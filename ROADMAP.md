@@ -1,7 +1,78 @@
 # ROADMAP.md — TopQuaranta
 
 > Current state and next steps. Historical iteration detail lives in git log.
-> Last updated: 2026-04-23.
+> Last updated: 2026-04-25.
+
+### Recent deliveries (past two days, 2026-04-24/25)
+
+- **Ranking factor breakdown** — `RankingProvisional` now stores
+  `age_factor`, `past_top_factor`, `monopoli_factor` per row (migration
+  `0011`). Staff ranking page surfaces them as percentage columns;
+  per-cançó breakdown panel on `CancoEditPage` lists every territory
+  the track is in with its decomposed score.
+- **Provisional column rename (semantic)** — `lastfm_playcount` on
+  `RankingProvisional` now stores the rolling 7-day plays delta (the
+  same `weekly_plays` the algorithm computes); `dies_en_top` left
+  NULL. UI relabelled "Escoltes 7d".
+- **MusicBrainz hardening** — staff can now (a) **desvincular** an
+  MBID and (b) optionally lock the artist out of further auto-match
+  attempts. Two new fields on `Artista`: `mb_blocked_mbids` (JSON
+  list) + `mb_auto_match_disabled` (bool). `resolve_mbid` short-circuits
+  on the lockout flag and skips blocked IDs (migration `0048`).
+  Extra Estat dashboard panel **Casos sospitosos d'homonímia** lists
+  artists where a Deezer ID was rejected as `artista_incorrecte` but
+  is still linked to a row with verified tracks. The auto-unlink in
+  `services.rebutjar_canco` clears every Deezer ID when 100 % of the
+  artist's tracks were rejected for that motiu (signal then
+  desaprova when there's no MBID either).
+- **Instagram + X (Twitter) on artists** (migration `0049`) — added
+  to `Artista.SOCIAL_LINK_FIELDS`, `PropostaArtista`, and
+  `PerfilUsuari`. `mb_sync` URL-relations route by URL host so MB's
+  generic "social network" relation lands on the right field.
+- **Cron pacing rebalanced** — backfill phase done, so
+  `obtenir_metadata_musicbrainz` dropped from `*/15 min` → hourly at
+  minute 30; `analitzar_whisper` from 01:30 / `--limit 700` →
+  05:00 / `--limit 100`. Pipeline rearranged into a single nightly
+  chain (backup → neteja → Whisper → senyal → ranking → playlists).
+- **Public top redesign** — TopPage now a 2-column grid with bigger
+  album art, song + artist + collaborators (max 3, single line) +
+  album name + release date in Catalan long form; "Actualitzat el X"
+  references the Saturday of the ISO week. Trend indicator (↑ or
+  badge-new) before the position number, using mm-design SVG icons.
+  No score visible publicly.
+- **Filter panel pattern** — new `FilterPanel` component
+  (`web-react/src/components/staff/FilterPanel.jsx`) with pending
+  state + apply/cancel/restore + count badge. Refactored into
+  StaffArtistesPage / StaffCanconsPage / StaffAlbumsPage.
+  Click-throughs from Estat preserved via URL params.
+- **Estat enriched** — MB block split into Artistes + Cançons (each
+  with sub-buckets and click-throughs to filtered lists); Whisper bucket
+  split into "pendent (cua)" vs "sense preview" (forever-pending);
+  feature-importance bars now signed with direction tokens
+  (↑ aprova / ↓ rebutja); homonímia panel with full case list.
+- **Accent + apostrophe insensitive search** — shared helper
+  `web/api/search_utils.py` (Postgres `unaccent` + apostrophe strip).
+  Applied to staff lists (artistes / cançons / albums + typeahead),
+  public artistes directory, and community search (perfils,
+  publicacions, usuaris staff view).
+- **Map cover correctness** — both `mapa_artistes_top` and
+  `_latest_cover` now restrict to albums with verified Cançons,
+  so a dirty Deezer ID can't surface a homonym's cover.
+- **Artist page collaborations** — new "També col·labora a" section
+  listing verified Cançons where the artist appears as
+  `artistes_col` (with main-artist credit + cover + year).
+- **Empty-string normalisation** — `Artista.save`, `Album.save`,
+  `Canco.save` now coerce `""` to `None` on every nullable-unique
+  CharField (`musicbrainz_id`, `spotify_id`). Prevents the
+  `duplicate key value violates unique constraint` we hit in production
+  on 2026-04-25 with two artists landing `mbid=""`.
+- **Component dedup pass** — extracted shared `MmIcon`,
+  `lib/format.js` (`fmtDataLlarga`, `fmtDataCurta`, `fmtAny`),
+  and `Field` (in `StaffTable.jsx`). Removed inlined copies from
+  three staff pages, FilterPanel, and TopPage.
+- **Test coverage** — 112 passed (was 92): added regressions for
+  `search_utils` normalisation, empty-string-unique save guards,
+  and homonym auto-unlink (5 scenarios).
 
 ### Recent deliveries (past week)
 
@@ -319,6 +390,134 @@ Tactical items not tied to specific CLAUDE_EXCELLENCE findings:
       Inclou: tipografia jeràrquica, consistència d'espais, dark
       mode, accessibilitat (a11y WCAG AA), mobile polish real
       testing cross-device.
+
+---
+
+## Phase 12 — Sprints planificats
+
+Full de ruta executable per a sessions futures. Cada sprint és
+autocontingut: nom, objectiu en una frase, i les tasques concretes.
+Sprints en ordre alfabètic (l'ordre de execució no és per la lletra
+sinó per prioritat — vegeu el report d'auditoria de 2026-04-25).
+
+### Sprint A — Tancar deute acumulat
+
+> Deixar el codi sense columnes mortes ni constants hardcoded ni
+> documentació desfasada.
+
+- [ ] Drop `RankingProvisional.dies_en_top` (sempre NULL des de v2.0).
+- [ ] Rename `RankingProvisional.lastfm_playcount` → `escoltes_setmanals`.
+- [ ] Drop `Artista.deezer_no_trobat` i netejar els writers a
+      `obtenir_metadata.py`.
+- [ ] Moure `PPCC_PENALITZACIO_PER_POSICIO` a `ConfiguracioGlobal`.
+- [ ] Magic numbers de l'heurístic ML → `constants.py`.
+- [ ] Corregir `CLAUDE_MODELS.md` (referències a `lastfm_mbid` ja
+      eliminats).
+- [ ] Decidir i executar el destí de `/root/TopQuaranta/` (1.4 GB
+      Wagtail legacy).
+
+### Sprint B — Whisper milestone i reentrenament ML
+
+> Tancar el cicle del backfill Whisper i decidir si simplifiquem el
+> model amb les noves dades.
+
+- [ ] Whisper backfill ja completat (2026-04-25).
+- [ ] Re-entrenar el model ML.
+- [ ] Comparar feature importances dels 4 features Whisper: si pugen
+      al top-5, valorar reduir TF-IDF de 60 a 30.
+- [ ] Desar baseline `ml_model.pre_whisper.joblib` per a comparativa
+      futura.
+
+### Sprint C — Robustesa staff_views i tests
+
+> Trencar el monòlit de `staff_views.py` i pujar la cobertura de
+> tests de l'API.
+
+- [ ] Split de `web/api/staff_views.py` (3.284 línies) en mòduls per
+      àrea: `staff_artistes.py`, `staff_cancons.py`, `staff_albums.py`,
+      `staff_ranking.py`, `staff_ml.py`, `staff_audit.py`,
+      `staff_estat.py`.
+- [ ] Tests d'integració amb `DRF APITestCase` per a `estat`,
+      `ranking_list`, `cancons_list`.
+- [ ] Pujar cobertura `web/api` de 0% a ~40%.
+
+### Sprint D — Performance pública
+
+> Reduir càrrega Postgres a hores punta amb cache HTTP a les rutes
+> més consultades.
+
+- [ ] `@cache_page` + ETag a `/api/v1/ranking/`, `/api/v1/artistes/`
+      i `/api/v1/mapa/artistes-top/`.
+- [ ] Mesurar càrrega abans/després.
+- [ ] Validar invalidació de cache quan corre el cron de provisional
+      (07:00 UTC).
+
+### Sprint E — Transparència algorítmica pública
+
+> Donar als visitants la mateixa visió que té l'staff sobre per què
+> una cançó està on està.
+
+- [ ] Panell "Per què està aquí?" a `/canco/<slug>` amb un toggle.
+- [ ] Llenguatge divulgatiu, no tècnic: "Aquesta setmana ha
+      acumulat X escoltes. Porta N setmanes al top, cosa que la
+      penalitza. L'àlbum té M cançons al top."
+- [ ] Extreure i adaptar lògica del `RankingBreakdownPanel` del
+      staff si existeix.
+
+### Sprint F — Accessibilitat i mobile
+
+> Passar WCAG AA i validar el SPA en dispositius reals.
+
+- [ ] Lighthouse pass per a cada pàgina principal.
+- [ ] Corregir contrast, semàntica, focus rings.
+- [ ] Testing real en mòbil, especialment pàgines staff.
+- [ ] Skip-to-content link i landmarks correctes.
+
+### Sprint G — Gestors d'artista i correu
+
+> Donar agència als artistes verificats per editar-se directament i
+> consolidar la infraestructura de correu.
+
+- [ ] Valorar si cal migrar a Hetzner Hosted Mail (ara: micropla
+      cdmon, 1 compte `noreply@`).
+- [ ] Permetre que usuaris amb `UserArtista` verificat proposen
+      correccions de camps no crítics (bio, socials, gènere) sense
+      intervenció staff.
+
+### Sprint H — Manifest cultural
+
+> Documentar públicament el criteri editorial del projecte.
+
+- [ ] Escriure `CULTURAL.md`: què és música catalana segons
+      TopQuaranta, per què els coeficients pesen el que pesen,
+      criteris editorials.
+- [ ] Enllaçar des del peu de pàgina.
+
+### Sprint I — Instagram automàtic
+
+> Distribuir els tops setmanals automàticament al canal d'Instagram.
+
+- [ ] Publicar automàticament els tops setmanals a Instagram.
+- [ ] Definir format visual, compte, credencials i cron.
+- [ ] Avaluar si usar l'API oficial de Meta o una solució alternativa.
+
+### Sprint J — Privacitat i cookies
+
+> Posar el lloc al dia amb el GDPR.
+
+- [ ] Implementar GDPR: política de privacitat, política de cookies,
+      banner de consentiment.
+- [ ] Revisar quines dades es guarden i amb quin propòsit.
+- [ ] Textos legals en català.
+
+### Sprint K — Capa editorial pública
+
+> Donar a un visitant nou una entrada clara al projecte.
+
+- [ ] Pàgines de contingut per a nous visitants: com funciona el
+      projecte, per què registrar-se, què et trobaràs com a usuari,
+      com proposar un artista.
+- [ ] Integrar-ho a la navegació principal.
 
 ---
 

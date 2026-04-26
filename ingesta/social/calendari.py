@@ -145,19 +145,43 @@ def slots_for(today: datetime.date) -> list[tuple[CalendarSlot, str]]:
     return out
 
 
+def tq_week_start(reference: datetime.date | None = None) -> datetime.date:
+    """The "TopQuaranta week" is **Saturday → Friday**, not the ISO
+    Monday → Sunday. Returns the most recent Saturday on or before
+    `reference`. This is the date the operator thinks of as "the
+    start of this week" — the day the official top publishes.
+
+    Internal storage (`SocialPost.setmana`, `TopSetmanal.setmana`)
+    keeps the Monday-of-ISO-week convention; this helper is for
+    UI/calendari rendering only.
+    """
+    if reference is None:
+        reference = datetime.date.today()
+    # weekday(): Mon=0 … Sat=5 … Sun=6.
+    # Days back to the most recent Saturday: (weekday + 2) % 7.
+    days_back = (reference.weekday() + 2) % 7
+    return reference - datetime.timedelta(days=days_back)
+
+
 def upcoming_week(
     reference: datetime.date | None = None,
 ) -> list[tuple[CalendarSlot, str, datetime.date]]:
-    """Return every slot of the ISO week containing `reference`
-    (default: today). Each tuple is `(slot, resolved_territori,
-    publication_date)`. Used by the staff dashboard to show what's
-    coming and which territori has been picked."""
-    if reference is None:
-        reference = datetime.date.today()
-    monday = reference - datetime.timedelta(days=reference.weekday())
+    """Every slot in the TopQuaranta week containing `reference`
+    (Saturday → Friday). Each tuple: `(slot, resolved_territori,
+    publication_date)`. Sorted chronologically: dissabte first,
+    divendres last.
+
+    The Monday used to resolve the rotatori territori is the Monday
+    *of the same TQ week* (i.e. 2 days after the Saturday start).
+    """
+    saturday = tq_week_start(reference)
+    monday = saturday + datetime.timedelta(days=2)
     out = []
     for s in CALENDARI:
-        publish_date = monday + datetime.timedelta(days=s.weekday)
+        # Days from `saturday` to the slot's weekday — we walk
+        # forwards 0..6 starting at Saturday so dissabte comes first.
+        days_offset = (s.weekday - 5) % 7  # Sat=0, Sun=1, Mon=2, …, Fri=6
+        publish_date = saturday + datetime.timedelta(days=days_offset)
         out.append((s, resolve_territori(s, monday), publish_date))
     out.sort(key=lambda t: (t[2], t[0].platform))
     return out

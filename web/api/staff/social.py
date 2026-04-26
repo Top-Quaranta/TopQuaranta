@@ -309,7 +309,9 @@ def social_preview(request: Request) -> Response:
     tipus = (request.data.get("tipus") or "").strip()
     platform = (request.data.get("platform") or "").strip()
 
-    args = ["publicar_social", "--dry-run"]
+    # `--force` so a previously-publicat row still re-renders for
+    # visual review (we never publish anyway because of --dry-run).
+    args = ["publicar_social", "--dry-run", "--force"]
     if setmana_raw and tipus:
         try:
             setmana = datetime.date.fromisoformat(setmana_raw)
@@ -324,9 +326,16 @@ def social_preview(request: Request) -> Response:
     if platform:
         args += ["--platform", platform]
     buf = io.StringIO()
-    with redirect_stdout(buf):
-        call_command(*args)
-    return Response({"output": buf.getvalue()})
+    try:
+        with redirect_stdout(buf):
+            call_command(*args)
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {"output": buf.getvalue(), "error": f"{type(exc).__name__}: {exc}"},
+            status=500,
+        )
+    output = buf.getvalue() or f"(sense sortida) Args: {args}"
+    return Response({"output": output, "args": args})
 
 
 @api_view(["POST"])
@@ -363,9 +372,16 @@ def social_publicar_ara(request: Request) -> Response:
     if platform:
         args += ["--platform", platform]
     buf = io.StringIO()
-    with redirect_stdout(buf):
-        call_command(*args)
-    return Response({"output": buf.getvalue()})
+    try:
+        with redirect_stdout(buf):
+            call_command(*args)
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {"output": buf.getvalue(), "error": f"{type(exc).__name__}: {exc}"},
+            status=500,
+        )
+    output = buf.getvalue() or f"(sense sortida) Args: {args}"
+    return Response({"output": output, "args": args})
 
 
 @api_view(["POST"])

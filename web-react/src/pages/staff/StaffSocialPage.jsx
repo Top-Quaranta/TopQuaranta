@@ -74,14 +74,23 @@ export default function StaffSocialPage() {
   }
 
   async function preview(post) {
-    setBusy(true); setOutput('')
+    setBusy(true)
+    setOutput('▶ Executant preview… (genera els PNGs però no publica)')
     try {
       const res = await api.post('/staff/social/preview/', {
         data: post.setmana, tipus: post.tipus, platform: post.platform,
       })
-      setOutput(res.output || '(sense sortida)')
+      const lines = []
+      if (res.args) lines.push(`$ manage.py ${res.args.join(' ')}`)
+      lines.push(res.output || '(sense sortida)')
+      if (res.error) lines.push(`\n⚠ ${res.error}`)
+      setOutput(lines.join('\n'))
+      // Scroll the output into view in case the click happens far down.
+      requestAnimationFrame(() => {
+        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
     } catch (e) {
-      setOutput(`Error: ${e.message || e}`)
+      setOutput(`✖ Error: ${e.payload?.error || e.message || e}\n\n${e.payload?.output || ''}`)
     } finally { setBusy(false) }
   }
 
@@ -128,16 +137,24 @@ export default function StaffSocialPage() {
   }
 
   async function publicarAra(post) {
-    if (!confirm(`Publicar ara: ${post.platform} · ${post.tipus} · ${post.territori || '—'} · ${post.setmana}?`)) return
-    setBusy(true); setOutput('')
+    if (!confirm(`Publicar ara: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'} · setmana del ${post.publication_date}?`)) return
+    setBusy(true)
+    setOutput('▶ Publicant… (això sí truca l\'API d\'Instagram si hi ha token vàlid)')
     try {
       const res = await api.post('/staff/social/publicar-ara/', {
         data: post.setmana, tipus: post.tipus, platform: post.platform,
       })
-      setOutput(res.output || '(sense sortida)')
+      const lines = []
+      if (res.args) lines.push(`$ manage.py ${res.args.join(' ')}`)
+      lines.push(res.output || '(sense sortida)')
+      if (res.error) lines.push(`\n⚠ ${res.error}`)
+      setOutput(lines.join('\n'))
+      requestAnimationFrame(() => {
+        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
       await reload()
     } catch (e) {
-      setOutput(`Error: ${e.message || e}`)
+      setOutput(`✖ Error: ${e.payload?.error || e.message || e}\n\n${e.payload?.output || ''}`)
     } finally { setBusy(false) }
   }
 
@@ -407,7 +424,12 @@ export default function StaffSocialPage() {
 
       {/* ── Captured stdout ──────────────────────────────────── */}
       {output && (
-        <pre className="bg-tq-ink text-tq-yellow text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap">{output}</pre>
+        <pre
+          id="social-output"
+          className="bg-tq-ink text-tq-yellow text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap"
+        >
+          {output}
+        </pre>
       )}
 
       {/* ── Posts list ───────────────────────────────────────── */}

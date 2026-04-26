@@ -18,8 +18,21 @@ export function TableCard({ children, className = '' }) {
   )
 }
 
+/**
+ * Wrap the real <table> in a horizontally-scrollable div so dense
+ * staff lists don't collapse / get cut off on mobile. `min-w-[640px]`
+ * keeps a sensible minimum width even when there's plenty of room
+ * (prevents the table from cramming columns) — narrower viewports
+ * trigger the inner scrollbar. The outer `TableCard` still owns
+ * `overflow-hidden` for its rounded corners, so this scroll lives
+ * just inside that mask.
+ */
 export function Table({ children }) {
-  return <table className="w-full text-sm">{children}</table>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-sm">{children}</table>
+    </div>
+  )
 }
 
 export function THead({ children }) {

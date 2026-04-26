@@ -1,12 +1,13 @@
 /**
  * ArtistesPage — /artistes
  *
- * Editorial redesign (Sprint J): hero ink band with title + filters
- * row, results in a white band with the same square-cover grid we
- * use everywhere else. Filters use the same compact pill vocabulary
- * as the rest of the SPA.
+ * Editorial layout (Sprint J/J ter): hero ink band with title +
+ * inline search + a staff-style FilterPanel button (cascading
+ * territori/comarca/municipi + booleans). Results live in a white
+ * band as a 4-col cover grid. Same shared editorial primitives the
+ * rest of the public SPA uses.
  *
- * Query params mirror the API 1:1 so links stay shareable:
+ * Query params mirror the API 1:1 so URLs stay shareable:
  *   q, territori, comarca, municipi, amb_dones, nou, al_top, page.
  */
 import { useEffect, useState } from 'react'
@@ -14,21 +15,31 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
 import {
-  Section, SectionHeader, TerritoriBadge,
+  Section, TerritoriBadge,
   TERR_COLORS, TERRITORI_NOM,
 } from '../components/editorial'
+import FilterPanel from '../components/staff/FilterPanel'
+import { Field, Select } from '../components/staff/StaffTable'
 
-/* Pill order — same shape as TopPage. "Tots" first as the null filter. */
 const TERRITORIS = [
-  { codi: '',    nom: 'Tots' },
-  { codi: 'AND', nom: 'Andorra' },
-  { codi: 'CAT', nom: 'Catalunya' },
-  { codi: 'CNO', nom: 'Catalunya del Nord' },
-  { codi: 'FRA', nom: 'Franja de Ponent' },
-  { codi: 'BAL', nom: 'Illes Balears' },
-  { codi: 'ALG', nom: "L'Alguer" },
-  { codi: 'VAL', nom: 'País Valencià' },
+  ['',    'Tots els territoris'],
+  ['AND', 'Andorra'],
+  ['CAT', 'Catalunya'],
+  ['CNO', 'Catalunya del Nord'],
+  ['FRA', 'Franja de Ponent'],
+  ['BAL', 'Illes Balears'],
+  ['ALG', "L'Alguer"],
+  ['VAL', 'País Valencià'],
 ]
+
+const FILTER_DEFAULTS = {
+  territori: '',
+  comarca: '',
+  municipi: '',
+  amb_dones: '',  // '1' or ''
+  nou: '',
+  al_top: '',
+}
 
 function initialsFor(nom) {
   if (!nom) return '?'
@@ -37,8 +48,6 @@ function initialsFor(nom) {
   return (words[0][0] + words[words.length - 1][0]).toUpperCase()
 }
 
-/* ── Card: square cover above name + meta. Same dimensions as the
- * HomePage album/discovery tiles so the visual rhythm carries over. */
 function ArtistaCard({ a }) {
   const territori = a.territoris?.[0]
   const color = TERR_COLORS[territori] || TERR_COLORS.ALT
@@ -49,12 +58,7 @@ function ArtistaCard({ a }) {
     >
       <div className="aspect-square relative" style={{ backgroundColor: 'var(--mm-color-gray-100)' }}>
         {a.imatge_url ? (
-          <img
-            src={a.imatge_url}
-            alt=""
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+          <img src={a.imatge_url} alt="" className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <div
             className="w-full h-full flex items-center justify-center font-display font-bold text-4xl text-white"
@@ -85,120 +89,69 @@ function ArtistaCard({ a }) {
   )
 }
 
-/* ── Filter pill (radio-style) — same look as TopPage territori pills. */
-function PillButton({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        'px-3 py-1 rounded-full text-xs font-semibold transition-colors ' +
-        (active
-          ? 'bg-tq-yellow text-tq-ink'
-          : 'bg-white/10 text-white hover:bg-white/20')
-      }
-    >
-      {children}
-    </button>
-  )
-}
-
-/* Toggle pill (checkbox) — visually identical to PillButton but with
- * a sr-only checkbox so keyboard / screen-reader users get a real
- * toggle semantic. */
-function FilterCheckbox({ checked, onChange, children, id }) {
-  return (
-    <label
-      htmlFor={id}
-      className={
-        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ' +
-        (checked
-          ? 'bg-tq-yellow text-tq-ink'
-          : 'bg-white/10 text-white hover:bg-white/20')
-      }
-    >
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-        className="sr-only"
-      />
-      {children}
-    </label>
-  )
-}
-
 export default function ArtistesPage() {
   const [params, setParams] = useSearchParams()
-  const q         = params.get('q')         || ''
-  const territori = (params.get('territori') || '').toUpperCase()
-  const comarca   = params.get('comarca')   || ''
-  const municipi  = params.get('municipi')  || ''
-  const ambDones  = params.get('amb_dones') === '1'
-  const nou       = params.get('nou')       === '1'
-  const alTop     = params.get('al_top')    === '1'
-  const page      = parseInt(params.get('page') || '1', 10)
+  const q    = params.get('q') || ''
+  const page = parseInt(params.get('page') || '1', 10)
+  const applied = {
+    territori: (params.get('territori') || '').toUpperCase(),
+    comarca:   params.get('comarca')   || '',
+    municipi:  params.get('municipi')  || '',
+    amb_dones: params.get('amb_dones') || '',
+    nou:       params.get('nou')       || '',
+    al_top:    params.get('al_top')    || '',
+  }
 
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [qDraft, setQDraft] = useState(q)
 
-  // Cascading reference data — comarques depend on territori, municipis on comarca.
-  const [comarques, setComarques] = useState([])
-  const [municipis, setMunicipis] = useState([])
-
   useEffect(() => { setQDraft(q) }, [q])
 
-  useEffect(() => {
-    if (!territori) { setComarques([]); return }
-    api.get(`/localitzacio/comarques/?territori=${territori}`)
-      .then(setComarques)
-      .catch(() => setComarques([]))
-  }, [territori])
-
-  useEffect(() => {
-    if (!comarca) { setMunicipis([]); return }
-    api.get(`/localitzacio/municipis/?comarca=${encodeURIComponent(comarca)}`)
-      .then(setMunicipis)
-      .catch(() => setMunicipis([]))
-  }, [comarca])
-
+  // Fetch results whenever the URL state changes.
   useEffect(() => {
     setLoading(true)
     setError(null)
     const qs = new URLSearchParams()
     if (q) qs.set('q', q)
-    if (territori) qs.set('territori', territori)
-    if (comarca) qs.set('comarca', comarca)
-    if (municipi) qs.set('municipi', municipi)
-    if (ambDones) qs.set('amb_dones', '1')
-    if (nou) qs.set('nou', '1')
-    if (alTop) qs.set('al_top', '1')
+    for (const [k, v] of Object.entries(applied)) {
+      if (v) qs.set(k, v)
+    }
     if (page > 1) qs.set('page', String(page))
     qs.set('per_page', '40')
     api.get(`/artistes/?${qs}`)
       .then(setData)
       .catch(e => setError(e.message || 'Error'))
       .finally(() => setLoading(false))
-  }, [q, territori, comarca, municipi, ambDones, nou, alTop, page])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, applied.territori, applied.comarca, applied.municipi,
+      applied.amb_dones, applied.nou, applied.al_top, page])
 
-  const setParam = (changes) => {
-    const next = new URLSearchParams(params)
-    for (const [k, v] of Object.entries(changes)) {
-      if (v === '' || v === false || v == null) next.delete(k)
-      else next.set(k, v === true ? '1' : String(v))
+  // Apply a filter set (from FilterPanel) into URL params, dropping
+  // empty values and resetting pagination.
+  const applyFilters = (next) => {
+    const out = new URLSearchParams()
+    if (q) out.set('q', q)
+    for (const [k, v] of Object.entries(next)) {
+      if (v) out.set(k, v)
     }
-    next.delete('page')
-    setParams(next)
+    setParams(out)
   }
 
-  const hasFilters = q || territori || comarca || municipi || ambDones || nou || alTop
+  const submitSearch = () => {
+    const out = new URLSearchParams(params)
+    if (qDraft) out.set('q', qDraft); else out.delete('q')
+    out.delete('page')
+    // Clear cascading geo filters when search changes — they were
+    // chosen against the previous result set.
+    out.delete('comarca')
+    out.delete('municipi')
+    setParams(out)
+  }
 
   return (
     <div className="space-y-0">
-      {/* ── Hero band: title, count, filters ──────────────────────── */}
       <Section tone="ink">
         <p className="text-[10px] uppercase tracking-widest text-tq-yellow">
           Directori
@@ -212,106 +165,39 @@ export default function ArtistesPage() {
             : 'Carregant…'}
         </p>
 
-        {/* Filters block — search + territori pills + booleans */}
-        <div className="mt-6 space-y-3">
-          {/* Search */}
-          <form
-            onSubmit={e => { e.preventDefault(); setParam({ q: qDraft, comarca: '', municipi: '' }) }}
-            className="flex gap-2"
-            role="search"
+        {/* Search inline + filter button. Search lives outside the
+            panel because it's the most common entry point and benefits
+            from being one keystroke away. */}
+        <form
+          onSubmit={e => { e.preventDefault(); submitSearch() }}
+          className="flex flex-wrap gap-2 mt-5 items-center"
+          role="search"
+        >
+          <label htmlFor="art-q" className="sr-only">Cercar artistes pel nom</label>
+          <input
+            id="art-q"
+            type="search"
+            value={qDraft}
+            onChange={e => setQDraft(e.target.value)}
+            placeholder="Cerca per nom…"
+            className="flex-1 min-w-[12rem] px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white placeholder-white/40 focus:outline-none focus:border-tq-yellow"
+          />
+          <button
+            type="submit"
+            className="px-4 py-1.5 bg-tq-yellow text-tq-ink rounded-md text-sm font-semibold hover:bg-tq-yellow-deep hover:text-white transition-colors"
           >
-            <label htmlFor="art-q" className="sr-only">Cercar artistes pel nom</label>
-            <input
-              id="art-q"
-              type="search"
-              value={qDraft}
-              onChange={e => setQDraft(e.target.value)}
-              placeholder="Cerca per nom…"
-              className="flex-1 min-w-0 px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white placeholder-white/40 focus:outline-none focus:border-tq-yellow"
-            />
-            <button
-              type="submit"
-              className="px-4 py-1.5 bg-tq-yellow text-tq-ink rounded-md text-sm font-semibold whitespace-nowrap hover:bg-tq-yellow-deep hover:text-white transition-colors"
-            >
-              Cercar
-            </button>
-          </form>
-
-          {/* Territori pills */}
-          <nav className="flex flex-wrap gap-1.5" aria-label="Filtre per territori">
-            {TERRITORIS.map(t => (
-              <PillButton
-                key={t.codi || 'tots'}
-                active={t.codi === territori}
-                onClick={() => setParam({ territori: t.codi, comarca: '', municipi: '' })}
-              >
-                {t.nom}
-              </PillButton>
-            ))}
-          </nav>
-
-          {/* Cascading dropdowns — only when a territori is picked */}
-          {territori && (
-            <div className="flex flex-wrap gap-2">
-              <label htmlFor="art-comarca" className="sr-only">Comarca</label>
-              <select
-                id="art-comarca"
-                value={comarca}
-                onChange={e => setParam({ comarca: e.target.value, municipi: '' })}
-                disabled={comarques.length === 0}
-                className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white focus:outline-none focus:border-tq-yellow disabled:opacity-40"
-              >
-                <option value="" className="text-tq-ink">Comarca: Totes</option>
-                {comarques.map(c => (
-                  <option key={c} value={c} className="text-tq-ink">{c}</option>
-                ))}
-              </select>
-
-              {comarca && (
-                <>
-                  <label htmlFor="art-municipi" className="sr-only">Municipi</label>
-                  <select
-                    id="art-municipi"
-                    value={municipi}
-                    onChange={e => setParam({ municipi: e.target.value })}
-                    disabled={municipis.length === 0}
-                    className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white focus:outline-none focus:border-tq-yellow disabled:opacity-40"
-                  >
-                    <option value="" className="text-tq-ink">Municipi: Tots</option>
-                    {municipis.map(m => (
-                      <option key={m.pk} value={m.nom} className="text-tq-ink">{m.nom}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Booleans */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <FilterCheckbox id="f-dones" checked={ambDones} onChange={v => setParam({ amb_dones: v })}>
-              Amb dones
-            </FilterCheckbox>
-            <FilterCheckbox id="f-nou" checked={nou} onChange={v => setParam({ nou: v })}>
-              Llançaments del darrer any
-            </FilterCheckbox>
-            <FilterCheckbox id="f-top" checked={alTop} onChange={v => setParam({ al_top: v })}>
-              Amb cançons al top
-            </FilterCheckbox>
-            {hasFilters && (
-              <button
-                type="button"
-                onClick={() => setParams({})}
-                className="text-xs text-tq-yellow hover:underline ml-auto font-semibold"
-              >
-                Netejar filtres
-              </button>
-            )}
-          </div>
-        </div>
+            Cercar
+          </button>
+          <FilterPanel
+            applied={applied}
+            defaults={FILTER_DEFAULTS}
+            onApply={applyFilters}
+          >
+            {(p, setP) => <ArtistesFilters pending={p} setPending={setP} />}
+          </FilterPanel>
+        </form>
       </Section>
 
-      {/* ── Results band ─────────────────────────────────────────── */}
       <Section tone="white">
         {error && <Alert tone="danger">{error}</Alert>}
 
@@ -371,5 +257,97 @@ export default function ArtistesPage() {
         )}
       </Section>
     </div>
+  )
+}
+
+/* ── Filter panel body (renders inside the staff FilterPanel) ─────── */
+
+function ArtistesFilters({ pending, setPending }) {
+  const [comarques, setComarques] = useState([])
+  const [municipis, setMunicipis] = useState([])
+
+  // Load comarques whenever a territori is chosen in the panel.
+  useEffect(() => {
+    if (!pending.territori) { setComarques([]); return }
+    api.get(`/localitzacio/comarques/?territori=${pending.territori}`)
+      .then(setComarques)
+      .catch(() => setComarques([]))
+  }, [pending.territori])
+
+  useEffect(() => {
+    if (!pending.comarca) { setMunicipis([]); return }
+    api.get(`/localitzacio/municipis/?comarca=${encodeURIComponent(pending.comarca)}`)
+      .then(setMunicipis)
+      .catch(() => setMunicipis([]))
+  }, [pending.comarca])
+
+  return (
+    <>
+      <Field label="Territori">
+        <Select
+          value={pending.territori}
+          onChange={e => setPending({
+            territori: e.target.value, comarca: '', municipi: '',
+          })}
+        >
+          {TERRITORIS.map(([c, l]) => (
+            <option key={c || 'tots'} value={c}>{l}</option>
+          ))}
+        </Select>
+      </Field>
+
+      {pending.territori && (
+        <Field label="Comarca">
+          <Select
+            value={pending.comarca}
+            onChange={e => setPending({ comarca: e.target.value, municipi: '' })}
+            disabled={comarques.length === 0}
+          >
+            <option value="">Totes les comarques</option>
+            {comarques.map(c => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
+      )}
+
+      {pending.comarca && (
+        <Field label="Municipi">
+          <Select
+            value={pending.municipi}
+            onChange={e => setPending({ municipi: e.target.value })}
+            disabled={municipis.length === 0}
+          >
+            <option value="">Tots els municipis</option>
+            {municipis.map(m => <option key={m.pk} value={m.nom}>{m.nom}</option>)}
+          </Select>
+        </Field>
+      )}
+
+      <div className="border-t border-black/10 pt-3 mt-1 flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-xs font-semibold text-tq-ink/80">
+          <input
+            type="checkbox"
+            checked={pending.amb_dones === '1'}
+            onChange={e => setPending({ amb_dones: e.target.checked ? '1' : '' })}
+          />
+          Amb dones
+        </label>
+        <label className="flex items-center gap-2 text-xs font-semibold text-tq-ink/80">
+          <input
+            type="checkbox"
+            checked={pending.nou === '1'}
+            onChange={e => setPending({ nou: e.target.checked ? '1' : '' })}
+          />
+          Llançaments del darrer any
+        </label>
+        <label className="flex items-center gap-2 text-xs font-semibold text-tq-ink/80">
+          <input
+            type="checkbox"
+            checked={pending.al_top === '1'}
+            onChange={e => setPending({ al_top: e.target.checked ? '1' : '' })}
+          />
+          Amb cançons al top
+        </label>
+      </div>
+    </>
   )
 }

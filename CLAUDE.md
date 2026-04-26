@@ -1,7 +1,8 @@
 # CLAUDE.md — TopQuaranta
 
 > Persistent memory for Claude Code. Read this file first on every session.
-> Last updated: 2026-04-21 — Post-Sprint-4 audit + Django-templates UI cleanup.
+> Last updated: 2026-04-26 — Post Sprints A–J ter (editorial redesign +
+> a11y baseline + shared editorial primitives).
 
 ## Other docs
 - **`CLAUDE_MODELS.md`** — every Django model with fields, relations, indexes.

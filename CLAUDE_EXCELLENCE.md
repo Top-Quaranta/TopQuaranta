@@ -1,5 +1,13 @@
 # CLAUDE_EXCELLENCE.md — Auditoria integral cap a l'obra eterna
 
+> **Document històric (2026-04-26)**. La fase d'Excellence (Phase 9)
+> està tancada — totes les troballes Tier 1 i Tier 2, i la majoria de
+> Tier 3 i 4, van baixar als sprints A–J ter del `ROADMAP.md`. Es
+> manté aquest document com a referència del marc d'avaluació
+> original (severitats, tiers, taxonomia S*/R*/P*) que va guiar la
+> fase. Per a l'estat de cada troballa concreta, vegeu el ROADMAP o
+> el `git log`.
+>
 > Audit sense pietat cap a l'excel·lència. Data original: 2026-04-16.
 >
 > El sistema actual *funciona correctament*. Aquest document no tracta d'això.

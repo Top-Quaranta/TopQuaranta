@@ -6,6 +6,14 @@ All notable changes to TopQuaranta are recorded here. Based on
 
 Dates are UTC.
 
+> **Note (2026-04-26)**: starting from `0.8.0` the per-session/per-sprint
+> changelog moved to **`ROADMAP.md`** (sections "Sprints — completats"
+> and "Sprints — pendents"). The detailed `[Unreleased]` block below
+> covers the work done between `0.8.0` (Phase 8 cleanup) and the start
+> of the sprint cadence (Sprint A, 2026-04-25); from there on, ROADMAP
+> is the source of truth. The next formal release tag (`0.9.0` or
+> `1.0.0`) will reset this file to a normal Keep-a-Changelog rhythm.
+
 ---
 
 ## [Unreleased]

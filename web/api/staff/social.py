@@ -32,7 +32,7 @@ from rest_framework.response import Response
 
 from ingesta.social.instagram_client import days_until_expiry, is_dry_run
 from ranking.models import ConfiguracioGlobal
-from social.models import SocialPost
+from social.models import InstagramAuth, SocialPost
 from web.api.staff._common import IsStaff
 
 
@@ -54,6 +54,47 @@ def _serialize(post: SocialPost) -> dict:
     }
 
 
+def _credentials_payload() -> dict:
+    """Token info for the staff page. Never returns the full token
+    string — only first/last 4 chars so an admin can verify which
+    one is active without exposing it on screen."""
+    row = InstagramAuth.load()
+    if row and row.access_token:
+        t = row.access_token
+        return {
+            "configured": True,
+            "source": "db",
+            "token_masked": f"{t[:4]}…{t[-4:]}",
+            "instagram_user_id": row.instagram_user_id,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "updated_by": row.updated_by.username if row.updated_by else None,
+        }
+    # Fallback: env-based credentials (dev / first-boot).
+    from django.conf import settings as _s
+
+    env_token = (getattr(_s, "INSTAGRAM_ACCESS_TOKEN", "") or "").strip()
+    if env_token and env_token != "test":
+        return {
+            "configured": True,
+            "source": "env",
+            "token_masked": f"{env_token[:4]}…{env_token[-4:]}",
+            "instagram_user_id": getattr(_s, "INSTAGRAM_USER_ID", "") or "",
+            "expires_at": getattr(_s, "INSTAGRAM_TOKEN_EXPIRES_AT", "") or None,
+            "updated_at": None,
+            "updated_by": None,
+        }
+    return {
+        "configured": False,
+        "source": None,
+        "token_masked": "",
+        "instagram_user_id": "",
+        "expires_at": None,
+        "updated_at": None,
+        "updated_by": None,
+    }
+
+
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def social_list(request: Request) -> Response:
@@ -69,8 +110,90 @@ def social_list(request: Request) -> Response:
                 "dry_run": is_dry_run(),
                 "token_days_left": days_until_expiry(),
             },
+            "credentials": _credentials_payload(),
         }
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_credentials_save(request: Request) -> Response:
+    """Persist the Instagram long-lived token + user ID to the
+    `InstagramAuth` singleton. Days-of-validity is recorded as
+    `expires_at = now + 60 days` (the default for a fresh long-lived
+    token); the renew flow updates it later."""
+    from django.utils import timezone as _tz
+
+    token = (request.data.get("access_token") or "").strip()
+    user_id = (request.data.get("instagram_user_id") or "").strip()
+    if not token or not user_id:
+        return Response(
+            {"error": "access_token i instagram_user_id obligatoris"}, status=400
+        )
+    if len(token) < 20:
+        return Response(
+            {"error": "access_token sospitosament curt; revisa-ho"}, status=400
+        )
+    row = InstagramAuth.load() or InstagramAuth(pk=1)
+    row.access_token = token
+    row.instagram_user_id = user_id
+    row.expires_at = _tz.now() + datetime.timedelta(days=60)
+    row.updated_by = request.user if request.user.is_authenticated else None
+    row.save()
+    return Response({"ok": True, "credentials": _credentials_payload()})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_credentials_test(request: Request) -> Response:
+    """Live read-only call to the Graph API: GET /<user_id>?fields=
+    username,account_type,media_count. Confirms the token is valid
+    without posting anything. Surfaces the response body verbatim."""
+    import requests
+
+    row = InstagramAuth.load()
+    token = row.access_token if row else ""
+    user_id = row.instagram_user_id if row else ""
+    if not token:
+        from django.conf import settings as _s
+
+        token = (getattr(_s, "INSTAGRAM_ACCESS_TOKEN", "") or "").strip()
+        user_id = (getattr(_s, "INSTAGRAM_USER_ID", "") or "").strip()
+    if not token or not user_id:
+        return Response(
+            {"ok": False, "error": "Cap credencial configurada."}, status=400
+        )
+    try:
+        r = requests.get(
+            f"https://graph.instagram.com/v19.0/{user_id}",
+            params={
+                "fields": "username,account_type,media_count",
+                "access_token": token,
+            },
+            timeout=20,
+        )
+        return Response(
+            {
+                "ok": r.ok,
+                "status": r.status_code,
+                "body": (
+                    r.json()
+                    if r.headers.get("content-type", "").startswith("application/json")
+                    else r.text[:500]
+                ),
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        return Response({"ok": False, "error": str(exc)}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_credentials_clear(request: Request) -> Response:
+    """Wipe the InstagramAuth row. Useful if you need to revoke +
+    re-authorize without leaving stale credentials around."""
+    InstagramAuth.objects.filter(pk=1).delete()
+    return Response({"ok": True, "credentials": _credentials_payload()})
 
 
 @api_view(["POST"])

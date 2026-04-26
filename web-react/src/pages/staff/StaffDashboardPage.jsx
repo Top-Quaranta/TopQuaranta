@@ -161,6 +161,11 @@ export default function StaffDashboardPage() {
           title="Usuaris"
           desc="Llista d'usuaris, moderació d'spam, reset 2FA."
         />
+        <Tile
+          to="/staff/social"
+          title="Distribució — Instagram"
+          desc="Calendari setmanal del feed + stories. Token, fases, kill switch."
+        />
       </div>
     </section>
   )

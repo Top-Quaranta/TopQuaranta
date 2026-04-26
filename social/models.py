@@ -2,9 +2,13 @@
 
 `SocialPost` is the audit + idempotency anchor for every published
 piece of content. One row per (platform, tipus, territori, setmana).
-The same row tracks `pendent` → `publicat`/`omès`/`error` so the
-publication command is naturally re-runnable: a row already in the
-`publicat` state short-circuits unless `--force` is passed.
+
+`InstagramAuth` is the singleton holding the long-lived access token
++ user ID + expiry. Same pattern as `music.SpotifyAuth`. Lets us
+rotate the token from the staff panel without SSH'ing into the box
+to edit `.env`. The settings `INSTAGRAM_ACCESS_TOKEN` etc. remain
+as a fallback when the DB row is empty (handy for first-boot, tests
+and the autoritzar_instagram command's output).
 """
 
 from django.db import models
@@ -74,3 +78,48 @@ class SocialPost(models.Model):
     def __str__(self) -> str:
         ter = f" · {self.territori}" if self.territori else ""
         return f"{self.platform} · {self.tipus}{ter} · {self.setmana} ({self.status})"
+
+
+class InstagramAuth(models.Model):
+    """Singleton holding the live Instagram credentials.
+
+    Populated either by `autoritzar_instagram` (interactive OAuth)
+    or by the staff panel form. The IG client checks this row first;
+    if empty, falls back to the `INSTAGRAM_*` settings — that
+    fallback path keeps the local dev workflow working without a DB
+    write.
+
+    `expires_at` is informational (we use it for the days-until
+    expiry alarm). Refresh of the long-lived token resets it +60d.
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    access_token = models.TextField(blank=True, default="")
+    instagram_user_id = models.CharField(max_length=40, blank=True, default="")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "comptes.Usuari",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Autorització Instagram"
+        verbose_name_plural = "Autoritzacions Instagram"
+
+    def save(self, *args, **kwargs):
+        self.id = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "InstagramAuth | None":
+        return cls.objects.filter(pk=1).first()
+
+    def __str__(self) -> str:
+        if not self.access_token:
+            return "Instagram auth (buit)"
+        masked = self.access_token[:4] + "…" + self.access_token[-4:]
+        return f"Instagram auth ({masked})"

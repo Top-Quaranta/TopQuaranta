@@ -37,12 +37,16 @@ export default function StaffSocialPage() {
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState('')
+  // Credentials form local state — never pre-filled with the existing
+  // token (we only ever show first/last 4 chars of what's already saved).
+  const [tokenDraft, setTokenDraft] = useState('')
+  const [userIdDraft, setUserIdDraft] = useState('')
 
   const reload = () => api.get('/staff/social/').then(setData).catch(() => setData(null))
   useEffect(() => { reload() }, [])
 
   if (!data) return <p className="p-6">Carregant…</p>
-  const { config, results } = data
+  const { config, results, credentials } = data
 
   const tokenTone =
     config.token_days_left == null  ? 'bg-gray-200 text-gray-700' :
@@ -81,6 +85,44 @@ export default function StaffSocialPage() {
     } finally { setBusy(false) }
   }
 
+  async function saveCredentials() {
+    if (!tokenDraft.trim() || !userIdDraft.trim()) {
+      alert('Cal omplir token + Instagram user ID.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.post('/staff/social/credentials/', {
+        access_token: tokenDraft.trim(),
+        instagram_user_id: userIdDraft.trim(),
+      })
+      setTokenDraft(''); setUserIdDraft('')
+      await reload()
+      alert('Credencials desades. Comprova-les amb "Provar token".')
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+
+  async function testCredentials() {
+    setBusy(true); setOutput('')
+    try {
+      const res = await api.post('/staff/social/credentials/test/')
+      setOutput(JSON.stringify(res, null, 2))
+    } catch (e) {
+      setOutput(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+
+  async function clearCredentials() {
+    if (!confirm('Esborrar les credencials d\'Instagram desades? Es tornarà a mode DRY-RUN.')) return
+    setBusy(true)
+    try {
+      await api.post('/staff/social/credentials/clear/')
+      await reload()
+    } finally { setBusy(false) }
+  }
+
   async function publicarAra(post) {
     if (!confirm(`Publicar ara: ${post.platform} · ${post.tipus} · ${post.territori || '—'} · ${post.setmana}?`)) return
     setBusy(true); setOutput('')
@@ -105,6 +147,101 @@ export default function StaffSocialPage() {
           {' '} (depèn de <code>INSTAGRAM_ACCESS_TOKEN</code>).
         </p>
       </header>
+
+      {/* ── Credentials card ──────────────────────────────────── */}
+      <div className={
+        'rounded-md p-4 border ' +
+        (credentials.configured
+          ? 'border-emerald-300 bg-emerald-50'
+          : 'border-yellow-300 bg-yellow-50')
+      }>
+        <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1">
+          Credencials Instagram
+        </p>
+        {credentials.configured ? (
+          <>
+            <p className="text-sm">
+              <strong>Configurades</strong> · Token{' '}
+              <code className="bg-white px-1.5 py-0.5 rounded">
+                {credentials.token_masked}
+              </code>{' '}
+              · IG user ID <code className="bg-white px-1.5 py-0.5 rounded">
+                {credentials.instagram_user_id}
+              </code>
+              {' '}· Origen <code>{credentials.source}</code>
+              {credentials.expires_at && <> · Caduca {credentials.expires_at.slice(0, 10)}</>}
+              {credentials.updated_by && <> · Desat per <strong>{credentials.updated_by}</strong></>}
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={testCredentials}
+                disabled={busy}
+                className="px-3 py-1.5 bg-tq-ink text-tq-yellow rounded text-xs font-semibold hover:bg-tq-ink/90"
+              >
+                Provar token (read-only)
+              </button>
+              <button
+                type="button"
+                onClick={clearCredentials}
+                disabled={busy}
+                className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700"
+              >
+                Esborrar credencials
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm">
+            <strong>Sense credencials.</strong> Genera un token al
+            developers.facebook.com (Instagram → API setup → Generate token)
+            i enganxa'l aquí sota.
+          </p>
+        )}
+
+        {/* Form to set / replace credentials */}
+        <details className="mt-3">
+          <summary className="text-xs cursor-pointer font-semibold text-tq-ink/70">
+            {credentials.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
+          </summary>
+          <div className="mt-2 grid sm:grid-cols-2 gap-2">
+            <label className="text-xs">
+              <span className="block mb-1 font-semibold">Long-lived access token</span>
+              <input
+                type="password"
+                autoComplete="off"
+                value={tokenDraft}
+                onChange={e => setTokenDraft(e.target.value)}
+                placeholder="IGAA..."
+                className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
+              />
+            </label>
+            <label className="text-xs">
+              <span className="block mb-1 font-semibold">Instagram user ID (numèric)</span>
+              <input
+                type="text"
+                value={userIdDraft}
+                onChange={e => setUserIdDraft(e.target.value)}
+                placeholder="178…"
+                className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={saveCredentials}
+            disabled={busy || !tokenDraft || !userIdDraft}
+            className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50"
+          >
+            Desar
+          </button>
+          <p className="text-[10px] text-tq-ink/60 mt-1">
+            El token només es desa xifrat al servidor (a la fila singleton
+            <code> InstagramAuth</code>). Mai es mostra sencer després de
+            desar-lo.
+          </p>
+        </details>
+      </div>
 
       {/* ── Config controls ───────────────────────────────────── */}
       <div className="grid sm:grid-cols-3 gap-3">

@@ -39,17 +39,35 @@ GRAPH_BASE = "https://graph.instagram.com/v19.0"
 LONG_LIVED_TTL_DAYS = 60
 
 
-def is_dry_run() -> bool:
-    token = (getattr(settings, "INSTAGRAM_ACCESS_TOKEN", "") or "").strip()
-    return token in ("", "test")
+def _auth_row():
+    """Lazily fetch the singleton InstagramAuth row. Lazy import so
+    this module stays importable before Django apps are ready."""
+    try:
+        from social.models import InstagramAuth
 
-
-def _user_id() -> str:
-    return getattr(settings, "INSTAGRAM_USER_ID", "") or "DRY_USER"
+        return InstagramAuth.load()
+    except Exception:
+        return None
 
 
 def _token() -> str:
+    """DB row first; .env settings as fallback."""
+    row = _auth_row()
+    if row and row.access_token:
+        return row.access_token
     return getattr(settings, "INSTAGRAM_ACCESS_TOKEN", "") or ""
+
+
+def _user_id() -> str:
+    row = _auth_row()
+    if row and row.instagram_user_id:
+        return row.instagram_user_id
+    return getattr(settings, "INSTAGRAM_USER_ID", "") or "DRY_USER"
+
+
+def is_dry_run() -> bool:
+    token = (_token() or "").strip()
+    return token in ("", "test")
 
 
 def _post(path: str, params: dict) -> dict:
@@ -153,6 +171,12 @@ def days_until_expiry() -> int | None:
     or DRY_RUN. Used by tq-health alerting."""
     if is_dry_run():
         return None
+    # Prefer the DB row (refreshed in-place by the renew command); fall
+    # back to settings string if the DB doesn't yet hold an expiry.
+    row = _auth_row()
+    if row and row.expires_at:
+        delta = row.expires_at - datetime.now(timezone.utc)
+        return delta.days
     raw = getattr(settings, "INSTAGRAM_TOKEN_EXPIRES_AT", "") or ""
     if not raw:
         return None

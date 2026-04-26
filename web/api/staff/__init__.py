@@ -69,6 +69,9 @@ from web.api.staff.senyal import (  # noqa: F401
     senyal_list,
 )
 from web.api.staff.social import (  # noqa: F401
+    social_credentials_clear,
+    social_credentials_save,
+    social_credentials_test,
     social_fase,
     social_list,
     social_preview,

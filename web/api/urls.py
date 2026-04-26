@@ -213,6 +213,21 @@ urlpatterns = [
         staff_views.social_story_cap,
         name="staff_social_story_cap",
     ),
+    path(
+        "staff/social/credentials/",
+        staff_views.social_credentials_save,
+        name="staff_social_credentials_save",
+    ),
+    path(
+        "staff/social/credentials/test/",
+        staff_views.social_credentials_test,
+        name="staff_social_credentials_test",
+    ),
+    path(
+        "staff/social/credentials/clear/",
+        staff_views.social_credentials_clear,
+        name="staff_social_credentials_clear",
+    ),
     # Feedback (user-filed corrections)
     path(
         "staff/feedback/",

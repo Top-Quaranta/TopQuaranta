@@ -118,29 +118,69 @@ def social_list(request: Request) -> Response:
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def social_credentials_save(request: Request) -> Response:
-    """Persist the Instagram long-lived token + user ID to the
-    `InstagramAuth` singleton. Days-of-validity is recorded as
-    `expires_at = now + 60 days` (the default for a fresh long-lived
-    token); the renew flow updates it later."""
+    """Persist the Instagram long-lived token to the `InstagramAuth`
+    singleton. The Instagram user ID is **resolved automatically** via
+    `GET https://graph.instagram.com/v19.0/me?access_token=...` so the
+    operator only needs to paste the token. Returns 400 if the token
+    can't be exchanged into a valid user_id (catches typos + revoked
+    tokens before they cause cron failures).
+
+    `expires_at` is set to `now + 60 days` — the default lifetime of
+    a fresh long-lived token. `renovar_token_instagram` resets it
+    every refresh.
+    """
+    import requests
     from django.utils import timezone as _tz
 
     token = (request.data.get("access_token") or "").strip()
-    user_id = (request.data.get("instagram_user_id") or "").strip()
-    if not token or not user_id:
-        return Response(
-            {"error": "access_token i instagram_user_id obligatoris"}, status=400
-        )
+    if not token:
+        return Response({"error": "access_token obligatori"}, status=400)
     if len(token) < 20:
         return Response(
             {"error": "access_token sospitosament curt; revisa-ho"}, status=400
         )
+
+    # Optional manual override for the user_id. Useful if Meta returns
+    # a wrapper account ID instead of the IG numeric ID; rare, but
+    # harmless to expose.
+    forced_uid = (request.data.get("instagram_user_id") or "").strip()
+
+    # Resolve user_id from the token.
+    try:
+        r = requests.get(
+            "https://graph.instagram.com/v19.0/me",
+            params={"fields": "id,username", "access_token": token},
+            timeout=20,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {"error": f"No s'ha pogut contactar amb Meta: {exc}"}, status=502
+        )
+    if not r.ok:
+        return Response(
+            {"error": f"Token rebutjat per Meta ({r.status_code}): {r.text[:200]}"},
+            status=400,
+        )
+    body = r.json()
+    user_id = forced_uid or str(body.get("id") or "")
+    username = body.get("username") or ""
+    if not user_id:
+        return Response({"error": "Meta no ha retornat user_id"}, status=400)
+
     row = InstagramAuth.load() or InstagramAuth(pk=1)
     row.access_token = token
     row.instagram_user_id = user_id
     row.expires_at = _tz.now() + datetime.timedelta(days=60)
     row.updated_by = request.user if request.user.is_authenticated else None
     row.save()
-    return Response({"ok": True, "credentials": _credentials_payload()})
+    return Response(
+        {
+            "ok": True,
+            "resolved_username": username,
+            "resolved_user_id": user_id,
+            "credentials": _credentials_payload(),
+        }
+    )
 
 
 @api_view(["POST"])

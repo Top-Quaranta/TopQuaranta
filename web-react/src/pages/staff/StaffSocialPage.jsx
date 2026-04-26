@@ -86,19 +86,23 @@ export default function StaffSocialPage() {
   }
 
   async function saveCredentials() {
-    if (!tokenDraft.trim() || !userIdDraft.trim()) {
-      alert('Cal omplir token + Instagram user ID.')
+    if (!tokenDraft.trim()) {
+      alert('Enganxa el token.')
       return
     }
     setBusy(true)
     try {
-      await api.post('/staff/social/credentials/', {
+      const res = await api.post('/staff/social/credentials/', {
         access_token: tokenDraft.trim(),
+        // Optional override; backend resolves this from the token if empty.
         instagram_user_id: userIdDraft.trim(),
       })
       setTokenDraft(''); setUserIdDraft('')
       await reload()
-      alert('Credencials desades. Comprova-les amb "Provar token".')
+      alert(
+        `Credencials desades. Compte detectat: @${res.resolved_username || '?'} ` +
+        `(ID ${res.resolved_user_id}). Comprova-les amb "Provar token".`
+      )
     } catch (e) {
       alert(`Error: ${e.payload?.error || e.message}`)
     } finally { setBusy(false) }
@@ -138,13 +142,18 @@ export default function StaffSocialPage() {
   }
 
   return (
-    <section className="p-4 md:p-6 space-y-6">
+    // The body of the SPA is `bg-tq-ink` (dark). Wrap the whole
+    // staff page in an explicit white surface so all the
+    // `text-tq-ink` inside reads correctly. Same pattern other
+    // staff pages get implicitly via their tables.
+    <section className="bg-white text-tq-ink rounded-lg shadow-md p-4 md:p-6 space-y-6">
       <header>
         <h1 className="text-2xl font-bold font-display">Distribució — Instagram</h1>
         <p className="text-sm text-tq-ink/60 mt-1">
           Control del calendari setmanal. Cada slot publica via Graph
           API. Mode <strong>{config.dry_run ? 'DRY-RUN' : 'PRODUCCIÓ'}</strong>
-          {' '} (depèn de <code>INSTAGRAM_ACCESS_TOKEN</code>).
+          {' '} (les credencials viuen a la fila singleton{' '}
+          <code>InstagramAuth</code>; sense token, mode DRY-RUN automàtic).
         </p>
       </header>
 
@@ -204,8 +213,8 @@ export default function StaffSocialPage() {
           <summary className="text-xs cursor-pointer font-semibold text-tq-ink/70">
             {credentials.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
           </summary>
-          <div className="mt-2 grid sm:grid-cols-2 gap-2">
-            <label className="text-xs">
+          <div className="mt-2 space-y-2">
+            <label className="block text-xs">
               <span className="block mb-1 font-semibold">Long-lived access token</span>
               <input
                 type="password"
@@ -215,30 +224,39 @@ export default function StaffSocialPage() {
                 placeholder="IGAA..."
                 className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
               />
+              <span className="block text-[10px] text-tq-ink/60 mt-1">
+                El token es genera a developers.facebook.com →
+                Instagram → API setup → Generate token.
+              </span>
             </label>
-            <label className="text-xs">
-              <span className="block mb-1 font-semibold">Instagram user ID (numèric)</span>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-tq-ink/70">
+                Override manual del Instagram user ID (rar; només si la
+                detecció automàtica no funciona)
+              </summary>
               <input
                 type="text"
                 value={userIdDraft}
                 onChange={e => setUserIdDraft(e.target.value)}
                 placeholder="178…"
-                className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
+                className="mt-1 w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
               />
-            </label>
+            </details>
           </div>
           <button
             type="button"
             onClick={saveCredentials}
-            disabled={busy || !tokenDraft || !userIdDraft}
+            disabled={busy || !tokenDraft}
             className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50"
           >
             Desar
           </button>
           <p className="text-[10px] text-tq-ink/60 mt-1">
-            El token només es desa xifrat al servidor (a la fila singleton
-            <code> InstagramAuth</code>). Mai es mostra sencer després de
-            desar-lo.
+            En desar, el backend confirma el token amb una crida a la
+            Graph API i extreu el teu Instagram user ID
+            automàticament. El token només es desa al servidor (fila
+            singleton <code>InstagramAuth</code>); mai no es mostra
+            sencer després.
           </p>
         </details>
       </div>

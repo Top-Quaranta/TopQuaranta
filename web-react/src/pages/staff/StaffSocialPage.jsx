@@ -474,7 +474,17 @@ export default function StaffSocialPage() {
               <td className="text-xs">{p.platform.replace('instagram_', '')}</td>
               <td className="text-xs">{p.tipus}</td>
               <td>{p.territori_label}</td>
-              <td><StatusBadge status={p.status} /></td>
+              <td>
+                <StatusBadge status={p.status} />
+                {p.error_msg && (
+                  <p className="text-[10px] text-red-700 mt-1 max-w-[18rem] break-words"
+                     title={p.error_msg}>
+                    {p.error_msg.length > 80
+                      ? p.error_msg.slice(0, 80) + '…'
+                      : p.error_msg}
+                  </p>
+                )}
+              </td>
               <td className="text-xs">{p.published_at ? p.published_at.slice(0, 16).replace('T', ' ') : '—'}</td>
               <td>
                 <div className="flex flex-wrap gap-1">

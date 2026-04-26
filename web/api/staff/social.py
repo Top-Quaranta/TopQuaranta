@@ -352,6 +352,12 @@ def social_render_serve(request: Request, filename: str) -> Response:
     """Serves a single PNG out of the renders cache. Auth-gated so
     we don't have to expose `/static/social/` publicly until the
     Caddy block is in place. Restricts to PNGs to avoid path tricks."""
+    return _serve_png(filename)
+
+
+def _serve_png(filename: str):
+    """Shared file-serving helper used by both the staff-only
+    endpoint and the public one Meta needs to fetch PNGs from."""
     import re
     from pathlib import Path
 
@@ -366,7 +372,10 @@ def social_render_serve(request: Request, filename: str) -> Response:
         candidate = Path("/tmp/tq_social/renders") / filename
     if not candidate.exists() or not candidate.is_file():
         raise Http404()
-    return FileResponse(open(candidate, "rb"), content_type="image/png")
+    resp = FileResponse(open(candidate, "rb"), content_type="image/png")
+    # Tell intermediaries (and Meta's fetcher) it's safe to cache.
+    resp["Cache-Control"] = "public, max-age=86400"
+    return resp
 
 
 @api_view(["POST"])

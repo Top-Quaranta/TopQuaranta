@@ -9,6 +9,7 @@ from . import (
     compte_views,
     comunitat_views,
     home_views,
+    social_public,
     staff_views,
     top_views,
     views,
@@ -196,7 +197,16 @@ urlpatterns = [
     path("staff/configuracio/", staff_views.configuracio, name="staff_configuracio"),
     # Auditoria
     path("staff/auditlog/", staff_views.auditlog, name="staff_auditlog"),
-    # ── Sprint I — social distribution ──
+    # ── Sprint I — public PNG endpoint Meta can fetch from ──
+    # See web/api/social_public.py for the rationale. NB: no trailing
+    # slash — Meta's image fetcher dislikes URLs that end in a slash
+    # right after the .png extension.
+    path(
+        "social/render/<str:filename>",
+        social_public.render_public,
+        name="social_render_public",
+    ),
+    # ── Sprint I — social distribution (staff) ──
     path("staff/social/", staff_views.social_list, name="staff_social_list"),
     path(
         "staff/social/preview/", staff_views.social_preview, name="staff_social_preview"

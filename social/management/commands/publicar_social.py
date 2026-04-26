@@ -39,12 +39,17 @@ STORY_TOP_TERRITORIAL = 5
 
 
 def _public_url_for(local_path: Path) -> str:
-    """The renderer writes to <SOCIAL_CACHE_DIR>/renders/. We expose
-    that path via Caddy at https://www.topquaranta.cat/static/social/.
-    For DRY_RUN this URL is never fetched, so its correctness only
-    matters in production (Caddy config will be updated)."""
+    """Public URL Meta can GET to fetch the rendered PNG.
+
+    Default: a Django endpoint at /api/v1/social/render/<filename>/
+    (see web/api/social_public.py). The day we wire a Caddy
+    `handle_path /static/social/*` block, flip
+    `SOCIAL_PUBLIC_BASE = "https://www.topquaranta.cat/static/social"`
+    in settings and the public URL changes without code edits."""
     base = getattr(
-        settings, "SOCIAL_PUBLIC_BASE", "https://www.topquaranta.cat/static/social"
+        settings,
+        "SOCIAL_PUBLIC_BASE",
+        "https://www.topquaranta.cat/api/v1/social/render",
     )
     return f"{base.rstrip('/')}/{local_path.name}"
 
@@ -178,6 +183,10 @@ class Command(BaseCommand):
         except Exception as exc:  # noqa: BLE001 — never crash the cron
             logger.exception("publicar_social failed for %s", label)
             self._mark(post, SocialPost.STATUS_ERROR, error_msg=str(exc)[:500])
+            # Surface the error in stdout too so the staff cockpit
+            # can show it (the panel proxies the captured stdout
+            # back to the operator).
+            self.stdout.write(f"  · ERROR: {type(exc).__name__}: {exc}")
 
     # ── feed flow ────────────────────────────────────────────────
 

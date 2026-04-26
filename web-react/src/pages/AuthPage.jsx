@@ -59,6 +59,11 @@ export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
+  // Sprint J — explicit consents required at registration. The backend
+  // refuses to create the account without these.
+  const [acceptaTermes, setAcceptaTermes] = useState(false)
+  const [edatMin, setEdatMin] = useState(false)
+  const [volNewsletter, setVolNewsletter] = useState(false)
   const [errors, setErrors] = useState({})
   const [generalError, setGeneralError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -103,6 +108,9 @@ export default function AuthPage() {
         email,
         password1: password,
         password2,
+        accepta_termes: acceptaTermes,
+        edat_min: edatMin,
+        vol_newsletter: volNewsletter,
       })
       setRegistrationSent(true)
     } catch (err) {
@@ -216,6 +224,66 @@ export default function AuthPage() {
               <p className="text-xs text-red-600 mt-1">{errors.password2}</p>
             )}
           </label>
+        )}
+
+        {/* Sprint J — explicit, separate consents at registration.
+            Per RGPD art. 7 these must be unbundled (terms + age can
+            be required to use the service; newsletter must be a
+            separate, optional opt-in). Each checkbox carries its
+            own field error coming back from the backend. */}
+        {!isLogin && (
+          <div className="space-y-2 pt-1">
+            <label className="flex items-start gap-2 text-xs text-tq-ink leading-relaxed">
+              <input
+                type="checkbox"
+                checked={acceptaTermes}
+                onChange={e => setAcceptaTermes(e.target.checked)}
+                className="mt-0.5 shrink-0"
+                required
+              />
+              <span>
+                Accepto els{' '}
+                <a href="/legal/termes" target="_blank" rel="noopener" className="underline">
+                  termes d'ús
+                </a>{' '}
+                i la{' '}
+                <a href="/legal/privacitat" target="_blank" rel="noopener" className="underline">
+                  política de privacitat
+                </a>.
+              </span>
+            </label>
+            {errors.accepta_termes && (
+              <p className="text-xs text-red-600">{errors.accepta_termes}</p>
+            )}
+
+            <label className="flex items-start gap-2 text-xs text-tq-ink leading-relaxed">
+              <input
+                type="checkbox"
+                checked={edatMin}
+                onChange={e => setEdatMin(e.target.checked)}
+                className="mt-0.5 shrink-0"
+                required
+              />
+              <span>Tinc 14 anys o més.</span>
+            </label>
+            {errors.edat_min && (
+              <p className="text-xs text-red-600">{errors.edat_min}</p>
+            )}
+
+            <label className="flex items-start gap-2 text-xs text-tq-ink leading-relaxed">
+              <input
+                type="checkbox"
+                checked={volNewsletter}
+                onChange={e => setVolNewsletter(e.target.checked)}
+                className="mt-0.5 shrink-0"
+              />
+              <span>
+                <strong>Opcional</strong> — vull rebre el top setmanal per
+                correu (encara no l'enviem; demanem el consentiment ara per
+                quan comencem).
+              </span>
+            </label>
+          </div>
         )}
 
         {generalError && (

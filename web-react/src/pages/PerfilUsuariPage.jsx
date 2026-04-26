@@ -204,7 +204,32 @@ export default function PerfilUsuariPage() {
           </button>
         </div>
 
-        <fieldset className="bg-red-900/20 border border-red-400/30 rounded-md p-4 mt-6">
+        <fieldset className="bg-white/5 border border-white/10 rounded-md p-4 mt-6">
+          <legend className="text-xs font-semibold uppercase tracking-wide text-white/70 px-1">
+            Les meves dades (RGPD)
+          </legend>
+          <p className="text-sm text-white/80 mb-3">
+            Pots descarregar tot el que sabem de tu o donar-te de baixa
+            de la newsletter en qualsevol moment. Els teus drets a la{' '}
+            <a href="/legal/privacitat" className="underline hover:text-tq-yellow">política de privacitat</a>.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const out = await api.post('/compte/exportar-dades/', {})
+                alert(`T'enviem un JSON amb totes les teves dades a ${out.email}.`)
+              } catch (e) {
+                alert(e.payload?.error || e.message)
+              }
+            }}
+            className="px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-sm font-semibold hover:bg-tq-yellow-deep hover:text-white transition-colors"
+          >
+            Exportar les meves dades
+          </button>
+        </fieldset>
+
+        <fieldset className="bg-red-900/20 border border-red-400/30 rounded-md p-4 mt-4">
           <legend className="text-xs font-semibold uppercase tracking-wide text-red-300 px-1">Zona perillosa</legend>
           <p className="text-sm text-white/80 mb-2">
             Eliminar el compte és una acció irreversible. T'enviarem un email

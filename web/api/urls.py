@@ -50,6 +50,17 @@ urlpatterns = [
         compte_views.compte_esborrar_sollicitar,
         name="compte_esborrar_sollicitar",
     ),
+    # ── Sprint J — RGPD ──
+    path(
+        "compte/exportar-dades/",
+        compte_views.exportar_dades,
+        name="compte_exportar_dades",
+    ),
+    path(
+        "compte/baixa-newsletter/",
+        compte_views.baixa_newsletter,
+        name="compte_baixa_newsletter",
+    ),
     # ── Staff (is_staff required) ──
     path("staff/dashboard/", staff_views.dashboard, name="staff_dashboard"),
     path("staff/estat/", staff_views.estat, name="staff_estat"),

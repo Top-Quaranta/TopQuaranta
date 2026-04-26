@@ -13,6 +13,7 @@ import { Link, NavLink } from 'react-router-dom'
 import TopQuarantaLogo from './TopQuarantaLogo'
 import AccountButton from './AccountButton'
 import FeedbackButton from './FeedbackButton'
+import CookieBanner from './CookieBanner'
 import { useAuth } from '../context/AuthContext'
 import { FeedbackProvider, useFeedbackContext } from '../context/FeedbackContext'
 
@@ -42,7 +43,9 @@ function FooterLine() {
         Com funciona
       </Link>
       <span>·</span>
-      <span>Open source</span>
+      <Link to="/legal" className="underline hover:opacity-100">
+        Legal
+      </Link>
       <span>·</span>
       <a
         href="https://github.com/miquelmatoses/TopQuaranta"
@@ -52,10 +55,6 @@ function FooterLine() {
       >
         GitHub
       </a>
-      <span>·</span>
-      <Link to="/privacitat" className="underline hover:opacity-100">
-        Privacitat
-      </Link>
       {target && (
         <>
           <span>·</span>
@@ -171,6 +170,11 @@ function LayoutInner({ children }) {
 
       {/* ── Inline footer — single line, body colour context ── */}
       <FooterLine />
+
+      {/* Cookie banner — shows once per browser; legally informative
+          (only strictly necessary cookies, no consent needed but
+          visitors deserve to know). */}
+      <CookieBanner />
     </>
   )
 }

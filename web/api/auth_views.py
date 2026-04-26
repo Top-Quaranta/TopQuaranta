@@ -174,22 +174,29 @@ def _send_verification_email(request, user) -> None:
 def register_view(request: Request) -> Response:
     """Create an inactive user and send an activation email.
 
-    Body: {email, password1, password2}.
+    Body: {email, password1, password2, accepta_termes (bool),
+           edat_min (bool), vol_newsletter (bool, optional)}.
+
+    Sprint J: requires explicit acceptance of terms+privacy AND
+    confirmation of minimum age (14). Newsletter is opt-in and
+    recorded separately so we can prove RGPD-compliant consent
+    granularity if ever asked.
 
     Anti-enumeration (S5): whether the address is new or already
     registered we return the same 201 "check your email" payload.
-    If the email is taken we silently skip user creation so an
-    attacker can't use this endpoint to map existing accounts. Field
-    validation errors (password mismatch, invalid email, weak
-    password) still surface as 400 so legitimate users see what's
-    wrong with the form itself.
     """
+    from django.utils import timezone
+
     from comptes.models import Usuari
+    from web.legal_versions import TERMES_VERSIO
 
     data = request.data or {}
     email = (data.get("email") or "").strip().lower()
     p1 = data.get("password1") or ""
     p2 = data.get("password2") or ""
+    accepta_termes = bool(data.get("accepta_termes"))
+    edat_min = bool(data.get("edat_min"))
+    vol_newsletter = bool(data.get("vol_newsletter"))
 
     errors: dict[str, str] = {}
     if not email:
@@ -210,6 +217,13 @@ def register_view(request: Request) -> Response:
         except ValidationError as exc:
             errors["password1"] = "; ".join(exc.messages)
 
+    if not accepta_termes:
+        errors["accepta_termes"] = (
+            "Has d'acceptar els termes i la política de privacitat."
+        )
+    if not edat_min:
+        errors["edat_min"] = "Has de confirmar que tens 14 anys o més."
+
     if errors:
         return Response({"errors": errors}, status=400)
 
@@ -221,6 +235,24 @@ def register_view(request: Request) -> Response:
         )
         user.set_password(p1)
         user.save()
+        # PerfilUsuari is created by the post_save signal; populate
+        # the consent fields immediately after.
+        perfil = getattr(user, "perfil", None)
+        if perfil is not None:
+            now = timezone.now()
+            perfil.consent_termes_at = now
+            perfil.consent_termes_versio = TERMES_VERSIO
+            if vol_newsletter:
+                perfil.vol_newsletter = True
+                perfil.consent_newsletter_at = now
+            perfil.save(
+                update_fields=[
+                    "consent_termes_at",
+                    "consent_termes_versio",
+                    "vol_newsletter",
+                    "consent_newsletter_at",
+                ]
+            )
         _send_verification_email(request, user)
     else:
         logger.info("Registration for existing email ignored: %s", email)

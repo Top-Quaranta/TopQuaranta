@@ -61,31 +61,7 @@ l'activitat des d'abril 2026 viu en sprints.
 Per ordre de prioritat (no alfabètic). Quan se'n fa un, es mou a la
 secció _completats_ amb la data i el detall.
 
-### 1. Sprint J — Privacitat i cookies (GDPR)
-
-> Posar el lloc al dia amb el RGPD/LOPDGDD.
-
-**Per què primer**: és el risc legal real del projecte. El SPA no
-fa tracking de tercers (no Google Analytics, no píxels), però
-seguim sense política de privacitat publicada ni banner de cookies
-informatiu (la cookie de sessió és funcional, però convé documentar-ho).
-
-- [ ] Pàgina `/privacitat` amb política completa (dades que es
-      guarden, finalitat, base legal, drets de l'usuari, contacte).
-- [ ] Pàgina `/cookies` amb la llista de cookies usades (sessionid,
-      csrftoken, axes_*) i la seva finalitat. Al SPA, **no** s'usen
-      cookies de tercers ni analytics.
-- [ ] Banner discret la primera visita amb "Entès" + link a la
-      política. No bloquejant.
-- [ ] Endpoint `POST /api/v1/compte/exportar-dades/` (right to data
-      portability) que envia un correu amb un fitxer JSON amb tot
-      el que el sistema sap de l'usuari.
-- [ ] L'auto-eliminació via correu ja existeix (Sprint G), enllaçar-la
-      des de la política.
-- [ ] Textos legals en català, revisió per algú amb formació jurídica
-      abans de publicar.
-
-### 2. Sprint I — Instagram automàtic
+### 1. Sprint I — Instagram automàtic
 
 > Distribuir els tops setmanals automàticament al canal d'Instagram.
 
@@ -100,7 +76,7 @@ un compte business i decidir API oficial vs solució no-oficial.
       publica el carrousel al feed.
 - [ ] Decidir si afegim també `Stories` o només feed.
 
-### 3. Backlog menor
+### 2. Backlog menor
 
 Items petits per fer en sessions curtes:
 
@@ -204,6 +180,23 @@ Extreta primitiva compartida `web-react/src/components/editorial.jsx`
 navegador setmanal (prev/next), nous camps `prev_setmana`/
 `next_setmana` a `/api/v1/top/`. Llenguatge intern eliminat de la
 UI pública (verificada/aprovat/revisió humana).
+
+### Sprint J — Privacitat, cookies i corpus legal complet ✅ (2026-04-26)
+
+Paquet legal sencer (no només GDPR): 7 pàgines a `/legal/{avis-legal,
+privacitat,cookies,termes,codi-conducta,llicencies,accessibilitat}` +
+índex `/legal`. Banner de cookies informatiu (no bloquejant) amb
+persistència a localStorage. Registre amb 3 checkboxes (termes
+obligatori, edat ≥14 obligatori, newsletter opt-in opcional). Camps
+nous a `PerfilUsuari` (`consent_termes_at`/`_versio`,
+`vol_newsletter`, `consent_newsletter_at`) — migració `comptes 0013`.
+Endpoints `POST /api/v1/compte/exportar-dades/` (RGPD art. 20, envia
+JSON per email) i `GET /api/v1/compte/baixa-newsletter/?token=…`
+(unsubscribe via signed token, sense login). Botó "Exporta les meves
+dades" a `PerfilUsuariPage`. Identitat del titular: CVR 46414683
+(Dinamarca), info@topquaranta.cat. Datatilsynet com a lead authority.
+0 violacions axe-core a 9 URLs noves. **Esborranys legals; pendent
+revisió jurídica humana abans de comunicació externa**.
 
 ### Sprint J ter — FilterPanel a `/artistes` + scroll mòbil a taules staff ✅ (2026-04-26)
 

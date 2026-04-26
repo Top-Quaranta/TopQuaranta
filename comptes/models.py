@@ -294,6 +294,29 @@ class PerfilUsuari(models.Model):
     # whether to auto-route to /onboarding on first session.
     onboarding_complet = models.BooleanField(default=False)
 
+    # ── Legal consent tracking (Sprint J) ──
+    # Recorded on registration. We store the version of the legal docs
+    # the user accepted so we can ask for a fresh acceptance when the
+    # docs are updated in a way that materially changes them. Version
+    # is the publication date of the docs, e.g. "2026-04-26".
+    consent_termes_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the user accepted the terms + privacy policy.",
+    )
+    consent_termes_versio = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Version (publication date) of the docs accepted.",
+    )
+
+    # Newsletter subscription (recorded separately from terms — RGPD
+    # requires explicit, distinct consent for marketing emails).
+    # Default False: opt-in only. The actual sending cron does not
+    # exist yet (Sprint J just lays the groundwork).
+    vol_newsletter = models.BooleanField(default=False, db_index=True)
+    consent_newsletter_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

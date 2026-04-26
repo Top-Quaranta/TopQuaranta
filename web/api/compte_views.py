@@ -672,3 +672,199 @@ def compte_esborrar_sollicitar(request: Request) -> Response:
         logger.exception("Failed to send account-deletion email to %s", u.email)
         return Response({"error": f"No s'ha pogut enviar l'email: {e}"}, status=500)
     return Response({"ok": True, "email": u.email})
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Sprint J — RGPD endpoints
+# ─────────────────────────────────────────────────────────────────────────
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def exportar_dades(request: Request) -> Response:
+    """Right to data portability (RGPD art. 20).
+
+    Collects everything the system knows about the user across the
+    domain models (perfil, gestió d'artistes, propostes, feedback,
+    publicacions, comentaris, missatges) and emails it to the user
+    as a JSON attachment. Inline only — never persisted to disk.
+    """
+    import json
+    import logging
+    from email.mime.application import MIMEApplication
+
+    from django.core.mail import EmailMessage
+    from django.utils import timezone
+
+    from comptes.models import (
+        Comentari,
+        Feedback,
+        Missatge,
+        PropostaArtista,
+        Publicacio,
+        UserArtista,
+    )
+
+    logger = logging.getLogger(__name__)
+    u = request.user
+    if not u.email:
+        return Response({"error": "El teu compte no té email."}, status=400)
+
+    perfil = getattr(u, "perfil", None)
+    payload = {
+        "exportat_at": timezone.now().isoformat(),
+        "usuari": {
+            "id": u.pk,
+            "email": u.email,
+            "username": u.username,
+            "date_joined": u.date_joined.isoformat() if u.date_joined else None,
+            "is_staff": bool(u.is_staff),
+        },
+        "perfil": (
+            {
+                "nom_public": perfil.nom_public,
+                "bio": perfil.bio,
+                "rol_musical": perfil.rol_musical,
+                "instruments": perfil.instruments,
+                "imatge_url": perfil.imatge_url,
+                "visible_directori": perfil.visible_directori,
+                "obert_colaboracions": perfil.obert_colaboracions,
+                "vol_newsletter": perfil.vol_newsletter,
+                "consent_termes_at": (
+                    perfil.consent_termes_at.isoformat()
+                    if perfil.consent_termes_at
+                    else None
+                ),
+                "consent_termes_versio": perfil.consent_termes_versio,
+                "consent_newsletter_at": (
+                    perfil.consent_newsletter_at.isoformat()
+                    if perfil.consent_newsletter_at
+                    else None
+                ),
+                "social": {
+                    f: getattr(perfil, f) or "" for f, _ in (perfil.SOCIAL_FIELDS or [])
+                },
+            }
+            if perfil
+            else None
+        ),
+        "gestio_artistes": [
+            {
+                "artista": ua.artista.nom,
+                "artista_slug": ua.artista.slug,
+                "estat": ua.estat,
+                "verificat": ua.verificat,
+                "sollicitud_text": ua.sollicitud_text,
+                "created_at": ua.created_at.isoformat(),
+            }
+            for ua in UserArtista.objects.filter(usuari=u).select_related("artista")
+        ],
+        "propostes_artista": [
+            {
+                "nom": p.nom,
+                "estat": p.estat,
+                "justificacio": p.justificacio,
+                "created_at": p.created_at.isoformat(),
+            }
+            for p in PropostaArtista.objects.filter(usuari=u)
+        ],
+        "feedback": [
+            {
+                "url": f.url,
+                "missatge": f.missatge,
+                "target_type": f.target_type,
+                "target_label": f.target_label,
+                "resolt": f.resolt,
+                "created_at": f.created_at.isoformat(),
+            }
+            for f in Feedback.objects.filter(usuari=u)
+        ],
+        "publicacions": [
+            {
+                "titol": p.titol,
+                "cos": p.cos,
+                "visibilitat": p.visibilitat,
+                "estat": p.estat,
+                "created_at": p.created_at.isoformat(),
+                "publicat_at": p.publicat_at.isoformat() if p.publicat_at else None,
+            }
+            for p in Publicacio.objects.filter(autor=u)
+        ],
+        "comentaris": [
+            {
+                "publicacio_id": c.publicacio_id,
+                "cos": c.cos,
+                "created_at": c.created_at.isoformat(),
+            }
+            for c in Comentari.objects.filter(autor=u)
+        ],
+        "missatges_enviats": [
+            {
+                "destinatari_id": m.destinatari_id,
+                "assumpte": m.assumpte,
+                "cos": m.cos,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in Missatge.objects.filter(remitent=u)
+        ],
+        "missatges_rebuts": [
+            {
+                "remitent_id": m.remitent_id,
+                "assumpte": m.assumpte,
+                "cos": m.cos,
+                "llegit_at": m.llegit_at.isoformat() if m.llegit_at else None,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in Missatge.objects.filter(destinatari=u)
+        ],
+    }
+
+    body_json = json.dumps(payload, indent=2, ensure_ascii=False)
+    msg = EmailMessage(
+        subject="TopQuaranta · les teves dades",
+        body=(
+            "Hola,\n\nAdjuntem el JSON amb totes les dades que tenim del "
+            f"teu compte ({u.email}).\n\nSi vols esborrar-les, fes-ho des "
+            "del teu compte.\n\nGràcies.\n"
+        ),
+        to=[u.email],
+    )
+    msg.attach("topquaranta-dades.json", body_json, "application/json")
+    try:
+        msg.send(fail_silently=False)
+    except Exception as e:
+        logger.exception("Failed to send data export to %s", u.email)
+        return Response({"error": f"No s'ha pogut enviar: {e}"}, status=500)
+    return Response({"ok": True, "email": u.email})
+
+
+@api_view(["GET"])
+@permission_classes([])
+def baixa_newsletter(request: Request) -> Response:
+    """Token-based newsletter unsubscribe (RGPD art. 7.3 — withdrawal
+    must be as easy as giving consent). Intended to be linked from
+    every newsletter email; works without login.
+
+    Token is `signing.dumps({"u": user.pk}, salt="newsletter-baixa")`
+    with the project SECRET_KEY. No max_age — links don't expire."""
+    from django.core import signing
+
+    from comptes.models import Usuari
+
+    token = (request.GET.get("token") or "").strip()
+    if not token:
+        return Response({"error": "Falta el token."}, status=400)
+    try:
+        data = signing.loads(token, salt="newsletter-baixa")
+        user_pk = int(data["u"])
+    except (signing.BadSignature, KeyError, ValueError, TypeError):
+        return Response({"error": "Token invàlid."}, status=400)
+    try:
+        u = Usuari.objects.get(pk=user_pk)
+    except Usuari.DoesNotExist:
+        return Response({"error": "Usuari inexistent."}, status=404)
+    perfil = getattr(u, "perfil", None)
+    if perfil is not None and perfil.vol_newsletter:
+        perfil.vol_newsletter = False
+        perfil.save(update_fields=["vol_newsletter"])
+    return Response({"ok": True, "email": u.email})

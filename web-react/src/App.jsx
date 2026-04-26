@@ -17,6 +17,14 @@ import ProposarArtistaPage from './pages/ProposarArtistaPage'
 import SolicitarGestioPage from './pages/SolicitarGestioPage'
 import GestioArtistaEditPage from './pages/GestioArtistaEditPage'
 import ComFuncionaPage from './pages/ComFuncionaPage'
+import { LegalIndex } from './pages/legal/LegalLayout'
+import AvisLegalPage from './pages/legal/AvisLegalPage'
+import PrivacitatPage from './pages/legal/PrivacitatPage'
+import CookiesPage from './pages/legal/CookiesPage'
+import TermesPage from './pages/legal/TermesPage'
+import CodiConductaPage from './pages/legal/CodiConductaPage'
+import LlicenciesPage from './pages/legal/LlicenciesPage'
+import AccessibilitatPage from './pages/legal/AccessibilitatPage'
 import SpotifyCallbackPage from './pages/SpotifyCallbackPage'
 import OnboardingPage from './pages/OnboardingPage'
 import PerfilUsuariPage from './pages/PerfilUsuariPage'
@@ -104,6 +112,18 @@ function AppContent() {
         <Route path="/artista/:artistaSlug/:albumSlug" element={<AlbumPage />} />
         <Route path="/mapa" element={<MapaPage />} />
         <Route path="/com-funciona" element={<ComFuncionaPage />} />
+        {/* Sprint J — legal corpus. Each subpage is independently
+            citable; /legal is the index. */}
+        <Route path="/legal" element={<LegalIndex />} />
+        <Route path="/legal/avis-legal" element={<AvisLegalPage />} />
+        <Route path="/legal/privacitat" element={<PrivacitatPage />} />
+        <Route path="/legal/cookies" element={<CookiesPage />} />
+        <Route path="/legal/termes" element={<TermesPage />} />
+        <Route path="/legal/codi-conducta" element={<CodiConductaPage />} />
+        <Route path="/legal/llicencies" element={<LlicenciesPage />} />
+        <Route path="/legal/accessibilitat" element={<AccessibilitatPage />} />
+        {/* Legacy alias so /privacitat (linked from old footer) still works. */}
+        <Route path="/privacitat" element={<Navigate to="/legal/privacitat" replace />} />
         <Route path="/compte/accedir" element={<AuthPage />} />
         <Route path="/compte/callback" element={<AuthCallbackPage />} />
         <Route path="/compte" element={<ComptePage />} />

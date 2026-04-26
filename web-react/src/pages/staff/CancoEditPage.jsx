@@ -10,6 +10,7 @@ import { Btn, Input, PageHeader, TableCard } from '../../components/staff/StaffT
 import ArtistaPicker from '../../components/staff/ArtistaPicker'
 import ArtistesColPicker from '../../components/staff/ArtistesColPicker'
 import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'
+import TopBreakdownPanel from '../../components/TopBreakdownPanel'
 
 export default function CancoEditPage() {
   const { pk } = useParams()
@@ -177,6 +178,10 @@ export default function CancoEditPage() {
 
       <div className="mt-4 max-w-2xl">
         <MusicBrainzPanel kind="canco" data={c} />
+      </div>
+
+      <div className="mt-6">
+        <TopBreakdownPanel slug={c.slug} />
       </div>
     </section>
   )

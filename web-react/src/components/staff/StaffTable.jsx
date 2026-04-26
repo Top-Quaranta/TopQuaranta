@@ -76,19 +76,32 @@ export function EmptyState({ children }) {
 }
 
 export function Pill({ children, tone = 'ink' }) {
-  const tones = {
-    ink: 'bg-tq-ink/10 text-tq-ink',
-    yellow: 'bg-tq-yellow text-tq-ink',
-    green: 'bg-emerald-100 text-emerald-800',
-    red: 'bg-red-100 text-red-800',
-    gray: 'bg-gray-200 text-gray-700',
+  // Brand tones use Tailwind utilities; semantic ones go through the
+  // design tokens (`--color-tq-success/danger/neutral`) so a palette
+  // change reaches every pill in one edit.
+  if (tone === 'ink' || tone === 'yellow') {
+    const cls =
+      tone === 'yellow'
+        ? 'bg-tq-yellow text-tq-ink'
+        : 'bg-tq-ink/10 text-tq-ink'
+    return (
+      <span
+        className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls}`}
+      >
+        {children}
+      </span>
+    )
   }
+  const sem = {
+    green: { bg: 'rgba(16, 185, 129, 0.16)', fg: 'var(--color-tq-success)' },
+    red:   { bg: 'rgba(239, 68, 68, 0.16)',  fg: 'var(--color-tq-danger)' },
+    gray:  { bg: 'rgba(156, 163, 175, 0.20)', fg: 'var(--color-tq-neutral, #6b7280)' },
+  }
+  const s = sem[tone] || sem.gray
   return (
     <span
-      className={
-        'inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ' +
-        (tones[tone] || tones.ink)
-      }
+      className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ background: s.bg, color: s.fg }}
     >
       {children}
     </span>
@@ -192,5 +205,19 @@ export function PageHeader({ title, subtitle, right }) {
       </div>
       {right && <div className="flex items-center gap-2">{right}</div>}
     </header>
+  )
+}
+
+/**
+ * Field — labelled wrapper for a select/input inside the FilterPanel.
+ * Centralised so the three list pages (Artistes, Cançons, Albums)
+ * stop redefining the same helper.
+ */
+export function Field({ label, children }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-semibold text-tq-ink/80">
+      <span>{label}</span>
+      {children}
+    </label>
   )
 }

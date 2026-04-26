@@ -159,8 +159,12 @@ class Command(BaseCommand):
                 # album endpoint. Don't mark `cancons_obtingudes=True` yet if
                 # the album is fresh; retry next run. After 30 days give up
                 # (a truly empty album never appears).
-                from datetime import date, timedelta
-
+                # NOTE: never re-import `date` / `timedelta` here. A local
+                # `from datetime import …` inside this method shadows the
+                # module-level import on line 4 and turns the early
+                # `cutoff = date.today() - …` (line 93) into an
+                # UnboundLocalError, leaving the lock-file held by a
+                # zombie process and blocking every subsequent hourly run.
                 album_old = (
                     album.data_llancament
                     and album.data_llancament < date.today() - timedelta(days=30)

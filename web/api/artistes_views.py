@@ -7,15 +7,32 @@ GET /api/v1/artistes/<slug>/     — artist profile (info + territories + recent
 import datetime
 
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, Max, OuterRef
 from django.shortcuts import get_object_or_404
+from django.views.decorators.http import condition
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from music.models import Album, Artista, Canco
-from ranking.models import RankingSetmanal
+from ranking.models import TopSetmanal
+from web.api.search_utils import normalize_search_term, unaccent_field
+from web.api.utils import cache_for_anon
+
+
+def _artistes_last_modified(request, *args, **kwargs):
+    """Most recent Artista.created_at — cheap aggregate (indexed PK
+    is implicit; created_at is small enough to scan even unindexed)."""
+    return Artista.objects.aggregate(Max("created_at"))["created_at__max"]
+
+
+def _artistes_etag(request, *args, **kwargs):
+    lm = _artistes_last_modified(request, *args, **kwargs)
+    if lm is None:
+        return None
+    qs = request.META.get("QUERY_STRING", "")
+    return f'W/"art-{int(lm.timestamp())}-{hash(qs) & 0xffffffff:08x}"'
 
 
 def _territoris_summary(artista) -> list[str]:
@@ -42,14 +59,16 @@ def _latest_cover(artista) -> str | None:
     """Artist card image — derived from the most recent album cover.
 
     Artista has no dedicated image field yet; populating one from
-    Deezer is a backfill we'll do later. For now this is a cheap
-    proxy that covers most active artists (any with ≥1 album).
+    Deezer is a backfill we'll do later. Restrict to albums with at
+    least one verified Cançó so a Deezer ID collision (homonym) can't
+    surface a cover from material that staff hasn't validated as ours.
     """
     return (
-        Album.objects.filter(artista=artista)
+        Album.objects.filter(artista=artista, cancons__verificada=True)
         .exclude(imatge_url="")
         .order_by("-data_llancament")
         .values_list("imatge_url", flat=True)
+        .distinct()
         .first()
     )
 
@@ -68,8 +87,10 @@ def _artista_row(artista) -> dict:
     }
 
 
+@condition(etag_func=_artistes_etag, last_modified_func=_artistes_last_modified)
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@cache_for_anon(60, key_prefix="artistes")
 def artistes_list(request: Request) -> Response:
     """Paginated directory of approved artists.
 
@@ -80,7 +101,7 @@ def artistes_list(request: Request) -> Response:
       municipi   — exact municipi name
       amb_dones  — "1": percentatge_femeni in {100, 50+} (female-led / mixed)
       nou        — "1": has any album released in the last 365 days
-      al_top     — "1": has at least one track ever in RankingSetmanal
+      al_top     — "1": has at least one track ever in TopSetmanal
       page       — 1-based page index (default 1)
       per_page   — items per page (default 40, capped at 100)
     """
@@ -119,14 +140,16 @@ def artistes_list(request: Request) -> Response:
     if (request.GET.get("al_top") or "") == "1":
         # Nested OuterRef via Canco is buggy here; a direct pk__in over
         # the (~100 artists) set is cheaper and clearer.
-        top_artist_ids = RankingSetmanal.objects.values_list(
+        top_artist_ids = TopSetmanal.objects.values_list(
             "canco__artista_id", flat=True
         ).distinct()
         qs = qs.filter(pk__in=top_artist_ids)
 
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(nom__icontains=q)
+        qs = qs.annotate(_nom_norm=unaccent_field("nom")).filter(
+            _nom_norm__contains=normalize_search_term(q)
+        )
 
     qs = qs.distinct().order_by("nom")
 
@@ -202,11 +225,13 @@ def artista_detail(request: Request, slug: str) -> Response:
     }
 
     if not artista.aprovat:
-        return Response({**base, "historial": [], "discografia": []})
+        return Response(
+            {**base, "historial": [], "discografia": [], "colaboracions": []}
+        )
 
     # Last 10 weeks across any territory.
     historial = list(
-        RankingSetmanal.objects.filter(canco__artista=artista)
+        TopSetmanal.objects.filter(canco__artista=artista)
         .select_related("canco")
         .order_by("-setmana", "territori", "posicio")[:50]
     )
@@ -247,4 +272,39 @@ def artista_detail(request: Request, slug: str) -> Response:
         for a in discografia
     ]
 
-    return Response({**base, "historial": historial_out, "discografia": disco_out})
+    # Col·laboracions — verified Cançons where this artist appears as
+    # `artistes_col` (i.e. the main artist is somebody else). One row
+    # per cançó so collabs on multi-guest albums don't get folded.
+    # Excludes tracks where the artist is also the main artist (D5).
+    colaboracions_qs = (
+        Canco.objects.filter(artistes_col=artista, verificada=True)
+        .exclude(artista=artista)
+        .select_related("artista", "album")
+        .order_by("-data_llancament", "nom")[:50]
+    )
+    colaboracions_out = [
+        {
+            "canco_slug": c.slug,
+            "canco_nom": c.nom,
+            "data_llancament": (
+                c.data_llancament.isoformat() if c.data_llancament else None
+            ),
+            "album_slug": c.album.slug if c.album_id else None,
+            "album_nom": c.album.nom if c.album_id else None,
+            "imatge_url": (
+                getattr(c.album, "imatge_url", None) or None if c.album_id else None
+            ),
+            "artista_principal_nom": c.artista.nom if c.artista_id else None,
+            "artista_principal_slug": c.artista.slug if c.artista_id else None,
+        }
+        for c in colaboracions_qs
+    ]
+
+    return Response(
+        {
+            **base,
+            "historial": historial_out,
+            "discografia": disco_out,
+            "colaboracions": colaboracions_out,
+        }
+    )

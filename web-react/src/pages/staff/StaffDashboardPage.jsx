@@ -132,8 +132,8 @@ export default function StaffDashboardPage() {
           desc="Edició d'àlbums i correcció de portades."
         />
         <Tile
-          to="/staff/ranking"
-          title="Ranking provisional"
+          to="/staff/top"
+          title="Top provisional"
           desc="Revisar el ranking diari i rebutjar entrades."
         />
         <Tile

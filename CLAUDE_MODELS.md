@@ -33,13 +33,16 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 | Core | `nom`, `slug`, `lastfm_nom` |
 | Approval state | `aprovat` ✦, `pendent_review` ✦ |
 | Discovery provenance (immutable) | `auto_descobert`, `font_descoberta` |
-| Discovery cache | `deezer_no_trobat`, `last_checked_deezer` |
+| Discovery cache | `last_checked_deezer` |
 | Deezer meta | `deezer_nb_fan`, `deezer_nb_album`, `deezer_nom`, `deezer_nom_similitud` |
 | Last.fm | `lastfm_te_scrobbles` ✦ |
 | Territories | `territoris` M2M (auto-synced) |
-| Social links | 10 URLFields, listed in `SOCIAL_LINK_FIELDS` |
+| Social links | 12 URLFields, listed in `SOCIAL_LINK_FIELDS` (added `instagram_url` + `twitter_url` 2026-04-25, migration `music 0049`) |
 | Genre | `genere` (free text), `percentatge_femeni` (choices) |
-| MusicBrainz (2026-04-22) | `musicbrainz_id` (UUID unique), `mb_type`, `mb_gender`, `mb_area`, `mb_area_hierarchy` (JSON), `mb_begin_date`, `mb_end_date`, `mb_disambiguation`, `mb_sort_name`, `mb_aliases` (JSON), `mb_tags` (JSON), `mb_rating`, `mb_discography_cache` (JSON {isrcs, titles}), `mb_last_sync` ✦ |
+| MusicBrainz (2026-04-22) | `musicbrainz_id` (UUID unique, `null=True`; `Artista.save()` normalises `""→None` to avoid UNIQUE collisions), `mb_type`, `mb_gender`, `mb_area`, `mb_area_hierarchy` (JSON), `mb_begin_date`, `mb_end_date`, `mb_disambiguation`, `mb_sort_name`, `mb_aliases` (JSON), `mb_tags` (JSON), `mb_rating`, `mb_discography_cache` (JSON {isrcs, titles}), `mb_last_sync` ✦ |
+| MB staff lockouts (2026-04-25, migration `music 0048`) | `mb_blocked_mbids` (JSON list of MBIDs `resolve_mbid` must skip) + `mb_auto_match_disabled` (bool — kills auto-match for this artist entirely; cleared automatically when staff types in a fresh MBID by hand) |
+| Last.fm artist metadata (2026-04-25, migration `music 0050`) | `lastfm_url`, `lastfm_bio_summary`, `lastfm_bio_content` (HTML), `lastfm_bio_published`, `lastfm_listeners`, `lastfm_playcount_total` (cumulative — distinct from per-track `SenyalDiari.lastfm_playcount`), `lastfm_ontour`, `lastfm_tags` (JSON list of `{name,url,count}`), `lastfm_image_{small,medium,large,extralarge}`, `lastfm_last_sync` ✦. Populated by `obtenir_metadata_lastfm` cron (05:00 UTC, 7-day refresh window). |
+| Last.fm similar-affinity (2026-04-25, migration `music 0050`) | `nb_similars_lastfm` (PositiveIntegerField). Counts the times this artist has been surfaced as a `similar` by `artist.getSimilar` of another aprovat artist. Used as a triage score on the pendents page (`?sort=similars_lastfm`). |
 | `created_at` | auto_now_add |
 
 ✦ = `db_index=True`.
@@ -61,13 +64,6 @@ got into the system (True for feat.-resolution / Viasona / auto
 sources, False for manual creation and legacy imports). It is NEVER
 flipped by the approval flow — historical code used it as a
 queue-membership flag, a conflation the 0042 migration resolved.
-
-`deezer_no_trobat` is a cache: "Deezer search failed for this
-artist, don't re-query immediately". The pendents filter no longer
-reads it (uses `deezer_ids__isnull` directly); it remains a write-path
-hint for `obtenir_novetats` / `obtenir_metadata`. A `post_save`
-receiver on `ArtistaDeezer` clears the flag whenever a real Deezer
-link appears.
 
 **Relations (related_name):**
 - `localitats` — reverse of `ArtistaLocalitat.artista`
@@ -208,6 +204,7 @@ Fields after the 2026-04-23 simplification:
 | `penalitzacio_album_per_canco` | 0.25 | Monopoli àlbum: `×(1 - value)` per earlier same-album track. |
 | `penalitzacio_artista_per_canco` | 0.2 | Monopoli artista: `×(1 - value)` per earlier same-artist track. |
 | `min_cancons_ranking_propi` | 20 | Threshold for an optional territori to get its own top. |
+| `ppcc_penalitzacio_per_posicio` | 0.04 | PPCC aggregator weight per source-territori position. Each entry from a territorial top scales by `(1 - (posició - 1) × valor)`. Promoted from a `ranking/algorisme.py` constant on 2026-04-25 (Sprint A). |
 
 Dropped 2026-04-23 (algorithm v1 legacy): `penalitzacio_descens`,
 `penalitzacio_setmana_0..2`, `suavitat`, `max_factor_a/b/c/final`.
@@ -230,9 +227,17 @@ Weekly official ranking. `setmana` = Monday of the ranking ISO week.
 
 ### `RankingProvisional` — `ranking_rankingprovisional`
 Rolling daily ranking. Truncated and rebuilt on each run.
-- `canco` FK, `territori` CharField(4)
-- `posicio`, `score_setmanal` (same semantics as setmanal despite the name)
-- `lastfm_playcount`, `dies_en_top`
+- `canco` FK (SET_NULL), `territori` CharField(4)
+- `posicio`, `score_setmanal` (the v2.0 final score = base × monopoli)
+- `escoltes_setmanals` — rolling 7-day plays delta (the algorithm's
+  `weekly_plays`). Renamed from the legacy `lastfm_playcount` on
+  2026-04-25 (migration `ranking 0012`, Sprint A) so the column name
+  matches the actual semantics. The companion `dies_en_top` column was
+  dropped in the same migration (had been NULL since v2.0).
+- Algorithm breakdown (migration `ranking 0011`, 2026-04-24):
+  `age_factor`, `past_top_factor`, `monopoli_factor` (all FloatField,
+  nullable). Surfaced as percentages in the staff ranking page and
+  in `RankingBreakdownPanel` on `CancoEditPage`.
 - `data_calcul` DateField(auto_now)
 - Unique: `(canco, territori)`. Index: `(territori, posicio)`
 
@@ -349,9 +354,9 @@ Flat comment attached to a `Publicacio`. No nested threads.
 
 ## Migrations
 
-- `music/` 0001–0047. Latest: `0047_album_mb_release_group_id_album_mb_status_and_more` (MusicBrainz fields, 2026-04-22).
+- `music/` 0001–0050. Latest: `0050_lastfm_artist_metadata` (Last.fm `lastfm_*` block + `nb_similars_lastfm`, 2026-04-25). `0049_artista_instagram_url_artista_twitter_url` (2026-04-25). `0048_artista_mb_auto_match_disabled_and_more` (MB lockouts: `mb_blocked_mbids` + `mb_auto_match_disabled`). `0047_album_mb_release_group_id_album_mb_status_and_more` (MusicBrainz fields, 2026-04-22).
   Notable recent: `0042_artista_pendent_review_constraint` (CheckConstraint
   on `aprovat` / `pendent_review`), `0045_canco_slug` (unique slug on Canco),
   `0044_drop_deezer_no_trobat` (dropped the stale cache flag).
-- `ranking/` 0001–0010. Latest: `0010_remove_configuracioglobal_max_factor_a_and_more` (drops `score_entrada`, the four `max_factor_*` clamps, `penalitzacio_descens`, `penalitzacio_setmana_0..2`, `suavitat`; bumps `coeficient_penalitzacio_top` default to 0.04 and carries that over to the live row when it still held the pre-v2.0 0.075).
-- `comptes/` 0001–0011. Latest: `0011_alter_perfilusuari_rol_musical` (oïdor/a + músic/a + productor/a label update). Notable recent: `0009_perfilusuari_notificar_comentaris_email_and_more` (Missatge, Comentari, notification opt-outs), `0010_rename_auth_user_m2m_columns` (aligned auth_user_groups / auth_user_user_permissions column names with the custom Usuari model so cascade deletes stop hitting ProgrammingError).
+- `ranking/` 0001–0012. Latest: `0012_sprint_a_cleanup` (renames `RankingProvisional.lastfm_playcount` → `escoltes_setmanals`, drops `dies_en_top`, promotes `PPCC_PENALITZACIO_PER_POSICIO` from a hardcoded constant to `ConfiguracioGlobal.ppcc_penalitzacio_per_posicio`, 2026-04-25). `0011_rankingprovisional_age_factor_and_more` (per-cançó algorithm breakdown, 2026-04-24). `0010_remove_configuracioglobal_max_factor_a_and_more` (drops `score_entrada`, the four `max_factor_*` clamps, `penalitzacio_descens`, `penalitzacio_setmana_0..2`, `suavitat`; bumps `coeficient_penalitzacio_top` default to 0.04 and carries that over to the live row when it still held the pre-v2.0 0.075).
+- `comptes/` 0001–0012. Latest: `0012_perfilusuari_twitter_url_and_more` (Instagram/X on PropostaArtista, X on PerfilUsuari, 2026-04-25). `0011_alter_perfilusuari_rol_musical` (oïdor/a + músic/a + productor/a label update). Notable recent: `0009_perfilusuari_notificar_comentaris_email_and_more` (Missatge, Comentari, notification opt-outs), `0010_rename_auth_user_m2m_columns` (aligned auth_user_groups / auth_user_user_permissions column names with the custom Usuari model so cascade deletes stop hitting ProgrammingError).

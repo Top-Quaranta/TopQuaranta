@@ -74,6 +74,33 @@ class ConfiguracioGlobal(models.Model):
         default=20,
         validators=_COUNT_RANGE,
     )
+    # Minimum weekly_plays a Cançó must reach to enter the top at all.
+    # Below this floor the algorithm treats the song as noise and
+    # excludes it — preferring a shorter top over filling the tail
+    # with 1-2 plays/week entries that round to score zero. Editorial
+    # rule (2026-04-26): "el top no arriba a 40 i ja està" if the
+    # eligible material doesn't pass this floor.
+    min_escoltes_top = models.IntegerField(
+        default=5,
+        validators=_COUNT_RANGE,
+        help_text="Cançons amb menys d'aquestes escoltes setmanals "
+        "queden fora del top. Si això fa que un territori no arribi "
+        "a 40 cançons, el top és més curt — no s'omple amb soroll.",
+    )
+    # PPCC aggregator weight per source position. Was a module-level
+    # constant in `ranking/algorisme.py`; promoted to the configurable
+    # surface 2026-04-25 (Sprint A) so editorial tuning doesn't require
+    # a code change. Default 0.04 matches the previous hardcoded value.
+    ppcc_penalitzacio_per_posicio = models.DecimalField(
+        max_digits=5,
+        decimal_places=3,
+        default=Decimal("0.04"),
+        validators=_PENALTY_RANGE,
+        help_text="PPCC: penalització per posició a la llista d'origen. "
+        "Cada cançó d'un top territorial entra a PPCC amb un score "
+        "multiplicat per (1 - (posició - 1) × valor). Ex amb 0.04: la "
+        "#1 entra al 100 %, la #2 al 96 %, la #25 al 4 %.",
+    )
 
     class Meta:
         verbose_name = "Configuració global"
@@ -142,7 +169,7 @@ class SenyalDiari(models.Model):
         return f"{self.canco} — {self.data}"
 
 
-class RankingSetmanal(models.Model):
+class TopSetmanal(models.Model):
     """Weekly ranking result. setmana = Monday of the ranking week (ISO).
 
     This is the cultural archive. Once a row is written it must remain
@@ -202,7 +229,7 @@ class RankingSetmanal(models.Model):
         return f"#{self.posicio} {nom} ({self.territori}) — {self.setmana}"
 
 
-class RankingProvisional(models.Model):
+class TopProvisional(models.Model):
     """
     Rolling daily ranking. Recalculated every day at 07:00.
     Truncated and rebuilt on each run — not a historical record.
@@ -221,8 +248,16 @@ class RankingProvisional(models.Model):
     territori = models.CharField(max_length=4)
     posicio = models.PositiveSmallIntegerField()
     score_setmanal = models.FloatField()
-    lastfm_playcount = models.IntegerField(null=True)
-    dies_en_top = models.IntegerField(null=True)
+    # v2.0: rolling 7-day plays delta (algorithm output `weekly_plays`).
+    # Renamed from the historic `lastfm_playcount` (which used to mean
+    # the cumulative total) on 2026-04-25 (Sprint A) so the semantics
+    # match the column name. The legacy `dies_en_top` companion column
+    # was dropped at the same time — it had been NULL since v2.0.
+    escoltes_setmanals = models.IntegerField(null=True)
+    # Per-cançó algorithm breakdown, for staff diagnostics.
+    age_factor = models.FloatField(null=True)
+    past_top_factor = models.FloatField(null=True)
+    monopoli_factor = models.FloatField(null=True)
     data_calcul = models.DateField(auto_now=True)
 
     class Meta:
@@ -232,3 +267,11 @@ class RankingProvisional(models.Model):
 
     def __str__(self) -> str:
         return f"#{self.posicio} {self.canco.nom} ({self.territori})"
+
+
+# Backward-compat aliases (Sprint Naming, 2026-04-25). External code
+# may still import the old class names; keep them resolvable until the
+# whole codebase has migrated. The DB tables will be renamed by the
+# next migration; the aliases just point to the new classes.
+RankingSetmanal = TopSetmanal
+RankingProvisional = TopProvisional

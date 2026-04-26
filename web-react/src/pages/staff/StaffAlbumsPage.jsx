@@ -6,7 +6,7 @@
  * a Deezer preview link.
  */
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import {
   EmptyState,
@@ -22,19 +22,28 @@ import {
   THead,
   Tr,
 } from '../../components/staff/StaffTable'
+import { Field } from '../../components/staff/StaffTable'
+import FilterPanel from '../../components/staff/FilterPanel'
+
+const DEFAULTS = { tipus: '', descartat: '', mb: '' }
 
 export default function StaffAlbumsPage() {
   const navigate = useNavigate()
-  const [q, setQ] = useState('')
-  const [tipus, setTipus] = useState('')
-  const [descartat, setDescartat] = useState('')
+  const [urlParams] = useSearchParams()
+  const [q, setQ] = useState(urlParams.get('q') || '')
+  const [applied, setApplied] = useState({
+    tipus:     urlParams.get('tipus')     ?? DEFAULTS.tipus,
+    descartat: urlParams.get('descartat') ?? DEFAULTS.descartat,
+    mb:        urlParams.get('mb')        ?? DEFAULTS.mb,
+  })
+  const { tipus, descartat, mb } = applied
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
 
   useEffect(() => {
-    const params = new URLSearchParams({ q, tipus, descartat, page })
+    const params = new URLSearchParams({ q, tipus, descartat, mb, page })
     api.get(`/staff/albums/?${params}`).then(setData).catch(() => setData(null))
-  }, [q, tipus, descartat, page])
+  }, [q, tipus, descartat, mb, page])
 
   return (
     <section>
@@ -43,23 +52,46 @@ export default function StaffAlbumsPage() {
         subtitle={data ? `${data.total} àlbums` : 'Carregant…'}
       />
 
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <Input
           placeholder="Cerca àlbum o artista…"
           value={q}
           onChange={e => { setPage(1); setQ(e.target.value) }}
+          className="flex-1 min-w-[14rem]"
         />
-        <Select value={tipus} onChange={e => { setPage(1); setTipus(e.target.value) }}>
-          <option value="">Tots els tipus</option>
-          <option value="album">Àlbum</option>
-          <option value="single">Single</option>
-          <option value="ep">EP</option>
-        </Select>
-        <Select value={descartat} onChange={e => { setPage(1); setDescartat(e.target.value) }}>
-          <option value="">Tots</option>
-          <option value="0">No descartats</option>
-          <option value="1">Descartats</option>
-        </Select>
+        <FilterPanel
+          applied={applied}
+          defaults={DEFAULTS}
+          onApply={next => { setApplied(next); setPage(1) }}
+        >
+          {(p, setP) => (
+            <>
+              <Field label="Tipus">
+                <Select value={p.tipus} onChange={e => setP({ tipus: e.target.value })}>
+                  <option value="">Tots els tipus</option>
+                  <option value="album">Àlbum</option>
+                  <option value="single">Single</option>
+                  <option value="ep">EP</option>
+                </Select>
+              </Field>
+              <Field label="Estat">
+                <Select value={p.descartat} onChange={e => setP({ descartat: e.target.value })}>
+                  <option value="">Tots</option>
+                  <option value="0">No descartats</option>
+                  <option value="1">Descartats</option>
+                </Select>
+              </Field>
+              <Field label="MusicBrainz">
+                <Select value={p.mb} onChange={e => setP({ mb: e.target.value })}>
+                  <option value="">Qualsevol</option>
+                  <option value="confirmat">Confirmat ✓</option>
+                  <option value="no_confirmat">No confirmat ✗</option>
+                  <option value="desconegut">Desconegut ?</option>
+                </Select>
+              </Field>
+            </>
+          )}
+        </FilterPanel>
       </div>
 
       <TableCard>

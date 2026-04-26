@@ -12,8 +12,8 @@
 /var/log/topquaranta/novetats.log
 /var/log/topquaranta/senyal.log
 /var/log/topquaranta/neteja.log
-/var/log/topquaranta/ranking.log
-/var/log/topquaranta/provisional.log
+/var/log/topquaranta/top.log
+/var/log/topquaranta/top-provisional.log
 /var/log/topquaranta/recover.log
 /var/log/topquaranta/ingestar.log
 /var/log/topquaranta/metadata.log

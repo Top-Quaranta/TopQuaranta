@@ -15,6 +15,8 @@ import ComptePage from './pages/ComptePage'
 import ComptePerfilPage from './pages/ComptePerfilPage'
 import ProposarArtistaPage from './pages/ProposarArtistaPage'
 import SolicitarGestioPage from './pages/SolicitarGestioPage'
+import GestioArtistaEditPage from './pages/GestioArtistaEditPage'
+import ComFuncionaPage from './pages/ComFuncionaPage'
 import SpotifyCallbackPage from './pages/SpotifyCallbackPage'
 import OnboardingPage from './pages/OnboardingPage'
 import PerfilUsuariPage from './pages/PerfilUsuariPage'
@@ -101,12 +103,14 @@ function AppContent() {
         <Route path="/artista/:artistaSlug/:albumSlug/:cancoSlug" element={<CancoPage />} />
         <Route path="/artista/:artistaSlug/:albumSlug" element={<AlbumPage />} />
         <Route path="/mapa" element={<MapaPage />} />
+        <Route path="/com-funciona" element={<ComFuncionaPage />} />
         <Route path="/compte/accedir" element={<AuthPage />} />
         <Route path="/compte/callback" element={<AuthCallbackPage />} />
         <Route path="/compte" element={<ComptePage />} />
         <Route path="/compte/perfil" element={<ComptePerfilPage />} />
         <Route path="/compte/artista/proposta" element={<ProposarArtistaPage />} />
         <Route path="/compte/artista/gestio" element={<SolicitarGestioPage />} />
+        <Route path="/compte/artista/:pk/editar" element={<GestioArtistaEditPage />} />
         {/* Perfil + missatges moved under /comunitat so they share the
             community sidebar. Old URLs kept as redirects. */}
         <Route path="/compte/perfil-usuari" element={<Navigate to="/comunitat/perfil" replace />} />
@@ -151,7 +155,9 @@ function AppContent() {
                   <Route path="/cancons/:pk" element={<CancoEditPage />} />
                   <Route path="/albums" element={<StaffAlbumsPage />} />
                   <Route path="/albums/:pk" element={<AlbumEditPage />} />
-                  <Route path="/ranking" element={<StaffRankingPage />} />
+                  <Route path="/top" element={<StaffRankingPage />} />
+                  {/* Legacy alias — keeps any in-flight bookmark working. */}
+                  <Route path="/ranking" element={<Navigate to="/staff/top" replace />} />
                   <Route path="/propostes" element={<PropostesPage />} />
                   <Route path="/propostes/:pk" element={<PropostaDetailPage />} />
                   <Route path="/solicituds" element={<SolicitudsPage />} />

@@ -61,12 +61,29 @@ _URL_REL_MAP = {
     "viasona": "viasona_url",
     "facebook": "facebook_url",
     "myspace": "myspace_url",
-    # NOTE: Artista has no instagram_url / twitter_url fields yet —
-    # MB relations of those types are ignored. Add fields when ready.
 }
 
-# Confidence threshold for single-match auto-assignment.
-AUTO_MATCH_SCORE = 95
+# Instagram / X don't have dedicated MB url-rel types — both are
+# exposed as the generic "social network" relation, distinguished only
+# by the URL host. We route them to the right field by inspecting
+# the URL after the relation type filter passes.
+_SOCIAL_NETWORK_REL_TYPES = {"social network", "social"}
+_SOCIAL_HOST_MAP = {
+    "instagram.com": "instagram_url",
+    "www.instagram.com": "instagram_url",
+    "twitter.com": "twitter_url",
+    "www.twitter.com": "twitter_url",
+    "x.com": "twitter_url",
+    "www.x.com": "twitter_url",
+    "mobile.twitter.com": "twitter_url",
+    "tiktok.com": "tiktok_url",
+    "www.tiktok.com": "tiktok_url",
+}
+
+# Confidence threshold for single-match auto-assignment. Lives in
+# `music/constants.py` since 2026-04-25 (Sprint A) — re-exported here
+# under the historical name to keep call sites stable.
+from music.constants import MB_AUTO_MATCH_SCORE as AUTO_MATCH_SCORE  # noqa: E402, F401
 
 
 def _looks_ppcc(area_name: str, disambiguation: str = "") -> bool:
@@ -111,6 +128,11 @@ def resolve_mbid(artista) -> str | None:
     name = artista.nom.strip()
     if not name:
         return None
+    # Staff-controlled escape hatches: stop auto-matching entirely, or
+    # skip previously-rejected MBIDs. Both survive re-runs of the cron.
+    if getattr(artista, "mb_auto_match_disabled", False):
+        return None
+    blocked = set(getattr(artista, "mb_blocked_mbids", []) or [])
     try:
         candidates = mb.search_artist(name)
     except Exception:
@@ -123,6 +145,8 @@ def resolve_mbid(artista) -> str | None:
         if c.get("score", 0) < AUTO_MATCH_SCORE:
             continue
         if c.get("name", "").lower() != want:
+            continue
+        if c.get("id") in blocked:
             continue
         strong.append(c)
 
@@ -144,6 +168,24 @@ def resolve_mbid(artista) -> str | None:
     return None  # still ambiguous — let staff pick
 
 
+def _field_for_relation(rel_type: str, url: str) -> str | None:
+    """Return the Artista field name for a MB url-rel, or None to skip.
+
+    Most rel types map 1:1 via `_URL_REL_MAP`. Instagram, X (Twitter)
+    and TikTok all share the generic "social network" rel type on MB,
+    so for that type we route by URL host via `_SOCIAL_HOST_MAP`.
+    """
+    field = _URL_REL_MAP.get(rel_type)
+    if field:
+        return field
+    if rel_type in _SOCIAL_NETWORK_REL_TYPES:
+        from urllib.parse import urlparse
+
+        host = (urlparse(url).hostname or "").lower()
+        return _SOCIAL_HOST_MAP.get(host)
+    return None
+
+
 def _apply_url_relations(artista, relations: list[dict]) -> int:
     """Fill missing social URL fields from MB's url-rels. Never overwrite."""
     filled = 0
@@ -151,15 +193,16 @@ def _apply_url_relations(artista, relations: list[dict]) -> int:
         if rel.get("target-type") != "url":
             continue
         rel_type = (rel.get("type") or "").lower()
-        field = _URL_REL_MAP.get(rel_type)
+        url = (rel.get("url") or {}).get("resource", "")
+        if not url.startswith(("http://", "https://")):
+            continue
+        field = _field_for_relation(rel_type, url)
         if not field:
             continue
         if getattr(artista, field, None):
             continue  # already set, don't overwrite
-        url = (rel.get("url") or {}).get("resource", "")
-        if url.startswith(("http://", "https://")):
-            setattr(artista, field, url)
-            filled += 1
+        setattr(artista, field, url)
+        filled += 1
     return filled
 
 

@@ -43,6 +43,7 @@ from comptes.models import (
     UserArtista,
 )
 from music.models import Municipi
+from web.api.search_utils import normalize_search_term, unaccent_field
 from web.api.staff_views import IsStaff
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -204,11 +205,17 @@ def directori(request: Request) -> Response:
     )
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(
-            Q(nom_public__icontains=q)
-            | Q(usuari__username__icontains=q)
-            | Q(instruments__icontains=q)
-            | Q(bio__icontains=q)
+        nq = normalize_search_term(q)
+        qs = qs.annotate(
+            _nom_norm=unaccent_field("nom_public"),
+            _user_norm=unaccent_field("usuari__username"),
+            _instr_norm=unaccent_field("instruments"),
+            _bio_norm=unaccent_field("bio"),
+        ).filter(
+            Q(_nom_norm__contains=nq)
+            | Q(_user_norm__contains=nq)
+            | Q(_instr_norm__contains=nq)
+            | Q(_bio_norm__contains=nq)
         )
     rol = request.GET.get("rol", "")
     if rol in {k for k, _ in PerfilUsuari.ROL_CHOICES}:
@@ -478,11 +485,17 @@ def staff_publicacions(request: Request) -> Response:
         qs = qs.filter(estat=estat)
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(
-            Q(titol__icontains=q)
-            | Q(cos__icontains=q)
-            | Q(autor__username__icontains=q)
-            | Q(autor__email__icontains=q)
+        nq = normalize_search_term(q)
+        qs = qs.annotate(
+            _titol_norm=unaccent_field("titol"),
+            _cos_norm=unaccent_field("cos"),
+            _user_norm=unaccent_field("autor__username"),
+            _email_norm=unaccent_field("autor__email"),
+        ).filter(
+            Q(_titol_norm__contains=nq)
+            | Q(_cos_norm__contains=nq)
+            | Q(_user_norm__contains=nq)
+            | Q(_email_norm__contains=nq)
         )
     qs = qs.order_by("-created_at")
     try:
@@ -546,10 +559,15 @@ def staff_directori_usuaris(request: Request) -> Response:
     )
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(
-            Q(usuari__username__icontains=q)
-            | Q(usuari__email__icontains=q)
-            | Q(nom_public__icontains=q)
+        nq = normalize_search_term(q)
+        qs = qs.annotate(
+            _user_norm=unaccent_field("usuari__username"),
+            _email_norm=unaccent_field("usuari__email"),
+            _nom_norm=unaccent_field("nom_public"),
+        ).filter(
+            Q(_user_norm__contains=nq)
+            | Q(_email_norm__contains=nq)
+            | Q(_nom_norm__contains=nq)
         )
     visible = request.GET.get("visible", "")
     if visible == "1":

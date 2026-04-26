@@ -100,6 +100,8 @@ class PropostaArtista(models.Model):
     soundcloud_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
     tiktok_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
     facebook_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
+    instagram_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
+    twitter_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
 
     # D3: list of Deezer IDs. Previously a comma-separated CharField; now a
     # JSONField so the ORM parses it for us. Default `list` so `.deezer_ids`
@@ -273,6 +275,7 @@ class PerfilUsuari(models.Model):
     tiktok_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
     facebook_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
     instagram_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
+    twitter_url = models.URLField(blank=True, validators=[HTTP_ONLY_URL])
 
     rol_musical = models.CharField(
         max_length=20, choices=ROL_CHOICES, default=ROL_ESCOLTADOR
@@ -305,6 +308,7 @@ class PerfilUsuari(models.Model):
         ("tiktok_url", "TikTok"),
         ("facebook_url", "Facebook"),
         ("instagram_url", "Instagram"),
+        ("twitter_url", "X"),
     ]
 
     class Meta:

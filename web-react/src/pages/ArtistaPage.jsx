@@ -12,10 +12,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { albumUrl, cancoUrl } from '../lib/urls'
 import FeedbackButton from '../components/FeedbackButton'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
+import { useAuth } from '../context/AuthContext'
 
 const TERRITORI_NOM = {
   CAT: 'Catalunya', VAL: 'País Valencià', BAL: 'Illes Balears',
@@ -26,6 +28,7 @@ const TERRITORI_NOM = {
 
 export default function ArtistaPage() {
   const { slug } = useParams()
+  const { profile } = useAuth()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -60,7 +63,7 @@ export default function ArtistaPage() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="bg-red-100 text-red-800 p-3 rounded-md text-sm">{error}</div>
+        <Alert tone="danger">{error}</Alert>
         <p className="mt-4">
           <Link to="/artistes" className="text-tq-yellow">← Torna al directori</Link>
         </p>
@@ -133,13 +136,25 @@ export default function ArtistaPage() {
           ))}
           {/* CTA: request to manage this artist. Goes to /compte/artista/gestio
               pre-filled. Private — still works for anonymous users because
-              AuthRoute on the target page will redirect to login. */}
-          <Link
-            to={`/compte/artista/gestio?artista=${data.slug}`}
-            className="ml-auto text-xs px-2.5 py-1 rounded-md bg-tq-ink text-tq-yellow font-semibold hover:bg-tq-ink/90"
-          >
-            Sóc aquest artista
-          </Link>
+              AuthRoute on the target page will redirect to login.
+              When the visitor is already a verified manager of this
+              artist (per /api/v1/auth/me/'s `verified_artist_pks`), we
+              swap the request CTA for a direct shortcut to the editor. */}
+          {profile?.verified_artist_pks?.includes(data.pk) ? (
+            <Link
+              to={`/compte/artista/${data.pk}/editar`}
+              className="ml-auto text-xs px-2.5 py-1 rounded-md bg-tq-yellow text-tq-ink font-semibold hover:bg-tq-yellow-deep hover:text-white"
+            >
+              Editar perfil
+            </Link>
+          ) : (
+            <Link
+              to={`/compte/artista/gestio?artista=${data.slug}`}
+              className="ml-auto text-xs px-2.5 py-1 rounded-md bg-tq-ink text-tq-yellow font-semibold hover:bg-tq-ink/90"
+            >
+              Sóc aquest artista
+            </Link>
+          )}
         </div>
         </div>
       </header>
@@ -182,7 +197,7 @@ export default function ArtistaPage() {
       {/* Discography */}
       {data.discografia?.length > 0 && (
         <section className="bg-white text-tq-ink rounded-lg p-6 shadow-md">
-          <h2 className="text-xl font-bold font-display mb-3">Discografia verificada</h2>
+          <h2 className="text-xl font-bold font-display mb-3">Discografia</h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {data.discografia.map(a => (
               <li key={a.slug}>
@@ -203,6 +218,47 @@ export default function ArtistaPage() {
                   <p className="text-xs text-gray-500">
                     {a.data_llancament?.slice(0, 4)} · {a.n_cancons} cançons
                   </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Col·laboracions — cançons d'altres artistes amb participació d'aquest. */}
+      {data.colaboracions?.length > 0 && (
+        <section className="bg-white text-tq-ink rounded-lg p-6 shadow-md">
+          <h2 className="text-xl font-bold font-display mb-3">També col·labora a</h2>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {data.colaboracions.map(c => (
+              <li key={c.canco_slug}>
+                <Link
+                  to={cancoUrl({
+                    cancoSlug: c.canco_slug,
+                    artistaSlug: c.artista_principal_slug,
+                    albumSlug: c.album_slug,
+                  })}
+                  className="block"
+                >
+                  {c.imatge_url ? (
+                    <img
+                      src={c.imatge_url}
+                      alt=""
+                      loading="lazy"
+                      className="aspect-square w-full object-cover rounded-md"
+                    />
+                  ) : (
+                    <div className="aspect-square w-full bg-gray-100 rounded-md" />
+                  )}
+                  <p className="mt-1.5 text-sm font-semibold truncate">{c.canco_nom}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    amb {c.artista_principal_nom}
+                  </p>
+                  {c.data_llancament && (
+                    <p className="text-[11px] text-gray-600">
+                      {c.data_llancament.slice(0, 4)}
+                    </p>
+                  )}
                 </Link>
               </li>
             ))}

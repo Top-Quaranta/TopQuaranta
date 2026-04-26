@@ -63,6 +63,18 @@ def _profile(request_or_user) -> dict:
     perfil = getattr(user, "perfil", None)
     onboarding_complet = bool(perfil.onboarding_complet) if perfil else True
 
+    # Verified-manager set: list of Artista PKs this user is allowed to
+    # self-edit via /api/v1/compte/artista/<pk>/editar/. Surfaced on
+    # /me/ so any public page (e.g. ArtistaPage) can pivot UI on it
+    # without a second round-trip. Cheap query — small per-user N.
+    from comptes.models import UserArtista
+
+    verified_artist_pks = list(
+        UserArtista.objects.filter(usuari=user, verificat=True).values_list(
+            "artista_id", flat=True
+        )
+    )
+
     return {
         "id": user.pk,
         "email": user.email,
@@ -73,6 +85,7 @@ def _profile(request_or_user) -> dict:
         "is_verified": is_verified,
         "has_totp": has_totp,
         "onboarding_complet": onboarding_complet,
+        "verified_artist_pks": verified_artist_pks,
     }
 
 

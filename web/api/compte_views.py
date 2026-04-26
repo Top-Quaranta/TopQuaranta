@@ -21,7 +21,7 @@ from rest_framework.response import Response
 
 from comptes.models import HTTP_ONLY_URL, Feedback, PropostaArtista, UserArtista, Usuari
 from music.models import Artista, Municipi
-from ranking.models import RankingSetmanal
+from ranking.models import TopSetmanal
 
 
 def _serialize_user_artista(ua) -> dict:
@@ -32,6 +32,9 @@ def _serialize_user_artista(ua) -> dict:
         "verificat": ua.verificat,
         "created_at": ua.created_at.isoformat() if ua.created_at else None,
         "artista": {
+            # `pk` is needed by the SPA so verified managers can deep-link
+            # into /compte/artista/<pk>/editar (the gestor self-edit form).
+            "pk": a.pk,
             "slug": a.slug,
             "nom": a.nom,
         },
@@ -72,7 +75,7 @@ def dashboard(request: Request) -> Response:
     # Artist stats, only if the user manages a verified artist.
     stats = None
     if artista_verificat:
-        qs = RankingSetmanal.objects.filter(canco__artista=artista_verificat.artista)
+        qs = TopSetmanal.objects.filter(canco__artista=artista_verificat.artista)
         stats = {
             "setmanes_al_ranking": qs.values("setmana").distinct().count(),
             "millor_posicio": qs.order_by("posicio")
@@ -81,6 +84,16 @@ def dashboard(request: Request) -> Response:
             "cancons_al_ranking": qs.values("canco_id").distinct().count(),
             "territoris_presents": qs.values("territori").distinct().count(),
         }
+
+    # Perfil snapshot — Sprint H surfaces directori state on the dashboard
+    # so the SPA can show "Activa el teu perfil" / "Edita el perfil" CTAs
+    # without a second round-trip to /comunitat/perfil/.
+    perfil_obj = getattr(user, "perfil", None)
+    perfil_payload = {
+        "visible_directori": bool(getattr(perfil_obj, "visible_directori", False)),
+        "onboarding_complet": bool(getattr(perfil_obj, "onboarding_complet", False)),
+        "nom_public": getattr(perfil_obj, "nom_public", "") or "",
+    }
 
     return Response(
         {
@@ -92,6 +105,7 @@ def dashboard(request: Request) -> Response:
                 ),
                 "is_staff": bool(user.is_staff),
             },
+            "perfil": perfil_payload,
             "gestio_list": [_serialize_user_artista(u) for u in gestio_list],
             "propostes_list": [_serialize_proposta(p) for p in propostes_list],
             "artista_verificat": (
@@ -215,6 +229,8 @@ PROPOSTA_SOCIAL_FIELDS = [
     "soundcloud_url",
     "tiktok_url",
     "facebook_url",
+    "instagram_url",
+    "twitter_url",
 ]
 
 
@@ -404,6 +420,137 @@ def solicitud_crear(request: Request) -> Response:
         estat=UserArtista.ESTAT_PENDENT,
     )
     return Response({"ok": True, "pk": ua.pk, "estat": ua.estat}, status=201)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Gestor d'artista — self-service edit of non-critical fields
+# ─────────────────────────────────────────────────────────────────────────
+
+# Fields a verified manager (UserArtista.verificat=True) may write directly
+# to their managed artist. Anything outside this set is silently ignored
+# (we don't 400 on extras so a future SPA bundle adding fields stays
+# forward-compatible). Critical fields kept staff-only:
+#   nom, slug, deezer_ids/ArtistaDeezer, ArtistaLocalitat (territoris),
+#   aprovat, pendent_review, MusicBrainz lockouts.
+GESTOR_EDITABLE_TEXT_FIELDS = ("bio", "genere")
+GESTOR_EDITABLE_CHOICE_FIELDS = ("percentatge_femeni",)
+GESTOR_EDITABLE_URL_FIELDS = tuple(f for f, _ in Artista.SOCIAL_LINK_FIELDS)
+GESTOR_EDITABLE_FIELDS = (
+    GESTOR_EDITABLE_TEXT_FIELDS
+    + GESTOR_EDITABLE_CHOICE_FIELDS
+    + GESTOR_EDITABLE_URL_FIELDS
+)
+
+
+def _serialize_gestor_artista(a: Artista) -> dict:
+    """Snapshot of the editable surface, plus choice metadata for the form."""
+    return {
+        "pk": a.pk,
+        "slug": a.slug,
+        "nom": a.nom,
+        "bio": a.bio or "",
+        "genere": a.genere or "",
+        "percentatge_femeni": a.percentatge_femeni or "",
+        "social": {f: getattr(a, f) or "" for f in GESTOR_EDITABLE_URL_FIELDS},
+        # Form metadata so the SPA doesn't hard-code the choice list.
+        "percentatge_choices": list(Artista.PERCENTATGE_FEMENI_CHOICES),
+        "social_fields": list(Artista.SOCIAL_LINK_FIELDS),
+    }
+
+
+def _gestor_check(request, pk: int) -> Artista | Response:
+    """Return the Artista if `request.user` may manage it, else a 403/404."""
+    try:
+        artista = Artista.objects.get(pk=pk)
+    except Artista.DoesNotExist:
+        return Response({"error": "Artista no trobat."}, status=404)
+    has_verified = UserArtista.objects.filter(
+        usuari=request.user, artista=artista, verificat=True
+    ).exists()
+    if not has_verified:
+        return Response(
+            {"error": "No tens permís per editar aquest artista."}, status=403
+        )
+    return artista
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def gestor_artista_editar(request: Request, pk: int) -> Response:
+    """Verified-manager self-service editor for non-critical Artista fields.
+
+    GET   returns the current snapshot + form metadata.
+    PATCH writes any subset of GESTOR_EDITABLE_FIELDS. Unknown keys are
+          silently dropped. URLFields go through HTTP_ONLY_URL; bad URLs
+          return 400 with per-field errors. Choice fields are validated
+          against `PERCENTATGE_FEMENI_CHOICES`. Audit row is written
+          *only* when at least one field actually changed (no log spam
+          on no-op PATCHes from auto-saves)."""
+    result = _gestor_check(request, pk)
+    if isinstance(result, Response):
+        return result
+    artista = result
+
+    if request.method == "GET":
+        return Response(_serialize_gestor_artista(artista))
+
+    data = request.data or {}
+    errors: dict[str, str] = {}
+    valid_choices = {v for v, _ in Artista.PERCENTATGE_FEMENI_CHOICES}
+    canviats: list[str] = []
+
+    # Free-text fields
+    for f in GESTOR_EDITABLE_TEXT_FIELDS:
+        if f not in data:
+            continue
+        new = (data.get(f) or "").strip()
+        if getattr(artista, f, "") != new:
+            setattr(artista, f, new)
+            canviats.append(f)
+
+    # Choice fields
+    for f in GESTOR_EDITABLE_CHOICE_FIELDS:
+        if f not in data:
+            continue
+        new = (data.get(f) or "").strip()
+        if new and new not in valid_choices:
+            errors[f] = "Valor no vàlid."
+            continue
+        if getattr(artista, f) != new:
+            setattr(artista, f, new)
+            canviats.append(f)
+
+    # URL fields — validated via the same HTTP-only validator the
+    # proposta endpoint uses. Empty string clears the field.
+    for f in GESTOR_EDITABLE_URL_FIELDS:
+        if f not in data:
+            continue
+        val, err = _clean_url(data.get(f, ""))
+        if err:
+            errors[f] = err
+            continue
+        if getattr(artista, f) != val:
+            setattr(artista, f, val)
+            canviats.append(f)
+
+    if errors:
+        return Response({"errors": errors}, status=400)
+
+    if canviats:
+        artista.save(update_fields=canviats)
+        from music.audit import log_staff_action
+
+        log_staff_action(
+            request,
+            "gestor_edita_artista",
+            target=artista,
+            camps=canviats,
+            usuari=request.user.pk,
+        )
+
+    return Response(
+        {"ok": True, "canviats": canviats, **_serialize_gestor_artista(artista)}
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ function formatSync(iso) {
   return d.toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-export default function MusicBrainzPanel({ kind, data, onSync, busy }) {
+export default function MusicBrainzPanel({ kind, data, onSync, onClear, busy }) {
   const hasId =
     (kind === 'artista' && data?.id) ||
     (kind === 'album' && data?.mb_release_group_id) ||
@@ -83,6 +83,17 @@ export default function MusicBrainzPanel({ kind, data, onSync, busy }) {
               Sincronitzar ara
             </button>
           )}
+          {kind === 'artista' && onClear && data?.id && (
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={busy}
+              title="Desvincula l'MBID i, opcionalment, bloqueja'l perquè el cron no el reassigni"
+              className="text-[11px] font-semibold px-2.5 py-1 rounded border border-tq-ink/30 text-tq-ink hover:bg-tq-ink/5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Desvincular…
+            </button>
+          )}
         </div>
       </div>
 
@@ -98,19 +109,48 @@ export default function MusicBrainzPanel({ kind, data, onSync, busy }) {
         <>
           {!hasId && (
             <p className="text-xs text-tq-ink/60 italic mb-2">
-              Aquest artista encara no té MBID assignat. El cron l'intentarà
-              resoldre pel nom, però si hi ha homonímia (p.ex. Crim) cal
-              posar-lo manualment. Cerca'l a{' '}
-              <a
-                href={`https://musicbrainz.org/search?query=${encodeURIComponent(data?.nom_hint || '')}&type=artist`}
-                target="_blank"
-                rel="noopener"
-                className="underline"
-              >
-                musicbrainz.org
-              </a>{' '}
-              i enganxa l'UUID al camp de l'editor.
+              Aquest artista encara no té MBID assignat.{' '}
+              {data?.auto_match_disabled ? (
+                <span>
+                  L'auto-match està <strong>desactivat</strong> — el cron
+                  no tornarà a proposar cap MBID. Per reactivar-lo, enganxa
+                  un MBID vàlid al camp i desa.
+                </span>
+              ) : (
+                <>
+                  El cron l'intentarà resoldre pel nom, però si hi ha
+                  homonímia (p.ex. Crim) cal posar-lo manualment. Cerca'l a{' '}
+                  <a
+                    href={`https://musicbrainz.org/search?query=${encodeURIComponent(data?.nom_hint || '')}&type=artist`}
+                    target="_blank"
+                    rel="noopener"
+                    className="underline"
+                  >
+                    musicbrainz.org
+                  </a>{' '}
+                  i enganxa l'UUID al camp de l'editor.
+                </>
+              )}
             </p>
+          )}
+          {Array.isArray(data?.blocked_mbids) && data.blocked_mbids.length > 0 && (
+            <div className="text-[11px] text-tq-ink/70 mb-2 flex flex-wrap gap-1 items-center">
+              <span className="uppercase tracking-wide text-tq-ink/60">
+                MBIDs bloquejats:
+              </span>
+              {data.blocked_mbids.map(id => (
+                <a
+                  key={id}
+                  href={`https://musicbrainz.org/artist/${id}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="font-mono underline decoration-dotted hover:decoration-solid"
+                  title="Prèviament rebutjat per staff — el cron no el reassignarà"
+                >
+                  {id.slice(0, 8)}…
+                </a>
+              ))}
+            </div>
           )}
           <Row label="MBID" value={data?.id} />
           <Row label="Tipus" value={data?.type} />
@@ -123,7 +163,10 @@ export default function MusicBrainzPanel({ kind, data, onSync, busy }) {
             label="Fi"
             value={
               data?.end_date ? (
-                <span className="text-red-700 font-semibold">{data.end_date}</span>
+                <span
+                  className="font-semibold"
+                  style={{ color: 'var(--color-tq-danger)' }}
+                >{data.end_date}</span>
               ) : null
             }
           />
@@ -163,7 +206,10 @@ export default function MusicBrainzPanel({ kind, data, onSync, busy }) {
             label="Idioma (Work)"
             value={
               data?.mb_lyrics_language === 'cat' ? (
-                <span className="text-emerald-700 font-semibold">
+                <span
+                  className="font-semibold"
+                  style={{ color: 'var(--color-tq-success)' }}
+                >
                   català ✓
                 </span>
               ) : (

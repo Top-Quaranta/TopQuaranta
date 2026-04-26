@@ -292,3 +292,86 @@ def get_track_info(artist_name: str, track_name: str) -> dict | None:
             track_name,
         )
     return None
+
+
+# ── Artist-level endpoints ──────────────────────────────────────────────
+
+
+def _artist_api_call(method: str, **extra) -> dict | None:
+    """Generic helper for artist.* endpoints. Returns parsed JSON or None.
+
+    Uses the same rate-limit + exponential-backoff retry pattern as
+    `_api_call` for tracks. Errors are logged once at WARNING and the
+    call returns None — never raises.
+    """
+    params = {
+        "method": method,
+        "api_key": settings.LASTFM_API_KEY,
+        "format": "json",
+        "autocorrect": 1,
+        **extra,
+    }
+    if "artist" in params:
+        params["artist"] = unicodedata.normalize("NFC", params["artist"])
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            time.sleep(RATE_LIMIT_SLEEP)
+            response = requests.get(LASTFM_API_URL, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                logger.warning(
+                    "Last.fm %s error %s for %r: %s",
+                    method,
+                    data.get("error"),
+                    params.get("artist"),
+                    data.get("message"),
+                )
+                return None
+            return data
+        except requests.RequestException as exc:
+            wait = 2**attempt
+            logger.warning(
+                "Last.fm %s attempt %d/%d failed for %r: %s — retry in %ds",
+                method,
+                attempt + 1,
+                MAX_RETRIES,
+                params.get("artist"),
+                exc,
+                wait,
+            )
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(wait)
+    return None
+
+
+def get_artist_info(artist_name: str) -> dict | None:
+    """Fetch the artist.getInfo block for `artist_name`.
+
+    Returns the raw `artist` dict from Last.fm (with `bio`, `stats`,
+    `image`, `tags`, `ontour`, `url`…) or None on any failure.
+    Autocorrect is on, so the returned name may differ slightly from
+    the input — callers should preserve our `lastfm_nom`/`nom` rather
+    than overwriting from the response.
+    """
+    data = _artist_api_call("artist.getInfo", artist=artist_name)
+    if not data:
+        return None
+    return data.get("artist") or None
+
+
+def get_artist_similar(artist_name: str, limit: int = 100) -> list[dict]:
+    """Fetch the artist.getSimilar list for `artist_name`.
+
+    Returns a list of similar-artist dicts as Last.fm hands them
+    (`name`, `match`, `url`, `image`, `mbid`). Empty list on any
+    failure. Caller is responsible for filtering by `match` threshold.
+    """
+    data = _artist_api_call("artist.getSimilar", artist=artist_name, limit=limit)
+    if not data:
+        return []
+    similar = (data.get("similarartists") or {}).get("artist") or []
+    if isinstance(similar, dict):
+        similar = [similar]
+    return similar

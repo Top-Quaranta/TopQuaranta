@@ -46,27 +46,44 @@ export default function ComunitatDirectoriPage() {
 
   return (
     <section className="max-w-4xl mx-auto text-white">
-      <h1 className="text-2xl font-bold mb-1">Directori de la comunitat</h1>
-      <p className="text-xs text-white/60 mb-4">
-        Usuaris que han decidit ser visibles. Si no hi apareixes, marca la
-        casella "Vull aparèixer al directori" al teu <Link to="/comunitat/perfil" className="underline">perfil</Link>.
-      </p>
+      {/* Header card — same shape as ComunitatPage so the sub-pages
+          read as siblings. */}
+      <div className="bg-tq-ink/40 border border-white/10 rounded-lg p-4 md:p-5 mb-5">
+        <p className="text-[10px] uppercase tracking-widest text-tq-yellow">
+          Comunitat · Directori
+        </p>
+        <h1 className="text-xl md:text-2xl font-bold font-display mt-1 leading-tight">
+          Músics i creadors oberts a connectar
+        </h1>
+        <p className="text-sm text-white/80 mt-2 leading-relaxed">
+          Filtra per rol, instrument o territori per trobar la persona
+          que busques. Només hi apareix qui ha decidit ser visible — si
+          no hi ets, marca la casella al teu{' '}
+          <Link to="/comunitat/perfil" className="underline hover:text-tq-yellow transition-colors">perfil</Link>.
+        </p>
+      </div>
 
+      {/* Filters row — labels are sr-only because each control's
+          first option / placeholder reads as the label visually. */}
       <div className="flex flex-wrap gap-2 mb-4">
+        <label htmlFor="dir-q" className="sr-only">Cercar al directori</label>
         <input
+          id="dir-q"
           value={q}
           onChange={e => { setPage(1); setQ(e.target.value) }}
           placeholder="Cerca nom, instrument, bio…"
           className="px-3 py-1.5 rounded border border-white/20 bg-white/5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-tq-yellow"
         />
-        <select value={rol} onChange={e => { setPage(1); setRol(e.target.value) }}
+        <label htmlFor="dir-rol" className="sr-only">Rol musical</label>
+        <select id="dir-rol" value={rol} onChange={e => { setPage(1); setRol(e.target.value) }}
                 className="px-3 py-1.5 rounded border border-white/20 bg-white/5 text-sm text-white focus:outline-none focus:border-tq-yellow">
           <option value="" className="text-tq-ink">Rol: tots</option>
           {(data?.rol_choices || []).map(([v, l]) => (
             <option key={v} value={v} className="text-tq-ink">{l}</option>
           ))}
         </select>
-        <select value={territori} onChange={e => { setPage(1); setTerritori(e.target.value) }}
+        <label htmlFor="dir-terr" className="sr-only">Territori</label>
+        <select id="dir-terr" value={territori} onChange={e => { setPage(1); setTerritori(e.target.value) }}
                 className="px-3 py-1.5 rounded border border-white/20 bg-white/5 text-sm text-white focus:outline-none focus:border-tq-yellow">
           {TERRITORIS.map(([c, l]) => (
             <option key={c} value={c} className="text-tq-ink">{l}</option>

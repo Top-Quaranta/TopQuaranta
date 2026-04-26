@@ -17,9 +17,11 @@ import {
   Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { albumUrl } from '../lib/urls'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
+import TopBreakdownPanel from '../components/TopBreakdownPanel'
 
 const TERRITORI_COLORS = {
   PPCC: '#427c42', CAT: '#c99b0c', VAL: '#cf3339', BAL: '#0047ba',
@@ -78,7 +80,7 @@ export default function CancoPage() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="bg-red-100 text-red-800 p-3 rounded-md text-sm">{error}</div>
+        <Alert tone="danger">{error}</Alert>
       </div>
     )
   }
@@ -144,6 +146,11 @@ export default function CancoPage() {
           />
         </div>
       </header>
+
+      {/* Algorithm transparency panel — discreet, collapsed by default.
+          Returns null when there's nothing to show (anon viewer of a
+          song that isn't in the current top). */}
+      <TopBreakdownPanel slug={data.slug} />
 
       {/* Ranking chart */}
       {data.historial?.length > 0 && (

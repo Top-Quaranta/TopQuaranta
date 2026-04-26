@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from ranking.models import ConfiguracioGlobal, RankingProvisional, RankingSetmanal
+from ranking.models import ConfiguracioGlobal, TopProvisional, TopSetmanal
 
 
 @pytest.mark.django_db
@@ -46,27 +46,26 @@ class TestRankingProvisional:
         return canco
 
     def test_create_provisional(self, setup_data):
-        rp = RankingProvisional.objects.create(
+        rp = TopProvisional.objects.create(
             canco=setup_data,
             territori="CAT",
             posicio=1,
             score_setmanal=85.5,
-            lastfm_playcount=1000,
-            dies_en_top=5,
+            escoltes_setmanals=1000,
         )
         assert rp.posicio == 1
         assert rp.territori == "CAT"
         assert str(rp) == "#1 Track (CAT)"
 
     def test_unique_canco_territori(self, setup_data):
-        RankingProvisional.objects.create(
+        TopProvisional.objects.create(
             canco=setup_data,
             territori="CAT",
             posicio=1,
             score_setmanal=80.0,
         )
         with pytest.raises(Exception):
-            RankingProvisional.objects.create(
+            TopProvisional.objects.create(
                 canco=setup_data,
                 territori="CAT",
                 posicio=2,
@@ -82,7 +81,7 @@ class TestRankingSetmanal:
         artista = Artista.objects.create(nom="Zoo", lastfm_nom="Zoo")
         album = Album.objects.create(artista=artista, nom="Raval")
         canco = Canco.objects.create(artista=artista, album=album, nom="Llum")
-        rs = RankingSetmanal.objects.create(
+        rs = TopSetmanal.objects.create(
             canco=canco,
             territori="VAL",
             setmana=date(2026, 4, 13),

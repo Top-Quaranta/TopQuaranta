@@ -150,6 +150,16 @@ class Artista(models.Model):
         help_text="Female representation percentage.",
     )
 
+    # Manager-authored short bio. Distinct from the Last.fm fields above
+    # which are auto-synced from `obtenir_metadata_lastfm` and would
+    # overwrite anything stored there. This field is owned by verified
+    # gestors (UserArtista.verificat=True) via the /compte/artista/<pk>/
+    # editar endpoint; staff can also edit it from the admin form.
+    bio = models.TextField(
+        blank=True,
+        help_text="Short bio written by the artist's verified manager.",
+    )
+
     # Social links
     spotify_url = models.URLField(blank=True)
     viasona_url = models.URLField(blank=True)
@@ -161,6 +171,10 @@ class Artista(models.Model):
     soundcloud_url = models.URLField(blank=True)
     tiktok_url = models.URLField(blank=True)
     facebook_url = models.URLField(blank=True)
+    instagram_url = models.URLField(blank=True)
+    # X (formerly Twitter). Both x.com and twitter.com URLs land here;
+    # mb_sync routes them by host.
+    twitter_url = models.URLField(blank=True)
 
     last_checked_deezer = models.DateTimeField(
         null=True,
@@ -199,6 +213,47 @@ class Artista(models.Model):
     )
     mb_discography_cache = models.JSONField(default=dict, blank=True)
     mb_last_sync = models.DateTimeField(null=True, blank=True, db_index=True)
+    # MBIDs that staff has explicitly rejected for this artist. The
+    # auto-resolver skips any candidate whose id appears here, so a
+    # homonym that matched once can't silently match again on the next
+    # cron run.
+    mb_blocked_mbids = models.JSONField(default=list, blank=True)
+    # Stops `resolve_mbid` from proposing ANY match for this artist,
+    # even one that's not in the blocklist. Use when we know MB has no
+    # entry for this artist at all — avoids recurring false positives
+    # on common names.
+    mb_auto_match_disabled = models.BooleanField(default=False)
+
+    # ── Last.fm artist metadata ─────────────────────────────────────────
+    # Populated by `obtenir_metadata_lastfm` (daily 05:00 UTC) via
+    # `artist.getInfo` + `artist.getSimilar`. Bio fields keep raw HTML
+    # (Last.fm returns it that way; render with safe-strip downstream).
+    # `lastfm_playcount_total` is the cumulative playcount on Last.fm
+    # for this artist — distinct from the per-track per-day samples in
+    # `SenyalDiari.lastfm_playcount`.
+    lastfm_url = models.URLField(blank=True)
+    lastfm_bio_summary = models.TextField(blank=True)
+    lastfm_bio_content = models.TextField(blank=True)
+    lastfm_bio_published = models.DateTimeField(null=True, blank=True)
+    lastfm_listeners = models.BigIntegerField(null=True, blank=True)
+    lastfm_playcount_total = models.BigIntegerField(null=True, blank=True)
+    lastfm_ontour = models.BooleanField(null=True, blank=True)
+    lastfm_tags = models.JSONField(default=list, blank=True)
+    lastfm_image_small = models.URLField(blank=True)
+    lastfm_image_medium = models.URLField(blank=True)
+    lastfm_image_large = models.URLField(blank=True)
+    lastfm_image_extralarge = models.URLField(blank=True)
+    lastfm_last_sync = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Symmetric to `mb_auto_match_disabled`: stops the daily Last.fm
+    # sync from touching this artist. Use when the Last.fm name slot
+    # is shared with a homonym (Crim-style collision) so the listeners
+    # / playcount / bio / similars would be a polluted aggregate.
+    lastfm_auto_match_disabled = models.BooleanField(default=False)
+    # Number of times this artist has been surfaced as a similar by
+    # `artist.getSimilar` of another aprovat artist. Higher = more
+    # recommended by Last.fm's network. Used as a triage score on the
+    # pendents page so high-affinity discoveries float to the top.
+    nb_similars_lastfm = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -235,6 +290,15 @@ class Artista(models.Model):
                 n += 1
                 slug = f"{base}-{n}"
             self.slug = slug
+        # Postgres treats two empty strings as colliding values in a
+        # UNIQUE column, so any setattr path that lands "" on a
+        # nullable-unique CharField would violate the constraint the
+        # moment a second row had the same. Normalise to NULL —
+        # Postgres allows multiple NULLs in a UNIQUE column.
+        if self.musicbrainz_id == "":
+            self.musicbrainz_id = None
+        if self.spotify_id == "":
+            self.spotify_id = None
         super().save(*args, **kwargs)
 
     def clean(self):
@@ -330,6 +394,8 @@ class Artista(models.Model):
         ("soundcloud_url", "SoundCloud"),
         ("tiktok_url", "TikTok"),
         ("facebook_url", "Facebook"),
+        ("instagram_url", "Instagram"),
+        ("twitter_url", "X"),
     ]
 
 
@@ -472,6 +538,9 @@ class Album(models.Model):
                 n += 1
                 slug = f"{base}-{n}"
             self.slug = slug
+        # Mirror of the Artista.save normalisation — see comment there.
+        if self.spotify_id == "":
+            self.spotify_id = None
         super().save(*args, **kwargs)
 
 
@@ -609,6 +678,9 @@ class Canco(models.Model):
                 n += 1
                 slug = f"{base}-{n}"
             self.slug = slug
+        # Mirror of the Artista.save normalisation — see comment there.
+        if self.spotify_id == "":
+            self.spotify_id = None
         super().save(*args, **kwargs)
 
     @property
@@ -743,6 +815,10 @@ class StaffAuditLog(models.Model):
         ("usuari_desactivar", "Usuari: desactivar"),
         ("usuari_reactivar", "Usuari: reactivar"),
         ("usuari_reset_2fa", "Usuari: reset 2FA"),
+        # Edits performed by a verified artist manager (UserArtista.verificat)
+        # via the public /compte/artista/<pk>/editar endpoint. Distinct from
+        # `artista_edit` so the audit page can filter staff vs. self-service.
+        ("gestor_edita_artista", "Artista: edició per gestor"),
     ]
 
     actor = models.ForeignKey(

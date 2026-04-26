@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { useAuth } from '../context/AuthContext'
 import Markdown from '../components/Markdown'
 
@@ -197,9 +198,7 @@ export default function ComunitatDetailPage() {
       </div>
 
       {pub.notes_staff && (
-        <div className="mt-4 bg-red-100 text-red-900 rounded-md p-3 text-sm">
-          <strong>Nota del staff:</strong> {pub.notes_staff}
-        </div>
+        <Alert tone="danger" className="mt-4"><strong>Nota del staff:</strong> {pub.notes_staff}</Alert>
       )}
 
       {canEdit && (

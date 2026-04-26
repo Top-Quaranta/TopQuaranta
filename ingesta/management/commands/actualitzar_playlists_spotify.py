@@ -1,7 +1,7 @@
 """Daily Spotify playlist sync.
 
 For each configured `SpotifyPlaylist`:
-  * top-<territori>: RankingProvisional.filter(territori=X) ordered by
+  * top-<territori>: TopProvisional.filter(territori=X) ordered by
     posicio, capped at 40.
   * novetats: Canco with data_llancament = yesterday, activa=True, cap
     at 100.
@@ -26,7 +26,7 @@ from django.utils import timezone
 
 from ingesta.clients.spotify import UserSpotifyClient
 from music.models import Canco, SpotifyAuth, SpotifyPlaylist
-from ranking.models import RankingProvisional
+from ranking.models import TopProvisional
 
 
 class Command(BaseCommand):
@@ -127,7 +127,7 @@ class Command(BaseCommand):
     def _select_cancons(self, pl: SpotifyPlaylist) -> list[Canco]:
         if pl.kind == SpotifyPlaylist.KIND_TOP:
             rows = (
-                RankingProvisional.objects.filter(territori=pl.territori)
+                TopProvisional.objects.filter(territori=pl.territori)
                 .select_related("canco")
                 .order_by("posicio")[:40]
             )

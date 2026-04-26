@@ -1,33 +1,79 @@
 /**
  * StaffLayout — shell for every /staff/* route.
  *
- * Renders a dark vertical sidebar on the left with links to each
- * staff area, and the routed content on the right. The yellow top
- * header from the public Layout is preserved — staff still need one
- * click back to the public site.
+ * Renders a dark vertical sidebar on the left with grouped links to
+ * each staff area, and the routed content on the right. The yellow
+ * top header from the public Layout is preserved — staff still need
+ * one click back to the public site.
  *
- * The sidebar collapses to a horizontal scrolling tab strip below
- * `md` so the panel stays usable on phones for quick review actions.
+ * Grouping rationale (2026-04-26):
+ *   - Visió general  → daily glance: dashboard tiles + Estat panel.
+ *   - Cua del dia    → things waiting on staff action (review queues).
+ *   - Catàleg        → library editing surfaces.
+ *   - Top            → ranking-specific staff views.
+ *   - Comunitat      → Grup C admin (Publicacions + Usuaris).
+ *   - Diagnòstic     → read-only signals / history / audit.
+ *   - Sistema        → global config.
+ *
+ * On screens ≥ md the group labels are visible above each cluster.
+ * Below md the sidebar collapses to a horizontal scroll strip; group
+ * labels are hidden there and a subtle vertical divider keeps the
+ * groups distinguishable in a single line.
  */
 import { NavLink } from 'react-router-dom'
 
-const SECTIONS = [
-  { to: '/staff',            label: 'Panel',       end: true },
-  { to: '/staff/estat',      label: 'Estat'        },
-  { to: '/staff/pendents',   label: 'Pendents'     },
-  { to: '/staff/artistes',   label: 'Artistes'     },
-  { to: '/staff/cancons',    label: 'Cançons'      },
-  { to: '/staff/albums',     label: 'Albums'       },
-  { to: '/staff/ranking',    label: 'Ranking prov.' },
-  { to: '/staff/propostes',  label: 'Propostes'    },
-  { to: '/staff/solicituds', label: 'Sol·licituds' },
-  { to: '/staff/feedback',   label: 'Feedback'     },
-  { to: '/staff/publicacions',    label: 'Publicacions' },
-  { to: '/staff/senyal',     label: 'Senyal'       },
-  { to: '/staff/historial',  label: 'Historial'    },
-  { to: '/staff/configuracio', label: 'Configuració' },
-  { to: '/staff/auditlog',   label: 'Auditoria'    },
-  { to: '/staff/usuaris',    label: 'Usuaris'      },
+const GROUPS = [
+  {
+    label: 'Visió general',
+    items: [
+      { to: '/staff',       label: 'Panel', end: true },
+      { to: '/staff/estat', label: 'Estat' },
+    ],
+  },
+  {
+    label: 'Cua del dia',
+    items: [
+      { to: '/staff/pendents',   label: 'Pendents'    },
+      { to: '/staff/propostes',  label: 'Propostes'   },
+      { to: '/staff/solicituds', label: 'Sol·licituds' },
+      { to: '/staff/feedback',   label: 'Feedback'    },
+    ],
+  },
+  {
+    label: 'Catàleg',
+    items: [
+      { to: '/staff/artistes', label: 'Artistes' },
+      { to: '/staff/cancons',  label: 'Cançons'  },
+      { to: '/staff/albums',   label: 'Àlbums'   },
+    ],
+  },
+  {
+    label: 'Top',
+    items: [
+      { to: '/staff/top', label: 'Top provisional' },
+    ],
+  },
+  {
+    label: 'Comunitat',
+    items: [
+      { to: '/staff/publicacions', label: 'Publicacions' },
+      { to: '/staff/usuaris',      label: 'Usuaris'      },
+    ],
+  },
+  {
+    label: 'Diagnòstic',
+    items: [
+      { to: '/staff/senyal',    label: 'Senyal'    },
+      { to: '/staff/historial', label: 'Historial' },
+      { to: '/staff/auditlog',  label: 'Auditoria' },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { to: '/staff/configuracio', label: 'Configuració' },
+    ],
+  },
 ]
 
 const linkBase =
@@ -56,11 +102,32 @@ export default function StaffLayout({ children }) {
           <p className="text-sm font-semibold">Staff</p>
         </div>
 
-        <nav className="flex md:flex-col gap-0.5 px-2 py-2 overflow-x-auto md:overflow-visible">
-          {SECTIONS.map(({ to, label, end }) => (
-            <NavLink key={to} to={to} end={end} className={linkClass}>
-              {label}
-            </NavLink>
+        <nav
+          className="flex md:flex-col gap-0.5 px-2 py-2 overflow-x-auto md:overflow-visible"
+          aria-label="Seccions staff"
+        >
+          {GROUPS.map((group, gi) => (
+            <div
+              key={group.label}
+              className={
+                'flex md:flex-col gap-0.5 ' +
+                // On mobile keep groups inline with a subtle divider so
+                // the eye can still parse the clusters.
+                (gi > 0 ? 'md:mt-3 border-l md:border-l-0 border-white/10 md:border-0 pl-2 md:pl-0' : '')
+              }
+            >
+              <p
+                className="hidden md:block text-[10px] uppercase tracking-widest text-white/40 px-3 mt-2 mb-1 select-none"
+                aria-hidden="true"
+              >
+                {group.label}
+              </p>
+              {group.items.map(({ to, label, end }) => (
+                <NavLink key={to} to={to} end={end} className={linkClass}>
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>

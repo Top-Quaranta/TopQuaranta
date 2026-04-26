@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
+import { Section } from '../components/editorial'
 
 const TERRITORI_NOM = {
   CAT: 'Catalunya',
@@ -362,8 +363,25 @@ export default function MapaPage() {
     : '0 0 10 10'
 
   return (
-    <section className="max-w-6xl mx-auto">
-      <div className="grid lg:grid-cols-[1fr_320px] gap-4">
+    <div className="space-y-0">
+      {/* ── Hero band ───────────────────────────────────────────── */}
+      <Section tone="ink">
+        <p className="text-[10px] uppercase tracking-widest text-tq-yellow">
+          Mapa
+        </p>
+        <h1 className="text-3xl md:text-5xl font-bold font-display mt-1.5 leading-tight">
+          La música al territori
+        </h1>
+        <p className="text-sm md:text-base text-white/80 mt-3 max-w-2xl leading-relaxed">
+          Fes clic a un territori per fer zoom a les seves comarques i,
+          després, als municipis. Al panell lateral hi apareixen els
+          artistes de la zona.
+        </p>
+      </Section>
+
+      {/* ── Map + side panel band ───────────────────────────────── */}
+      <Section tone="white">
+        <div className="grid lg:grid-cols-[1fr_320px] gap-4">
         {/* ── Map ── */}
         <div
           className="relative rounded-lg border border-black/5 p-3 min-h-[500px]"
@@ -467,7 +485,7 @@ export default function MapaPage() {
               <div className="text-[10px] uppercase tracking-widest text-tq-ink/60">
                 Artistes
               </div>
-              <div className="text-4xl font-bold font-display text-tq-yellow-deep">
+              <div className="text-4xl font-bold font-display text-tq-ink tabular-nums leading-none">
                 {kpi.n_artistes.toLocaleString('ca')}
               </div>
             </div>
@@ -534,7 +552,8 @@ export default function MapaPage() {
             </p>
           )}
         </aside>
-      </div>
-    </section>
+        </div>
+      </Section>
+    </div>
   )
 }

@@ -25,10 +25,18 @@ const inputClass =
   'mt-1 w-full border border-gray-300 rounded-md px-3 py-2 text-sm'
 
 function TabButton({ active, onClick, children }) {
+  // role="tab" + aria-selected to satisfy axe's `aria-required-children`
+  // rule on the parent role="tablist" wrapper. tabIndex follows the
+  // standard tab pattern: only the active tab is in the focus order;
+  // the others are reachable via arrow keys (handled by the browser
+  // when role/state are set correctly).
   return (
     <button
       type="button"
       onClick={onClick}
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
       className={
         'flex-1 text-sm font-semibold py-2 transition-colors ' +
         (active

@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { useAuth } from '../context/AuthContext'
 
 export default function ComptePerfilPage() {
@@ -138,12 +139,10 @@ export default function ComptePerfilPage() {
         </div>
 
         {errors.__all__ && (
-          <div className="bg-red-50 text-red-800 p-3 rounded-md text-sm">{errors.__all__}</div>
+          <Alert tone="danger">{errors.__all__}</Alert>
         )}
         {success && (
-          <div className="bg-emerald-50 text-emerald-800 p-3 rounded-md text-sm">
-            Perfil actualitzat correctament.
-          </div>
+          <Alert tone="success">Perfil actualitzat correctament.</Alert>
         )}
 
         <div className="flex gap-2">

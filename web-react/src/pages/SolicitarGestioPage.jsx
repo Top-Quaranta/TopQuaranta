@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { useAuth } from '../context/AuthContext'
 
 const inputClass =
@@ -146,9 +147,7 @@ export default function SolicitarGestioPage() {
       </p>
 
       {errors.__all__ && (
-        <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm">
-          {errors.__all__}
-        </div>
+        <Alert tone="danger" className="mb-4">{errors.__all__}</Alert>
       )}
 
       <form onSubmit={submit} className="flex flex-col gap-4">

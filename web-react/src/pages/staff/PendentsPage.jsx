@@ -174,6 +174,19 @@ function Row({ a, onApproved, onDiscarded }) {
           <span className="text-xs opacity-60">(no cal tornar-la a indicar)</span>
         )}
       </Td>
+      <Td className="text-xs tabular-nums">
+        {a.nb_similars_lastfm > 0 ? (
+          <span
+            className="font-semibold"
+            style={{ color: 'var(--color-tq-yellow-deep)' }}
+            title={`Recomanat per ${a.nb_similars_lastfm} artista(es) aprovats nostres a Last.fm`}
+          >
+            {a.nb_similars_lastfm}×
+          </span>
+        ) : (
+          <span className="opacity-30">—</span>
+        )}
+      </Td>
       <Td className="text-right">
         {err && <div className="text-[11px] text-red-600 mb-1">{err}</div>}
         <div className="flex gap-1 justify-end">
@@ -194,12 +207,20 @@ export default function PendentsPage() {
   const [page, setPage] = useState(1)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
+  // Discovery-source filter (`font_descoberta`). Empty = all.
+  const [font, setFont] = useState('')
+  // Sort key. Empty = backend default; `similars_lastfm` orders by
+  // Last.fm-network affinity descending (best for triaging
+  // similar-artists discoveries).
+  const [sort, setSort] = useState('')
   const dq = useDebounced(q)
 
   function load(p = page, cerca = dq) {
     setData(null)
     const params = new URLSearchParams({ page: p })
     if (cerca) params.set('q', cerca)
+    if (font) params.set('font_descoberta', font)
+    if (sort) params.set('sort', sort)
     api
       .get(`/staff/pendents/?${params}`)
       .then(setData)
@@ -209,7 +230,7 @@ export default function PendentsPage() {
   useEffect(() => {
     load(page, dq)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, dq])
+  }, [page, dq, font, sort])
 
   // Resetting the page back to 1 every time the search changes keeps
   // the results coherent — otherwise a search with few hits would land
@@ -232,7 +253,7 @@ export default function PendentsPage() {
           data ? `${data.total} pendents de revisió` : 'Carregant…'
         }
       />
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <Input
           placeholder="Cerca per nom d'artista…"
           value={q}
@@ -248,6 +269,20 @@ export default function PendentsPage() {
             neteja
           </button>
         )}
+        <Select value={font} onChange={e => { setPage(1); setFont(e.target.value) }}>
+          <option value="">Font: qualsevol</option>
+          <option value="lastfm_similar">Last.fm similar</option>
+          <option value="proposta_usuari">Proposta d'usuari</option>
+          <option value="manual">Manual</option>
+          <option value="legacy">Legacy</option>
+          <option value="viasona">Viasona</option>
+          <option value="collaborador">Col·laborador</option>
+          <option value="deezer_contributor">Deezer contributor</option>
+        </Select>
+        <Select value={sort} onChange={e => { setPage(1); setSort(e.target.value) }}>
+          <option value="">Ordre per defecte</option>
+          <option value="similars_lastfm">Similars Last.fm ↓</option>
+        </Select>
       </div>
       {error && <p className="text-sm text-red-300 mb-4">{error}</p>}
       <TableCard>
@@ -257,13 +292,14 @@ export default function PendentsPage() {
               <Th>Artista</Th>
               <Th>Deezer</Th>
               <Th>Localitat</Th>
+              <Th title="Cops que aquest artista apareix com a similar a artist.getSimilar de Last.fm sobre algun artista aprovat nostre">Similars LFM</Th>
               <Th></Th>
             </tr>
           </THead>
           <tbody>
             {data?.results?.length === 0 && (
               <tr>
-                <td colSpan={4}>
+                <td colSpan={5}>
                   <EmptyState>Cap artista pendent. 🎉</EmptyState>
                 </td>
               </tr>

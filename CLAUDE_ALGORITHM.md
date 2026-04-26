@@ -75,7 +75,7 @@ s'accelera cap als 365 dies.
 
 ### 2.3 `past_top_factor`
 
-Penalització acumulada per aparicions prèvies al rànquing setmanal.
+Penalització acumulada per aparicions prèvies al top setmanal.
 Per cada fila de `RankingSetmanal(canco=C, territori=T, posicio=N)`
 amb N ≤ 40, suma:
 
@@ -133,7 +133,7 @@ la setmana immediatament anterior (RankingSetmanal ordenat per
 ## 3. Agregació PPCC
 
 PPCC no executa el càlcul per territori — agrega els resultats de
-tots els territoris amb rànquing propi (CAT, VAL, BAL, ALT +
+tots els territoris amb top propi (CAT, VAL, BAL, ALT +
 opcionals amb prou volum):
 
 1. Per cada fila, `score_global = score_setmanal × (1 − (pos − 1) × 0.04)`
@@ -145,7 +145,7 @@ opcionals amb prou volum):
 
 ## 4. Suport territorial
 
-- **Fixos** (sempre rànquing): `CAT`, `VAL`, `BAL`.
+- **Fixos** (sempre top): `CAT`, `VAL`, `BAL`.
 - **Agregats** (sempre es generen): `ALT`, `PPCC`.
 - **Opcionals**: `CNO`, `AND`, `FRA`, `ALG`, `CAR`. Només tenen top
   propi si arriben al llindar `min_cancons_ranking_propi` (default
@@ -163,5 +163,5 @@ encara que el seu territori natal tingui poca producció.
 
 Cada fila de `RankingSetmanal` guarda `algorithm_version="v2.0"` i
 `config_snapshot` amb els coeficients usats en aquell càlcul. Això
-permet reproduir exactament el rànquing d'una setmana històrica
+permet reproduir exactament el top d'una setmana històrica
 encara que els defaults canviïn més endavant.

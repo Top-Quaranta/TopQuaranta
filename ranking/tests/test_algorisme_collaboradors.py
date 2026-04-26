@@ -11,7 +11,7 @@ import pytest
 # Skipped automatically when running with SQLite (test settings).
 from django.conf import settings
 
-from ranking.algorisme import calcular_ranking_territori
+from ranking.algorisme import calcular_top_territori
 from ranking.models import ConfiguracioGlobal, SenyalDiari
 
 _is_postgres = "postgresql" in settings.DATABASES["default"].get("ENGINE", "")
@@ -80,11 +80,11 @@ class TestCollaboratorTerritoryInclusion:
         return collab_track
 
     def test_collab_track_in_main_artist_territory(self, setup_collab):
-        results = calcular_ranking_territori("CAT")
+        results = calcular_top_territori("CAT")
         canco_ids = {r["canco_id"] for r in results}
         assert setup_collab.pk in canco_ids
 
     def test_collab_track_in_collaborator_territory(self, setup_collab):
-        results = calcular_ranking_territori("VAL")
+        results = calcular_top_territori("VAL")
         canco_ids = {r["canco_id"] for r in results}
         assert setup_collab.pk in canco_ids

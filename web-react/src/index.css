@@ -48,6 +48,29 @@ button, input, textarea, select {
   border-radius: 4px;
 }
 
+/* WCAG 2.4.7 (Focus Visible). Tailwind v4 strips the browser default
+   outline; restore a visible keyboard-only focus ring for every
+   interactive element. We use `:focus-visible` so mouse clicks don't
+   render the ring (avoids the "ugly outline on click" complaint while
+   keeping keyboard navigation usable). The ring picks the brand
+   yellow on dark contexts; falls back to ink on yellow surfaces. */
+:focus-visible {
+  outline: 2px solid var(--color-tq-yellow);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+body[data-theme="yellow"] :focus-visible,
+.bg-tq-yellow :focus-visible,
+.bg-white :focus-visible {
+  outline-color: var(--color-tq-ink);
+}
+
+/* WCAG 2.5.5 (Target Size, Level AAA) is aspirational. Applying it
+   globally inflates every chip and inline button — too disruptive
+   for the current design. Per-component review is the right path
+   (StaffTable.Btn, FilterPill, etc.) as we iterate, instead of a
+   blanket min-height that would break dense info layouts. */
+
 /* Utility hook: `data-theme="yellow"` on <body> paints the whole page
    yellow with ink text. Homepage sets this via `useEffect`. */
 body[data-theme="yellow"] {

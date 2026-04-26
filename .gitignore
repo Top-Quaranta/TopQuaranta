@@ -56,3 +56,6 @@ temp/
 # Spleeter downloads model weights here when run from project root.
 # (Used by scripts/model_comparison/runners/run_spleeter.py.)
 pretrained_models/
+# Pre-Whisper ML artifacts kept locally for rollback diffing only.
+music/ml_*.pre_whisper.joblib
+music/ml_directions*.joblib

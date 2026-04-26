@@ -21,27 +21,82 @@ import { PageHeader, Pill, TableCard } from '../../components/staff/StaffTable'
 
 // ── Small display helpers ────────────────────────────────────────────────
 
-function BigNumber({ label, value, sub, tone = 'ink' }) {
+function BigNumber({ label, value, sub, tone = 'ink', to }) {
+  // ink/yellow are brand colours (utility classes). Semantic tones map
+  // to the `--color-tq-success/danger/neutral` design tokens via inline
+  // styles, so a palette change reaches them without touching call sites.
   const tones = {
     ink:    'bg-white text-tq-ink',
     yellow: 'bg-tq-yellow text-tq-ink',
-    green:  'bg-emerald-100 text-emerald-900',
-    red:    'bg-red-100 text-red-900',
-    gray:   'bg-gray-100 text-gray-800',
   }
-  return (
-    <div className={`rounded-lg p-4 ${tones[tone] || tones.ink}`}>
+  const semStyle = {
+    green:  { background: 'rgba(16, 185, 129, 0.16)', color: 'var(--color-tq-success)'                  },
+    red:    { background: 'rgba(239, 68, 68, 0.16)',  color: 'var(--color-tq-danger)'                   },
+    gray:   { background: 'rgba(156, 163, 175, 0.16)', color: 'var(--color-tq-neutral, #6b7280)'        },
+  }
+  const inner = (
+    <>
       <p className="text-[10px] uppercase tracking-widest opacity-70">{label}</p>
       <p className="text-3xl font-bold font-display tabular-nums mt-1">
         {typeof value === 'number' ? value.toLocaleString('ca') : value ?? '—'}
       </p>
       {sub && <p className="text-[11px] opacity-60 mt-0.5">{sub}</p>}
+    </>
+  )
+  const cls = tones[tone] || tones.ink
+  const style = semStyle[tone]
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={`block rounded-lg p-4 hover:shadow-md transition-shadow ${cls || ''}`}
+        style={style}
+      >
+        {inner}
+      </Link>
+    )
+  }
+  return <div className={`rounded-lg p-4 ${cls || ''}`} style={style}>{inner}</div>
+}
+
+/**
+ * StatRow — labelled value with optional `to` link, used in the
+ * MusicBrainz / Whisper detail panels.
+ */
+function StatRow({ label, value, to, accent }) {
+  // `accent` accepts a semantic tone key (success | danger | warning)
+  // and resolves to the matching design-system colour token. Falls
+  // through to ink for the default text colour.
+  const accentColor = {
+    success: 'var(--color-tq-success)',
+    danger:  'var(--color-tq-danger)',
+    warning: 'var(--color-tq-yellow-deep)',
+  }[accent]
+  const valNode = (
+    <span
+      className="font-semibold tabular-nums"
+      style={accentColor ? { color: accentColor } : undefined}
+    >
+      {typeof value === 'number' ? value.toLocaleString('ca') : value ?? '—'}
+    </span>
+  )
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1 text-xs border-b border-black/5 last:border-0">
+      <span className="opacity-70">{label}</span>
+      {to ? (
+        <Link to={to} className="underline decoration-dotted hover:decoration-solid">
+          {valNode}
+        </Link>
+      ) : (
+        valNode
+      )}
     </div>
   )
 }
 
 function StackedBar({ segments, total }) {
-  // segments = [{label, value, color}]. Normalises by total.
+  // segments = [{label, value, color, to?}]. `to` makes the segment
+  // and its legend entry a click-through to a pre-filtered list.
   if (!total) return null
   return (
     <div className="w-full">
@@ -49,47 +104,103 @@ function StackedBar({ segments, total }) {
         {segments.map(s => {
           const pct = (s.value / total) * 100
           if (pct <= 0) return null
-          return (
+          const tooltip = `${s.label}: ${s.value.toLocaleString('ca')} (${pct.toFixed(1)}%)`
+          // The Link itself carries the colour + width so we don't get
+          // the "Link is wider than its inner div" mismatch. Block
+          // display so width: % actually applies on the <a> element.
+          const styleSeg = {
+            width: `${pct}%`,
+            background: s.color,
+          }
+          return s.to ? (
+            <Link
+              key={s.label}
+              to={s.to}
+              title={tooltip}
+              aria-label={tooltip}
+              className="block h-full hover:opacity-80 transition-opacity"
+              style={styleSeg}
+            />
+          ) : (
             <div
               key={s.label}
-              style={{ width: `${pct}%`, background: s.color }}
-              title={`${s.label}: ${s.value.toLocaleString('ca')} (${pct.toFixed(1)}%)`}
+              style={styleSeg}
+              title={tooltip}
             />
           )
         })}
       </div>
       <div className="flex flex-wrap gap-3 mt-2 text-[11px]">
-        {segments.map(s => (
-          <span key={s.label} className="inline-flex items-center gap-1">
-            <span
-              className="inline-block w-2.5 h-2.5 rounded-sm"
-              style={{ background: s.color }}
-            />
-            <span className="font-semibold">{s.label}</span>
-            <span className="opacity-60">
-              {s.value.toLocaleString('ca')} ({((s.value / total) * 100).toFixed(1)}%)
+        {segments.map(s => {
+          const body = (
+            <>
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-sm"
+                style={{ background: s.color }}
+              />
+              <span className="font-semibold">{s.label}</span>
+              <span className="opacity-60">
+                {s.value.toLocaleString('ca')} ({((s.value / total) * 100).toFixed(1)}%)
+              </span>
+            </>
+          )
+          return s.to ? (
+            <Link
+              key={s.label}
+              to={s.to}
+              className="inline-flex items-center gap-1 underline decoration-dotted hover:decoration-solid"
+            >
+              {body}
+            </Link>
+          ) : (
+            <span key={s.label} className="inline-flex items-center gap-1">
+              {body}
             </span>
-          </span>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function HorizontalBars({ items, max, formatValue }) {
+function HorizontalBars({ items, max, formatValue, showDirection }) {
   return (
     <ul className="space-y-1.5">
       {items.map(item => {
         const pct = max ? (item.value / max) * 100 : 0
+        // direction: +1 → higher value pushes approval, -1 → rejection,
+        // 0 → no direction (TF-IDF / absent). Bar colour reflects it.
+        const dir = item.direction ?? 0
+        const barColor =
+          dir > 0 ? 'var(--color-tq-success)' :
+          dir < 0 ? 'var(--color-tq-danger)' :
+          'var(--mm-color-accent, #facc15)'
         return (
           <li key={item.name} className="flex items-center gap-3 text-xs">
+            {showDirection && (
+              <span
+                className="w-4 shrink-0 text-center font-bold"
+                title={
+                  dir > 0 ? 'Més valor → més APROVA'
+                  : dir < 0 ? 'Més valor → més REBUTJA'
+                  : 'Sense direcció (feature neutra o textual)'
+                }
+                style={{
+                  color: dir > 0 ? 'var(--color-tq-success)'
+                    : dir < 0 ? 'var(--color-tq-danger)'
+                    : 'var(--color-tq-neutral-soft, #888)',
+                }}
+              >
+                {dir > 0 ? '↑' : dir < 0 ? '↓' : '·'}
+              </span>
+            )}
             <span className="w-48 truncate font-mono text-tq-ink/80" title={item.name}>
               {item.name}
             </span>
             <div className="flex-1 h-4 bg-tq-ink/5 rounded overflow-hidden">
               <div
-                className="h-full bg-tq-yellow"
-                style={{ width: `${pct}%` }}
+                className="h-full"
+                style={{ width: `${pct}%`, background: barColor }}
               />
             </div>
             <span className="w-14 text-right tabular-nums">
@@ -152,7 +263,7 @@ export default function EstatPage() {
     )
   }
 
-  const { bd, whisper, ranking, senyal, comunitat, crons, ml, flux, musicbrainz: mb } = data
+  const { bd, whisper, ranking, senyal, comunitat, crons, ml, flux, musicbrainz: mb, homonimia } = data
 
   // Biggest importance for scaling bars.
   const maxImp = ml?.importances?.[0]?.value || 1
@@ -165,7 +276,18 @@ export default function EstatPage() {
   const clsNone = ml?.classe_distribution?.none || 0
   const clsTotal = clsA + clsB + clsC + clsNone
 
-  const whisperTotal = whisper.ca + whisper.no_ca + whisper.pendent
+  // The "forever-pending" bucket (tracks without a Deezer preview)
+  // can never be analysed — we keep it visible so the cobertura % is
+  // honest, but exclude it from any ETA maths.
+  const whisperPendentAmbPreview = whisper.pendent_amb_preview ?? 0
+  const whisperPendentSensePreview = whisper.pendent_sense_preview ?? 0
+  const whisperPendentTotal = whisperPendentAmbPreview + whisperPendentSensePreview
+  const whisperAnalitzat = whisper.ca + whisper.no_ca
+  const whisperTotal = whisperAnalitzat + whisperPendentTotal
+  const whisperDailyLimit = whisper.daily_limit || 100
+  const whisperEtaDies = whisperPendentAmbPreview > 0
+    ? Math.ceil(whisperPendentAmbPreview / whisperDailyLimit)
+    : 0
 
   return (
     <section className="space-y-6">
@@ -289,12 +411,18 @@ export default function EstatPage() {
                           {a.nom}
                         </Link>
                         {a.musicbrainz_id && (
-                          <span className="text-[10px] uppercase font-semibold px-1.5 rounded bg-emerald-100 text-emerald-800">
+                          <span
+                            className="text-[10px] uppercase font-semibold px-1.5 rounded"
+                            style={{ background: 'rgba(16, 185, 129, 0.16)', color: 'var(--color-tq-success)' }}
+                          >
                             MBID
                           </span>
                         )}
                         {a.mb_end_date && (
-                          <span className="text-[10px] uppercase font-semibold px-1.5 rounded bg-red-100 text-red-800">
+                          <span
+                            className="text-[10px] uppercase font-semibold px-1.5 rounded"
+                            style={{ background: 'rgba(239, 68, 68, 0.16)', color: 'var(--color-tq-danger)' }}
+                          >
                             Dissolt {a.mb_end_date.slice(0, 4)}
                           </span>
                         )}
@@ -335,22 +463,26 @@ export default function EstatPage() {
             label="Cançons"
             value={bd.cancons.total}
             sub={`${bd.cancons.verificades.toLocaleString('ca')} verificades · ${bd.cancons.no_verificades_actives.toLocaleString('ca')} pendents`}
+            to="/staff/cancons?verificada="
           />
           <BigNumber
             label="Artistes aprovats"
             value={bd.artistes.aprovats}
             sub={`${bd.artistes.pendents.toLocaleString('ca')} pendents de revisió`}
             tone="yellow"
+            to="/staff/artistes?aprovat=1"
           />
           <BigNumber
             label="Albums actius"
             value={bd.albums.actius}
             sub={bd.albums.descartats ? `${bd.albums.descartats} descartats` : undefined}
+            to="/staff/albums?descartat=0"
           />
           <BigNumber
             label="Senyal diari"
             value={senyal.total}
             sub={senyal.data_recent ? `últim: ${senyal.data_recent}` : undefined}
+            to="/staff/senyal"
           />
         </div>
 
@@ -361,8 +493,8 @@ export default function EstatPage() {
           <StackedBar
             total={bd.cancons.total}
             segments={[
-              { label: 'Verificades', value: bd.cancons.verificades, color: 'var(--color-tq-success)' },
-              { label: 'Pendents',    value: bd.cancons.no_verificades_actives, color: 'var(--color-tq-warning)' },
+              { label: 'Verificades', value: bd.cancons.verificades, color: 'var(--color-tq-success)', to: '/staff/cancons?verificada=1' },
+              { label: 'Pendents',    value: bd.cancons.no_verificades_actives, color: 'var(--color-tq-warning)', to: '/staff/cancons?verificada=0' },
               { label: 'Inactives',   value: bd.cancons.inactives, color: 'var(--color-tq-neutral)' },
             ]}
           />
@@ -376,18 +508,36 @@ export default function EstatPage() {
         </h2>
         <div className="bg-white text-tq-ink rounded-lg p-4">
           <p className="text-[11px] uppercase tracking-widest opacity-60 mb-2">
-            Cobertura ({((whisperTotal - whisper.pendent) / whisperTotal * 100).toFixed(1)}% analitzat)
+            Cobertura ({(whisperAnalitzat / Math.max(whisperTotal, 1) * 100).toFixed(1)}% analitzat
+            {whisperPendentSensePreview > 0 && (
+              <> · {(whisperPendentSensePreview / Math.max(whisperTotal, 1) * 100).toFixed(1)}% sense preview Deezer</>
+            )})
           </p>
           <StackedBar
             total={whisperTotal}
             segments={[
-              { label: 'Català',       value: whisper.ca,      color: 'var(--color-tq-success)' },
-              { label: 'No-català',    value: whisper.no_ca,   color: 'var(--color-tq-danger)' },
-              { label: 'Pendent',      value: whisper.pendent, color: 'var(--color-tq-neutral-soft)' },
+              { label: 'Català',           value: whisper.ca,                 color: 'var(--color-tq-success)',      to: '/staff/cancons?verificada=&whisper=ca' },
+              { label: 'No-català',        value: whisper.no_ca,              color: 'var(--color-tq-danger)',       to: '/staff/cancons?verificada=&whisper=no_ca' },
+              { label: 'Pendent (cua)',    value: whisperPendentAmbPreview,   color: 'var(--color-tq-warning)',      to: '/staff/cancons?verificada=&whisper=pendent&preview=si' },
+              { label: 'Sense preview',    value: whisperPendentSensePreview, color: 'var(--color-tq-neutral-soft)', to: '/staff/cancons?verificada=&whisper=pendent&preview=no' },
             ]}
           />
           <p className="text-[11px] opacity-60 mt-3">
-            A ~700 cançons/nit el cron trigarà <strong>{Math.ceil(whisper.pendent / 700)} dies</strong> més a arribar al 100%.
+            {whisperPendentAmbPreview === 0 ? (
+              <>Cua al dia. La cron de les 05:00 UTC processa les noves entrades (límit {whisperDailyLimit}/nit).</>
+            ) : (
+              <>
+                Cua processable: <strong>{whisperPendentAmbPreview.toLocaleString('ca')}</strong> cançons.
+                A {whisperDailyLimit}/nit, la cron arribarà al fons en{' '}
+                <strong>{whisperEtaDies} {whisperEtaDies === 1 ? 'dia' : 'dies'}</strong>.
+              </>
+            )}
+            {whisperPendentSensePreview > 0 && (
+              <>
+                {' '}Les <strong>{whisperPendentSensePreview.toLocaleString('ca')}</strong> cançons sense preview
+                Deezer no es poden analitzar mai (no apliquen al càlcul d'ETA).
+              </>
+            )}
           </p>
         </div>
       </section>
@@ -398,34 +548,177 @@ export default function EstatPage() {
           <h2 className="text-sm uppercase tracking-widest text-white/60 mb-2">
             MusicBrainz
           </h2>
+          <div className="grid lg:grid-cols-2 gap-3">
+            {/* Artistes — desglossament */}
+            <div className="bg-white text-tq-ink rounded-lg p-4">
+              <p className="text-[11px] uppercase tracking-widest opacity-60 mb-2">
+                Artistes aprovats (MBID assignat a {((mb.aprovats_amb_mbid / Math.max(mb.aprovats_total, 1)) * 100).toFixed(1)} %)
+              </p>
+              <StackedBar
+                total={mb.aprovats_total}
+                segments={[
+                  { label: 'Amb MBID',           value: mb.aprovats_amb_mbid,            color: 'var(--color-tq-success)',      to: '/staff/artistes?aprovat=1&mb=amb_mbid' },
+                  { label: 'Provat sense MBID',  value: mb.aprovats_provat_sense_mbid,   color: 'var(--color-tq-warning)',      to: '/staff/artistes?aprovat=1&mb=provat_sense_mbid' },
+                  { label: 'Mai provat',         value: mb.aprovats_mai_provat,          color: 'var(--color-tq-neutral-soft)', to: '/staff/artistes?aprovat=1&mb=mai_provat' },
+                ]}
+              />
+              <div className="mt-3">
+                <StatRow
+                  label="Artistes sincronitzats (alguna vegada)"
+                  value={mb.artistes_sincronitzats}
+                  to="/staff/artistes?aprovat=&mb=amb_mbid"
+                />
+                <StatRow
+                  label="Auto-match bloquejat (staff)"
+                  value={mb.aprovats_bloquejats}
+                  to="/staff/artistes?aprovat=1&mb=bloquejat"
+                />
+                <StatRow
+                  label="Detectats com a dissolts"
+                  value={mb.artistes_dissolts_detectats}
+                  to="/staff/artistes?aprovat=1&mb=dissolt"
+                  accent="danger"
+                />
+                <StatRow
+                  label="Sync més antic pendent"
+                  value={mb.sync_mes_antic ? mb.sync_mes_antic.slice(0, 16).replace('T', ' ') : '—'}
+                />
+              </div>
+            </div>
+
+            {/* Cançons + àlbums — confirmacions MB */}
+            <div className="bg-white text-tq-ink rounded-lg p-4">
+              <p className="text-[11px] uppercase tracking-widest opacity-60 mb-2">
+                Cançons no verificades (cobertura MB)
+              </p>
+              <StackedBar
+                total={mb.no_verif_total}
+                segments={[
+                  { label: 'MB confirma cançó',     value: mb.no_verif_mb_confirmat,       color: 'var(--color-tq-success)',      to: '/staff/cancons?verificada=0&mb=confirmat' },
+                  { label: 'Artista té MBID',        value: mb.no_verif_artista_amb_mbid,  color: 'var(--color-tq-warning)',      to: '/staff/cancons?verificada=0&mb=artista_amb_mbid' },
+                  { label: 'Sense cobertura',        value: mb.no_verif_sense_cobertura,   color: 'var(--color-tq-neutral-soft)', to: '/staff/cancons?verificada=0&mb=sense_cobertura' },
+                ]}
+              />
+              <div className="mt-3">
+                <StatRow
+                  label="Cançons confirmades per MB (totes)"
+                  value={`${mb.cancons_confirmades.toLocaleString('ca')} / ${mb.cancons_verificades_total.toLocaleString('ca')} verif.`}
+                  to="/staff/cancons?verificada=&mb=confirmat"
+                />
+                <StatRow
+                  label="Cançons no confirmades (MB diu que no)"
+                  value="veure"
+                  to="/staff/cancons?verificada=&mb=no_confirmat"
+                />
+                <StatRow
+                  label="Àlbums confirmats per MB"
+                  value={`${mb.albums_confirmats.toLocaleString('ca')} / ${mb.albums_total.toLocaleString('ca')}`}
+                  to="/staff/albums?mb=confirmat"
+                />
+                <StatRow
+                  label="Cançons amb lletra 'cat' (Work)"
+                  value={mb.cancons_lletra_cat}
+                  to="/staff/cancons?verificada=&mb=cat"
+                  accent="success"
+                />
+              </div>
+              <p className="text-[11px] opacity-60 mt-3">
+                "Artista té MBID" són candidates clares: la cançó encara no
+                s'ha pogut conciliar amb cap recording, però sabem qui n'és
+                l'artista a MB. Una sync manual pot acabar de quadrar-les.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ─── Casos sospitosos d'homonímia Deezer ─── */}
+      {homonimia && (
+        <section>
+          <h2 className="text-sm uppercase tracking-widest text-white/60 mb-2">
+            Homonímia Deezer
+          </h2>
           <div className="bg-white text-tq-ink rounded-lg p-4">
-            <p className="text-[11px] uppercase tracking-widest opacity-60 mb-2">
-              Cobertura (MBID assignat a {((mb.aprovats_amb_mbid / Math.max(mb.aprovats_total, 1)) * 100).toFixed(1)}% dels artistes aprovats)
-            </p>
-            <StackedBar
-              total={mb.aprovats_total}
-              segments={[
-                { label: 'Amb MBID', value: mb.aprovats_amb_mbid, color: 'var(--color-tq-success)' },
-                { label: 'Sense MBID', value: mb.aprovats_total - mb.aprovats_amb_mbid, color: 'var(--color-tq-neutral-soft)' },
-              ]}
-            />
-            <dl className="grid sm:grid-cols-2 gap-y-1 mt-3 text-xs">
-              <dt className="opacity-60">Artistes sincronitzats (alguna vegada)</dt>
-              <dd className="text-right font-semibold tabular-nums">{mb.artistes_sincronitzats.toLocaleString('ca')}</dd>
-              <dt className="opacity-60">Cançons confirmades per MB</dt>
-              <dd className="text-right font-semibold tabular-nums">
-                {mb.cancons_confirmades.toLocaleString('ca')}{' '}
-                <span className="opacity-60">/ {mb.cancons_verificades_total.toLocaleString('ca')} verif.</span>
-              </dd>
-              <dt className="opacity-60">Àlbums confirmats per MB</dt>
-              <dd className="text-right font-semibold tabular-nums">{mb.albums_confirmats.toLocaleString('ca')}</dd>
-              <dt className="opacity-60">Cançons amb lletra 'cat' (Work)</dt>
-              <dd className="text-right font-semibold tabular-nums text-emerald-700">{mb.cancons_lletra_cat.toLocaleString('ca')}</dd>
-              <dt className="opacity-60">Artistes detectats com a dissolts</dt>
-              <dd className="text-right font-semibold tabular-nums text-red-700">{mb.artistes_dissolts_detectats.toLocaleString('ca')}</dd>
-              <dt className="opacity-60">Sync més antic pendent</dt>
-              <dd className="text-right text-[11px]">{mb.sync_mes_antic ? mb.sync_mes_antic.slice(0, 16).replace('T', ' ') : '—'}</dd>
-            </dl>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-widest opacity-60">
+                  Casos sospitosos a revisar
+                </p>
+                <p
+                  className="text-3xl font-bold font-display tabular-nums"
+                  style={{ color: homonimia.casos_sospitosos > 0 ? 'var(--color-tq-warning)' : 'var(--color-tq-success)' }}
+                >
+                  {homonimia.casos_sospitosos.toLocaleString('ca')}
+                </p>
+              </div>
+              <p className="text-[11px] opacity-70 max-w-md text-right">
+                Un cas és sospitós si el mateix Deezer artist ID encara
+                està lligat a un artista i té cançons verificades, però
+                també hi ha rebuigs com a "perfil Deezer no és el nostre
+                artista". Si l'staff ja ha desvinculat el Deezer ID
+                erroni, el cas desapareix.
+              </p>
+            </div>
+
+            {homonimia.casos_sospitosos === 0 ? (
+              <p className="text-xs italic text-tq-ink/60">
+                Cap cas pendent ara mateix. Quan rebutgis una cançó amb
+                "perfil Deezer no és el nostre artista", apareixerà aquí
+                si el Deezer ID continua lligat i té cançons verificades.
+              </p>
+            ) : (
+              <table className="w-full text-xs border-t border-black/5">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-widest opacity-60">
+                    <th className="text-left py-2">Artista</th>
+                    <th className="text-left">Deezer artist ID</th>
+                    <th className="text-right">Verificades</th>
+                    <th className="text-right">Rebutjades</th>
+                    <th className="text-right">Últim rebuig</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {homonimia.casos.map(c => (
+                    <tr key={`${c.artista_pk}-${c.deezer_id}`} className="border-t border-black/5">
+                      <td className="py-2">
+                        <Link
+                          to={`/staff/artistes/${c.artista_pk}`}
+                          className="font-semibold underline hover:text-tq-yellow-deep"
+                        >
+                          {c.artista_nom}
+                        </Link>
+                      </td>
+                      <td>
+                        <a
+                          href={`https://www.deezer.com/artist/${c.deezer_id}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="font-mono text-[11px] underline opacity-80 hover:opacity-100"
+                        >
+                          {c.deezer_id} ↗
+                        </a>
+                      </td>
+                      <td className="text-right tabular-nums">
+                        <Link
+                          to={`/staff/cancons?verificada=1&artista_pk=${c.artista_pk}`}
+                          className="underline hover:text-tq-yellow-deep"
+                        >
+                          {c.n_verificades}
+                        </Link>
+                      </td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-tq-danger)' }}>
+                        {c.n_rebutjades}
+                      </td>
+                      <td className="text-right text-[11px] opacity-70">
+                        {c.last_rejected_at
+                          ? c.last_rejected_at.slice(0, 10)
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       )}
@@ -553,9 +846,15 @@ export default function EstatPage() {
               items={topImportances}
               max={maxImp}
               formatValue={v => (v * 100).toFixed(2) + '%'}
+              showDirection
             />
+            <p className="text-[11px] opacity-70 mt-3 flex flex-wrap gap-x-3 gap-y-1">
+              <span><span style={{ color: 'var(--color-tq-success)' }}>↑</span> més valor → aprova</span>
+              <span><span style={{ color: 'var(--color-tq-danger)' }}>↓</span> més valor → rebutja</span>
+              <span>· sense direcció (TF-IDF o sense dades)</span>
+            </p>
             {ml.importances.length > 20 && (
-              <p className="text-[11px] opacity-60 mt-3">
+              <p className="text-[11px] opacity-60 mt-1">
                 {ml.importances.length - 20} features més amb importància residual.
               </p>
             )}

@@ -126,7 +126,7 @@ Not in the cron by default — run on demand when staff approves a
 batch of new artists without Deezer ids, or before a marketing push
 that needs fresh fan counts.
 
-### 3.5 `analitzar_whisper` — nightly 01:30 UTC
+### 3.5 `analitzar_whisper` — nightly 05:00 UTC
 ```bash
 python manage.py analitzar_whisper [--limit N] [--refresh-older-than DAYS]
                                     [--canco-id PK] [--dry-run]
@@ -135,15 +135,15 @@ Runs `faster-whisper large-v3 .detect_language()` on each Canco's
 30-second Deezer preview. Populates `Canco.whisper_lang`,
 `whisper_p`, `whisper_all_probs` (99-lang JSON), `whisper_processat_at`.
 Processes tracks never analysed first, optionally re-analyses rows
-older than N days. Cron window is 01:30 → ~06:45 UTC with
-`--limit 700` (~27 s/track on CPU, 15-min buffer before the 07:00
-provisional ranking). Full backfill ETA ≈ 9 days for ~6 300 pending
-tracks from a cold start.
+older than N days. Cron window is 05:00 with `--limit 100` (~45 min
+worst case at ~27 s/track on CPU, finishing well before the 06:00
+signal step). Backfill of the historical ~6.7k catalogue completed
+2026-04-25 — from now on the daily intake is <50 tracks/night.
 
 See `scripts/model_comparison/resultats.md` for the eval numbers
 that justified this integration.
 
-### 3.6 `obtenir_metadata_musicbrainz` — every 15 min
+### 3.6 `obtenir_metadata_musicbrainz` — hourly at minute 30
 ```bash
 python manage.py obtenir_metadata_musicbrainz [--refresh-days N]
                                               [--limit N] [--artista-id PK]
@@ -184,7 +184,39 @@ python manage.py netejar_caducades
 ```
 Deletes unverified tracks with `data_llancament < today - DIES_CADUCITAT`.
 
-### 3.8 Utility / ad-hoc commands (not cron-scheduled)
+### 3.8 `obtenir_metadata_lastfm` — daily 05:00 UTC
+```bash
+python manage.py obtenir_metadata_lastfm [--limit N] [--refresh-days N]
+                                         [--artista-id PK] [--dry-run]
+```
+Pulls Last.fm artist-level metadata into `Artista.lastfm_*` and walks
+the `artist.getSimilar` network to surface candidate pendents. Single-
+instance `fcntl.flock` on `/tmp/lastfm_artist_sync.lock`. Defaults to
+500 artists per invocation; refresh window 7 days.
+
+Per artist (queue order = aprovat → pendent → discartat, then oldest
+`lastfm_last_sync`):
+  1. `artist.getInfo` → fill bio summary/content, listeners,
+     playcount, ontour, tags, four image sizes, url.
+  2. `artist.getSimilar` (limit 100, `match >= 0.3`) → for every
+     candidate name, find an existing Artista by `lastfm_nom` or
+     case-insensitive `nom`. If found, increment
+     `nb_similars_lastfm`. Otherwise create a placeholder
+     (`pendent_review=True`, `auto_descobert=True`,
+     `font_descoberta="lastfm_similar"`, `nb_similars_lastfm=1`).
+  3. Stamp `lastfm_last_sync = now()`.
+
+Idempotency is gated by the source artist's recency: re-running on
+the same artist within `--refresh-days` is a no-op (the queue skips
+it). Within a single sync each similar's counter is incremented
+exactly once.
+
+The `nb_similars_lastfm` count surfaces in the staff Artistes /
+Pendents lists and in the `LastfmPanel` of `ArtistaEditPage`. Pendents
+gains a sort `?sort=similars_lastfm` (high-affinity first) and a
+filter `?font_descoberta=lastfm_similar` to triage just this batch.
+
+### 3.9 Utility / ad-hoc commands (not cron-scheduled)
 - `recalcular_ml` — force retrain the RF model and reclassify all unverified
   tracks. Normally runs automatically via `recalcular_ml_si_cal()` when 5+ new
   decisions have accumulated.
@@ -197,7 +229,7 @@ Deletes unverified tracks with `data_llancament < today - DIES_CADUCITAT`.
 `backfill_deezer_artistes`, `backfill_preview_url`,
 `seed_spotify_playlists`. Preserved for history only.
 
-### 3.9 Spotify playlist sync — daily 07:15 UTC
+### 3.10 Spotify playlist sync — daily 07:15 UTC
 ```bash
 python manage.py actualitzar_playlists_spotify [--dry-run] [--only <codi>]
 ```
@@ -230,21 +262,24 @@ python manage.py configurar_spotify_playlists \
 ## 4. Track verification (ML classifier)
 
 `music/ml.py` — Random Forest (100 estimators, `class_weight="balanced"`)
-trained on **4,371** decisions from `HistorialRevisio`. Post 2026-04-21
-feature slim: **76 features** (16 structured + 4 Whisper LID + 60 TF-IDF
-char n-grams of the track title).
+trained on **7,912** decisions from `HistorialRevisio`. After the
+2026-04-25 TF-IDF retall: **49 features** (12 structured + 4 Whisper LID
++ 3 MusicBrainz + 30 TF-IDF char n-grams of the track title). Path
+to today: 223 → 76 (slim) → 79 (+ MB) → 49 (TF-IDF cap 60 → 30 after
+A/B 5-fold CV proved the smaller cap matched ROC-AUC and improved F1
++ accuracy slightly).
 
-5-fold CV metrics (2026-04-21, 4,371 training rows):
-- ROC-AUC **0.9994** · F1 **0.9522** · Accuracy **0.9675**.
-- Top 10 features carry **88%** of the signal (was 77% in the 223-feature
-  model).
+5-fold CV metrics (2026-04-25, 7 730 training rows, max_features=30):
+- ROC-AUC **0.9998** · F1 **0.9908** · Accuracy **0.9953**.
+- Top 7 features (4 of which are Whisper LID) carry **70%** of the
+  signal; estructurals dominate at 95.6 %, TF-IDF only 4.4 %.
 
-Top 5 features by importance:
-1. `ratio_rebuig_artista` (22.2%) — Bayesian-smoothed (k=5, prior=0.5)
-2. `ratio_rebuig_registrant` (14.9%)
-3. `ratio_rebuig_isrc_prefix` (13.6%)
-4. `nb_decisions_artista` (9.1%)
-5. `nom_artista_len` (7.1%)
+Top 5 features by importance (2026-04-25 retrain, max_features=30):
+1. `ratio_rebuig_artista` (20.0%) — Bayesian-smoothed (k=5, prior=0.5)
+2. `whisper_p_ca` (17.8%) — Whisper LID confidence the track is català
+3. `ratio_rebuig_registrant` (10.7%)
+4. `whisper_p_en` (9.8%)
+5. `whisper_margin_ca` (9.0%)
 
 Bayesian smoothing on the three `ratio_rebuig_*` features: returns
 `(rej + k*p) / (total + k)` with `k=5, p=0.5`, so an artist with few
@@ -273,24 +308,36 @@ output into `/var/log/topquaranta/status/<tag>.status` — consumed by the
 health check (§7).
 
 ```cron
-# Pipeline
+# Hourly: ingest + metadata refresh
 0 * * * *    topquaranta  tq-run obtenir_novetats                 # every hour
-*/15 * * * * topquaranta  tq-run obtenir_metadata_musicbrainz     # every 15 min
-30 1 * * *   topquaranta  tq-run analitzar_whisper --limit 700    # nightly LID
-0 4 * * *    topquaranta  tq-run netejar_caducades                # 04:00
-0 6 * * *    topquaranta  tq-run obtenir_senyal                   # 06:00
-0 7 * * *    topquaranta  tq-run calcular_ranking --provisional   # 07:00
+30 * * * *   topquaranta  tq-run obtenir_metadata_musicbrainz     # 30 min after novetats
+
+# Nightly pipeline (each step feeds the next)
+0 3 * * *    postgres     tq-backup                               # 03:00 DB backup
+0 4 * * *    topquaranta  tq-run netejar_caducades                # 04:00 purge expired
+0 5 * * *    topquaranta  tq-run analitzar_whisper --limit 100    # 05:00 Whisper LID
+0 5 * * *    topquaranta  tq-run obtenir_metadata_lastfm --limit 500  # 05:00 Last.fm artist meta
+0 6 * * *    topquaranta  tq-run obtenir_senyal                   # 06:00 Last.fm signal
+0 7 * * *    topquaranta  tq-run calcular_ranking --provisional   # 07:00 provisional
 15 7 * * *   topquaranta  tq-run actualitzar_playlists_spotify    # 07:15 Spotify sync
+
+# Weekly
 0 8 * * 6    topquaranta  tq-run calcular_ranking                 # Sat 08:00 official
 
-# DB backup
-0 3 * * *   postgres      tq-backup                               # 03:00
-
-# Retention
+# Retention + ops
 0 5 1 1,4,7,10 * topquaranta tq-run arxivar_senyal_vell           # quarterly
-30 4 1 * *  postgres        tq-restore-test                       # monthly
+30 4 1 * *   postgres       tq-restore-test                       # monthly
 */30 * * * * topquaranta    tq-recover                            # recovery sweep
 ```
+
+Two pacing changes since the original schedule (2026-04-25 sweep):
+- `obtenir_metadata_musicbrainz` was `*/15` during the MB backfill;
+  now hourly at minute 30 — the queue is empty most of the time and
+  the 15-min cadence was just polling for nothing.
+- `analitzar_whisper` was 01:30 with `--limit 700` (5 h backfill
+  window). Backlog drained 2026-04-25; now 05:00 with `--limit 100`
+  (~45 min worst case), so it slots cleanly into the daily pipeline
+  before signal ingestion.
 
 ## 6. Backups
 
@@ -334,3 +381,30 @@ No external services. Everything is file-based on the server.
 All auto-discovered artists sit in the pending queue (`/staff/artistes/pendents/`)
 until a human approves them with a municipality assignment (which auto-sets
 the territory via the `ArtistaLocalitat` → `Municipi` → `Territori` chain).
+
+## 7. HomePage feed endpoints (Sprint I bis, 2026-04-26)
+
+The redesigned `/` is composed from a small set of read-only public
+endpoints, all anonymous-friendly and cached via `cache_for_anon`.
+Live in `web/api/home_views.py`:
+
+| Endpoint | Cache | Returns |
+|---|---|---|
+| `GET /api/v1/stats/` | 60 s | `{cancons_verificades, artistes_aprovats, territoris_actius, setmana}` — the latter is the latest `TopSetmanal.setmana` against which `territoris_actius` is computed (number of distinct `territori` values). |
+| `GET /api/v1/top/nova-setmana/` | 1 h | First entry (lowest `posicio`) of the latest PPCC `TopSetmanal` whose `canco_id` was absent from the previous PPCC week. `null` when first run / no movement. |
+| `GET /api/v1/artistes/destacat/` | 1 h | The artist with `UserArtista.verificat=True` whose biggest per-cançó positive PPCC delta is the largest. Tie-breaker: count of `Canco(verificada=True)`. Includes `lastfm_image_large`, `bio` (or `lastfm_bio_summary` truncated to 120 chars), territoris codes. |
+| `GET /api/v1/artistes/descoberta/?limit=N` | 1 h | Artists `aprovat=True`, `created_at >= today − 30 d`, with `≥1` verified cançó, never present in `TopSetmanal`. Ordered by `-created_at`. `limit` capped at 12. |
+
+Plus extensions to existing endpoints:
+
+- **`GET /api/v1/albums/`** (new list view; the per-slug detail
+  endpoint is unchanged). Filters: `ordering=±data_llancament`,
+  `amb_verificades=true|false`, `limit≤24`. Annotates each album
+  with `n_verificades` (count of `Canco(verificada=True, activa=True)`
+  rows under it).
+- **`GET /api/v1/top/?oficial=true&limit=N`**. The default behaviour
+  falls back to `TopProvisional` when no weekly row exists; with
+  `oficial=true`, the response is `entries=[]` instead — the
+  HomePage hero can then hide the section cleanly. `limit` is also
+  honoured (capped at `MAX_POSICIONS_TOP`) so the home strip can
+  request only the 10 first rows.

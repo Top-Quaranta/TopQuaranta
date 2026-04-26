@@ -30,11 +30,20 @@ from .constants import (
     MIN_TRAINING_SAMPLES,
     ML_CLASSE_A_THRESHOLD,
     ML_CLASSE_B_THRESHOLD,
+    RATIO_PRIOR_K,
+    RATIO_PRIOR_P,
+    TFIDF_MAX_FEATURES,
 )
 
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = Path(__file__).parent / "ml_model.joblib"
+# Signed direction vector saved alongside the RF model: for each feature
+# stores `mean_approved - mean_rejected` from the training set. Positive
+# means "higher value → more approvals"; negative means "higher value →
+# more rejections". Magnitude is on feature scale — only the sign is
+# surfaced to staff. Rebuilt on every training run.
+DIRECTIONS_PATH = Path(__file__).parent / "ml_directions.joblib"
 LAST_RECALC_FILE = "/tmp/tq_last_ml_recalc"
 
 # Feature slimming (2026-04-21): the previous 23 structured + 200 TF-IDF
@@ -78,20 +87,12 @@ FEATURE_NAMES = [
     "mbrainz_confirmed",
     "mb_lyrics_cat",
     "artista_te_mbid",
-] + [f"tfidf_{i}" for i in range(60)]
+] + [f"tfidf_{i}" for i in range(TFIDF_MAX_FEATURES)]
 
 TFIDF_PATH = Path(__file__).parent / "ml_tfidf.joblib"
-TFIDF_MAX_FEATURES = 60
-
-# Bayesian smoothing on the three "ratio_rebuig_*" features. When an
-# artist / prefix / registrant has very few decisions the raw ratio
-# rej/total is extremely noisy — two rejections in a row push it to
-# 100% and feed a reinforcement loop where the RF then doubles down
-# on rejection. By mixing in PRIOR_K "virtual" decisions at PRIOR_P
-# (=0.5 = neutral), the ratio only drifts away from 0.5 once there's
-# enough real signal to overcome the prior.
-RATIO_PRIOR_K = 5
-RATIO_PRIOR_P = 0.5
+# `TFIDF_MAX_FEATURES`, `RATIO_PRIOR_K`, `RATIO_PRIOR_P` live in
+# `music/constants.py` since 2026-04-25 (Sprint A) so other modules
+# can read the same numbers without importing the ML stack.
 
 # P2: module-level cache for the two joblib artifacts (RF classifier +
 # TF-IDF vectorizer), keyed on file mtime so recalcular_ml writing a new
@@ -139,10 +140,20 @@ def _tfidf_features(text: str) -> list[float]:
     if tfidf is None:
         return [0.0] * TFIDF_MAX_FEATURES
     try:
-        vec = tfidf.transform([text or ""])
-        return vec.toarray()[0].tolist()
+        vec = tfidf.transform([text or ""]).toarray()[0].tolist()
     except Exception:
         return [0.0] * TFIDF_MAX_FEATURES
+    # `TFIDF_MAX_FEATURES` is a CAP, not a guaranteed dimension —
+    # `min_df=2` can yield a smaller vocabulary on tiny / repetitive
+    # corpora, in which case `tfidf.transform()` returns a shorter
+    # vector. Pad up to the cap so every row reaches the RF with a
+    # consistent shape (and FEATURE_NAMES stays well-defined). Truncate
+    # in the unlikely case vocab grows past the cap (defensive).
+    if len(vec) < TFIDF_MAX_FEATURES:
+        vec = vec + [0.0] * (TFIDF_MAX_FEATURES - len(vec))
+    elif len(vec) > TFIDF_MAX_FEATURES:
+        vec = vec[:TFIDF_MAX_FEATURES]
+    return vec
 
 
 def _isrc_category(isrc: str) -> tuple[int, int, int, int]:
@@ -476,6 +487,31 @@ def entrenar_model() -> bool:
     )
     clf.fit(X, y)
     joblib.dump(clf, MODEL_PATH)
+
+    # Compute per-feature direction: positive = higher value pushes
+    # toward approval, negative = toward rejection. Simple mean-diff is
+    # robust to the imbalance because RandomForest already handles it;
+    # we only want the sign, not a calibrated effect size. Skip TF-IDF
+    # entries (always ≥ 0 and noisy individually).
+    try:
+        import numpy as np  # noqa: F401 — lazy import, sklearn already pulls it
+
+        n_struct = len(FEATURE_NAMES) - TFIDF_MAX_FEATURES
+        arr_pos: list[list[float]] = []
+        arr_neg: list[list[float]] = []
+        for feats, label in zip(X, y):
+            (arr_pos if label == 1 else arr_neg).append(feats[:n_struct])
+        directions: dict[str, float] = {}
+        if arr_pos and arr_neg:
+            import statistics as stats
+
+            for i in range(n_struct):
+                mp = stats.fmean(row[i] for row in arr_pos)
+                mn = stats.fmean(row[i] for row in arr_neg)
+                directions[FEATURE_NAMES[i]] = mp - mn
+        joblib.dump(directions, DIRECTIONS_PATH)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not compute feature directions: %s", exc)
 
     importances = dict(zip(FEATURE_NAMES, clf.feature_importances_))
     sorted_imp = sorted(importances.items(), key=lambda x: -x[1])

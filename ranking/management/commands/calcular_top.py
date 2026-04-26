@@ -11,14 +11,14 @@ from ranking.algorisme import (
     TERRITORIS_AGREGATS,
     TERRITORIS_FIXOS,
     TERRITORIS_OPCIONALS,
-    calcular_ranking_territori,
-    territoris_amb_ranking_propi,
+    calcular_top_territori,
+    territoris_amb_top_propi,
 )
 from ranking.models import (
     ConfiguracioGlobal,
-    RankingProvisional,
-    RankingSetmanal,
     SenyalDiari,
+    TopProvisional,
+    TopSetmanal,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ ALL_TERRITORIS = sorted(TERRITORIS_FIXOS | TERRITORIS_AGREGATS | TERRITORIS_OPCI
 # weekly-plays Python algorithm.
 ALGORITHM_VERSION = "v2.0"
 
-# R1: coefficients we snapshot into each RankingSetmanal row. Only the
+# R1: coefficients we snapshot into each TopSetmanal row. Only the
 # fields that still live on ConfiguracioGlobal after the v2.0 simplification.
 _CONFIG_SNAPSHOT_FIELDS = [
     "dia_setmana_ranking",
@@ -76,7 +76,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--provisional",
             action="store_true",
-            help="Write to RankingProvisional (rolling daily) instead of RankingSetmanal.",
+            help="Write to TopProvisional (rolling daily) instead of TopSetmanal.",
         )
 
     def handle(self, *args, **options):
@@ -169,7 +169,7 @@ class Command(BaseCommand):
         summary = []
         for territori in territoris:
             self.stdout.write(f"\nCalculating {territori}...")
-            results = calcular_ranking_territori(territori)
+            results = calcular_top_territori(territori)
 
             top40 = [r for r in results if r["posicio"] <= 40]
 
@@ -179,9 +179,9 @@ class Command(BaseCommand):
                 # out (e.g. artist M2M corrected, ALT loses all feeders).
                 if not dry_run:
                     if provisional:
-                        RankingProvisional.objects.filter(territori=territori).delete()
+                        TopProvisional.objects.filter(territori=territori).delete()
                     else:
-                        RankingSetmanal.objects.filter(
+                        TopSetmanal.objects.filter(
                             territori=territori, setmana=setmana
                         ).delete()
                 if territori in (TERRITORIS_AGREGATS | TERRITORIS_OPCIONALS):
@@ -255,7 +255,7 @@ class Command(BaseCommand):
         }
 
         with transaction.atomic():
-            RankingSetmanal.objects.filter(
+            TopSetmanal.objects.filter(
                 territori=territori,
                 setmana=setmana,
             ).delete()
@@ -263,7 +263,7 @@ class Command(BaseCommand):
             for r in rows:
                 canco_nom, artista_nom = names.get(r["canco_id"], ("", ""))
                 objs.append(
-                    RankingSetmanal(
+                    TopSetmanal(
                         canco_id=r["canco_id"],
                         territori=territori,
                         setmana=setmana,
@@ -275,41 +275,31 @@ class Command(BaseCommand):
                         config_snapshot=config_snapshot,
                     )
                 )
-            RankingSetmanal.objects.bulk_create(objs)
+            TopSetmanal.objects.bulk_create(objs)
 
     def _save_provisional(self, territori: str, rows: list[dict]) -> None:
-        """Replace provisional ranking for a territory."""
-        # Get latest playcount per canco from SenyalDiari
-        canco_ids = [r["canco_id"] for r in rows]
-        latest_date = (
-            SenyalDiari.objects.filter(canco_id__in=canco_ids, error=False)
-            .order_by("-data")
-            .values_list("data", flat=True)
-            .first()
-        )
-        playcount_map = {}
-        if latest_date:
-            for sd in SenyalDiari.objects.filter(
-                canco_id__in=canco_ids, data=latest_date, error=False
-            ).values("canco_id", "lastfm_playcount"):
-                playcount_map[sd["canco_id"]] = sd["lastfm_playcount"]
+        """Replace provisional ranking for a territory.
 
+        v2.0: `escoltes_setmanals` stores the rolling 7-day plays delta
+        (same figure that feeds the algorithm as `weekly_plays`).
+        Renamed from `lastfm_playcount` on 2026-04-25 (Sprint A) to
+        match its actual semantics; the legacy `dies_en_top` companion
+        column was dropped at the same time.
+        """
         with transaction.atomic():
-            RankingProvisional.objects.filter(territori=territori).delete()
+            TopProvisional.objects.filter(territori=territori).delete()
             objs = []
             for r in rows:
                 objs.append(
-                    RankingProvisional(
+                    TopProvisional(
                         canco_id=r["canco_id"],
                         territori=territori,
                         posicio=r["posicio"],
                         score_setmanal=r["score_setmanal"] or 0.0,
-                        lastfm_playcount=playcount_map.get(r["canco_id"]),
-                        # v2.0 uses weekly_plays in place of dies_en_top.
-                        # The column name is historical; repurposed to hold
-                        # the plays-this-week value surfaced by the new
-                        # algorithm.
-                        dies_en_top=int(r.get("weekly_plays") or 0),
+                        escoltes_setmanals=int(r.get("weekly_plays") or 0),
+                        age_factor=r.get("age_factor"),
+                        past_top_factor=r.get("past_top_factor"),
+                        monopoli_factor=r.get("monopoli_factor"),
                     )
                 )
-            RankingProvisional.objects.bulk_create(objs)
+            TopProvisional.objects.bulk_create(objs)

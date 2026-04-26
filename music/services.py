@@ -20,11 +20,62 @@ def rebutjar_canco(canco: Canco, motiu: str) -> None:
     """
     Reject a single track: record historial, set verificada=False and activa=False.
     The track stays in DB for audit but won't appear in pending lists or rankings.
+
+    Side effect when motiu == "artista_incorrecte": if after this
+    rejection the artist has zero remaining active Cançons AND every
+    rejection recorded for this artist is also "artista_incorrecte",
+    we treat the whole Deezer attachment as wrong and remove every
+    ArtistaDeezer row for the artist. The post_delete signal then
+    desaprova the artist if no MBID remains. See
+    `_try_auto_unlink_homonym_deezer` for the safety thresholds — when
+    in doubt we leave the case for human review (it will surface in
+    the Estat "Casos sospitosos" panel).
     """
+    artista = canco.artista
     crear_historial(canco, "rebutjada", motiu)
     canco.verificada = False
     canco.activa = False
     canco.save(update_fields=["verificada", "activa"])
+    if motiu == "artista_incorrecte" and artista is not None:
+        _try_auto_unlink_homonym_deezer(artista)
+
+
+def _try_auto_unlink_homonym_deezer(artista: Artista) -> bool:
+    """Detach Deezer IDs from an artist when every track has been
+    rejected as a homonym. Conservative: if anything still verified
+    or active exists, or if any historial rejection used a different
+    motiu, we abstain.
+
+    Returns True if the unlink happened.
+    """
+    # Any track still alive? Defer to human review (e.g. some tracks
+    # could be from a different — correct — Deezer ID on the same artist).
+    if Canco.objects.filter(artista=artista, activa=True).exists():
+        return False
+    # Look at every rejection ever recorded for this artist's name.
+    motius = list(
+        HistorialRevisio.objects.filter(
+            artista_nom=artista.nom, decisio="rebutjada"
+        ).values_list("motiu", flat=True)
+    )
+    if not motius:
+        return False
+    if any(m != "artista_incorrecte" for m in motius):
+        return False
+    deezer_links = list(artista.deezer_ids.all())
+    if not deezer_links:
+        return False
+    # Trigger. The post_delete signal does the desaprovació if there's
+    # also no MBID anchor left.
+    artista.deezer_ids.all().delete()
+    logger.info(
+        "Auto-unlinked %d Deezer ID(s) from artist '%s' (pk=%s) — "
+        "every Cançó rejected as artista_incorrecte.",
+        len(deezer_links),
+        artista.nom,
+        artista.pk,
+    )
+    return True
 
 
 def aprovar_canco(canco: Canco) -> None:

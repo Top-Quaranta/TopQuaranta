@@ -96,11 +96,36 @@ export default function OnboardingPage() {
         Benvingut · TopQuaranta
       </p>
       <h1 className="text-3xl font-bold mb-2">Completa el teu perfil</h1>
-      <p className="text-sm text-white/70 mb-6">
+      <p className="text-sm text-white/70 mb-4">
         Digues qui ets a la comunitat. Aquesta informació només apareix al{' '}
         <strong>directori intern</strong> si tu ho decideixes; pots canviar-ho
         en qualsevol moment des de <code>/compte</code>.
       </p>
+
+      {/* Sprint H — què pots fer aquí, en tres punts. Discret, dins
+          una targeta neutra perquè no competeixi amb el formulari. */}
+      <div className="bg-white/5 border border-white/10 rounded-md p-4 mb-6 text-sm text-white/80">
+        <p className="text-[10px] uppercase tracking-widest text-white/60 mb-2">
+          Què pots fer com a usuari registrat
+        </p>
+        <ul className="space-y-1.5 leading-relaxed">
+          <li className="flex gap-2">
+            <span className="text-tq-yellow shrink-0">·</span>
+            <span><strong>Proposar i gestionar artistes</strong> per fer-los
+            aparèixer al top i al mapa.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-tq-yellow shrink-0">·</span>
+            <span><strong>Activar el teu perfil al directori</strong> per
+            connectar amb altres músics dels Països Catalans.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-tq-yellow shrink-0">·</span>
+            <span><strong>Publicar a la comunitat</strong>: comparteix
+            projectes, demana col·laboradors, anuncia novetats.</span>
+          </li>
+        </ul>
+      </div>
 
       <form
         onSubmit={e => { e.preventDefault(); saveAndContinue(true) }}

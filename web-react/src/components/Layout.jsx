@@ -38,6 +38,10 @@ function FooterLine() {
   const { target } = useFeedbackContext()
   return (
     <footer className="px-6 lg:px-12 py-6 text-xs opacity-60 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <Link to="/com-funciona" className="underline hover:opacity-100">
+        Com funciona
+      </Link>
+      <span>·</span>
       <span>Open source</span>
       <span>·</span>
       <a
@@ -95,6 +99,21 @@ function LayoutInner({ children }) {
 
   return (
     <>
+      {/* Skip link — visible only when focused via keyboard. WCAG 2.4.1
+          (Bypass Blocks). Lets keyboard users jump past the header /
+          main nav straight into the page content. */}
+      <a
+        href="#main-content"
+        className="
+          sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50
+          focus:px-3 focus:py-2 focus:rounded-md focus:bg-tq-ink focus:text-tq-yellow
+          focus:font-semibold focus:shadow-lg focus:outline-none focus:ring-2
+          focus:ring-tq-yellow
+        "
+      >
+        Salta al contingut principal
+      </a>
+
       {/* ── Yellow header ── */}
       <header className="bg-tq-yellow text-tq-ink sticky top-0 z-40">
         <div className="h-12 flex items-center gap-6 px-6 lg:px-12">
@@ -146,7 +165,7 @@ function LayoutInner({ children }) {
       </header>
 
       {/* ── Main — full-width container with lg side padding ── */}
-      <main className="px-6 lg:px-12 py-6 min-h-[60vh]">
+      <main id="main-content" className="px-6 lg:px-12 py-6 min-h-[60vh]" tabIndex="-1">
         {children}
       </main>
 

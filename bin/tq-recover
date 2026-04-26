@@ -35,7 +35,6 @@ mkdir -p "$STATUS_DIR"
 declare -A DAILY_AT=(
     [netejar_caducades]="04:30"
     [obtenir_senyal]="06:30"
-    [actualitzar_score_entrada]="07:00"
     [calcular_ranking_provisional]="07:30"
 )
 # When the tag does NOT equal the manage.py command name (e.g. the

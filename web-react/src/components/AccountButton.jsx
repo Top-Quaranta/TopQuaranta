@@ -46,7 +46,12 @@ export default function AccountButton() {
     return <span className="h-8 w-8 rounded-full bg-tq-ink/10 animate-pulse" />
   }
 
-  const to = profile ? '/compte' : '/compte/accedir'
+  // When the user has unread DMs, the icon doubles as a missatges
+  // shortcut — clicking the badge should land you on the inbox, not
+  // on the dashboard. Without unread we keep the dashboard target.
+  const to = profile
+    ? (unread > 0 ? '/comunitat/missatges' : '/compte')
+    : '/compte/accedir'
   const label = profile
     ? `${profile.email}${unread > 0 ? ` (${unread} missatge${unread === 1 ? '' : 's'} no llegits)` : ''}`
     : 'Accedir'

@@ -11,6 +11,7 @@ import { api } from '../../lib/api'
 import { Btn, Input, PageHeader, Select, TableCard } from '../../components/staff/StaffTable'
 import LocationCascade from '../../components/staff/LocationCascade'
 import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'
+import LastfmPanel from '../../components/staff/LastfmPanel'
 
 export default function ArtistaEditPage() {
   const { pk } = useParams()
@@ -61,6 +62,40 @@ export default function ArtistaEditPage() {
 
   function setDeezerIds(ids) {
     setA(prev => ({ ...prev, deezer_ids: ids }))
+  }
+
+  async function clearMB() {
+    const block = confirm(
+      `Desvincular el MBID actual de ${a.nom}?\n\n` +
+      `Per defecte el bloquejaré perquè el cron no el reassigni.\n` +
+      `Prem "Cancel·lar" per avortar.`
+    )
+    if (!block) return
+    const disableAuto = confirm(
+      `Vols també DESACTIVAR l'auto-match per aquest artista?\n\n` +
+      `OK: si no existeix cap MBID correcte a MusicBrainz, el cron no ` +
+      `proposarà cap coincidència futura (ni per altres homònims).\n\n` +
+      `Cancel·lar: només bloqueja el MBID actual; el cron podrà proposar ` +
+      `altres MBIDs si apareixen.`
+    )
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const out = await api.post(`/staff/artistes/${pk}/mb-clear/`, {
+        block: true,
+        disable_auto: disableAuto,
+      })
+      if (out.ok) {
+        setMsg(
+          `MBID desvinculat.` +
+          (out.blocked ? ` Bloquejat: ${out.old_mbid.slice(0, 8)}….` : '') +
+          (out.auto_match_disabled ? ' Auto-match desactivat.' : '')
+        )
+        const fresh = await api.get(`/staff/artistes/${pk}/`)
+        setA(fresh)
+      }
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
   }
 
   async function syncMB() {
@@ -251,8 +286,10 @@ export default function ArtistaEditPage() {
             kind="artista"
             data={{ ...a.musicbrainz, nom_hint: a.nom }}
             onSync={syncMB}
+            onClear={clearMB}
             busy={busy}
           />
+          <LastfmPanel data={{ ...(a.lastfm || {}), pk: a.pk }} />
         </div>
       </div>
     </section>

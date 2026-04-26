@@ -1,10 +1,33 @@
-from django.db.models import Count
+from django.db.models import Count, Max
+from django.views.decorators.http import condition
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from music.models import Artista, ArtistaLocalitat, Municipi
-from ranking.models import RankingSetmanal
+from ranking.models import SenyalDiari, TopSetmanal
+from web.api.utils import cache_for_anon
+
+
+def _mapa_last_modified(request, *args, **kwargs):
+    """Most recent SenyalDiari date — drives map cache invalidation.
+    A new daily senyal is the only thing that meaningfully changes
+    the artist ranking served by `mapa_artistes_top`."""
+    import datetime as _dt
+
+    d = SenyalDiari.objects.aggregate(Max("data"))["data__max"]
+    if d is None:
+        return None
+    return _dt.datetime.combine(d, _dt.time.min, tzinfo=_dt.timezone.utc)
+
+
+def _mapa_etag(request, *args, **kwargs):
+    lm = _mapa_last_modified(request, *args, **kwargs)
+    if lm is None:
+        return None
+    qs = request.META.get("QUERY_STRING", "")
+    return f'W/"mapa-{int(lm.timestamp())}-{hash(qs) & 0xffffffff:08x}"'
+
 
 # ── Location API — single source of truth ──
 #
@@ -107,7 +130,7 @@ def mapa_artistes(request: Request) -> Response:
     An artist with multiple locations appears in all corresponding municipis.
     """
     latest = (
-        RankingSetmanal.objects.order_by("-setmana")
+        TopSetmanal.objects.order_by("-setmana")
         .values_list("setmana", flat=True)
         .first()
     )
@@ -116,7 +139,7 @@ def mapa_artistes(request: Request) -> Response:
     artist_ids: dict[int, int] = {}
     if latest:
         for row in (
-            RankingSetmanal.objects.filter(setmana=latest)
+            TopSetmanal.objects.filter(setmana=latest)
             .values("canco__artista_id")
             .annotate(aparicions=Count("id"))
             .order_by("-aparicions")
@@ -230,7 +253,7 @@ def mapa_stats(request: Request) -> Response:
         Municipi,
         Territori,
     )
-    from ranking.models import RankingSetmanal
+    from ranking.models import TopSetmanal
 
     level = (request.GET.get("level") or "territori").strip()
     parent = (request.GET.get("parent") or "").strip()
@@ -251,14 +274,14 @@ def mapa_stats(request: Request) -> Response:
 
     # Latest setmanal week — fallback to any setmanal we have, else empty set.
     latest_setmana = (
-        RankingSetmanal.objects.order_by("-setmana")
+        TopSetmanal.objects.order_by("-setmana")
         .values_list("setmana", flat=True)
         .first()
     )
     ranking_canco_ids: set[int] = set()
     if latest_setmana is not None:
         ranking_canco_ids = set(
-            RankingSetmanal.objects.filter(setmana=latest_setmana)
+            TopSetmanal.objects.filter(setmana=latest_setmana)
             .values_list("canco_id", flat=True)
             .distinct()
         )
@@ -354,7 +377,7 @@ def mapa_municipi_artistes(request: Request) -> Response:
     info to drive the side-panel detail view on /mapa.
     """
     from music.models import ArtistaLocalitat
-    from ranking.models import RankingSetmanal
+    from ranking.models import TopSetmanal
 
     ter = (request.GET.get("territori") or "").strip()
     com = (request.GET.get("comarca") or "").strip()
@@ -376,7 +399,7 @@ def mapa_municipi_artistes(request: Request) -> Response:
 
     # Which of their songs are in the latest weekly ranking?
     latest_setmana = (
-        RankingSetmanal.objects.order_by("-setmana")
+        TopSetmanal.objects.order_by("-setmana")
         .values_list("setmana", flat=True)
         .first()
     )
@@ -385,7 +408,7 @@ def mapa_municipi_artistes(request: Request) -> Response:
         from django.db.models import Count
 
         for row in (
-            RankingSetmanal.objects.filter(setmana=latest_setmana)
+            TopSetmanal.objects.filter(setmana=latest_setmana)
             .values("canco__artista_id")
             .annotate(n=Count("pk", distinct=True))
         ):
@@ -409,7 +432,9 @@ def mapa_municipi_artistes(request: Request) -> Response:
     return Response(results)
 
 
+@condition(etag_func=_mapa_etag, last_modified_func=_mapa_last_modified)
 @api_view(["GET"])
+@cache_for_anon(60, key_prefix="mapa")
 def mapa_artistes_top(request: Request) -> Response:
     """Artistes for the /mapa side panel, sorted by listens, any level.
 
@@ -455,8 +480,14 @@ def mapa_artistes_top(request: Request) -> Response:
 
     # Per-canco max playcount (cumulative metric so max == latest),
     # then fold into per-artista totals in one pass.
+    #
+    # Restrict to `verificada=True` cançons. Otherwise a Deezer ID
+    # collision (a Catalan artist sharing an ID with a popular
+    # international homonym) inflates the artist's apparent listens
+    # with material that staff has already deemed not theirs — they
+    # ranked at the top of the map without a single verified track.
     canco_rows = (
-        Canco.objects.filter(artista_id__in=artista_ids)
+        Canco.objects.filter(artista_id__in=artista_ids, verificada=True)
         .annotate(plays=Max("senyals__lastfm_playcount"))
         .values_list("artista_id", "plays")
     )
@@ -466,12 +497,16 @@ def mapa_artistes_top(request: Request) -> Response:
             plays or 0
         )
 
-    # Latest album cover per artista (for the grid thumbnail).
+    # Latest album cover per artista (for the grid thumbnail). Same
+    # `verificada=True` guard as the play-count aggregation above:
+    # a Deezer ID collision can otherwise surface a cover from the
+    # homonym's catalogue, even when our artist has no real material.
     cover_rows = (
-        Album.objects.filter(artista_id__in=artista_ids)
+        Album.objects.filter(artista_id__in=artista_ids, cancons__verificada=True)
         .exclude(imatge_url="")
         .order_by("artista_id", "-data_llancament")
         .values_list("artista_id", "imatge_url")
+        .distinct()
     )
     cover_by_artista: dict[int, str] = {}
     for artista_id, url in cover_rows:

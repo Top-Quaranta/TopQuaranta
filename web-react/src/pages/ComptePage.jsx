@@ -12,21 +12,22 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
+import Badge from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
 import { artistaUrl } from '../lib/urls'
+import MmIcon from '../components/MmIcon'
 
-const ESTAT_STYLES = {
-  pendent:  'bg-tq-yellow-soft text-tq-yellow-deep',
-  aprovat:  'bg-emerald-100 text-emerald-800',
-  rebutjat: 'bg-red-100 text-red-800',
-}
+// Map estat → Badge variant. Variants come from the design-system
+// Badge component (which itself maps to `--color-tq-success/danger/warning`).
+const ESTAT_VARIANT = { pendent: 'warning', aprovat: 'success', rebutjat: 'danger' }
 const ESTAT_LABEL = { pendent: 'Pendent', aprovat: 'Aprovat', rebutjat: 'Rebutjat' }
 
 function EstatBadge({ estat }) {
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ESTAT_STYLES[estat] || 'bg-gray-100'}`}>
+    <Badge variant={ESTAT_VARIANT[estat] || 'default'} className="rounded-full">
       {ESTAT_LABEL[estat] || estat}
-    </span>
+    </Badge>
   )
 }
 
@@ -88,22 +89,76 @@ function StatsCard({ stats, artistaNom }) {
   )
 }
 
-function ArtistaCard({ u }) {
+function ArtistaCard({ u, millorPosicio }) {
+  // Verified managers get the full toolbar (estat al top, editar perfil,
+  // veure al mapa). Non-verified rows stay link-only — the underlying
+  // card still navigates to the public artist page.
   return (
-    <Link
-      to={artistaUrl(u.artista.slug)}
-      className="group bg-white text-tq-ink rounded-lg shadow-md p-4 flex flex-col gap-2 hover:shadow-lg transition-all hover:-translate-y-0.5 min-h-[6.5rem]"
-    >
-      <p className="font-semibold truncate">{u.artista.nom}</p>
-      <div className="flex flex-wrap gap-1.5 mt-auto">
+    <div className="group bg-white text-tq-ink rounded-lg shadow-md p-4 flex flex-col gap-2 hover:shadow-lg transition-all hover:-translate-y-0.5 min-h-[6.5rem]">
+      <Link to={artistaUrl(u.artista.slug)} className="block">
+        <p className="font-semibold truncate">{u.artista.nom}</p>
+      </Link>
+      {u.verificat && (
+        <p className="text-xs text-gray-500">
+          {millorPosicio
+            ? <>Millor posició al top: <strong className="text-tq-ink tabular-nums">#{millorPosicio}</strong></>
+            : <>Encara no està al top.</>
+          }
+        </p>
+      )}
+      <div className="flex flex-wrap gap-1.5 mt-auto items-center">
         {u.verificat && (
-          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-semibold">
-            Verificat
-          </span>
+          <Badge variant="success" className="rounded-full">Verificat</Badge>
         )}
         <EstatBadge estat={u.estat} />
+        {u.verificat && u.artista.pk && (
+          <div className="ml-auto flex gap-1.5">
+            <Link
+              to="/mapa"
+              className="text-xs px-2 py-1 rounded-md border border-tq-ink/20 text-tq-ink font-semibold hover:bg-tq-ink/5"
+            >
+              Veure al mapa
+            </Link>
+            <Link
+              to={`/compte/artista/${u.artista.pk}/editar`}
+              className="text-xs px-2 py-1 rounded-md bg-tq-ink text-tq-yellow font-semibold hover:bg-tq-ink/90"
+            >
+              Editar perfil
+            </Link>
+          </div>
+        )}
       </div>
-    </Link>
+    </div>
+  )
+}
+
+/* Inline guidance card — Sprint H. Shown in two places on the
+ * dashboard: when the user hasn't proposed any artist yet, and when
+ * they aren't visible in the directori. Keeps the dashboard from
+ * feeling like an empty grid for new accounts. */
+function GuidanceCard({ icon, title, body, ctaTo, ctaLabel, tone = 'yellow' }) {
+  const ctaCls = tone === 'yellow'
+    ? 'bg-tq-yellow text-tq-ink hover:bg-tq-yellow-deep hover:text-white'
+    : 'bg-tq-ink text-tq-yellow hover:bg-tq-ink/90'
+  return (
+    <article className="bg-white/5 border border-white/10 rounded-lg p-4 flex items-start gap-3">
+      <span
+        aria-hidden="true"
+        className="inline-flex items-center justify-center w-10 h-10 rounded-md bg-tq-yellow/20 text-tq-yellow shrink-0"
+      >
+        <MmIcon name={icon} className="h-5 w-5" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm text-white">{title}</p>
+        <p className="text-xs text-white/70 mt-0.5 leading-relaxed">{body}</p>
+        <Link
+          to={ctaTo}
+          className={'inline-block mt-2 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ' + ctaCls}
+        >
+          {ctaLabel}
+        </Link>
+      </div>
+    </article>
   )
 }
 
@@ -229,16 +284,61 @@ export default function ComptePage() {
         </div>
       )}
 
-      {error && <div className="bg-red-100 text-red-800 p-3 rounded-md text-sm">{error}</div>}
+      {error && <Alert tone="danger">{error}</Alert>}
 
       {!loading && !error && data && (
         <>
+          {/* Sprint H — guiatges contextuals que depenen de l'estat
+              real del compte. Apareixen només quan són accionables i
+              desapareixen quan el pas està fet. */}
+          {data.gestio_list.every(u => !u.verificat) && (
+            <GuidanceCard
+              icon="icon-artistes"
+              title="Tens un artista o grup?"
+              body="Proposa'l per aparèixer al top setmanal i al mapa. Revisem cada proposta a mà."
+              ctaTo="/compte/artista/proposta"
+              ctaLabel="Proposar artista"
+            />
+          )}
+
+          {data.perfil && !data.perfil.visible_directori && (
+            <GuidanceCard
+              icon="user"
+              title="Vols que altres músics et trobin?"
+              body="Activa el teu perfil al directori intern i digues si estàs obert a col·laboracions."
+              ctaTo="/comunitat/perfil"
+              ctaLabel="Activar perfil"
+              tone="ink"
+            />
+          )}
+          {data.perfil && data.perfil.visible_directori && (
+            <p className="text-xs text-white/70">
+              ✓ El teu perfil és visible al directori.{' '}
+              <Link to="/comunitat/perfil" className="text-tq-yellow underline">
+                Editar perfil
+              </Link>
+            </p>
+          )}
+
           <section>
             <header className="flex items-baseline justify-between mb-3">
               <h2 className="text-lg font-bold font-display">Els meus artistes</h2>
             </header>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {data.gestio_list.map(u => <ArtistaCard key={u.pk} u={u} />)}
+              {data.gestio_list.map(u => (
+                <ArtistaCard
+                  key={u.pk}
+                  u={u}
+                  /* Same artist as `stats` only if this is the verified one.
+                     Future work: per-artist stats endpoint when a user
+                     manages more than one verified artist. */
+                  millorPosicio={
+                    data.artista_verificat && data.artista_verificat.pk === u.pk
+                      ? data.stats?.millor_posicio
+                      : null
+                  }
+                />
+              ))}
               <AddCard to="/compte/artista/gestio" label="Sol·licitar gestió" />
             </div>
           </section>

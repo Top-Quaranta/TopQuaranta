@@ -88,11 +88,17 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 | GET | `/staff/albums/` | List with `n_cancons` / `n_verificades` annotations, filter by `tipus`, `descartat`, `artista_pk`. |
 | GET/PATCH | `/staff/albums/<pk>/` | Detail incl. track list with per-track collab map. PATCH accepts `artista_pk` + `cascade_cancons` to also re-point tracks. |
 
-### Ranking (provisional)
+### Top (provisional)
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/staff/ranking/?territori=CAT` | Top-40 provisional + territori list + motius. |
-| POST | `/staff/ranking/accio/` | Bulk `rebutjar_canco` / `rebutjar_artista` with `motiu`. |
+| GET | `/staff/top/?territori=CAT` | Top-40 provisional + territori list + motius. |
+| POST | `/staff/top/accio/` | Bulk `rebutjar_canco` / `rebutjar_artista` with `motiu`. |
+| GET | `/cancons/<slug>/top-breakdown/` | Algorithm transparency for one Canço. **Public endpoint**, but the payload differentiates by viewer (anonymous → only territoris where the song currently sits in `TopProvisional`; staff or `UserArtista.verificat=True` over the song's main artist → also the eligible-territori list with theoretical scores for ones the song hasn't broken into yet). Returned shape per entry: `{territori, nom_territori, posicio, escoltes_setmanals, dies_des_del_llancament, age_factor, past_top_penalty_pct, monopoli_album_pct, monopoli_artista_pct, score_final, setmanes_al_top, is_at_top}`. Theoretical entries set `posicio: null` and `is_at_top: false` and exclude the monopoli post-process (would require re-running the per-artist pass). Sprint E, 2026-04-25. |
+
+The legacy paths `/staff/ranking/` + `/staff/ranking/accio/` and the
+sibling `/staff/cancons/<pk>/ranking/` stay alive as POST-safe aliases
+(no redirect) per Sprint Naming Consolidation, 2026-04-25 — same view
+at the new + old URLs.
 
 ### Propostes (user proposals) & Sol·licituds (management requests)
 | Method | Path | Purpose |

@@ -1,5 +1,5 @@
 /**
- * StaffRankingPage — /staff/ranking
+ * StaffRankingPage — /staff/top
  *
  * Provisional ranking review, per territory. Bulk select + reject
  * (canco or artist). No pagination: always shows the full top-40.
@@ -21,6 +21,17 @@ import {
   Tr,
 } from '../../components/staff/StaffTable'
 
+function fmtFactor(v) {
+  if (v === null || v === undefined) return '—'
+  // Factors are in [0, 1]; show as percentage with 1 decimal.
+  return `${(v * 100).toFixed(1)}%`
+}
+
+function fmtScore(v) {
+  if (v === null || v === undefined) return '—'
+  return Math.round(v).toLocaleString()
+}
+
 export default function StaffRankingPage() {
   const [territori, setTerritori] = useState('CAT')
   const [data, setData] = useState(null)
@@ -31,7 +42,7 @@ export default function StaffRankingPage() {
 
   function load() {
     setData(null)
-    api.get(`/staff/ranking/?territori=${territori}`).then(setData).catch(() => setData(null))
+    api.get(`/staff/top/?territori=${territori}`).then(setData).catch(() => setData(null))
   }
   useEffect(load, [territori])
 
@@ -48,7 +59,7 @@ export default function StaffRankingPage() {
     if (!confirm(`${action} ${sel.size} entrades amb motiu "${motiu}"?`)) return
     setBusy(true); setMsg('')
     try {
-      const out = await api.post('/staff/ranking/accio/', {
+      const out = await api.post('/staff/top/accio/', {
         action,
         ids: [...sel],
         motiu,
@@ -64,7 +75,7 @@ export default function StaffRankingPage() {
   return (
     <section>
       <PageHeader
-        title="Ranking provisional"
+        title="Top provisional"
         subtitle={data ? `${data.entries.length} entrades a ${territori}` : 'Carregant…'}
       />
 
@@ -101,13 +112,16 @@ export default function StaffRankingPage() {
               <Th>#</Th>
               <Th>Cançó</Th>
               <Th>Artista</Th>
-              <Th>Playcount</Th>
-              <Th>Dies al top</Th>
+              <Th>Escoltes 7d</Th>
+              <Th title="Factor d'antiguitat: 1 - (dies/365)^2.5">Antiguitat</Th>
+              <Th title="Penalització per setmanes anteriors al top (Σ coef/2^(N-1))">Top passat</Th>
+              <Th title="(1-0.25)^cancons_album_abans · (1-0.2)^cancons_artista_abans">Monopoli</Th>
+              <Th>Score</Th>
             </tr>
           </THead>
           <tbody>
             {data?.entries?.length === 0 && (
-              <tr><td colSpan={6}><EmptyState>Cap entrada.</EmptyState></td></tr>
+              <tr><td colSpan={9}><EmptyState>Cap entrada.</EmptyState></td></tr>
             )}
             {data?.entries?.map(e => (
               <Tr key={e.pk}>
@@ -127,8 +141,11 @@ export default function StaffRankingPage() {
                     </Link>
                   ) : e.artista_nom}
                 </Td>
-                <Td className="text-xs">{e.lastfm_playcount?.toLocaleString()}</Td>
-                <Td className="text-xs">{e.dies_en_top}</Td>
+                <Td className="text-xs">{e.escoltes_setmanals?.toLocaleString()}</Td>
+                <Td className="text-xs">{fmtFactor(e.age_factor)}</Td>
+                <Td className="text-xs">{fmtFactor(e.past_top_factor)}</Td>
+                <Td className="text-xs">{fmtFactor(e.monopoli_factor)}</Td>
+                <Td className="text-xs font-semibold">{fmtScore(e.score_final)}</Td>
               </Tr>
             ))}
           </tbody>

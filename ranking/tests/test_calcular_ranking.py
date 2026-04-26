@@ -5,7 +5,7 @@ import pytest
 from django.conf import settings
 from django.core.management import call_command
 
-from ranking.models import ConfiguracioGlobal, RankingProvisional, SenyalDiari
+from ranking.models import ConfiguracioGlobal, SenyalDiari, TopProvisional
 
 # Raw SQL uses PostgreSQL-specific syntax (DISTINCT ON, ::text casts).
 _is_postgres = "postgresql" in settings.DATABASES["default"].get("ENGINE", "")
@@ -60,27 +60,25 @@ class TestCalcularRankingCommand:
 
     def test_dry_run_no_writes(self, setup_data):
         out = StringIO()
-        call_command("calcular_ranking", "--dry-run", "--territori", "CAT", stdout=out)
+        call_command("calcular_top", "--dry-run", "--territori", "CAT", stdout=out)
         output = out.getvalue()
         assert "DRY RUN" in output or "dry" in output.lower()
-        from ranking.models import RankingSetmanal
+        from ranking.models import TopSetmanal
 
-        assert RankingSetmanal.objects.count() == 0
+        assert TopSetmanal.objects.count() == 0
 
     def test_provisional_flag_writes_to_provisional(self, setup_data):
         out = StringIO()
-        call_command(
-            "calcular_ranking", "--provisional", "--territori", "CAT", stdout=out
-        )
-        assert RankingProvisional.objects.filter(territori="CAT").exists()
+        call_command("calcular_top", "--provisional", "--territori", "CAT", stdout=out)
+        assert TopProvisional.objects.filter(territori="CAT").exists()
 
     def test_provisional_truncates_on_rerun(self, setup_data):
         call_command(
-            "calcular_ranking", "--provisional", "--territori", "CAT", stdout=StringIO()
+            "calcular_top", "--provisional", "--territori", "CAT", stdout=StringIO()
         )
-        first_count = RankingProvisional.objects.filter(territori="CAT").count()
+        first_count = TopProvisional.objects.filter(territori="CAT").count()
         call_command(
-            "calcular_ranking", "--provisional", "--territori", "CAT", stdout=StringIO()
+            "calcular_top", "--provisional", "--territori", "CAT", stdout=StringIO()
         )
-        second_count = RankingProvisional.objects.filter(territori="CAT").count()
+        second_count = TopProvisional.objects.filter(territori="CAT").count()
         assert first_count == second_count

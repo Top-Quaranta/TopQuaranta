@@ -21,31 +21,67 @@
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 
-# Hourly Deezer novelty ingestion
+# ─────────────────────────────────────────────────────────────────────
+# Hourly: ingest + metadata refresh
+# ─────────────────────────────────────────────────────────────────────
+
+# Deezer novelty ingestion — every hour on the hour. Brings new
+# tracks/albums/artists into the system; later steps key off this.
 0 * * * *   topquaranta   /home/topquaranta/bin/tq-run obtenir_novetats >> /var/log/topquaranta/novetats.log 2>&1
 
-# Daily cleanup of expired unverified tracks — 04:00
+# MusicBrainz metadata refresh — 30 min after novetats so it picks up
+# the artists just ingested. Single-instance lock + queue-empty
+# short-circuit make idle runs cheap. Rate-limited to 1 req/s.
+# (Was every 15 min during the backfill phase — slimmed to hourly on
+# 2026-04-25 once the backlog was drained.)
+30 * * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_musicbrainz >> /var/log/topquaranta/mb.log 2>&1
+
+# ─────────────────────────────────────────────────────────────────────
+# Nightly pipeline (UTC) — each step feeds the next
+# ─────────────────────────────────────────────────────────────────────
+
+# 03:00 → PostgreSQL backup. Tiered retention in /home/topquaranta/backups/
+0 3 * * *   postgres      /home/topquaranta/bin/tq-backup >> /var/log/topquaranta/backup.log 2>&1
+
+# 04:00 → Purge expired unverified tracks (older than DIES_CADUCITAT).
 0 4 * * *   topquaranta   /home/topquaranta/bin/tq-run netejar_caducades >> /var/log/topquaranta/neteja.log 2>&1
 
-# Daily signal ingestion — 06:00. Stores raw Last.fm playcount + listeners
-# per (canço, data). No normalisation step any more (algorithm v2.0 uses
-# weekly-delta of playcount directly).
+# 05:00 → Whisper language ID on new tracks with Deezer previews.
+# Backfill of the historical 6.7k catalogue finished 2026-04-25; from
+# now on the daily intake is <50 tracks/night, so --limit 100 leaves
+# plenty of headroom (~45 min worst case at 27 s/track CPU).
+0 5 * * *   topquaranta   /home/topquaranta/bin/tq-run analitzar_whisper --limit 100 >> /var/log/topquaranta/whisper.log 2>&1
+
+# 05:00 → Last.fm artist metadata refresh. ~2 reqs/artist (info +
+# similar), rate-limited to 0.2 s each ≈ 200 s for --limit 500. Runs
+# in parallel with Whisper above (different processes, different
+# locks); Last.fm finishes long before the 06:00 senyal step.
+0 5 * * *   topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_lastfm --limit 500 >> /var/log/topquaranta/lastfm-meta.log 2>&1
+
+# 06:00 → Last.fm signal ingestion. Stores raw playcount + listeners
+# per (canço, data). No normalisation step (algorithm v2.0 reads the
+# weekly delta of playcount directly).
 0 6 * * *   topquaranta   /home/topquaranta/bin/tq-run obtenir_senyal >> /var/log/topquaranta/senyal.log 2>&1
 
-# Daily provisional ranking — 07:00
-0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run calcular_ranking --provisional >> /var/log/topquaranta/provisional.log 2>&1
+# 07:00 → Daily provisional ranking. Uses today's freshly-ingested signal.
+0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run calcular_top --provisional >> /var/log/topquaranta/top-provisional.log 2>&1
 
-# Spotify playlist sync — 07:15. Runs right after the provisional
+# 07:15 → Spotify playlist sync. Runs right after the provisional
 # ranking settles so the 4 territorial playlists + Novetats reflect
 # the freshest data. Silently skips tracks that don't resolve via
 # ISRC; mismatches counted in SpotifyPlaylist.last_n_*.
 15 7 * * *  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify >> /var/log/topquaranta/playlists.log 2>&1
 
-# Weekly official ranking — Saturday 08:00
-0 8 * * 6   topquaranta   /home/topquaranta/bin/tq-run calcular_ranking >> /var/log/topquaranta/ranking.log 2>&1
+# ─────────────────────────────────────────────────────────────────────
+# Weekly
+# ─────────────────────────────────────────────────────────────────────
 
-# Daily PostgreSQL backup — 03:00. Tiered retention in /home/topquaranta/backups/
-0 3 * * *   postgres      /home/topquaranta/bin/tq-backup >> /var/log/topquaranta/backup.log 2>&1
+# Saturday 08:00 → official ranking for the just-finished ISO week.
+0 8 * * 6   topquaranta   /home/topquaranta/bin/tq-run calcular_top >> /var/log/topquaranta/top.log 2>&1
+
+# ─────────────────────────────────────────────────────────────────────
+# Operations & retention
+# ─────────────────────────────────────────────────────────────────────
 
 # Recovery sweep: every 30 min detect missed/failed daily runs and
 # relaunch them via tq-run. Capped at MAX_RECOVER_PER_DAY per command
@@ -57,14 +93,3 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # Quarterly: archive SenyalDiari rows older than 2 years (Φ6 retention).
 0 5 1 1,4,7,10 * topquaranta   /home/topquaranta/bin/tq-run arxivar_senyal_vell >> /var/log/topquaranta/arxivar.log 2>&1
-
-# MusicBrainz metadata backfill — every 15 min. Single-instance lock
-# inside the command keeps it from piling up; exits when the queue is
-# empty (no artist older than --refresh-days) so idle invocations are
-# cheap. Rate-limited globally to 1 req/s so we stay polite.
-*/15 * * * * topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_musicbrainz >> /var/log/topquaranta/mb.log 2>&1
-
-# Nightly: Whisper LID over new tracks with Deezer previews.
-# Limited to 700 tracks/night so it finishes before provisional ranking.
-# At ~27 s/track CPU, 700 tracks = ~5h15m (01:30 → 06:45). (Φ LID)
-30 1 * * *  topquaranta   /home/topquaranta/bin/tq-run analitzar_whisper --limit 700 >> /var/log/topquaranta/whisper.log 2>&1

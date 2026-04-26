@@ -22,6 +22,8 @@ import {
   THead,
   Tr,
 } from '../../components/staff/StaffTable'
+import { Field } from '../../components/staff/StaffTable'
+import FilterPanel from '../../components/staff/FilterPanel'
 
 // Mirror of music.constants.MOTIUS_REBUIG (label/value pairs). Keep
 // this in sync when the backend list changes — the bulk-action
@@ -33,6 +35,18 @@ const MOTIUS = [
   ['no_musica',          'No és música'],
 ]
 
+// Default filter values — also used by the FilterPanel "Restablir"
+// button and to compute the "active filters" count badge.
+const DEFAULTS = {
+  verificada: '0',
+  ml_classe: '',
+  whisper: '',
+  deezer: '',
+  mb: '',
+  preview: '',
+  sort: '-ml_confianca',
+}
+
 export default function StaffCanconsPage() {
   const navigate = useNavigate()
   // Seed filters from query string so deep links like
@@ -40,12 +54,16 @@ export default function StaffCanconsPage() {
   // URLs (pendents row → verified tracks, for example).
   const [urlParams, setUrlParams] = useSearchParams()
   const [q, setQ] = useState(urlParams.get('q') || '')
-  const [verificada, setVerificada] = useState(urlParams.get('verificada') || '0')
-  const [mlClasse, setMlClasse] = useState(urlParams.get('ml_classe') || '')
-  const [whisper, setWhisper] = useState(urlParams.get('whisper') || '')
-  const [deezer, setDeezer] = useState(urlParams.get('deezer') || '')
-  const [mb, setMb] = useState(urlParams.get('mb') || '')
-  const [sort, setSort] = useState(urlParams.get('sort') || '-ml_confianca')
+  const [applied, setApplied] = useState({
+    verificada: urlParams.get('verificada') ?? DEFAULTS.verificada,
+    ml_classe:  urlParams.get('ml_classe')  ?? DEFAULTS.ml_classe,
+    whisper:    urlParams.get('whisper')    ?? DEFAULTS.whisper,
+    deezer:     urlParams.get('deezer')     ?? DEFAULTS.deezer,
+    mb:         urlParams.get('mb')         ?? DEFAULTS.mb,
+    preview:    urlParams.get('preview')    ?? DEFAULTS.preview,
+    sort:       urlParams.get('sort')       ?? DEFAULTS.sort,
+  })
+  const { verificada, ml_classe: mlClasse, whisper, deezer, mb, preview, sort } = applied
   const artistaPk = urlParams.get('artista_pk') || ''
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
@@ -56,13 +74,13 @@ export default function StaffCanconsPage() {
 
   function load() {
     const params = new URLSearchParams({
-      q, verificada, ml_classe: mlClasse, whisper, deezer, mb, sort, page,
+      q, verificada, ml_classe: mlClasse, whisper, deezer, mb, preview, sort, page,
     })
     if (artistaPk) params.set('artista_pk', artistaPk)
     api.get(`/staff/cancons/?${params}`).then(setData).catch(() => setData(null))
   }
 
-  useEffect(load, [q, verificada, mlClasse, whisper, deezer, mb, sort, page, artistaPk])
+  useEffect(load, [q, verificada, mlClasse, whisper, deezer, mb, preview, sort, page, artistaPk])
 
   const allSelected = data?.results?.length && data.results.every(r => sel.has(r.pk))
 
@@ -134,48 +152,84 @@ export default function StaffCanconsPage() {
         }
       />
 
-      <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca cançó o artista…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Select value={verificada} onChange={e => { setPage(1); setVerificada(e.target.value) }}>
-          <option value="0">No verificades</option>
-          <option value="1">Verificades</option>
-          <option value="">Totes</option>
-        </Select>
-        <Select value={mlClasse} onChange={e => { setPage(1); setMlClasse(e.target.value) }}>
-          <option value="">ML: totes</option>
-          <option value="A">Classe A</option>
-          <option value="B">Classe B</option>
-          <option value="C">Classe C</option>
-        </Select>
-        <Select value={whisper} onChange={e => { setPage(1); setWhisper(e.target.value) }}>
-          <option value="">Whisper: qualsevol</option>
-          <option value="ca">ca</option>
-          <option value="no_ca">no ca</option>
-          <option value="pendent">pendent</option>
-        </Select>
-        <Select value={deezer} onChange={e => { setPage(1); setDeezer(e.target.value) }}>
-          <option value="">Deezer: qualsevol</option>
-          <option value="no">Sense Deezer</option>
-          <option value="si">Amb Deezer</option>
-        </Select>
-        <Select value={mb} onChange={e => { setPage(1); setMb(e.target.value) }}>
-          <option value="">MusicBrainz: qualsevol</option>
-          <option value="confirmat">Confirmat ✓</option>
-          <option value="no_confirmat">No confirmat ✗</option>
-          <option value="desconegut">Desconegut ?</option>
-          <option value="cat">Lletra cat</option>
-          <option value="artista_dissolt">Artista dissolt</option>
-        </Select>
-        <Select value={sort} onChange={e => { setPage(1); setSort(e.target.value) }}>
-          <option value="-ml_confianca">Ordre: ML conf. ↓</option>
-          <option value="ml_confianca">Ordre: ML conf. ↑</option>
-          <option value="-data_llancament">Ordre: Data ↓ (més recents)</option>
-          <option value="data_llancament">Ordre: Data ↑ (més antigues)</option>
-          <option value="nom">Ordre: Nom A-Z</option>
-          <option value="-nom">Ordre: Nom Z-A</option>
-          <option value="artista">Ordre: Artista A-Z</option>
-          <option value="-artista">Ordre: Artista Z-A</option>
-        </Select>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Input
+          placeholder="Cerca cançó o artista…"
+          value={q}
+          onChange={e => { setPage(1); setQ(e.target.value) }}
+          className="flex-1 min-w-[14rem]"
+        />
+        <FilterPanel
+          applied={applied}
+          defaults={DEFAULTS}
+          onApply={next => { setApplied(next); setPage(1) }}
+        >
+          {(p, setP) => (
+            <>
+              <Field label="Estat de verificació">
+                <Select value={p.verificada} onChange={e => setP({ verificada: e.target.value })}>
+                  <option value="0">No verificades</option>
+                  <option value="1">Verificades</option>
+                  <option value="">Totes</option>
+                </Select>
+              </Field>
+              <Field label="Classe ML">
+                <Select value={p.ml_classe} onChange={e => setP({ ml_classe: e.target.value })}>
+                  <option value="">Totes</option>
+                  <option value="A">Classe A</option>
+                  <option value="B">Classe B</option>
+                  <option value="C">Classe C</option>
+                </Select>
+              </Field>
+              <Field label="Whisper LID">
+                <Select value={p.whisper} onChange={e => setP({ whisper: e.target.value })}>
+                  <option value="">Qualsevol</option>
+                  <option value="ca">Català</option>
+                  <option value="no_ca">No-català</option>
+                  <option value="pendent">Pendent</option>
+                </Select>
+              </Field>
+              <Field label="Preview Deezer">
+                <Select value={p.preview} onChange={e => setP({ preview: e.target.value })}>
+                  <option value="">Qualsevol</option>
+                  <option value="si">Té preview</option>
+                  <option value="no">Sense preview</option>
+                </Select>
+              </Field>
+              <Field label="Deezer ID">
+                <Select value={p.deezer} onChange={e => setP({ deezer: e.target.value })}>
+                  <option value="">Qualsevol</option>
+                  <option value="si">Amb Deezer</option>
+                  <option value="no">Sense Deezer</option>
+                </Select>
+              </Field>
+              <Field label="MusicBrainz">
+                <Select value={p.mb} onChange={e => setP({ mb: e.target.value })}>
+                  <option value="">Qualsevol</option>
+                  <option value="confirmat">Confirmat ✓</option>
+                  <option value="no_confirmat">No confirmat ✗</option>
+                  <option value="desconegut">Desconegut ?</option>
+                  <option value="artista_amb_mbid">Artista té MBID (cançó no)</option>
+                  <option value="sense_cobertura">Sense cobertura</option>
+                  <option value="cat">Lletra cat</option>
+                  <option value="artista_dissolt">Artista dissolt</option>
+                </Select>
+              </Field>
+              <Field label="Ordenació">
+                <Select value={p.sort} onChange={e => setP({ sort: e.target.value })}>
+                  <option value="-ml_confianca">ML conf. ↓</option>
+                  <option value="ml_confianca">ML conf. ↑</option>
+                  <option value="-data_llancament">Data ↓ (més recents)</option>
+                  <option value="data_llancament">Data ↑ (més antigues)</option>
+                  <option value="nom">Nom A-Z</option>
+                  <option value="-nom">Nom Z-A</option>
+                  <option value="artista">Artista A-Z</option>
+                  <option value="-artista">Artista Z-A</option>
+                </Select>
+              </Field>
+            </>
+          )}
+        </FilterPanel>
       </div>
 
       {sel.size > 0 && (

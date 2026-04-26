@@ -11,6 +11,7 @@
  * which we don't want to ship to the browser.
  */
 import { useSearchParams } from 'react-router-dom'
+import Alert from '../components/ui/Alert'
 
 export default function SpotifyCallbackPage() {
   const [params] = useSearchParams()
@@ -25,9 +26,9 @@ export default function SpotifyCallbackPage() {
       <h1 className="text-3xl font-bold mb-3">Callback</h1>
 
       {error && (
-        <div className="bg-red-100 text-red-800 rounded-md p-3 text-sm mb-4">
+        <Alert tone="danger" className="mb-4">
           Spotify ha tornat un error: <strong>{error}</strong>
-        </div>
+        </Alert>
       )}
 
       {code && (

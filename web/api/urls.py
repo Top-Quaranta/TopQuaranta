@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import (
     album_views,
@@ -7,8 +8,9 @@ from . import (
     canco_views,
     compte_views,
     comunitat_views,
-    ranking_views,
+    home_views,
     staff_views,
+    top_views,
     views,
 )
 
@@ -32,6 +34,13 @@ urlpatterns = [
         "compte/solicituds/",
         compte_views.solicitud_crear,
         name="compte_solicitud_crear",
+    ),
+    # Manager self-service: GET snapshot + PATCH non-critical fields.
+    # Permission: requires UserArtista(usuari, artista, verificat=True).
+    path(
+        "compte/artista/<int:pk>/editar/",
+        compte_views.gestor_artista_editar,
+        name="compte_gestor_artista_editar",
     ),
     # Public feedback (authenticated, any user)
     path("feedback/", compte_views.feedback_crear, name="feedback_crear"),
@@ -59,6 +68,11 @@ urlpatterns = [
     # Artistes
     path("staff/artistes/", staff_views.artistes_list, name="staff_artistes_list"),
     path(
+        "staff/artistes/fusionar/",
+        staff_views.artistes_fusionar,
+        name="staff_artistes_fusionar",
+    ),
+    path(
         "staff/artistes/search/",
         staff_views.artistes_search,
         name="staff_artistes_search",
@@ -72,6 +86,11 @@ urlpatterns = [
         "staff/artistes/<int:pk>/",
         staff_views.artista_detail,
         name="staff_artista_detail",
+    ),
+    path(
+        "staff/artistes/<int:pk>/mb-clear/",
+        staff_views.artista_mb_clear,
+        name="staff_artista_mb_clear",
     ),
     path(
         "staff/artistes/<int:pk>/sync-mb/",
@@ -91,6 +110,19 @@ urlpatterns = [
         staff_views.canco_refetch_senyal,
         name="staff_canco_refetch_senyal",
     ),
+    path(
+        "staff/cancons/<int:pk>/top/",
+        staff_views.canco_top_breakdown,
+        name="staff_canco_top_breakdown",
+    ),
+    # Legacy alias — kept alive for any in-flight SPA bundle. Same view
+    # at both URLs (cleaner than 301 because the staff endpoints support
+    # POST/PATCH where 301 → method downgrade is unsafe).
+    path(
+        "staff/cancons/<int:pk>/ranking/",
+        staff_views.canco_top_breakdown,
+        name="staff_canco_ranking_breakdown",
+    ),
     # Albums
     path("staff/albums/", staff_views.albums_list, name="staff_albums_list"),
     path(
@@ -98,9 +130,12 @@ urlpatterns = [
         staff_views.album_detail,
         name="staff_album_detail",
     ),
-    # Ranking provisional
-    path("staff/ranking/", staff_views.ranking_list, name="staff_ranking_list"),
-    path("staff/ranking/accio/", staff_views.ranking_accio, name="staff_ranking_accio"),
+    # Top provisional (canonical) + legacy ranking aliases.
+    path("staff/top/", staff_views.top_list, name="staff_top_list"),
+    path("staff/top/accio/", staff_views.top_accio, name="staff_top_accio"),
+    # Legacy aliases (POST-safe — same view, no redirect).
+    path("staff/ranking/", staff_views.top_list, name="staff_ranking_list"),
+    path("staff/ranking/accio/", staff_views.top_accio, name="staff_ranking_accio"),
     # Propostes
     path("staff/propostes/", staff_views.propostes_list, name="staff_propostes_list"),
     path(
@@ -193,8 +228,38 @@ urlpatterns = [
         staff_views.usuari_esborrar,
         name="staff_usuari_esborrar",
     ),
+    # ── HomePage feed (Sprint I) ──
+    path("stats/", home_views.stats, name="home_stats"),
+    # Sprint I bis: replaced "nova de la setmana" with "destacada
+    # (most-climbed)" semantics. URL renamed; no legacy alias kept
+    # because the SPA bundle is rebuilt in lockstep.
+    path(
+        "top/canco-destacada/",
+        home_views.top_canco_destacada,
+        name="home_canco_destacada",
+    ),
+    path(
+        "artistes/destacat/",
+        home_views.artista_destacat,
+        name="home_artista_destacat",
+    ),
+    path(
+        "artistes/descoberta/",
+        home_views.artistes_descoberta,
+        name="home_artistes_descoberta",
+    ),
+    # Albums list (Sprint I) — placed before any /albums/<slug>/ to keep
+    # the URL resolver from misinterpreting "list" as a slug.
+    path("albums/", album_views.album_list, name="album_list"),
     # Ranking (top 40 per territory + week)
-    path("ranking/", ranking_views.ranking, name="ranking"),
+    path("top/", top_views.ranking, name="top"),
+    # Legacy public path → permanent redirect to the canonical /api/v1/top/.
+    # GET-only endpoint, so 301 with query-string preservation is safe.
+    path(
+        "ranking/",
+        RedirectView.as_view(pattern_name="api:top", permanent=True, query_string=True),
+        name="ranking",
+    ),
     # Artistes
     path("artistes/", artistes_views.artistes_list, name="artistes_list"),
     path("artistes/<slug:slug>/", artistes_views.artista_detail, name="artista_detail"),
@@ -202,6 +267,11 @@ urlpatterns = [
     path("albums/<slug:slug>/", album_views.album_detail, name="album_detail"),
     # Cançons
     path("cancons/<slug:slug>/", canco_views.canco_detail, name="canco_detail"),
+    path(
+        "cancons/<slug:slug>/top-breakdown/",
+        canco_views.canco_top_breakdown,
+        name="canco_top_breakdown_public",
+    ),
     # Mapa (existing + drill-down)
     path("mapa/artistes/", views.mapa_artistes, name="mapa_artistes"),
     path("mapa/stats/", views.mapa_stats, name="mapa_stats"),

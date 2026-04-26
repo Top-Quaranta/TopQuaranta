@@ -144,7 +144,14 @@ the SPA palette but has no dependency on mm-design.
     │   │   ├── urls.py          # /api/v1/…
     │   │   ├── auth_views.py    # me · login · logout · register
     │   │   ├── ranking_views.py · artistes_views.py · album_views.py
-    │   │   ├── canco_views.py · compte_views.py · staff_views.py
+    │   │   ├── canco_views.py · compte_views.py
+    │   │   ├── staff/           # split-by-area staff endpoints (Sprint C, 2026-04-25)
+    │   │   │                    # _common · dashboard · pendents · artistes
+    │   │   │                    # cancons · albums · ranking · propostes
+    │   │   │                    # solicituds · senyal · historial · configuracio
+    │   │   │                    # audit · usuaris · feedback · estat
+    │   │   ├── staff_views.py   # backward-compat shim → re-exports staff/*
+    │   │   ├── search_utils.py  # accent + apostrophe insensitive search helpers
     │   │   ├── views.py         # localitzacio (territoris/comarques/municipis)
     │   │   └── middleware.py · VERSIONING.md
     │   ├── sitemaps.py          # hardcoded SPA URLs for /sitemap.xml
@@ -160,8 +167,10 @@ the SPA palette but has no dependency on mm-design.
     │       ├── lib/             # api.js · urls.js
     │       ├── context/         # AuthContext · FeedbackContext
     │       ├── components/      # Layout · AccountButton · TopQuarantaLogo
-    │       │   ├── FeedbackButton · ExternalListenLinks
-    │       │   ├── AdminRoute · StaffLayout
+    │       │   ├── FeedbackButton · ExternalListenLinks · MmIcon
+    │       │   ├── editorial.jsx — shared Section/SectionHeader/
+    │       │   │                  TerritoriBadge/TrendCue + TERR_COLORS
+    │       │   ├── AdminRoute · StaffLayout · ComunitatLayout
     │       │   └── staff/       # StaffTable · ArtistaPicker
     │       │                    # ArtistesColPicker · LocationCascade
     │       └── pages/
@@ -209,8 +218,29 @@ to refresh the dist bundle that Caddy serves.
 1. Colors / fonts / spacing / shadows come from `var(--mm-*)` or Tailwind's
    `tq-*` tokens. Never hardcode hex values in templates or components.
 2. Fonts: Playfair Display (headings), Roboto (body).
-3. Territory accent: the React HomePage maps territoris to a hand-picked
-   palette (see `HomePage.jsx`).
+3. Territory accent: a single brand mapping lives at
+   `web-react/src/components/editorial.jsx::TERR_COLORS`. Public-page
+   labels use `TERRITORI_NOM` (visible) — note that "PPCC" is shown as
+   **"Global"** to visitors but stays as the legacy code in DB and API
+   query params.
+
+**Editorial primitives** (Sprint J bis, `components/editorial.jsx`):
+shared by HomePage, TopPage, ArtistesPage, MapaPage and the
+`/comunitat` pages.
+- `<Section tone="ink|white">` — alternating full-bleed band.
+- `<SectionHeader kicker title>` — kicker auto-recolours per band
+  (yellow on ink, ink/60 on white) so a kicker can never re-introduce
+  the 1.53:1 yellow-on-white violation caught at the Sprint F audit.
+- `<TerritoriBadge codi>` — monochrome SVG via mask (inherits
+  `currentColor`).
+- `<TrendCue posicio posicio_anterior>` — top-list arrow icon used
+  by every weekly-top surface; its colours are tone-safe on both
+  ink and white.
+
+**A11y baseline** (Sprint F + J bis): WCAG AA across the public
+SPA. Re-audited via puppeteer + axe-core on every redesign sprint
+(`/tmp/axe/run.js`); see ROADMAP for the latest pass and the URL
+list.
 
 ## 6. Key decisions
 
@@ -234,6 +264,7 @@ to refresh the dist bundle that Caddy serves.
 | **MusicBrainz as disambiguation oracle** (2026-04-22) | Deezer stays primary (discovery + previews + scale). MB adds an always-on cron every 15 min (`obtenir_metadata_musicbrainz`) that pulls MBID + area + begin/end dates + URL relations + aliases + tags + full discography (release-groups/recordings/ISRCs/Work language). Reconciles Albums/Cançons via ISRC then normalised title fuzzy. Feeds 3 ML features (`mbrainz_confirmed`, `mb_lyrics_cat`, `artista_te_mbid`). Staff pins MBID manually on collision cases. |
 | **Grup C community (2026-04)** | `PerfilUsuari`, `Publicacio`, `Comentari`, `Missatge` — directori, feed moderat, DM 1-to-1, comentaris. Missatge té notificació email amb opt-out. Self-delete via email confirmation. |
 | **Mapa drill-down (2026-04-22)** | `/mapa` SVG dels PPCC amb 3 nivells (territori → comarca → municipi) i panell lateral amb KPIs + graella d'artistes ordenats per reproduccions. GeoJSON preprocessats (Douglas-Peucker 0.002°) a `web-react/public/geodata/` via `scripts/simplify_geodata.py`. |
+| **Public read cache (2026-04-25)** | Hot read endpoints `/api/v1/{ranking,artistes,mapa/artistes-top}/` cached **60 s for anonymous hits** in `pagecache` (LocMem per worker). Authenticated requests bypass. Each endpoint also exposes ETag + Last-Modified via Django's `condition` decorator (rooted at `RankingProvisional.data_calcul`, `Artista.created_at`, `SenyalDiari.data` respectively) — re-fetching clients get a 304 in ~5 ms. Helper at `web/api/utils.py::cache_for_anon`. |
 
 ## 7. Shared constants
 

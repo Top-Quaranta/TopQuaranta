@@ -22,7 +22,7 @@
 
 ## <img src="https://raw.githubusercontent.com/miquelmatoses/mm-design/main/icons/readme/icon-music-red.svg" width="20" height="20" /> Què és
 
-**TopQuaranta** és el rànquing setmanal públic de música en llengua catalana
+**TopQuaranta** és el top setmanal públic de música en llengua catalana
 per als Països Catalans. Cada setmana publica un **Top 40** per territori,
 calculat a partir d'escoltes reals de Last.fm amb metadades de Deezer.
 

@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { cancoUrl } from '../lib/urls'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
@@ -54,7 +55,7 @@ export default function AlbumPage() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="bg-red-100 text-red-800 p-3 rounded-md text-sm">{error}</div>
+        <Alert tone="danger">{error}</Alert>
       </div>
     )
   }

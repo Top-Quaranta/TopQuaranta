@@ -19,6 +19,7 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import Alert from '../components/ui/Alert'
 import { useAuth } from '../context/AuthContext'
 import LocationCascade from '../components/staff/LocationCascade'
 
@@ -32,6 +33,8 @@ const SOCIAL_FIELDS = [
   ['soundcloud_url', 'SoundCloud'],
   ['tiktok_url',     'TikTok'],
   ['facebook_url',   'Facebook'],
+  ['instagram_url',  'Instagram'],
+  ['twitter_url',    'X'],
 ]
 
 function Field({ label, error, children, hint, required }) {
@@ -116,9 +119,7 @@ export default function ProposarArtistaPage() {
       </p>
 
       {errors.__all__ && (
-        <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm">
-          {errors.__all__}
-        </div>
+        <Alert tone="danger" className="mb-4">{errors.__all__}</Alert>
       )}
 
       <form onSubmit={submit} className="flex flex-col gap-4">

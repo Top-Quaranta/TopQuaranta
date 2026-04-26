@@ -76,6 +76,8 @@ from web.api.staff.social import (  # noqa: F401
     social_list,
     social_preview,
     social_publicar_ara,
+    social_render_serve,
+    social_slides_for,
     social_story_cap,
     social_toggle,
 )

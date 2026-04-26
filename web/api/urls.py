@@ -228,6 +228,16 @@ urlpatterns = [
         staff_views.social_credentials_clear,
         name="staff_social_credentials_clear",
     ),
+    path(
+        "staff/social/slides/",
+        staff_views.social_slides_for,
+        name="staff_social_slides_for",
+    ),
+    path(
+        "staff/social/render/<str:filename>/",
+        staff_views.social_render_serve,
+        name="staff_social_render_serve",
+    ),
     # Feedback (user-filed corrections)
     path(
         "staff/feedback/",

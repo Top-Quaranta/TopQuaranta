@@ -292,6 +292,83 @@ def social_credentials_clear(request: Request) -> Response:
     return Response({"ok": True, "credentials": _credentials_payload()})
 
 
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def social_slides_for(request: Request) -> Response:
+    """List rendered PNGs for a (tipus, territori, setmana) triple.
+
+    Looks at `<SOCIAL_CACHE_DIR>/renders/` and returns every file
+    whose name matches the pattern the renderer writes for this
+    slot. Includes a `serve_url` per file pointing at the staff
+    `social/render/<filename>/` endpoint that proxies the bytes."""
+    from pathlib import Path
+
+    from django.conf import settings as _s
+    from django.urls import reverse
+
+    tipus = (request.GET.get("tipus") or "").strip()
+    territori = (request.GET.get("territori") or "").strip() or "general"
+    setmana = (request.GET.get("setmana") or "").strip()
+    if not (tipus and setmana):
+        return Response({"error": "tipus + setmana required"}, status=400)
+
+    base = Path(getattr(_s, "SOCIAL_CACHE_DIR", "/tmp/tq_social")) / "renders"
+    if not base.exists():
+        base = Path("/tmp/tq_social/renders")
+
+    feed_pattern = f"feed_{tipus}_{territori}_{setmana}_*.png"
+    story_pattern = f"story_{tipus}_{territori}_{setmana}_*.png"
+    feed_files = sorted(base.glob(feed_pattern)) if base.exists() else []
+    story_files = sorted(base.glob(story_pattern)) if base.exists() else []
+
+    def _serve_url(p):
+        return reverse("api:staff_social_render_serve", args=[p.name])
+
+    return Response(
+        {
+            "feed": [
+                {
+                    "name": p.name,
+                    "url": _serve_url(p),
+                    "size_kb": round(p.stat().st_size / 1024),
+                }
+                for p in feed_files
+            ],
+            "stories": [
+                {
+                    "name": p.name,
+                    "url": _serve_url(p),
+                    "size_kb": round(p.stat().st_size / 1024),
+                }
+                for p in story_files
+            ],
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def social_render_serve(request: Request, filename: str) -> Response:
+    """Serves a single PNG out of the renders cache. Auth-gated so
+    we don't have to expose `/static/social/` publicly until the
+    Caddy block is in place. Restricts to PNGs to avoid path tricks."""
+    import re
+    from pathlib import Path
+
+    from django.conf import settings as _s
+    from django.http import FileResponse, Http404
+
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.png", filename):
+        raise Http404()
+    base = Path(getattr(_s, "SOCIAL_CACHE_DIR", "/tmp/tq_social")) / "renders"
+    candidate = base / filename
+    if not candidate.exists():
+        candidate = Path("/tmp/tq_social/renders") / filename
+    if not candidate.exists() or not candidate.is_file():
+        raise Http404()
+    return FileResponse(open(candidate, "rb"), content_type="image/png")
+
+
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def social_preview(request: Request) -> Response:

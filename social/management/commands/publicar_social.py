@@ -109,9 +109,28 @@ class Command(BaseCommand):
 
     # ── per-slot dispatch ─────────────────────────────────────────
 
+    # Same map the staff API uses; duplicated here to avoid importing
+    # web.api.staff from a management command (cyclic risk).
+    _TERRITORI_LABEL = {
+        "PPCC": "Global",
+        "CAT": "Catalunya",
+        "VAL": "País Valencià",
+        "BAL": "Illes Balears",
+        "AND": "Andorra",
+        "CNO": "Catalunya del Nord",
+        "FRA": "Franja de Ponent",
+        "ALG": "L'Alguer",
+        "ALT": "Altres",
+        "": "—",
+    }
+
     def _handle_slot(self, slot, territori, setmana, cfg, opts):
-        label = f"{slot.platform} · {slot.tipus} · {territori or '—'}"
-        self.stdout.write(f"\n[{setmana}] {label}")
+        ter_label = self._TERRITORI_LABEL.get(territori, territori or "—")
+        label = f"{slot.platform} · {slot.tipus} · {ter_label}"
+        # Show the Saturday-of-the-TQ-week (= ISO Monday + 5d), which
+        # is what the operator thinks of as "the week of …".
+        setmana_dissabte = setmana + datetime.timedelta(days=5)
+        self.stdout.write(f"\n[setmana del {setmana_dissabte}] {label}")
 
         # Phase gate.
         if cfg.fase_distribucio < slot.min_fase:

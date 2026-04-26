@@ -41,6 +41,9 @@ export default function StaffSocialPage() {
   // token (we only ever show first/last 4 chars of what's already saved).
   const [tokenDraft, setTokenDraft] = useState('')
   const [userIdDraft, setUserIdDraft] = useState('')
+  // pk → {feed:[…], stories:[…]} of rendered slide thumbnails. Populated
+  // when the operator clicks "Veure slides" on a row.
+  const [slidesByPk, setSlidesByPk] = useState({})
 
   const reload = () => api.get('/staff/social/').then(setData).catch(() => setData(null))
   useEffect(() => { reload() }, [])
@@ -71,6 +74,21 @@ export default function StaffSocialPage() {
   async function setStoryCap(n) {
     await api.post('/staff/social/story-cap/', { n })
     await reload()
+  }
+
+  async function loadSlides(post) {
+    setBusy(true)
+    try {
+      const params = new URLSearchParams({
+        tipus: post.tipus,
+        territori: post.territori || 'general',
+        setmana: post.setmana,
+      })
+      const res = await api.get(`/staff/social/slides/?${params}`)
+      setSlidesByPk(prev => ({ ...prev, [post.pk]: res }))
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
   }
 
   async function preview(post) {
@@ -446,7 +464,7 @@ export default function StaffSocialPage() {
           </tr>
         </thead>
         <tbody>
-          {results.map(p => (
+          {results.flatMap(p => [
             <tr key={p.pk}>
               {/* publication_date is the calendar date the slot
                   publishes on (Saturday for top global, Wednesday
@@ -459,7 +477,7 @@ export default function StaffSocialPage() {
               <td><StatusBadge status={p.status} /></td>
               <td className="text-xs">{p.published_at ? p.published_at.slice(0, 16).replace('T', ' ') : '—'}</td>
               <td>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-1">
                   <button
                     type="button"
                     onClick={() => preview(p)}
@@ -467,6 +485,14 @@ export default function StaffSocialPage() {
                     className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
                   >
                     Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadSlides(p)}
+                    disabled={busy}
+                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                  >
+                    Veure slides
                   </button>
                   <button
                     type="button"
@@ -478,8 +504,15 @@ export default function StaffSocialPage() {
                   </button>
                 </div>
               </td>
-            </tr>
-          ))}
+            </tr>,
+            slidesByPk[p.pk] ? (
+              <tr key={`${p.pk}-slides`}>
+                <td colSpan={7} className="bg-gray-50 p-3">
+                  <SlidesGallery slides={slidesByPk[p.pk]} />
+                </td>
+              </tr>
+            ) : null,
+          ]).filter(Boolean)}
         </tbody>
       </Table>
 
@@ -489,5 +522,52 @@ export default function StaffSocialPage() {
         </p>
       )}
     </section>
+  )
+}
+
+function SlidesGallery({ slides }) {
+  const both = (slides.feed?.length || 0) + (slides.stories?.length || 0)
+  if (both === 0) {
+    return (
+      <p className="text-xs text-tq-ink/60 italic">
+        Cap PNG renderitzat. Fes "Preview" primer per generar-los.
+      </p>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {slides.feed?.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1.5">
+            Feed · {slides.feed.length} {slides.feed.length === 1 ? 'slide' : 'slides'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {slides.feed.map(s => (
+              <a key={s.name} href={s.url} target="_blank" rel="noopener"
+                 title={`${s.name} (${s.size_kb} kB)`}>
+                <img src={s.url} alt={s.name}
+                     className="w-32 h-40 object-cover rounded border border-tq-ink/20 hover:border-tq-ink" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      {slides.stories?.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1.5">
+            Stories · {slides.stories.length} {slides.stories.length === 1 ? 'story' : 'stories'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {slides.stories.map(s => (
+              <a key={s.name} href={s.url} target="_blank" rel="noopener"
+                 title={`${s.name} (${s.size_kb} kB)`}>
+                <img src={s.url} alt={s.name}
+                     className="w-24 h-44 object-cover rounded border border-tq-ink/20 hover:border-tq-ink" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

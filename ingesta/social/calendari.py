@@ -143,3 +143,33 @@ def slots_for(today: datetime.date) -> list[tuple[CalendarSlot, str]]:
         if s.weekday == today.weekday():
             out.append((s, resolve_territori(s, monday)))
     return out
+
+
+def upcoming_week(
+    reference: datetime.date | None = None,
+) -> list[tuple[CalendarSlot, str, datetime.date]]:
+    """Return every slot of the ISO week containing `reference`
+    (default: today). Each tuple is `(slot, resolved_territori,
+    publication_date)`. Used by the staff dashboard to show what's
+    coming and which territori has been picked."""
+    if reference is None:
+        reference = datetime.date.today()
+    monday = reference - datetime.timedelta(days=reference.weekday())
+    out = []
+    for s in CALENDARI:
+        publish_date = monday + datetime.timedelta(days=s.weekday)
+        out.append((s, resolve_territori(s, monday), publish_date))
+    out.sort(key=lambda t: (t[2], t[0].platform))
+    return out
+
+
+def publication_date_for(slot_tipus: str, setmana: datetime.date) -> datetime.date:
+    """Given a tipus + the Monday-of-week, return the calendar date
+    on which that slot's content publishes. Used by the staff
+    `Preview` action so we don't accidentally render against the
+    Monday (which has no PPCC slot)."""
+    monday = setmana - datetime.timedelta(days=setmana.weekday())
+    for s in CALENDARI:
+        if s.tipus == slot_tipus:
+            return monday + datetime.timedelta(days=s.weekday)
+    return monday

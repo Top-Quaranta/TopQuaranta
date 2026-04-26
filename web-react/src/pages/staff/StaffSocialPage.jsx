@@ -46,7 +46,7 @@ export default function StaffSocialPage() {
   useEffect(() => { reload() }, [])
 
   if (!data) return <p className="p-6">Carregant…</p>
-  const { config, results, credentials } = data
+  const { config, results, credentials, calendari } = data
 
   const tokenTone =
     config.token_days_left == null  ? 'bg-gray-200 text-gray-700' :
@@ -316,7 +316,7 @@ export default function StaffSocialPage() {
 
       <div className="p-3 border rounded-md max-w-md">
         <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1">
-          Story cap PPCC (cançons)
+          Story cap Global (cançons)
         </p>
         <Select
           value={config.story_max_cancons_ppcc}
@@ -330,6 +330,81 @@ export default function StaffSocialPage() {
         </p>
       </div>
 
+      {/* ── Calendari de la setmana ───────────────────────────── */}
+      <section>
+        <h2 className="text-base font-bold font-display mb-2">
+          Calendari d'aquesta setmana
+        </h2>
+        <p className="text-xs text-tq-ink/60 mb-2">
+          El cron entra cada dia, però només publica si la fase actual
+          inclou aquell slot. La rotació territorial està resolta — així
+          ja saps quin top toca abans de prémer res.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="text-xs min-w-[560px] w-full border-collapse">
+            <thead>
+              <tr className="text-left text-tq-ink/70">
+                <th className="py-1 pr-3">Dia</th>
+                <th className="py-1 pr-3">Plataforma</th>
+                <th className="py-1 pr-3">Tipus</th>
+                <th className="py-1 pr-3">Territori</th>
+                <th className="py-1 pr-3">Fase mín.</th>
+                <th className="py-1">Estat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(calendari || []).map(s => {
+                const inFase = config.fase_distribucio >= s.min_fase
+                return (
+                  <tr key={`${s.platform}-${s.tipus}-${s.weekday}`}
+                      className={inFase ? '' : 'opacity-60'}>
+                    <td className="py-1 pr-3">
+                      <strong>{s.weekday_name}</strong>{' '}
+                      <span className="text-tq-ink/60">
+                        {s.publication_date.slice(5)}
+                      </span>
+                    </td>
+                    <td className="py-1 pr-3">{s.platform.replace('instagram_', '')}</td>
+                    <td className="py-1 pr-3">{s.tipus}</td>
+                    <td className="py-1 pr-3">{s.territori_label}</td>
+                    <td className="py-1 pr-3">{s.min_fase}</td>
+                    <td className="py-1">
+                      {inFase
+                        ? <span className="text-emerald-700 font-semibold">actiu</span>
+                        : <span className="text-tq-ink/50">cal fase ≥ {s.min_fase}</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ── Insights externs ─────────────────────────────────── */}
+      <div className="p-3 border border-tq-ink/15 rounded-md bg-gray-50 text-xs">
+        <p className="font-semibold mb-1">Insights — on mirar les mètriques</p>
+        <p className="text-tq-ink/70">
+          Les estadístiques (reach, completion rate, follower growth,
+          engagement) no apareixen aquí encara — les mira al{' '}
+          <a
+            href="https://business.facebook.com/latest/insights/overview"
+            target="_blank" rel="noopener"
+            className="underline hover:text-tq-yellow-deep"
+          >
+            Meta Business Suite Insights
+          </a>{' '}
+          o a la mateixa app d'Instagram (Profile → Insights).
+        </p>
+        <p className="text-tq-ink/60 mt-1">
+          Sprint K integrarà el subset rellevant directament al panell
+          (Insights API + comptadors interns ètics). De moment, mira
+          cada dilluns: si en 4 setmanes consecutives la fase actual
+          aguanta els llindars de reach i engagement, puja a la fase
+          següent.
+        </p>
+      </div>
+
       {/* ── Captured stdout ──────────────────────────────────── */}
       {output && (
         <pre className="bg-tq-ink text-tq-yellow text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap">{output}</pre>
@@ -339,7 +414,7 @@ export default function StaffSocialPage() {
       <Table>
         <thead>
           <tr>
-            <th className="text-left">Setmana</th>
+            <th className="text-left">Setmana del</th>
             <th className="text-left">Plataforma</th>
             <th className="text-left">Tipus</th>
             <th className="text-left">Territori</th>
@@ -351,10 +426,14 @@ export default function StaffSocialPage() {
         <tbody>
           {results.map(p => (
             <tr key={p.pk}>
-              <td>{p.setmana}</td>
+              {/* publication_date is the calendar date the slot
+                  publishes on (Saturday for top global, Wednesday
+                  for territorial, etc.) — way more meaningful than
+                  the internal Monday-of-ISO-week. */}
+              <td>{p.publication_date}</td>
               <td className="text-xs">{p.platform.replace('instagram_', '')}</td>
               <td className="text-xs">{p.tipus}</td>
-              <td>{p.territori || '—'}</td>
+              <td>{p.territori_label}</td>
               <td><StatusBadge status={p.status} /></td>
               <td className="text-xs">{p.published_at ? p.published_at.slice(0, 16).replace('T', ' ') : '—'}</td>
               <td>

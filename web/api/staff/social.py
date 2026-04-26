@@ -30,19 +30,42 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from ingesta.social.calendari import publication_date_for, upcoming_week
 from ingesta.social.instagram_client import days_until_expiry, is_dry_run
 from ranking.models import ConfiguracioGlobal
 from social.models import InstagramAuth, SocialPost
 from web.api.staff._common import IsStaff
 
+# User-facing label map. PPCC is the legacy code; visitors see
+# "Global". Mirrors the convention used everywhere in the public SPA.
+TERRITORI_LABEL = {
+    "PPCC": "Global",
+    "CAT": "Catalunya",
+    "VAL": "País Valencià",
+    "BAL": "Illes Balears",
+    "AND": "Andorra",
+    "CNO": "Catalunya del Nord",
+    "FRA": "Franja de Ponent",
+    "ALG": "L'Alguer",
+    "ALT": "Altres",
+    "": "—",
+}
+
 
 def _serialize(post: SocialPost) -> dict:
+    # The publication day for this slot's tipus (Saturday for PPCC,
+    # Wednesday/Monday for territorial, etc.). Surfaces in the UI as
+    # the human-meaningful date — the operator thinks about "the
+    # post of dissabte", not "the Monday of the ISO week".
+    pub_date = publication_date_for(post.tipus, post.setmana)
     return {
         "pk": post.pk,
         "platform": post.platform,
         "tipus": post.tipus,
         "territori": post.territori,
+        "territori_label": TERRITORI_LABEL.get(post.territori, post.territori or "—"),
         "setmana": post.setmana.isoformat(),
+        "publication_date": pub_date.isoformat(),
         "status": post.status,
         "instagram_media_id": post.instagram_media_id or "",
         "error_msg": post.error_msg or "",
@@ -52,6 +75,38 @@ def _serialize(post: SocialPost) -> dict:
         "created_at": post.created_at.isoformat(),
         "updated_at": post.updated_at.isoformat(),
     }
+
+
+_DAY_CA = [
+    "dilluns",
+    "dimarts",
+    "dimecres",
+    "dijous",
+    "divendres",
+    "dissabte",
+    "diumenge",
+]
+
+
+def _calendari_payload() -> list[dict]:
+    """One row per slot of the current ISO week, with the territori
+    already resolved (so the operator knows ahead of time which top
+    will go out)."""
+    out = []
+    for slot, ter, pub_date in upcoming_week():
+        out.append(
+            {
+                "platform": slot.platform,
+                "tipus": slot.tipus,
+                "territori": ter,
+                "territori_label": TERRITORI_LABEL.get(ter, ter or "—"),
+                "min_fase": slot.min_fase,
+                "weekday": slot.weekday,
+                "weekday_name": _DAY_CA[slot.weekday],
+                "publication_date": pub_date.isoformat(),
+            }
+        )
+    return out
 
 
 def _credentials_payload() -> dict:
@@ -111,6 +166,7 @@ def social_list(request: Request) -> Response:
                 "token_days_left": days_until_expiry(),
             },
             "credentials": _credentials_payload(),
+            "calendari": _calendari_payload(),
         }
     )
 
@@ -239,15 +295,30 @@ def social_credentials_clear(request: Request) -> Response:
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def social_preview(request: Request) -> Response:
-    """Run publicar_social --dry-run for the requested date / tipus
-    / platform. Returns the captured stdout so the staff page can
-    show what was rendered. Always safe."""
-    data = (request.data.get("data") or "").strip()
+    """Run publicar_social --dry-run for the requested slot.
+
+    Caller passes `setmana` (Monday of the ISO week — what the
+    SocialPost row stores) + tipus + platform. We translate the
+    setmana into the *publication day* for that tipus before calling
+    the command, otherwise calling with a Monday wouldn't match a
+    Saturday slot in the calendari.
+    """
+    setmana_raw = (
+        request.data.get("data") or request.data.get("setmana") or ""
+    ).strip()
     tipus = (request.data.get("tipus") or "").strip()
     platform = (request.data.get("platform") or "").strip()
+
     args = ["publicar_social", "--dry-run"]
-    if data:
-        args += ["--data", data]
+    if setmana_raw and tipus:
+        try:
+            setmana = datetime.date.fromisoformat(setmana_raw)
+        except ValueError:
+            return Response({"error": "data invàlida"}, status=400)
+        target = publication_date_for(tipus, setmana)
+        args += ["--data", target.isoformat()]
+    elif setmana_raw:
+        args += ["--data", setmana_raw]
     if tipus:
         args += ["--tipus", tipus]
     if platform:
@@ -262,13 +333,33 @@ def social_preview(request: Request) -> Response:
 @permission_classes([IsStaff])
 def social_publicar_ara(request: Request) -> Response:
     """Force-run publicar_social for the requested triple. Bypasses
-    the existing-publicat short-circuit via --force."""
-    data = (request.data.get("data") or "").strip() or datetime.date.today().isoformat()
+    the existing-publicat short-circuit via --force.
+
+    Same setmana → publication-date translation as `social_preview`.
+    """
+    setmana_raw = (
+        request.data.get("data") or request.data.get("setmana") or ""
+    ).strip()
     tipus = (request.data.get("tipus") or "").strip()
     platform = (request.data.get("platform") or "").strip()
     if not tipus:
         return Response({"error": "tipus required"}, status=400)
-    args = ["publicar_social", "--data", data, "--tipus", tipus, "--force"]
+    if setmana_raw:
+        try:
+            setmana = datetime.date.fromisoformat(setmana_raw)
+        except ValueError:
+            return Response({"error": "data invàlida"}, status=400)
+        target = publication_date_for(tipus, setmana)
+    else:
+        target = datetime.date.today()
+    args = [
+        "publicar_social",
+        "--data",
+        target.isoformat(),
+        "--tipus",
+        tipus,
+        "--force",
+    ]
     if platform:
         args += ["--platform", platform]
     buf = io.StringIO()

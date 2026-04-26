@@ -136,11 +136,11 @@ npm run build      # bundle estàtic a web-react/dist/
 
 - **Llegeix primer**: [`CLAUDE.md`](./CLAUDE.md) (convencions de codi,
   estructura, convencions de commit).
-- **Emergències / incidents**: [`RUNBOOK.md`](./RUNBOOK.md).
-- **Història del projecte**: [`ROADMAP.md`](./ROADMAP.md) i
-  [`CHANGELOG.md`](./CHANGELOG.md).
-- **Política d'API**: [`web/api/VERSIONING.md`](./web/api/VERSIONING.md).
-- **Política de claus SSH**: [`deploy/SSH_KEY_POLICY.md`](./deploy/SSH_KEY_POLICY.md).
+- **Emergències / incidents**: [`docs/ops/runbook.md`](./RUNBOOK.md).
+- **Història del projecte**: [`docs/history/roadmap.md`](./ROADMAP.md) i
+  [`docs/history/changelog.md`](./CHANGELOG.md).
+- **Política d'API**: [`docs/architecture/api-versioning.md`](./web/api/VERSIONING.md).
+- **Política de claus SSH**: [`docs/ops/ssh-keys.md`](./deploy/SSH_KEY_POLICY.md).
 
 Cada commit ha de passar:
 - **pytest** (sense xarxa: mocks per a Last.fm / Deezer).
@@ -155,7 +155,7 @@ El CI (GitHub Actions) ho valida. El pre-commit local ho fa en segons.
 
 El pipeline corre automàticament via cron (hourly `obtenir_novetats`,
 daily `obtenir_senyal`, weekly `calcular_ranking` oficials; vegeu
-`/etc/cron.d/topquaranta` i `ROADMAP.md`). Health: `tq-health` sobre el
+`/etc/cron.d/topquaranta` i `docs/history/roadmap.md`). Health: `tq-health` sobre el
 servidor.
 
 ---

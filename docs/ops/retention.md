@@ -22,7 +22,7 @@ ever deleted.
 | `ranking_rankingsetmanal` | **Forever** | — | The cultural artifact. R1 stores `algorithm_version` + `config_snapshot` so each row is self-describing. |
 | `ranking_rankingprovisional` | Rolling (truncated + rebuilt daily) | — | Already ephemeral by design. |
 | `ranking_senyaldiari` | **Last 2 years** | Older rows → CSV.gz at `/home/topquaranta/archive/senyal-YYYY.csv.gz`, then deleted from DB. | ~1,200 rows/day. At 10 years unchecked, 4.4M rows. Policy keeps DB size bounded. |
-| `music_historialrevisio` | **Forever** | — | Staff revision decisions. Feeds the ML classifier + satisfies the audit obligation in `docs/DEFINITION.md` §Governance. |
+| `music_historialrevisio` | **Forever** | — | Staff revision decisions. Feeds the ML classifier + satisfies the audit obligation in `docs/product/definition.md` §Governance. |
 | `music_staffauditlog` | **Forever** | — | R9: immutable log of destructive staff actions. See Φ4 public history at `/com-funciona/historial/` for the anonymized excerpt. |
 | `music_canco`, `music_artista`, `music_album` | **Forever** | — | Domain objects. Deletion happens only on explicit staff action (cascade / SET_NULL per R2). |
 | `music_artistadeezer`, `music_artistalocalitat` | With their parent `Artista`. | — | R10, R11: sole sources of truth. |

@@ -5,14 +5,20 @@
 > a11y baseline + shared editorial primitives).
 
 ## Other docs
-- **`CLAUDE_MODELS.md`** — every Django model with fields, relations, indexes.
-- **`CLAUDE_PIPELINE.md`** — ingest → signal → ranking flow, API clients, crons.
-- **`CLAUDE_STAFF.md`** — React staff panel, DRF endpoints, permission model.
-- **`CLAUDE_ALGORITHM.md`** — 14-CTE ranking algorithm details.
-- **`CLAUDE_EXCELLENCE.md`** — full audit + findings (S1..Φ7) from Phase 9.
-- **`CLAUDE_LEGACY.md`** — historical audit of the pre-2026 system (reference only).
-- **`ROADMAP.md`** — phase status; current state and next steps.
-- **`RUNBOOK.md`** — operational troubleshooting.
+
+Every doc lives under `docs/` organised by audience. Quick map:
+
+- **`docs/architecture/`** — `models.md`, `pipeline.md`, `algorithm.md`,
+  `staff.md`, `api-versioning.md`. Reference for the codebase.
+- **`docs/product/`** — `definition.md` (què compta com a música en català).
+- **`docs/ops/`** — `runbook.md`, `retention.md`, `deprecation.md`,
+  `ssh-keys.md`. Things you read when something breaks or has to be
+  decommissioned.
+- **`docs/history/`** — `roadmap.md` (estat + sprints), `changelog.md`.
+
+Also at the repo root:
+- `MANIFEST.md` — mission, no-goals, values.
+- `LICENSE-DATA.md` — CC BY 4.0 on the dataset.
 
 ---
 
@@ -90,114 +96,31 @@ the SPA palette but has no dependency on mm-design.
 
 ## 4. Project structure
 
+Top-level layout. `ls -R` for the rest; the docs in `docs/` describe
+each subsystem in detail.
+
 ```
-/home/topquaranta/
-├── bin/                 # ops scripts outside the repo
-│   ├── tq-run           # runs manage.py command with retry + status file
-│   ├── tq-recover       # detects missed/failed runs, relaunches
-│   ├── tq-health        # non-zero exit on any cron failure
-│   └── tq-backup        # pg_dump + tiered retention
-├── backups/             # daily/ weekly/ monthly/ pg_dump snapshots
-└── app/                         # The repo.
-    ├── manage.py
-    ├── .env                     # never commit
-    ├── requirements.txt · requirements-dev.txt
-    ├── pyproject.toml · pytest.ini · conftest.py
-    │
-    ├── topquaranta/             # Django settings + root URLs
-    │   ├── settings/            # base · production · web_server · local · test
-    │   └── urls.py              # /api/v1/ · /compte/ · /sitemap.xml · /robots.txt
-    │
-    ├── music/                   # core domain models + services
-    │   │                        # Artista, Album, Canco, Territori, Municipi,
-    │   │                        # ArtistaLocalitat, ArtistaDeezer,
-    │   │                        # HistorialRevisio, StaffAuditLog,
-    │   │                        # SpotifyAuth, SpotifyPlaylist
-    │   ├── models.py · ml.py · services.py · verificacio.py · signals.py
-    │   ├── audit.py · constants.py · titlecase_catala.py · utils.py
-    │   ├── ml_model.joblib · ml_tfidf.joblib     # slim model post 2026-04-21
-    │   └── migrations/          # 47 migrations (0001 … 0046)
-    │
-    ├── ranking/                 # ConfiguracioGlobal · SenyalDiari
-    │   │                        # RankingSetmanal · RankingProvisional
-    │   ├── algorisme.py         # 14-CTE SQL + PPCC aggregation
-    │   └── management/commands/calcular_ranking.py
-    │
-    ├── ingesta/                 # external-API pipeline (ingest + Spotify export)
-    │   ├── clients/             # deezer.py · lastfm.py · spotify.py · whisper.py
-    │   └── management/commands/
-    │       ├── obtenir_novetats.py · obtenir_metadata.py · obtenir_senyal.py
-    │       ├── netejar_caducades.py
-    │       ├── analitzar_whisper.py · arxivar_senyal_vell.py
-    │       ├── autoritzar_spotify.py · configurar_spotify_playlists.py
-    │       └── actualitzar_playlists_spotify.py
-    │
-    ├── comptes/                 # custom Usuari + UserArtista + PropostaArtista
-    │   │                        # + Feedback (user correction reports)
-    │   ├── views.py             # registre · activar · TQLoginView · 2FA flow
-    │   ├── urls.py              # only Caddy-allowlisted routes
-    │   ├── forms.py             # RegistreForm only
-    │   ├── tokens.py
-    │   └── templates/comptes/   # 7 files, all extend _base_auth.html
-    │
-    ├── web/                     # Django API + SEO + error handlers
-    │   ├── api/                 # DRF — the primary Django surface
-    │   │   ├── urls.py          # /api/v1/…
-    │   │   ├── auth_views.py    # me · login · logout · register
-    │   │   ├── ranking_views.py · artistes_views.py · album_views.py
-    │   │   ├── canco_views.py · compte_views.py
-    │   │   ├── staff/           # split-by-area staff endpoints (Sprint C, 2026-04-25)
-    │   │   │                    # _common · dashboard · pendents · artistes
-    │   │   │                    # cancons · albums · ranking · propostes
-    │   │   │                    # solicituds · senyal · historial · configuracio
-    │   │   │                    # audit · usuaris · feedback · estat
-    │   │   ├── staff_views.py   # backward-compat shim → re-exports staff/*
-    │   │   ├── search_utils.py  # accent + apostrophe insensitive search helpers
-    │   │   ├── views.py         # localitzacio (territoris/comarques/municipis)
-    │   │   └── middleware.py · VERSIONING.md
-    │   ├── sitemaps.py          # hardcoded SPA URLs for /sitemap.xml
-    │   ├── views/__init__.py    # 404/500/403 error handlers only
-    │   └── templates/web/       # 4 files: robots.txt + 403/404/500
-    │
-    ├── web-react/               # React SPA ── public + staff UI
-    │   ├── vite.config.js       # base: '/'
-    │   ├── package.json
-    │   ├── dist/                # built bundle served by Caddy
-    │   └── src/
-    │       ├── main.jsx · App.jsx
-    │       ├── lib/             # api.js · urls.js
-    │       ├── context/         # AuthContext · FeedbackContext
-    │       ├── components/      # Layout · AccountButton · TopQuarantaLogo
-    │       │   ├── FeedbackButton · ExternalListenLinks · MmIcon
-    │       │   ├── editorial.jsx — shared Section/SectionHeader/
-    │       │   │                  TerritoriBadge/TrendCue + TERR_COLORS
-    │       │   ├── AdminRoute · StaffLayout · ComunitatLayout
-    │       │   └── staff/       # StaffTable · ArtistaPicker
-    │       │                    # ArtistesColPicker · LocationCascade
-    │       └── pages/
-    │           ├── HomePage · TopPage · ArtistesPage · ArtistaPage
-    │           ├── AlbumPage · CancoPage · MapaPage
-    │           ├── AuthPage · ComptePage · ComptePerfilPage
-    │           ├── ProposarArtistaPage · SolicitarGestioPage
-    │           ├── SpotifyCallbackPage
-    │           └── staff/       # 17 pages — full staff panel
-    │                            # StaffDashboard · EstatPage · Pendents
-    │                            # StaffArtistes · ArtistaEdit · ArtistaCrear
-    │                            # StaffCancons · CancoEdit · StaffAlbums
-    │                            # AlbumEdit · StaffRanking · Propostes
-    │                            # PropostaDetail · Solicituds · Senyal
-    │                            # Historial · Configuracio · Auditlog
-    │                            # Usuaris · UsuariDetail · FeedbackPage
-    │
-    ├── scripts/                 # non-command Python
-    │   ├── analisi_lastfm.py · explorar_senyal.py · simular_ranking.py
-    │   ├── model_comparison/    # Whisper vs VoxLingua LID evaluation
-    │   └── archived_commands/   # one-shot migrations already run (kept for history)
-    │
-    ├── vendor/mm-design/        # vendored brand tokens for Django static
-    ├── deploy/                  # Caddyfile · systemd · cron · logrotate
-    └── docs/                    # DEFINITION · DEPRECATION · RETENTION
+app/
+├── manage.py
+├── topquaranta/   # Django settings (base · production · web_server · local · test)
+├── music/         # core domain — Artista / Album / Canco / Territori / Municipi /
+│                  # ArtistaLocalitat / HistorialRevisio / StaffAuditLog / Spotify*
+├── ranking/       # algorithm v2.0 + ConfiguracioGlobal + Top* models
+├── ingesta/       # Last.fm + Deezer + MusicBrainz + Spotify clients & commands
+├── comptes/       # Usuari + auth flow + UserArtista + PropostaArtista + Feedback +
+│                  # community models (PerfilUsuari · Publicacio · Comentari · Missatge)
+├── web/           # Django API (`web/api/`) + SEO + error handlers
+├── web-react/     # React SPA — public site + staff panel
+├── scripts/       # non-command Python (analysis, archived migrations)
+├── vendor/        # mm-design tokens (Django side)
+├── deploy/        # Caddyfile · systemd · cron · logrotate
+├── docs/          # see CLAUDE.md §"Other docs" above for the map
+└── tests across each app under `*/tests/`
 ```
+
+Operations scripts (outside the repo, in `/home/topquaranta/bin/`):
+`tq-run`, `tq-recover`, `tq-health`, `tq-backup`. Backups land in
+`/home/topquaranta/backups/{daily,weekly,monthly}/`.
 
 ## 5. Design system (mm-design)
 
@@ -326,7 +249,7 @@ React SPA: Vitest not yet wired for runtime tests; builds validated via
 
 Claude Code runs on the production server. GitHub is canonical:
 `git pull --rebase` before pushing. Never commit without explicit request.
-At the end of each session, update `ROADMAP.md` to reflect reality.
+At the end of each session, update `docs/history/roadmap.md` to reflect reality.
 
 **Deploy routine:**
 1. Edit code (Python and/or React).

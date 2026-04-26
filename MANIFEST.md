@@ -83,7 +83,7 @@ A person visiting the ranking is a reader, not a product.
 
 ### No gatekeeping
 
-The definition of eligibility (`docs/DEFINITION.md`) is:
+The definition of eligibility (`docs/product/definition.md`) is:
 *is the song sung in Catalan?* That is the only test. We will not add:
 - Quality filters ("this artist isn't serious enough").
 - Purity filters ("this isn't Catalan enough").

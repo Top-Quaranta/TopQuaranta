@@ -192,7 +192,7 @@ and confidence — this allows the ML model to be retrained from its own history
 Singleton. `save()` forces `pk=1`, `load()` classmethod uses get_or_create.
 Holds the editable coefficients consumed by algorithm v2.0 plus
 `min_cancons_ranking_propi` (threshold for optional territoris to get
-their own ranking). See `CLAUDE_ALGORITHM.md`.
+their own ranking). See `docs/architecture/algorithm.md`.
 
 Fields after the 2026-04-23 simplification:
 

@@ -5,7 +5,7 @@ arrives under `/api/v2/*` the same middleware will return `2` for those
 routes. Clients that read the header can sanity-check they're talking to
 the version they expected.
 
-See web/api/VERSIONING.md for the policy and bump procedure.
+See docs/architecture/api-versioning.md for the policy and bump procedure.
 """
 
 from typing import Callable

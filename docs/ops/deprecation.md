@@ -25,7 +25,7 @@ codebase or outside it:
 - **Management commands**: anything invoked from `manage.py`, cron, or
   scripts under `bin/`.
 - **API endpoints** (`/api/v1/*`): external contract, see also
-  `web/api/VERSIONING.md` — the two docs overlap on API changes and
+  `docs/architecture/api-versioning.md` — the two docs overlap on API changes and
   agree.
 - **Staff panel features**: URLs, template blocks, audit-log action
   codes that queries depend on.
@@ -42,7 +42,7 @@ Before removing any item in scope:
 
 ### 1. Announce
 
-Add the item to `CHANGELOG.md` under `## [Unreleased]` → `### Deprecated`,
+Add the item to `docs/history/changelog.md` under `## [Unreleased]` → `### Deprecated`,
 naming:
 - **What** will be removed.
 - **When** it will be removed (a concrete date or version).
@@ -78,7 +78,7 @@ Minimum grace windows before removal:
 |---|---|
 | Internal (cron, management command, staff feature, model field consumed only by our code) | **90 days** |
 | External surface (`/api/v1/*` endpoints, response schema) | **180 days** |
-| Data deletion (R14: SenyalDiari rows older than 2 years archived) | **Follow the retention policy** in `docs/RETENTION.md`. |
+| Data deletion (R14: SenyalDiari rows older than 2 years archived) | **Follow the retention policy** in `docs/ops/retention.md`. |
 
 Windows are minimums, not defaults. If a deprecation lands in December,
 you probably want to remove in March (~100 days) rather than exactly
@@ -88,7 +88,7 @@ day 91, so the removal doesn't collide with a release cycle.
 
 At removal time:
 
-- Move the `CHANGELOG.md` entry from `### Deprecated` to `### Removed`
+- Move the `docs/history/changelog.md` entry from `### Deprecated` to `### Removed`
   under the actual release.
 - For API removal, bump the `/api/v1/` → `/api/v2/` prefix as specified
   in VERSIONING.md; v1 stays live for another 180 days.
@@ -121,7 +121,7 @@ consumers. No deprecation window needed; a note in CHANGELOG under
 
 ## Template for a deprecation entry
 
-When you're about to deprecate something, open `CHANGELOG.md` and
+When you're about to deprecate something, open `docs/history/changelog.md` and
 paste:
 
 ```markdown
@@ -137,5 +137,5 @@ Then add the in-code warning, and move on.
 ## Historical record
 
 Every deprecation that's been completed is preserved in
-`CHANGELOG.md` under the release where it was Removed. That's the
+`docs/history/changelog.md` under the release where it was Removed. That's the
 source of truth for "when did X go away?"

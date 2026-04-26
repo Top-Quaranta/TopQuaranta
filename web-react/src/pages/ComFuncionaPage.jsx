@@ -3,7 +3,7 @@
  *
  * Public, divulgative page that answers "what is TopQuaranta and why
  * does it work this way?". Sourced from MANIFEST.md and
- * docs/DEFINITION.md but written in plain Catalan for visitors, not
+ * docs/product/definition.md but written in plain Catalan for visitors, not
  * contributors. Lives in-tree (no Markdown round-trip) so it stays
  * within the SPA's design system and doesn't need a CMS.
  *

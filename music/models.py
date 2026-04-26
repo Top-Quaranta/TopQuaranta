@@ -588,7 +588,7 @@ class Canco(models.Model):
     )
     # D2: lastfm_mbid + lastfm_verificat dropped 2026-04-17 — both had
     # zero populated rows and zero consumers. See Canco model above /
-    # CLAUDE_EXCELLENCE.md D2 for context.
+    # docs/history/roadmap.md (sprint A) for context.
     # R5: "Last.fm's autocorrect of our query IS the correct track".
     # When True, obtenir_senyal stops flagging SenyalDiari rows for this
     # track as corrected even when the returned names differ from what

@@ -1,7 +1,7 @@
 """Φ6: archive SenyalDiari rows older than the retention window.
 
 Exports old rows to `/home/topquaranta/archive/senyal-<year>.csv.gz`
-and deletes them from the live DB. See `docs/RETENTION.md` for the
+and deletes them from the live DB. See `docs/ops/retention.md` for the
 policy this implements.
 
 Scheduled quarterly via cron; see README / CLAUDE.md §3.

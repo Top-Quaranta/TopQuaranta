@@ -180,7 +180,7 @@ LOGGING = {
         },
         # All ERROR / CRITICAL log records across the project are appended to
         # a single file. Consumed by bin/tq-health.sh and the ops dashboard;
-        # see CLAUDE_PIPELINE.md (monitoring section).
+        # see docs/architecture/pipeline.md (monitoring section).
         "errors_file": {
             "class": "logging.FileHandler",
             "filename": str(_LOG_DIR / "errors.log"),

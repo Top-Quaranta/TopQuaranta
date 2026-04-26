@@ -102,6 +102,31 @@ class ConfiguracioGlobal(models.Model):
         "#1 entra al 100 %, la #2 al 96 %, la #25 al 4 %.",
     )
 
+    # ── Sprint I: Instagram distribution controls ───────────────────────
+    instagram_actiu = models.BooleanField(
+        default=True,
+        help_text="Kill switch global. Si False, `publicar_social` surt "
+        "immediatament sense fer res (els cron entries marquen 'omès').",
+    )
+    fase_distribucio = models.PositiveSmallIntegerField(
+        default=1,
+        help_text=(
+            "Phase 1: només dissabte feed+stories PPCC. "
+            "Phase 2: + dimecres territorial rotatori. "
+            "Phase 3: + dilluns segon territorial. "
+            "Phase 4: + divendres novetats singles. "
+            "Phase 5: + dimarts novetats àlbums. "
+            "Pujar de fase requereix avaluar Instagram Insights "
+            "(criteris a docs/architecture/pipeline.md)."
+        ),
+    )
+    story_max_cancons_ppcc = models.PositiveSmallIntegerField(
+        default=40,
+        help_text="Quantes cançons del top PPCC publicar com a stories "
+        "individuals. Per defecte 40 (totes); si la story completion "
+        "rate cau per sota del 25 % al story #N, baixa aquí a N.",
+    )
+
     class Meta:
         verbose_name = "Configuració global"
         verbose_name_plural = "Configuració global"

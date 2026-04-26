@@ -93,3 +93,26 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # Quarterly: archive SenyalDiari rows older than 2 years (Φ6 retention).
 0 5 1 1,4,7,10 * topquaranta   /home/topquaranta/bin/tq-run arxivar_senyal_vell >> /var/log/topquaranta/arxivar.log 2>&1
+
+# ─────────────────────────────────────────────────────────────────────
+# Sprint I — social distribution (Instagram)
+# ─────────────────────────────────────────────────────────────────────
+# Each entry below is gated by ConfiguracioGlobal.fase_distribucio:
+# the entry runs unconditionally (cron-wise) but `publicar_social`
+# marks the SocialPost as `omès` when the slot's min_fase exceeds
+# the current value. Bumping `fase_distribucio` in /staff/social
+# enables the next slot without touching this file.
+#
+# Phase 1: Saturday only (PPCC feed + stories) — runs after
+# `calcular_top` has produced the official setmanal ranking.
+30 9 * * 6  topquaranta  /home/topquaranta/bin/tq-run publicar_social >> /var/log/topquaranta/social.log 2>&1
+# Phase 2+: territorial rotatori dimecres
+30 9 * * 3  topquaranta  /home/topquaranta/bin/tq-run publicar_social >> /var/log/topquaranta/social.log 2>&1
+# Phase 3+: second territorial dilluns
+30 9 * * 1  topquaranta  /home/topquaranta/bin/tq-run publicar_social >> /var/log/topquaranta/social.log 2>&1
+# Phase 4+: nous singles divendres
+0 10 * * 5  topquaranta  /home/topquaranta/bin/tq-run publicar_social >> /var/log/topquaranta/social.log 2>&1
+# Phase 5+: nous àlbums dimarts
+0 10 * * 2  topquaranta  /home/topquaranta/bin/tq-run publicar_social >> /var/log/topquaranta/social.log 2>&1
+# Monthly token refresh (1st of month, 03:00 UTC).
+0 3 1 * *   topquaranta  /home/topquaranta/bin/tq-run renovar_token_instagram >> /var/log/topquaranta/social.log 2>&1

@@ -22,7 +22,19 @@ INSTALLED_APPS = [
     "ranking",
     "web",
     "comptes",
+    "social",
 ]
+
+# Sprint I — Instagram + cache directory for generated social
+# assets. Persistent (survives reboots, unlike /tmp); falls back
+# automatically to /tmp/tq_social if the path is unwriteable.
+SOCIAL_CACHE_DIR = "/var/cache/topquaranta/social"
+
+# Instagram credentials. Empty/test value forces DRY_RUN in the
+# client (no real API calls; PNGs still rendered).
+INSTAGRAM_ACCESS_TOKEN = ""
+INSTAGRAM_USER_ID = ""
+INSTAGRAM_TOKEN_EXPIRES_AT = ""
 
 AUTH_USER_MODEL = "comptes.Usuari"
 

@@ -819,6 +819,8 @@ class StaffAuditLog(models.Model):
         # via the public /compte/artista/<pk>/editar endpoint. Distinct from
         # `artista_edit` so the audit page can filter staff vs. self-service.
         ("gestor_edita_artista", "Artista: edició per gestor"),
+        # Sprint I — social distribution.
+        ("social_publicat", "Social: publicat (Instagram)"),
     ]
 
     actor = models.ForeignKey(

@@ -61,6 +61,12 @@ const GROUPS = [
     ],
   },
   {
+    label: 'Distribució',
+    items: [
+      { to: '/staff/social', label: 'Instagram' },
+    ],
+  },
+  {
     label: 'Diagnòstic',
     items: [
       { to: '/staff/senyal',    label: 'Senyal'    },

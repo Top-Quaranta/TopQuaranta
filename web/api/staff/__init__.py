@@ -68,6 +68,14 @@ from web.api.staff.senyal import (  # noqa: F401
     senyal_acceptar_correccio,
     senyal_list,
 )
+from web.api.staff.social import (  # noqa: F401
+    social_fase,
+    social_list,
+    social_preview,
+    social_publicar_ara,
+    social_story_cap,
+    social_toggle,
+)
 from web.api.staff.solicituds import (  # noqa: F401
     _solicitud_row,
     solicitud_rebutjar,

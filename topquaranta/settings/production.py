@@ -62,3 +62,9 @@ if EMAIL_HOST_PASSWORD:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
     EMAIL_FILE_PATH = "/var/log/topquaranta/admin_mail"
+
+# ── Sprint I: Instagram credentials ─────────────────────────────────────
+# Empty token forces DRY_RUN in `ingesta.social.instagram_client`.
+INSTAGRAM_ACCESS_TOKEN = config("INSTAGRAM_ACCESS_TOKEN", default="")
+INSTAGRAM_USER_ID = config("INSTAGRAM_USER_ID", default="")
+INSTAGRAM_TOKEN_EXPIRES_AT = config("INSTAGRAM_TOKEN_EXPIRES_AT", default="")

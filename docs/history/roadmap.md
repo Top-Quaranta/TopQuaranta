@@ -61,20 +61,20 @@ l'activitat des d'abril 2026 viu en sprints.
 Per ordre de prioritat (no alfabètic). Quan se'n fa un, es mou a la
 secció _completats_ amb la data i el detall.
 
-### 1. Sprint I — Instagram automàtic
+### 1. Sprint K — Analytics ètica (interna)
 
-> Distribuir els tops setmanals automàticament al canal d'Instagram.
+> Mètriques agregades sense vulnerar el manifest. GoAccess sobre
+> logs Caddy + comptadors interns + UTM convention.
 
-**Per què**: tracció gratuïta cada dissabte. Cost moderat. Requereix
-un compte business i decidir API oficial vs solució no-oficial.
-
-- [ ] Definir format visual del post setmanal (carrousel? imatge
-      única amb top 10?). Generar via PIL/Cairo o html-to-image.
-- [ ] Crear/configurar el compte Instagram business + Facebook page
-      requerida per l'API oficial de Meta.
-- [ ] Cron dissabte 09:30 UTC (post `calcular_top` setmanal) que
-      publica el carrousel al feed.
-- [ ] Decidir si afegim també `Stories` o només feed.
+- [ ] GoAccess cron diari → `/var/www/analytics/index.html` (privat).
+- [ ] Model `MetricaEsdeveniment(data, clau, comptador)` + middleware
+      que incrementa pageviews per pàgina pública.
+- [ ] `register_event(clau)` cridat des dels endpoints clau
+      (registre completat, proposta enviada, feedback enviat).
+- [ ] Pàgina staff `/staff/analytics` amb gràfics setmanals.
+- [ ] Convenció UTM documentada (`?utm_source=instagram&utm_campaign=top-YYYY-wWW`).
+- [ ] Documentació al `docs/product/definition.md` i `/legal/privacitat`
+      sobre què mesurem internament.
 
 ### 2. Backlog menor
 
@@ -180,6 +180,30 @@ Extreta primitiva compartida `web-react/src/components/editorial.jsx`
 navegador setmanal (prev/next), nous camps `prev_setmana`/
 `next_setmana` a `/api/v1/top/`. Llenguatge intern eliminat de la
 UI pública (verificada/aprovat/revisió humana).
+
+### Sprint I — Distribució automàtica a Instagram ✅ (2026-04-26)
+
+App nova `social/` (model `SocialPost` idempotent per
+`(platform, tipus, territori, setmana)`); package `ingesta/social/`
+amb `colors`, `fonts`, `cover_cache`, `calendari`, `captions`,
+`renderer` (PIL, formats 1080×1350 feed + 1080×1920 stories),
+`instagram_client` (Graph API v19; mode DRY_RUN automàtic quan
+`INSTAGRAM_ACCESS_TOKEN` és buit/`"test"`). Commands
+`autoritzar_instagram` (interactiu, code → long-lived 60 dies),
+`publicar_social --data --tipus --platform --dry-run --force`,
+`renovar_token_instagram`. Calendari amb 5 fases via
+`ConfiguracioGlobal.fase_distribucio`: Fase 1 (default) només
+dissabte; Fases 2-5 desbloquegen dimecres/dilluns/divendres/dimarts.
+Kill switch a `instagram_actiu`. Story cap configurable
+`story_max_cancons_ppcc` (1-40). Pàgina staff `/staff/social` amb
+preview en viu, force-publicar, controls de fase + kill + token TTL.
+Crons al `cron.topquaranta` per als 5 dies + token mensual. Fonts
+Playfair + Roboto vendoritzades. Audit action `social_publicat`
+afegida (migració `music 0054`). 12 tests nous (153 total).
+
+> **Recordatori operatiu**: Fase 1 al començament. Pujar de fase
+> requereix avaluar Insights Instagram durant 4 setmanes —
+> llindars documentats al fitxer del sprint o al panell staff.
 
 ### Sprint J — Privacitat, cookies i corpus legal complet ✅ (2026-04-26)
 

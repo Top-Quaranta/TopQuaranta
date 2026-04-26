@@ -196,6 +196,23 @@ urlpatterns = [
     path("staff/configuracio/", staff_views.configuracio, name="staff_configuracio"),
     # Auditoria
     path("staff/auditlog/", staff_views.auditlog, name="staff_auditlog"),
+    # ── Sprint I — social distribution ──
+    path("staff/social/", staff_views.social_list, name="staff_social_list"),
+    path(
+        "staff/social/preview/", staff_views.social_preview, name="staff_social_preview"
+    ),
+    path(
+        "staff/social/publicar-ara/",
+        staff_views.social_publicar_ara,
+        name="staff_social_publicar_ara",
+    ),
+    path("staff/social/toggle/", staff_views.social_toggle, name="staff_social_toggle"),
+    path("staff/social/fase/", staff_views.social_fase, name="staff_social_fase"),
+    path(
+        "staff/social/story-cap/",
+        staff_views.social_story_cap,
+        name="staff_social_story_cap",
+    ),
     # Feedback (user-filed corrections)
     path(
         "staff/feedback/",

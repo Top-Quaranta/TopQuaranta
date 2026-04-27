@@ -81,19 +81,81 @@ def _post(path: str, params: dict) -> dict:
     return r.json()
 
 
+def _get(path: str, params: dict | None = None) -> dict:
+    """Live GET; raises on non-200."""
+    import requests
+
+    p = {**(params or {}), "access_token": _token()}
+    r = requests.get(f"{GRAPH_BASE}/{path}", params=p, timeout=30)
+    if not r.ok:
+        raise RuntimeError(f"IG API {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def wait_until_finished(
+    container_id: str, *, timeout_s: int = 90, interval_s: float = 2.0
+) -> None:
+    """Block until the container reaches `FINISHED` status.
+
+    Required before `publish_container` for both single-image and
+    carousel posts — Meta processes uploads asynchronously and
+    refuses to publish a container that's still IN_PROGRESS or
+    PUBLISHED. Caught 2026-04-27 with code 9007 / subcode 2207027
+    ("Media ID is not available") on the very first real publish.
+
+    Raises `RuntimeError` if the status reaches `ERROR` or if the
+    timeout elapses without ever seeing `FINISHED`.
+    """
+    if is_dry_run():
+        return
+    deadline = time.time() + timeout_s
+    last_status = "?"
+    while time.time() < deadline:
+        body = _get(container_id, {"fields": "status_code,status"})
+        last_status = body.get("status_code") or last_status
+        if last_status == "FINISHED":
+            logger.info("container %s ready", container_id)
+            return
+        if last_status == "ERROR":
+            raise RuntimeError(
+                f"IG container {container_id} entered ERROR state: "
+                f"{body.get('status', '')[:300]}"
+            )
+        time.sleep(interval_s)
+    raise RuntimeError(
+        f"IG container {container_id} not FINISHED after {timeout_s}s "
+        f"(last status: {last_status})"
+    )
+
+
 # ── Public surface ──────────────────────────────────────────────────
 
 
-def upload_carousel_item(image_url: str) -> str:
-    """Upload one image as a carousel child. Returns container ID."""
+def upload_carousel_item(image_url: str, *, user_tags: list[dict] | None = None) -> str:
+    """Upload one image as a carousel child. Returns container ID.
+
+    `user_tags` is the Meta `user_tags` payload — a list of
+    `{"username": str, "x": float, "y": float}` (coordinates 0..1).
+    Capped at 20 per image by Meta. We don't validate locally; the
+    API will reject invalid handles silently (untagged) or raise.
+    """
     if is_dry_run():
         cid = f"dry-item-{int(time.time()*1000)}-{abs(hash(image_url)) & 0xffff:04x}"
-        logger.info("[DRY] upload_carousel_item %s → %s", image_url, cid)
+        logger.info(
+            "[DRY] upload_carousel_item %s tags=%d → %s",
+            image_url,
+            len(user_tags or []),
+            cid,
+        )
         return cid
     body = {
         "image_url": image_url,
         "is_carousel_item": "true",
     }
+    if user_tags:
+        import json
+
+        body["user_tags"] = json.dumps(user_tags[:20])
     return _post(f"{_user_id()}/media", body)["id"]
 
 
@@ -111,13 +173,24 @@ def create_carousel(child_ids: list[str], caption: str) -> str:
     return _post(f"{_user_id()}/media", body)["id"]
 
 
-def upload_image(image_url: str, caption: str) -> str:
+def upload_image(
+    image_url: str, caption: str, *, user_tags: list[dict] | None = None
+) -> str:
     """Single-image feed post. Returns container ID."""
     if is_dry_run():
         cid = f"dry-image-{int(time.time()*1000)}"
-        logger.info("[DRY] upload_image %s → %s", image_url, cid)
+        logger.info(
+            "[DRY] upload_image %s tags=%d → %s",
+            image_url,
+            len(user_tags or []),
+            cid,
+        )
         return cid
     body = {"image_url": image_url, "caption": caption[:2200]}
+    if user_tags:
+        import json
+
+        body["user_tags"] = json.dumps(user_tags[:20])
     return _post(f"{_user_id()}/media", body)["id"]
 
 

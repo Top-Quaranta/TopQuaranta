@@ -28,6 +28,8 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from ingesta.social import calendari, captions, instagram_client, payload, renderer
+from ingesta.social.calendari import tq_week_start
+from ingesta.social.captions import instagram_username
 from music.audit import log_staff_action
 from ranking.models import ConfiguracioGlobal
 from social.models import SocialPost
@@ -105,10 +107,21 @@ class Command(BaseCommand):
             self.stdout.write(f"Cap slot per a {target} (tipus/platform).")
             return
 
-        # `setmana` reference for SocialPost rows = monday of the
-        # current ISO week — same convention as TopSetmanal.
-        setmana = target - datetime.timedelta(days=target.weekday())
+        # `setmana` reference for SocialPost rows = ISO Monday of the
+        # *Saturday that opens this TQ-week* (Sat → Fri). Anchoring to
+        # the Saturday means Mon/Tue/…/Fri publications all resolve to
+        # the same setmana — the same one TopSetmanal computed when
+        # the chart was generated on that Saturday. Computing it as
+        # `target - target.weekday()` instead would jump to the *next*
+        # Monday's ISO week and miss the TopSetmanal row entirely
+        # (caught 2026-04-27: territorial slots returned "sense
+        # contingut" because they queried the future setmana).
+        saturday = tq_week_start(target)
+        setmana = saturday - datetime.timedelta(days=saturday.weekday())
 
+        # Stash the resolved publication date so per-slot novetats
+        # can compute their window without recomputing from scratch.
+        opts["_target_date"] = target
         for slot, territori in slots:
             self._handle_slot(slot, territori, setmana, cfg, opts)
 
@@ -164,7 +177,12 @@ class Command(BaseCommand):
         if slot.tipus in (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL):
             data = payload.build_top(territori, setmana)
         else:
-            data = payload.build_novetats(slot.tipus, setmana)
+            # Novetats use a publication-date-anchored window so two
+            # consecutive runs can't double-count a boundary release.
+            publish_date = opts.get("_target_date") or datetime.date.today()
+            data = payload.build_novetats(
+                slot.tipus, setmana, publish_date=publish_date
+            )
 
         if not data:
             self._mark(
@@ -224,14 +242,37 @@ class Command(BaseCommand):
             self.stdout.write("  · --dry-run, no es publica.")
             return
 
+        # Per-slide auto-tags: the cover slide carries no tag; the
+        # rest carry the artists whose entries appear on that slide.
+        # All tags are placed at (0.5, 0.5) — Meta clusters multiple
+        # tags at the same point into a tappable list, so we don't
+        # need to spread them across the canvas.
+        tags_per_slide = self._slide_tags(slot.tipus, len(paths), data)
+
         # Real publish: upload each as carousel item, then carousel
-        # parent + publish. Single-image fallback when only one slide.
+        # parent + publish. Single-image fallback when only one
+        # slide. Meta processes uploads asynchronously, so each
+        # container must reach status_code=FINISHED *before* we hit
+        # /media_publish — otherwise the API replies with code 9007
+        # / subcode 2207027 ("Media ID is not available").
         urls = [_public_url_for(p) for p in paths]
         if len(urls) == 1:
-            container = instagram_client.upload_image(urls[0], caption)
+            container = instagram_client.upload_image(
+                urls[0],
+                caption,
+                user_tags=tags_per_slide[0] or None,
+            )
         else:
-            child_ids = [instagram_client.upload_carousel_item(u) for u in urls]
+            child_ids = []
+            for i, u in enumerate(urls):
+                cid = instagram_client.upload_carousel_item(
+                    u,
+                    user_tags=tags_per_slide[i] or None,
+                )
+                instagram_client.wait_until_finished(cid)
+                child_ids.append(cid)
             container = instagram_client.create_carousel(child_ids, caption)
+        instagram_client.wait_until_finished(container)
         media_id = instagram_client.publish_container(container)
         self._mark(
             post,
@@ -279,6 +320,8 @@ class Command(BaseCommand):
         for p in paths:
             url = _public_url_for(p)
             container = instagram_client.upload_story(url)
+            # Same async-readiness gate as the feed flow above.
+            instagram_client.wait_until_finished(container)
             sid = instagram_client.publish_container(container)
             story_ids.append(sid)
 
@@ -304,6 +347,69 @@ class Command(BaseCommand):
         self.stdout.write(f"  · {len(story_ids)} stories publicades.")
 
     # ── helpers ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _slide_tags(tipus: str, n_slides: int, data: dict) -> list[list[dict]]:
+        """Per-slide `user_tags` payloads, one entry per slide.
+
+        Slide 0 is always the cover (no tags). The rest mirror the
+        renderer's chunking logic so every artist appears on the same
+        slide where their entry was drawn:
+
+          • top_*       → 10 entries per slide (uniform)
+          • nous_albums → 1 album per slide
+          • nous_singles → bin-packed (≤10 per slide, even split)
+
+        All tags are placed at (0.5, 0.5) — Meta clusters multiple
+        same-coordinate tags into a single tappable list bubble. We
+        don't try to spread them across the canvas because there's
+        no meaningful visual position for an artist on a list slide.
+        """
+        out: list[list[dict]] = [[]]  # cover slide → no tags
+
+        def _tag(handle_url: str | None) -> dict | None:
+            u = instagram_username(handle_url)
+            return {"username": u, "x": 0.5, "y": 0.5} if u else None
+
+        TOP_TIPUS = (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL)
+        if tipus in TOP_TIPUS:
+            entries = data.get("entries") or []
+            for page in range(1, n_slides):
+                chunk = entries[(page - 1) * 10 : page * 10]
+                tags = [t for e in chunk if (t := _tag(e.get("artista_instagram_url")))]
+                out.append(tags[:20])  # respect per-image cap
+        elif tipus == SocialPost.TIPUS_NOUS_ALBUMS:
+            items = data.get("items") or []
+            # 1 slide per album (renderer caps at 9; n_slides may be
+            # smaller if there are fewer items).
+            for item in items[: n_slides - 1]:
+                t = _tag(item.get("artista_instagram_url"))
+                out.append([t] if t else [])
+        elif tipus == SocialPost.TIPUS_NOUS_SINGLES:
+            # Mirror the bin-packing in `render_feed_novetats`:
+            # `per_slide = ceil(n / n_slides)`. Trailing slide may
+            # carry fewer items.
+            items = data.get("items") or []
+            n = len(items)
+            slides = max(1, n_slides - 1)  # exclude cover
+            per_slide = -(-n // slides) if n else 0
+            offset = 0
+            for _ in range(slides):
+                chunk = items[offset : offset + per_slide]
+                if not chunk:
+                    out.append([])
+                else:
+                    tags = [
+                        t for e in chunk if (t := _tag(e.get("artista_instagram_url")))
+                    ]
+                    out.append(tags[:20])
+                offset += per_slide
+        # Pad to exactly n_slides in case of any mismatch — the
+        # publisher indexes by slide position and would otherwise
+        # IndexError.
+        while len(out) < n_slides:
+            out.append([])
+        return out[:n_slides]
 
     def _record_omes(self, slot, territori, setmana, *, motiu: str):
         post, _ = SocialPost.objects.get_or_create(

@@ -17,9 +17,17 @@ from django.db import models
 class SocialPost(models.Model):
     PLATFORM_INSTAGRAM_FEED = "instagram_feed"
     PLATFORM_INSTAGRAM_STORY = "instagram_story"
+    PLATFORM_MASTODON = "mastodon"
+    PLATFORM_BLUESKY = "bluesky"
+    PLATFORM_TELEGRAM = "telegram"
+    PLATFORM_NEWSLETTER = "newsletter"
     PLATFORM_CHOICES = [
         (PLATFORM_INSTAGRAM_FEED, "Instagram · Feed"),
         (PLATFORM_INSTAGRAM_STORY, "Instagram · Stories"),
+        (PLATFORM_MASTODON, "Mastodon"),
+        (PLATFORM_BLUESKY, "Bluesky"),
+        (PLATFORM_TELEGRAM, "Telegram"),
+        (PLATFORM_NEWSLETTER, "Newsletter"),
     ]
 
     # Content type. Each renderer + caption template lives keyed by
@@ -123,3 +131,125 @@ class InstagramAuth(models.Model):
             return "Instagram auth (buit)"
         masked = self.access_token[:4] + "…" + self.access_token[-4:]
         return f"Instagram auth ({masked})"
+
+
+class MastodonAuth(models.Model):
+    """Singleton for Mastodon credentials.
+
+    `instance_url` is the base URL of the home instance (e.g.
+    `https://mastodont.cat`). `access_token` is a permanent app
+    token created from the instance's settings → developer page
+    (no OAuth dance needed for a single-account bot).
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    instance_url = models.CharField(max_length=200, blank=True, default="")
+    access_token = models.TextField(blank=True, default="")
+    handle = models.CharField(max_length=80, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "comptes.Usuari",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Autorització Mastodon"
+        verbose_name_plural = "Autoritzacions Mastodon"
+
+    def save(self, *args, **kwargs):
+        self.id = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "MastodonAuth | None":
+        return cls.objects.filter(pk=1).first()
+
+
+class BlueskyAuth(models.Model):
+    """Singleton for Bluesky credentials.
+
+    Bluesky uses an `app_password` (different from the account
+    password) created at https://bsky.app/settings/app-passwords.
+    `handle` is the user's @handle (e.g. `topquaranta.bsky.social`).
+    The session JWT is fetched on demand and cached briefly in
+    process memory; we never store it long-term.
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    handle = models.CharField(max_length=120, blank=True, default="")
+    app_password = models.CharField(max_length=120, blank=True, default="")
+    did = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Decentralised identifier (resolved on first auth).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "comptes.Usuari",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Autorització Bluesky"
+        verbose_name_plural = "Autoritzacions Bluesky"
+
+    def save(self, *args, **kwargs):
+        self.id = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "BlueskyAuth | None":
+        return cls.objects.filter(pk=1).first()
+
+
+class TelegramAuth(models.Model):
+    """Singleton for Telegram bot credentials.
+
+    `bot_token` is created via @BotFather (`/newbot`). `chat_id` is
+    the destination — typically a public channel like
+    `@topquaranta_canal` (string, leading @) or a numeric supergroup
+    ID. The bot must be added as an admin of the channel with
+    "Post messages" permission.
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    bot_token = models.CharField(max_length=200, blank=True, default="")
+    chat_id = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Channel handle (e.g. @topquaranta) or numeric ID.",
+    )
+    bot_username = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        help_text="Auto-resolved label (e.g. 'topquaranta_bot').",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        "comptes.Usuari",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = "Autorització Telegram"
+        verbose_name_plural = "Autoritzacions Telegram"
+
+    def save(self, *args, **kwargs):
+        self.id = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "TelegramAuth | None":
+        return cls.objects.filter(pk=1).first()

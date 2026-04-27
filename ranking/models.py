@@ -127,6 +127,36 @@ class ConfiguracioGlobal(models.Model):
         "rate cau per sota del 25 % al story #N, baixa aquí a N.",
     )
 
+    # ── Sprint I bis: multi-channel distribution kill switches ──────
+    # Each channel has its own switch so we can pause one without
+    # touching the others (e.g. Mastodon instance is down, or we
+    # want to skip a newsletter week without disabling the cron).
+    mastodon_actiu = models.BooleanField(
+        default=False,
+        help_text="Kill switch per al cron de Mastodon. Si False, "
+        "`publicar_mastodon` surt sense fer res.",
+    )
+    bluesky_actiu = models.BooleanField(
+        default=False,
+        help_text="Kill switch per al cron de Bluesky. Si False, "
+        "`publicar_bluesky` surt sense fer res.",
+    )
+    telegram_actiu = models.BooleanField(
+        default=False,
+        help_text="Kill switch per al cron de Telegram. Si False, "
+        "`publicar_canal --channel telegram` surt sense fer res.",
+    )
+    newsletter_actiu = models.BooleanField(
+        default=False,
+        help_text="Kill switch per al cron de newsletter setmanal. "
+        "Si False, `enviar_newsletter` surt sense fer res.",
+    )
+    rss_actiu = models.BooleanField(
+        default=True,
+        help_text="Si False, els feeds /rss/*.xml retornen 503 (per a "
+        "casos d'emergència — habitualment està sempre actiu).",
+    )
+
     class Meta:
         verbose_name = "Configuració global"
         verbose_name_plural = "Configuració global"

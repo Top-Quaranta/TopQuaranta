@@ -212,9 +212,24 @@ urlpatterns = [
         "staff/social/preview/", staff_views.social_preview, name="staff_social_preview"
     ),
     path(
+        "staff/social/preview-all/",
+        staff_views.social_preview_all,
+        name="staff_social_preview_all",
+    ),
+    path(
         "staff/social/publicar-ara/",
         staff_views.social_publicar_ara,
         name="staff_social_publicar_ara",
+    ),
+    path(
+        "staff/social/reset/",
+        staff_views.social_reset,
+        name="staff_social_reset",
+    ),
+    path(
+        "staff/social/eliminar-instagram/",
+        staff_views.social_eliminar_instagram,
+        name="staff_social_eliminar_instagram",
     ),
     path("staff/social/toggle/", staff_views.social_toggle, name="staff_social_toggle"),
     path("staff/social/fase/", staff_views.social_fase, name="staff_social_fase"),
@@ -237,6 +252,54 @@ urlpatterns = [
         "staff/social/credentials/clear/",
         staff_views.social_credentials_clear,
         name="staff_social_credentials_clear",
+    ),
+    # Mastodon
+    path(
+        "staff/social/mastodon/",
+        staff_views.social_mastodon_save,
+        name="staff_social_mastodon_save",
+    ),
+    path(
+        "staff/social/mastodon/test/",
+        staff_views.social_mastodon_test,
+        name="staff_social_mastodon_test",
+    ),
+    path(
+        "staff/social/mastodon/clear/",
+        staff_views.social_mastodon_clear,
+        name="staff_social_mastodon_clear",
+    ),
+    # Bluesky
+    path(
+        "staff/social/bluesky/",
+        staff_views.social_bluesky_save,
+        name="staff_social_bluesky_save",
+    ),
+    path(
+        "staff/social/bluesky/test/",
+        staff_views.social_bluesky_test,
+        name="staff_social_bluesky_test",
+    ),
+    path(
+        "staff/social/bluesky/clear/",
+        staff_views.social_bluesky_clear,
+        name="staff_social_bluesky_clear",
+    ),
+    # Telegram
+    path(
+        "staff/social/telegram/",
+        staff_views.social_telegram_save,
+        name="staff_social_telegram_save",
+    ),
+    path(
+        "staff/social/telegram/test/",
+        staff_views.social_telegram_test,
+        name="staff_social_telegram_test",
+    ),
+    path(
+        "staff/social/telegram/clear/",
+        staff_views.social_telegram_clear,
+        name="staff_social_telegram_clear",
     ),
     path(
         "staff/social/slides/",

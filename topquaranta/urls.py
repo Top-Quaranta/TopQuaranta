@@ -2,6 +2,7 @@ from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from django.views.generic import TemplateView
 
+from web.feeds import novetats_feed, top_feed
 from web.sitemaps import sitemaps
 
 # Post Sprint-4 + cleanup: Django serves only API, auth flows that
@@ -25,6 +26,10 @@ urlpatterns = [
             content_type="text/plain",
         ),
     ),
+    # Atom feeds. Caddy passes /rss/* through to Django (see
+    # deploy/Caddyfile).
+    path("rss/top.xml", top_feed, name="rss_top"),
+    path("rss/novetats.xml", novetats_feed, name="rss_novetats"),
 ]
 
 # S13: custom branded error pages (only used when DEBUG=False).

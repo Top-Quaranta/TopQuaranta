@@ -63,7 +63,9 @@ const GROUPS = [
   {
     label: 'Distribució',
     items: [
-      { to: '/staff/social', label: 'Instagram' },
+      // Single landing page now covers all 5 channels — Instagram +
+      // Mastodon + Bluesky + Newsletter + RSS — under "Social".
+      { to: '/staff/social', label: 'Social' },
     ],
   },
   {

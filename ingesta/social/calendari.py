@@ -145,22 +145,10 @@ def slots_for(today: datetime.date) -> list[tuple[CalendarSlot, str]]:
     return out
 
 
-def tq_week_start(reference: datetime.date | None = None) -> datetime.date:
-    """The "TopQuaranta week" is **Saturday → Friday**, not the ISO
-    Monday → Sunday. Returns the most recent Saturday on or before
-    `reference`. This is the date the operator thinks of as "the
-    start of this week" — the day the official top publishes.
-
-    Internal storage (`SocialPost.setmana`, `TopSetmanal.setmana`)
-    keeps the Monday-of-ISO-week convention; this helper is for
-    UI/calendari rendering only.
-    """
-    if reference is None:
-        reference = datetime.date.today()
-    # weekday(): Mon=0 … Sat=5 … Sun=6.
-    # Days back to the most recent Saturday: (weekday + 2) % 7.
-    days_back = (reference.weekday() + 2) % 7
-    return reference - datetime.timedelta(days=days_back)
+# Canonical helper lives in `music.dates` so non-social code can use
+# it. Keep this re-export so existing `from ingesta.social.calendari
+# import tq_week_start` callers don't break.
+from music.dates import tq_week_start  # noqa: E402,F401
 
 
 def upcoming_week(
@@ -188,12 +176,21 @@ def upcoming_week(
 
 
 def publication_date_for(slot_tipus: str, setmana: datetime.date) -> datetime.date:
-    """Given a tipus + the Monday-of-week, return the calendar date
-    on which that slot's content publishes. Used by the staff
-    `Preview` action so we don't accidentally render against the
-    Monday (which has no PPCC slot)."""
-    monday = setmana - datetime.timedelta(days=setmana.weekday())
+    """Given a tipus + the SocialPost.setmana (= ISO Monday of the
+    TQ-week's Saturday), return the calendar date that slot publishes
+    on. Anchored to the *Saturday* that opens the TQ-week, then offset
+    forwards by `(slot.weekday - 5) % 7` (Sat=0, Sun=1, Mon=2 … Fri=6).
+
+    Earlier this was anchored to ISO Monday + slot.weekday, which gave
+    the wrong calendar date for Mon→Fri slots after we switched
+    `setmana` to the TQ-week's-Saturday convention (the calendar date
+    fell one ISO week behind). Caught 2026-04-27 because Preview was
+    rendering territorials into the wrong setmana folder, so "Veure
+    slides" found nothing.
+    """
+    saturday = setmana + datetime.timedelta(days=5)
     for s in CALENDARI:
         if s.tipus == slot_tipus:
-            return monday + datetime.timedelta(days=s.weekday)
-    return monday
+            days_offset = (s.weekday - 5) % 7
+            return saturday + datetime.timedelta(days=days_offset)
+    return saturday

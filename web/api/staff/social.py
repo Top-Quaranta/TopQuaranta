@@ -32,8 +32,15 @@ from rest_framework.response import Response
 
 from ingesta.social.calendari import publication_date_for, upcoming_week
 from ingesta.social.instagram_client import days_until_expiry, is_dry_run
+from music.dates import project_week_number
 from ranking.models import ConfiguracioGlobal
-from social.models import InstagramAuth, SocialPost
+from social.models import (
+    BlueskyAuth,
+    InstagramAuth,
+    MastodonAuth,
+    SocialPost,
+    TelegramAuth,
+)
 from web.api.staff._common import IsStaff
 
 # User-facing label map. PPCC is the legacy code; visitors see
@@ -66,6 +73,7 @@ def _serialize(post: SocialPost) -> dict:
         "territori_label": TERRITORI_LABEL.get(post.territori, post.territori or "—"),
         "setmana": post.setmana.isoformat(),
         "publication_date": pub_date.isoformat(),
+        "project_week": project_week_number(pub_date),
         "status": post.status,
         "instagram_media_id": post.instagram_media_id or "",
         "error_msg": post.error_msg or "",
@@ -104,6 +112,7 @@ def _calendari_payload() -> list[dict]:
                 "weekday": slot.weekday,
                 "weekday_name": _DAY_CA[slot.weekday],
                 "publication_date": pub_date.isoformat(),
+                "project_week": project_week_number(pub_date),
             }
         )
     return out
@@ -150,6 +159,77 @@ def _credentials_payload() -> dict:
     }
 
 
+def _mask(secret: str) -> str:
+    if not secret:
+        return ""
+    if len(secret) <= 8:
+        return "…" * len(secret)
+    return f"{secret[:4]}…{secret[-4:]}"
+
+
+def _mastodon_payload() -> dict:
+    row = MastodonAuth.load()
+    if row and row.access_token:
+        return {
+            "configured": True,
+            "instance_url": row.instance_url,
+            "handle": row.handle,
+            "token_masked": _mask(row.access_token),
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "updated_by": row.updated_by.username if row.updated_by else None,
+        }
+    return {
+        "configured": False,
+        "instance_url": "",
+        "handle": "",
+        "token_masked": "",
+        "updated_at": None,
+        "updated_by": None,
+    }
+
+
+def _telegram_payload() -> dict:
+    row = TelegramAuth.load()
+    if row and row.bot_token and row.chat_id:
+        return {
+            "configured": True,
+            "chat_id": row.chat_id,
+            "bot_username": row.bot_username,
+            "token_masked": _mask(row.bot_token),
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "updated_by": row.updated_by.username if row.updated_by else None,
+        }
+    return {
+        "configured": False,
+        "chat_id": "",
+        "bot_username": "",
+        "token_masked": "",
+        "updated_at": None,
+        "updated_by": None,
+    }
+
+
+def _bluesky_payload() -> dict:
+    row = BlueskyAuth.load()
+    if row and row.app_password:
+        return {
+            "configured": True,
+            "handle": row.handle,
+            "did": row.did,
+            "password_masked": _mask(row.app_password),
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "updated_by": row.updated_by.username if row.updated_by else None,
+        }
+    return {
+        "configured": False,
+        "handle": "",
+        "did": "",
+        "password_masked": "",
+        "updated_at": None,
+        "updated_by": None,
+    }
+
+
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def social_list(request: Request) -> Response:
@@ -160,12 +240,20 @@ def social_list(request: Request) -> Response:
             "results": [_serialize(p) for p in qs],
             "config": {
                 "instagram_actiu": cfg.instagram_actiu,
+                "mastodon_actiu": cfg.mastodon_actiu,
+                "bluesky_actiu": cfg.bluesky_actiu,
+                "telegram_actiu": cfg.telegram_actiu,
+                "newsletter_actiu": cfg.newsletter_actiu,
+                "rss_actiu": cfg.rss_actiu,
                 "fase_distribucio": cfg.fase_distribucio,
                 "story_max_cancons_ppcc": cfg.story_max_cancons_ppcc,
                 "dry_run": is_dry_run(),
                 "token_days_left": days_until_expiry(),
             },
             "credentials": _credentials_payload(),
+            "mastodon": _mastodon_payload(),
+            "bluesky": _bluesky_payload(),
+            "telegram": _telegram_payload(),
             "calendari": _calendari_payload(),
         }
     )
@@ -292,6 +380,211 @@ def social_credentials_clear(request: Request) -> Response:
     return Response({"ok": True, "credentials": _credentials_payload()})
 
 
+# ── Mastodon credentials ─────────────────────────────────────────────
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_mastodon_save(request: Request) -> Response:
+    """Persist Mastodon credentials. Caller passes:
+        instance_url   — e.g. "https://mastodont.cat"
+        access_token   — long-lived app token (scopes: write:media,
+                         write:statuses)
+        handle         — user-facing label (e.g. "topquaranta")
+    The handle is auto-resolved from `whoami()` if blank.
+    """
+    instance = (request.data.get("instance_url") or "").strip().rstrip("/")
+    token = (request.data.get("access_token") or "").strip()
+    handle = (request.data.get("handle") or "").strip()
+    if not instance or not token:
+        return Response(
+            {"error": "instance_url + access_token obligatoris"}, status=400
+        )
+    if not instance.startswith(("http://", "https://")):
+        return Response(
+            {"error": "instance_url ha de començar amb http(s)://"}, status=400
+        )
+    user = request.user if request.user.is_authenticated else None
+    MastodonAuth.objects.update_or_create(
+        pk=1,
+        defaults={
+            "instance_url": instance,
+            "access_token": token,
+            "handle": handle,
+            "updated_by": user,
+        },
+    )
+    # Best-effort: try to resolve the handle if the operator left
+    # it blank. Failure here is non-fatal — we keep the row, just
+    # without the auto-filled label.
+    if not handle:
+        try:
+            from ingesta.social import mastodon_client
+
+            who = mastodon_client.whoami()
+            if isinstance(who, dict) and who.get("username"):
+                MastodonAuth.objects.filter(pk=1).update(handle=who["username"][:80])
+        except Exception:  # noqa: BLE001
+            logger = __import__("logging").getLogger(__name__)
+            logger.exception("mastodon whoami after save failed")
+    return Response({"ok": True, "mastodon": _mastodon_payload()})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_mastodon_test(request: Request) -> Response:
+    """Hit `/api/v1/accounts/verify_credentials` and return the
+    verified handle so the operator can confirm the right account."""
+    try:
+        from ingesta.social import mastodon_client
+
+        who = mastodon_client.whoami()
+    except Exception as exc:  # noqa: BLE001
+        return Response({"ok": False, "error": str(exc)[:300]}, status=502)
+    return Response({"ok": True, "whoami": who})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_mastodon_clear(request: Request) -> Response:
+    MastodonAuth.objects.filter(pk=1).delete()
+    return Response({"ok": True, "mastodon": _mastodon_payload()})
+
+
+# ── Bluesky credentials ──────────────────────────────────────────────
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_bluesky_save(request: Request) -> Response:
+    """Persist Bluesky credentials. Caller passes:
+        handle        — e.g. "topquaranta.bsky.social"
+        app_password  — created at bsky.app/settings/app-passwords
+                        (NOT the account password)
+    DID is resolved + stored on first authenticated request.
+    """
+    handle = (request.data.get("handle") or "").strip().lstrip("@")
+    app_password = (request.data.get("app_password") or "").strip()
+    if not handle or not app_password:
+        return Response({"error": "handle + app_password obligatoris"}, status=400)
+    user = request.user if request.user.is_authenticated else None
+    BlueskyAuth.objects.update_or_create(
+        pk=1,
+        defaults={
+            "handle": handle,
+            "app_password": app_password,
+            "did": "",  # cleared; bluesky_client._session() refills it
+            "updated_by": user,
+        },
+    )
+    # Reset cached session so the next call re-authenticates.
+    try:
+        from ingesta.social import bluesky_client
+
+        bluesky_client._SESSIONS.clear()
+    except Exception:  # noqa: BLE001
+        pass
+    return Response({"ok": True, "bluesky": _bluesky_payload()})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_bluesky_test(request: Request) -> Response:
+    """Run createSession against bsky.social and return the resolved
+    DID. Confirms the app-password is valid."""
+    try:
+        from ingesta.social import bluesky_client
+
+        # Force re-auth so a stale cached session can't mask a
+        # broken password.
+        bluesky_client._SESSIONS.clear()
+        who = bluesky_client.whoami()
+    except Exception as exc:  # noqa: BLE001
+        return Response({"ok": False, "error": str(exc)[:300]}, status=502)
+    return Response({"ok": True, "whoami": who, "bluesky": _bluesky_payload()})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_bluesky_clear(request: Request) -> Response:
+    BlueskyAuth.objects.filter(pk=1).delete()
+    try:
+        from ingesta.social import bluesky_client
+
+        bluesky_client._SESSIONS.clear()
+    except Exception:  # noqa: BLE001
+        pass
+    return Response({"ok": True, "bluesky": _bluesky_payload()})
+
+
+# ── Telegram credentials ─────────────────────────────────────────────
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_telegram_save(request: Request) -> Response:
+    """Persist Telegram bot credentials. Caller passes:
+        bot_token  — the long token from @BotFather (`/newbot`)
+        chat_id    — destination channel: handle (`@topquaranta`)
+                     or numeric supergroup ID
+    The bot must already be added as admin of the destination
+    channel with "Post messages" permission — the test endpoint
+    confirms this via `/getChat`.
+    """
+    bot_token = (request.data.get("bot_token") or "").strip()
+    chat_id = (request.data.get("chat_id") or "").strip()
+    if not bot_token or not chat_id:
+        return Response({"error": "bot_token + chat_id obligatoris"}, status=400)
+    if not bot_token.count(":") == 1:
+        return Response(
+            {"error": "bot_token sembla mal format (ha de ser '<id>:<hash>')"},
+            status=400,
+        )
+    user = request.user if request.user.is_authenticated else None
+    TelegramAuth.objects.update_or_create(
+        pk=1,
+        defaults={
+            "bot_token": bot_token,
+            "chat_id": chat_id,
+            "bot_username": "",
+            "updated_by": user,
+        },
+    )
+    # Best-effort: resolve the bot's own username for display.
+    try:
+        from ingesta.social import telegram_client
+
+        info = telegram_client.whoami()
+        if isinstance(info, dict) and info.get("username"):
+            TelegramAuth.objects.filter(pk=1).update(bot_username=info["username"][:80])
+    except Exception:  # noqa: BLE001
+        logger = __import__("logging").getLogger(__name__)
+        logger.exception("telegram whoami after save failed")
+    return Response({"ok": True, "telegram": _telegram_payload()})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_telegram_test(request: Request) -> Response:
+    """Run /getMe + /getChat to confirm the bot token is valid AND
+    has access to the destination channel. Returns both payloads."""
+    try:
+        from ingesta.social import telegram_client
+
+        bot = telegram_client.whoami()
+        chat = telegram_client.chat_info()
+    except Exception as exc:  # noqa: BLE001
+        return Response({"ok": False, "error": str(exc)[:300]}, status=502)
+    return Response({"ok": True, "bot": bot, "chat": chat})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_telegram_clear(request: Request) -> Response:
+    TelegramAuth.objects.filter(pk=1).delete()
+    return Response({"ok": True, "telegram": _telegram_payload()})
+
+
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def social_slides_for(request: Request) -> Response:
@@ -309,17 +602,50 @@ def social_slides_for(request: Request) -> Response:
     tipus = (request.GET.get("tipus") or "").strip()
     territori = (request.GET.get("territori") or "").strip() or "general"
     setmana = (request.GET.get("setmana") or "").strip()
+    # `platform` lets the caller scope the response to feed-only or
+    # story-only PNGs. When omitted we return both (legacy callers).
+    # The staff page passes `post.platform` so each row's "Veure
+    # slides" only shows the slides that belong to that row.
+    platform = (request.GET.get("platform") or "").strip()
     if not (tipus and setmana):
         return Response({"error": "tipus + setmana required"}, status=400)
+    want_feed = platform in ("", SocialPost.PLATFORM_INSTAGRAM_FEED)
+    want_story = platform in ("", SocialPost.PLATFORM_INSTAGRAM_STORY)
 
     base = Path(getattr(_s, "SOCIAL_CACHE_DIR", "/tmp/tq_social")) / "renders"
     if not base.exists():
         base = Path("/tmp/tq_social/renders")
 
-    feed_pattern = f"feed_{tipus}_{territori}_{setmana}_*.png"
-    story_pattern = f"story_{tipus}_{territori}_{setmana}_*.png"
-    feed_files = sorted(base.glob(feed_pattern)) if base.exists() else []
-    story_files = sorted(base.glob(story_pattern)) if base.exists() else []
+    # Try the row's stored setmana first, then fall back to the setmana
+    # the renderer would *actually* use (= ISO Monday of the TQ-week
+    # containing the publication date). This covers the case where
+    # legacy rows still carry the old buggy setmana value but the
+    # rendered files live under the canonical one.
+    candidates = {setmana}
+    try:
+        from music.dates import tq_week_start
+
+        target = publication_date_for(tipus, datetime.date.fromisoformat(setmana))
+        canonical_sat = tq_week_start(target)
+        canonical_setmana = canonical_sat - datetime.timedelta(
+            days=canonical_sat.weekday()
+        )
+        candidates.add(canonical_setmana.isoformat())
+    except (ValueError, TypeError):
+        pass
+
+    feed_files: list = []
+    story_files: list = []
+    for s in candidates:
+        if not base.exists():
+            break
+        if want_feed:
+            feed_files.extend(base.glob(f"feed_{tipus}_{territori}_{s}_*.png"))
+        if want_story:
+            story_files.extend(base.glob(f"story_{tipus}_{territori}_{s}_*.png"))
+    # De-dup + stable order.
+    feed_files = sorted(set(feed_files), key=lambda p: p.name)
+    story_files = sorted(set(story_files), key=lambda p: p.name)
 
     def _serve_url(p):
         return reverse("api:staff_social_render_serve", args=[p.name])
@@ -426,6 +752,58 @@ def social_preview(request: Request) -> Response:
 
 @api_view(["POST"])
 @permission_classes([IsStaff])
+def social_preview_all(request: Request) -> Response:
+    """Render every calendar slot of the upcoming TQ week in dry-run.
+
+    Used by the staff "Generar totes les slides" button so the
+    operator can review the design across PPCC + territoris + novetats
+    without waiting for each slot's calendar day to come round.
+
+    For each slot we call `publicar_social --dry-run --force` with
+    its own `--data` (the day that slot would naturally publish on),
+    so the command's weekday filter matches and the slot actually
+    fires. Returns concatenated stdout for the operator to inspect.
+    """
+    setmana_raw = (request.data.get("setmana") or "").strip()
+    reference: datetime.date | None = None
+    if setmana_raw:
+        try:
+            reference = datetime.date.fromisoformat(setmana_raw)
+        except ValueError:
+            return Response({"error": "setmana invàlida"}, status=400)
+    slots = upcoming_week(reference)
+    buf = io.StringIO()
+    runs: list[dict] = []
+    for slot, _territori, publish_date in slots:
+        args = [
+            "publicar_social",
+            "--dry-run",
+            "--force",
+            "--data",
+            publish_date.isoformat(),
+            "--tipus",
+            slot.tipus,
+            "--platform",
+            slot.platform,
+        ]
+        try:
+            with redirect_stdout(buf):
+                call_command(*args)
+            runs.append({"args": args, "ok": True})
+        except Exception as exc:  # noqa: BLE001
+            runs.append(
+                {
+                    "args": args,
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            buf.write(f"\n  · ERROR: {type(exc).__name__}: {exc}\n")
+    return Response({"output": buf.getvalue(), "runs": runs})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
 def social_publicar_ara(request: Request) -> Response:
     """Force-run publicar_social for the requested triple. Bypasses
     the existing-publicat short-circuit via --force.
@@ -472,11 +850,131 @@ def social_publicar_ara(request: Request) -> Response:
 
 @api_view(["POST"])
 @permission_classes([IsStaff])
+def social_reset(request: Request) -> Response:
+    """Clear a SocialPost's local state so the next `Publicar` runs
+    fresh (status → pendent, instagram_media_id + error_msg cleared,
+    metadata wiped). Does **not** touch the live IG post — for that
+    use `eliminar-instagram` first.
+
+    Used during testing when something goes wrong (e.g. wanted IG
+    handles weren't filled in) and the operator wants to retry from
+    a clean slate without spawning a duplicate IG post.
+    """
+    pk = request.data.get("pk")
+    if not pk:
+        return Response({"error": "pk required"}, status=400)
+    try:
+        post = SocialPost.objects.get(pk=int(pk))
+    except (SocialPost.DoesNotExist, ValueError):
+        return Response({"error": "post not found"}, status=404)
+    previous = {
+        "status": post.status,
+        "instagram_media_id": post.instagram_media_id,
+        "error_msg": post.error_msg,
+    }
+    post.status = SocialPost.STATUS_PENDENT
+    post.instagram_media_id = ""
+    post.error_msg = ""
+    post.metadata = {}
+    post.published_at = None
+    post.save(
+        update_fields=[
+            "status",
+            "instagram_media_id",
+            "error_msg",
+            "metadata",
+            "published_at",
+            "updated_at",
+        ]
+    )
+    return Response({"ok": True, "post": _serialize(post), "previous": previous})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_eliminar_instagram(request: Request) -> Response:
+    """Delete the live IG post via Meta's `DELETE /{media-id}` and
+    clear the local row. Destructive — removes the post from the
+    public feed. Use it when re-publishing a corrected version (so
+    the feed doesn't end up with two copies).
+    """
+    pk = request.data.get("pk")
+    if not pk:
+        return Response({"error": "pk required"}, status=400)
+    try:
+        post = SocialPost.objects.get(pk=int(pk))
+    except (SocialPost.DoesNotExist, ValueError):
+        return Response({"error": "post not found"}, status=404)
+    media_id = (post.instagram_media_id or "").strip()
+    if not media_id:
+        return Response(
+            {"error": "el post no té media_id; no hi ha res a esborrar a IG"},
+            status=400,
+        )
+    if is_dry_run():
+        deleted = False
+        msg = "DRY-RUN: no es crida l'API de Meta"
+    else:
+        # Meta accepts DELETE on the media ID for self-owned posts
+        # within the standard retention window. Failures (post
+        # already gone, permission denied, etc.) propagate so the
+        # operator sees the cause in the captured stdout.
+        import requests
+
+        from ingesta.social.instagram_client import GRAPH_BASE, _token
+
+        r = requests.delete(
+            f"{GRAPH_BASE}/{media_id}",
+            params={"access_token": _token()},
+            timeout=30,
+        )
+        deleted = r.ok
+        msg = (
+            f"DELETE /{media_id} → {r.status_code}: {r.text[:300]}"
+            if not r.ok
+            else f"DELETE /{media_id} → 200 OK"
+        )
+        if not r.ok:
+            return Response({"ok": False, "msg": msg}, status=502)
+    # Mirror the reset path: blank local state.
+    post.status = SocialPost.STATUS_PENDENT
+    post.instagram_media_id = ""
+    post.error_msg = ""
+    post.metadata = {}
+    post.published_at = None
+    post.save()
+    return Response(
+        {"ok": True, "deleted": deleted, "msg": msg, "post": _serialize(post)}
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
 def social_toggle(request: Request) -> Response:
+    """Flip a per-channel kill switch.
+
+    Accepts an optional `channel` to target a specific switch
+    (`instagram` | `mastodon` | `bluesky` | `newsletter` | `rss`).
+    Default is `instagram` for backward-compat with the old UI
+    button that didn't pass a channel.
+    """
+    field_map = {
+        "instagram": "instagram_actiu",
+        "mastodon": "mastodon_actiu",
+        "bluesky": "bluesky_actiu",
+        "telegram": "telegram_actiu",
+        "newsletter": "newsletter_actiu",
+        "rss": "rss_actiu",
+    }
+    channel = (request.data.get("channel") or "instagram").strip()
+    field = field_map.get(channel)
+    if field is None:
+        return Response({"error": f"unknown channel '{channel}'"}, status=400)
     cfg = ConfiguracioGlobal.load()
-    cfg.instagram_actiu = bool(request.data.get("actiu", not cfg.instagram_actiu))
-    cfg.save(update_fields=["instagram_actiu"])
-    return Response({"instagram_actiu": cfg.instagram_actiu})
+    new_val = bool(request.data.get("actiu", not getattr(cfg, field)))
+    setattr(cfg, field, new_val)
+    cfg.save(update_fields=[field])
+    return Response({channel + "_actiu": new_val})
 
 
 @api_view(["POST"])

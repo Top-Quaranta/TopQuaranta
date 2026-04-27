@@ -1,0 +1,28 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Top setmanal · Setmana {{ project_week }}{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;color:#facc15;margin:0 0 16px;">
+  {{ heading }}
+</h1>
+<p style="margin:0 0 24px;color:#d4d4d4;">
+  Aquesta setmana al Top de <strong>{{ territori_nom }}</strong>:
+</p>
+<ol style="padding:0 0 0 22px;margin:0 0 28px;color:#fff;">
+  {% for e in entries %}
+  <li style="margin:6px 0;">
+    <strong style="color:#facc15;">{{ e.canco_nom|default:e.nom }}</strong>
+    <span style="color:#9ca3af;"> — {{ e.artista_nom }}</span>
+  </li>
+  {% endfor %}
+</ol>
+<p style="margin:0 0 24px;">
+  <a href="https://www.topquaranta.cat/top"
+     style="display:inline-block;padding:10px 22px;background:#facc15;color:#0a0a0a;font-weight:bold;border-radius:6px;text-decoration:none;">
+    Veure el top complet
+  </a>
+</p>
+<p style="margin:32px 0 0;color:#6b7280;font-size:12px;line-height:1.5;border-top:1px solid #1f2937;padding-top:16px;">
+  Reps aquest correu perquè vas marcar l'opció "Vull rebre la newsletter setmanal" al teu compte.
+  <a href="{{ unsub_url }}" style="color:#9ca3af;">Donar-me de baixa</a>.
+</p>
+{% endblock %}

@@ -13,7 +13,7 @@
  */
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
-import { Table, Select } from '../../components/staff/StaffTable'
+import { Table, Select, Input } from '../../components/staff/StaffTable'
 
 const STATUS_TONE = {
   pendent:  'bg-yellow-100 text-yellow-900',
@@ -41,6 +41,15 @@ export default function StaffSocialPage() {
   // token (we only ever show first/last 4 chars of what's already saved).
   const [tokenDraft, setTokenDraft] = useState('')
   const [userIdDraft, setUserIdDraft] = useState('')
+  // Mastodon + Bluesky form drafts — same shape as the IG one
+  // (never pre-filled with the existing secret).
+  const [mstInstance, setMstInstance] = useState('')
+  const [mstToken, setMstToken] = useState('')
+  const [mstHandle, setMstHandle] = useState('')
+  const [bskyHandle, setBskyHandle] = useState('')
+  const [bskyPwd, setBskyPwd] = useState('')
+  const [tgToken, setTgToken] = useState('')
+  const [tgChatId, setTgChatId] = useState('')
   // pk → {feed:[…], stories:[…]} of rendered slide thumbnails. Populated
   // when the operator clicks "Veure slides" on a row.
   const [slidesByPk, setSlidesByPk] = useState({})
@@ -50,6 +59,9 @@ export default function StaffSocialPage() {
 
   if (!data) return <p className="p-6">Carregant…</p>
   const { config, results, credentials, calendari } = data
+  const mastodon = data.mastodon || { configured: false }
+  const bluesky = data.bluesky || { configured: false }
+  const telegram = data.telegram || { configured: false }
 
   const tokenTone =
     config.token_days_left == null  ? 'bg-gray-200 text-gray-700' :
@@ -79,15 +91,41 @@ export default function StaffSocialPage() {
   async function loadSlides(post) {
     setBusy(true)
     try {
+      // `platform` scopes the response so a feed row only shows
+      // feed PNGs and a story row only shows stories — without it
+      // the gallery mixed both because they share tipus/setmana.
       const params = new URLSearchParams({
         tipus: post.tipus,
         territori: post.territori || 'general',
         setmana: post.setmana,
+        platform: post.platform,
       })
       const res = await api.get(`/staff/social/slides/?${params}`)
       setSlidesByPk(prev => ({ ...prev, [post.pk]: res }))
     } catch (e) {
       alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+
+  async function previewAll() {
+    setBusy(true)
+    setOutput('▶ Generant totes les slides de la setmana (PPCC + territoris + novetats)…')
+    try {
+      const res = await api.post('/staff/social/preview-all/', {})
+      const lines = []
+      ;(res.runs || []).forEach(r => {
+        lines.push(`$ manage.py ${r.args.join(' ')}`)
+        if (!r.ok && r.error) lines.push(`⚠ ${r.error}`)
+      })
+      lines.push('')
+      lines.push(res.output || '(sense sortida)')
+      setOutput(lines.join('\n'))
+      await reload()
+      requestAnimationFrame(() => {
+        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    } catch (e) {
+      setOutput(`✖ Error: ${e.payload?.error || e.message || e}\n\n${e.payload?.output || ''}`)
     } finally { setBusy(false) }
   }
 
@@ -151,6 +189,163 @@ export default function StaffSocialPage() {
     try {
       await api.post('/staff/social/credentials/clear/')
       await reload()
+    } finally { setBusy(false) }
+  }
+
+  // ── Mastodon ──────────────────────────────────────────────────
+  async function saveMastodon() {
+    if (!mstInstance.trim() || !mstToken.trim()) {
+      alert('Cal instance_url + access_token.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.post('/staff/social/mastodon/', {
+        instance_url: mstInstance.trim(),
+        access_token: mstToken.trim(),
+        handle: mstHandle.trim(),
+      })
+      setMstInstance(''); setMstToken(''); setMstHandle('')
+      await reload()
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+  async function testMastodon() {
+    setBusy(true); setOutput('')
+    try {
+      const res = await api.post('/staff/social/mastodon/test/')
+      setOutput(JSON.stringify(res, null, 2))
+    } catch (e) {
+      setOutput(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+  async function clearMastodon() {
+    if (!confirm('Esborrar credencials Mastodon? El cron passarà a mode DRY-RUN per a aquest canal.')) return
+    setBusy(true)
+    try {
+      await api.post('/staff/social/mastodon/clear/')
+      await reload()
+    } finally { setBusy(false) }
+  }
+
+  // ── Bluesky ───────────────────────────────────────────────────
+  async function saveBluesky() {
+    if (!bskyHandle.trim() || !bskyPwd.trim()) {
+      alert('Cal handle + app_password.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.post('/staff/social/bluesky/', {
+        handle: bskyHandle.trim(),
+        app_password: bskyPwd.trim(),
+      })
+      setBskyHandle(''); setBskyPwd('')
+      await reload()
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+  async function testBluesky() {
+    setBusy(true); setOutput('')
+    try {
+      const res = await api.post('/staff/social/bluesky/test/')
+      setOutput(JSON.stringify(res, null, 2))
+    } catch (e) {
+      setOutput(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+  async function clearBluesky() {
+    if (!confirm('Esborrar credencials Bluesky? El cron passarà a mode DRY-RUN per a aquest canal.')) return
+    setBusy(true)
+    try {
+      await api.post('/staff/social/bluesky/clear/')
+      await reload()
+    } finally { setBusy(false) }
+  }
+
+  // ── Telegram ──────────────────────────────────────────────────
+  async function saveTelegram() {
+    if (!tgToken.trim() || !tgChatId.trim()) {
+      alert('Cal bot_token + chat_id.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.post('/staff/social/telegram/', {
+        bot_token: tgToken.trim(),
+        chat_id: tgChatId.trim(),
+      })
+      setTgToken(''); setTgChatId('')
+      await reload()
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+  async function testTelegram() {
+    setBusy(true); setOutput('')
+    try {
+      const res = await api.post('/staff/social/telegram/test/')
+      setOutput(JSON.stringify(res, null, 2))
+    } catch (e) {
+      setOutput(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+  async function clearTelegram() {
+    if (!confirm('Esborrar credencials Telegram? El cron passarà a mode DRY-RUN per a aquest canal.')) return
+    setBusy(true)
+    try {
+      await api.post('/staff/social/telegram/clear/')
+      await reload()
+    } finally { setBusy(false) }
+  }
+
+  // ── Channel toggles (mastodon / bluesky / telegram / newsletter / rss) ──
+  async function toggleChannel(channel) {
+    setBusy(true)
+    try {
+      await api.post('/staff/social/toggle/', { channel })
+      await reload()
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+
+  async function resetPost(post) {
+    if (!confirm(
+      `Reset estat: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'}?\n\n` +
+      `Marca la fila com "pendent" i esborra el media_id local. ` +
+      `NO toca la publicació a Instagram. Útil per a reintentar el procés des de zero.`
+    )) return
+    setBusy(true); setOutput('▶ Reset estat…')
+    try {
+      const res = await api.post('/staff/social/reset/', { pk: post.pk })
+      setOutput(`✓ Reset: status era ${res.previous?.status}, media_id era "${res.previous?.instagram_media_id || '(buit)'}"`)
+      await reload()
+    } catch (e) {
+      setOutput(`✖ Error: ${e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+
+  async function eliminarIG(post) {
+    if (!post.instagram_media_id) {
+      alert('Aquest post no té media_id (mai no s\'ha publicat a IG, o ja s\'ha resetejat).')
+      return
+    }
+    if (!confirm(
+      `ESBORRAR DE INSTAGRAM: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'}\n` +
+      `media_id: ${post.instagram_media_id}\n\n` +
+      `Això elimina la publicació del feed de @topquaranta i deixa la fila lista per re-publicar. ` +
+      `És DESTRUCTIU. Confirmes?`
+    )) return
+    setBusy(true); setOutput('▶ Esborrant publicació de IG…')
+    try {
+      const res = await api.post('/staff/social/eliminar-instagram/', { pk: post.pk })
+      setOutput(`${res.ok ? '✓' : '✖'} ${res.msg || ''}`)
+      await reload()
+    } catch (e) {
+      setOutput(`✖ Error: ${e.payload?.error || e.message}\n\n${e.payload?.msg || ''}`)
     } finally { setBusy(false) }
   }
 
@@ -365,6 +560,186 @@ export default function StaffSocialPage() {
         </p>
       </div>
 
+      {/* ── Canals addicionals ────────────────────────────────── */}
+      <section>
+        <h2 className="text-base font-bold font-display mb-2">
+          Canals addicionals
+        </h2>
+        <p className="text-xs text-tq-ink/60 mb-3">
+          Mateix payload setmanal que Instagram, distribuït a 4 canals més.
+          Cada canal té el seu kill switch independent. Activa'ls quan
+          tinguis les credencials posades; sense credencials el cron salta
+          aquell canal en silenci.
+        </p>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+          {[
+            { key: 'instagram', label: 'Instagram', val: config.instagram_actiu },
+            { key: 'mastodon',  label: 'Mastodon',  val: config.mastodon_actiu },
+            { key: 'bluesky',   label: 'Bluesky',   val: config.bluesky_actiu },
+            { key: 'telegram',  label: 'Telegram',  val: config.telegram_actiu },
+            { key: 'newsletter',label: 'Newsletter',val: config.newsletter_actiu },
+            { key: 'rss',       label: 'RSS',       val: config.rss_actiu },
+          ].map(c => (
+            <div key={c.key} className="p-3 border rounded-md flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-tq-ink/60">{c.label}</p>
+                <p className="text-sm mt-1">{c.val ? 'Actiu' : 'Pausat'}</p>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => toggleChannel(c.key)}
+                className={
+                  'px-3 py-1 rounded text-xs font-semibold ' +
+                  (c.val
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-red-600 text-white hover:bg-red-700')
+                }
+              >
+                {c.val ? 'Pausar' : 'Activar'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Mastodon credentials */}
+        <div className="p-3 border rounded-md mb-3">
+          <h3 className="text-sm font-semibold mb-1">Credencials Mastodon</h3>
+          {mastodon.configured ? (
+            <p className="text-xs">
+              <strong>{mastodon.handle || '(handle no establert)'}</strong>
+              {' '}@ <code>{mastodon.instance_url}</code>
+              {' '} · token <code>{mastodon.token_masked}</code>
+              {mastodon.updated_by && <> · per <strong>{mastodon.updated_by}</strong></>}
+              <button type="button" onClick={testMastodon} disabled={busy}
+                className="ml-2 px-2 py-1 text-[11px] rounded bg-gray-100 hover:bg-gray-200">
+                Provar
+              </button>
+              <button type="button" onClick={clearMastodon} disabled={busy}
+                className="ml-1 px-2 py-1 text-[11px] rounded bg-red-100 text-red-800 hover:bg-red-200">
+                Esborrar
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs text-tq-ink/60">
+              Sense credencials. Crea una "App" a la teva instància (Settings → Development →
+              New Application, scopes: <code>write:media write:statuses</code>) i enganxa el token.
+            </p>
+          )}
+          <details className="mt-2">
+            <summary className="text-[11px] cursor-pointer">
+              {mastodon.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
+            </summary>
+            <div className="grid sm:grid-cols-3 gap-2 mt-2">
+              <Input placeholder="https://mastodont.cat" value={mstInstance}
+                     onChange={e => setMstInstance(e.target.value)} />
+              <Input placeholder="access_token" value={mstToken}
+                     onChange={e => setMstToken(e.target.value)} type="password" />
+              <Input placeholder="handle (opcional)" value={mstHandle}
+                     onChange={e => setMstHandle(e.target.value)} />
+            </div>
+            <button type="button" onClick={saveMastodon} disabled={busy || !mstInstance || !mstToken}
+              className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50">
+              Desar
+            </button>
+          </details>
+        </div>
+
+        {/* Bluesky credentials */}
+        <div className="p-3 border rounded-md mb-3">
+          <h3 className="text-sm font-semibold mb-1">Credencials Bluesky</h3>
+          {bluesky.configured ? (
+            <p className="text-xs">
+              <strong>@{bluesky.handle}</strong>
+              {' '} · contrasenya <code>{bluesky.password_masked}</code>
+              {bluesky.did && <> · DID <code className="text-[10px]">{bluesky.did}</code></>}
+              {bluesky.updated_by && <> · per <strong>{bluesky.updated_by}</strong></>}
+              <button type="button" onClick={testBluesky} disabled={busy}
+                className="ml-2 px-2 py-1 text-[11px] rounded bg-gray-100 hover:bg-gray-200">
+                Provar
+              </button>
+              <button type="button" onClick={clearBluesky} disabled={busy}
+                className="ml-1 px-2 py-1 text-[11px] rounded bg-red-100 text-red-800 hover:bg-red-200">
+                Esborrar
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs text-tq-ink/60">
+              Sense credencials. Crea una <strong>App Password</strong> a {' '}
+              <a className="underline" href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener">
+                bsky.app/settings/app-passwords
+              </a> {' '} (NO la contrasenya del compte).
+            </p>
+          )}
+          <details className="mt-2">
+            <summary className="text-[11px] cursor-pointer">
+              {bluesky.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
+            </summary>
+            <div className="grid sm:grid-cols-2 gap-2 mt-2">
+              <Input placeholder="topquaranta.bsky.social" value={bskyHandle}
+                     onChange={e => setBskyHandle(e.target.value)} />
+              <Input placeholder="app password" value={bskyPwd}
+                     onChange={e => setBskyPwd(e.target.value)} type="password" />
+            </div>
+            <button type="button" onClick={saveBluesky} disabled={busy || !bskyHandle || !bskyPwd}
+              className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50">
+              Desar
+            </button>
+          </details>
+        </div>
+
+        {/* Telegram credentials */}
+        <div className="p-3 border rounded-md mb-3">
+          <h3 className="text-sm font-semibold mb-1">Credencials Telegram</h3>
+          {telegram.configured ? (
+            <p className="text-xs">
+              <strong>{telegram.bot_username ? `@${telegram.bot_username}` : '(bot)'}</strong>
+              {' '}→ canal <code>{telegram.chat_id}</code>
+              {' '} · token <code>{telegram.token_masked}</code>
+              {telegram.updated_by && <> · per <strong>{telegram.updated_by}</strong></>}
+              <button type="button" onClick={testTelegram} disabled={busy}
+                className="ml-2 px-2 py-1 text-[11px] rounded bg-gray-100 hover:bg-gray-200">
+                Provar
+              </button>
+              <button type="button" onClick={clearTelegram} disabled={busy}
+                className="ml-1 px-2 py-1 text-[11px] rounded bg-red-100 text-red-800 hover:bg-red-200">
+                Esborrar
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs text-tq-ink/60">
+              Sense credencials. Parla amb {' '}
+              <a className="underline" href="https://t.me/BotFather" target="_blank" rel="noopener">
+                @BotFather
+              </a>
+              {' '}, fes <code>/newbot</code>, copia el token. Després afegeix el bot al teu canal com a admin amb permís de <em>Post messages</em> i fica el handle (<code>@topquaranta</code>) com a chat_id.
+            </p>
+          )}
+          <details className="mt-2">
+            <summary className="text-[11px] cursor-pointer">
+              {telegram.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
+            </summary>
+            <div className="grid sm:grid-cols-2 gap-2 mt-2">
+              <Input placeholder="bot_token (de @BotFather)" value={tgToken}
+                     onChange={e => setTgToken(e.target.value)} type="password" />
+              <Input placeholder="@canal o ID numèric" value={tgChatId}
+                     onChange={e => setTgChatId(e.target.value)} />
+            </div>
+            <button type="button" onClick={saveTelegram} disabled={busy || !tgToken || !tgChatId}
+              className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50">
+              Desar
+            </button>
+          </details>
+        </div>
+
+        <p className="text-[11px] text-tq-ink/60">
+          La <strong>newsletter</strong> usa l'SMTP configurat a <code>EMAIL_HOST</code>;
+          envia automàticament cada dissabte als usuaris amb <code>vol_newsletter=True</code>.
+          L'<strong>RSS</strong> es serveix a <code>/rss/top.xml</code> + <code>/rss/novetats.xml</code> sense altres credencials.
+        </p>
+      </section>
+
       {/* ── Calendari de la setmana ───────────────────────────── */}
       <section>
         <h2 className="text-base font-bold font-display mb-2">
@@ -375,6 +750,20 @@ export default function StaffSocialPage() {
           inclou aquell slot. La rotació territorial està resolta — així
           ja saps quin top toca abans de prémer res.
         </p>
+        <div className="mb-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={previewAll}
+            className="px-3 py-1.5 rounded bg-tq-ink text-tq-yellow text-xs font-bold hover:bg-tq-ink/90 disabled:opacity-50"
+          >
+            Generar totes les slides de la setmana (dry-run)
+          </button>
+          <span className="text-[11px] text-tq-ink/60 ml-2">
+            Renderitza tots els slots (PPCC + territoris + novetats) sense publicar.
+            Després pots veure'ls amb "Veure slides" a la taula de baix.
+          </span>
+        </div>
         <div className="overflow-x-auto">
           <table className="text-xs min-w-[560px] w-full border-collapse">
             <thead>
@@ -393,10 +782,10 @@ export default function StaffSocialPage() {
                 return (
                   <tr key={`${s.platform}-${s.tipus}-${s.weekday}`}
                       className={inFase ? '' : 'opacity-60'}>
-                    <td className="py-1 pr-3">
+                    <td className="py-1 pr-3" title={s.publication_date}>
                       <strong>{s.weekday_name}</strong>{' '}
                       <span className="text-tq-ink/60">
-                        {s.publication_date.slice(5)}
+                        · setm. {s.project_week}
                       </span>
                     </td>
                     <td className="py-1 pr-3">{s.platform.replace('instagram_', '')}</td>
@@ -454,7 +843,7 @@ export default function StaffSocialPage() {
       <Table>
         <thead>
           <tr>
-            <th className="text-left">Setmana del</th>
+            <th className="text-left">Setmana</th>
             <th className="text-left">Plataforma</th>
             <th className="text-left">Tipus</th>
             <th className="text-left">Territori</th>
@@ -464,13 +853,22 @@ export default function StaffSocialPage() {
           </tr>
         </thead>
         <tbody>
-          {results.flatMap(p => [
-            <tr key={p.pk}>
-              {/* publication_date is the calendar date the slot
-                  publishes on (Saturday for top global, Wednesday
-                  for territorial, etc.) — way more meaningful than
-                  the internal Monday-of-ISO-week. */}
-              <td>{p.publication_date}</td>
+          {results.flatMap((p, idx) => {
+            // Alternate row banding by *project week* so the
+            // estat column never visually merges with a neighbour
+            // row from a different week. Pairs of (post-row,
+            // slides-row) share the same band.
+            const rowBg = (p.project_week % 2 === 0)
+              ? 'bg-white'
+              : 'bg-tq-yellow/5'
+            return [
+            <tr key={p.pk} className={`${rowBg} align-top border-t border-tq-ink/10`}>
+              <td className="font-semibold whitespace-nowrap" title={`Publicació: ${p.publication_date}`}>
+                Setmana {p.project_week}
+                <div className="text-[10px] text-tq-ink/50 font-normal">
+                  {p.publication_date}
+                </div>
+              </td>
               <td className="text-xs">{p.platform.replace('instagram_', '')}</td>
               <td className="text-xs">{p.tipus}</td>
               <td>{p.territori_label}</td>
@@ -512,17 +910,38 @@ export default function StaffSocialPage() {
                   >
                     Publicar
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => resetPost(p)}
+                    disabled={busy}
+                    title="Marca la fila com a pendent. No toca IG. Útil per reintentar."
+                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                  >
+                    Reset
+                  </button>
+                  {p.instagram_media_id && (
+                    <button
+                      type="button"
+                      onClick={() => eliminarIG(p)}
+                      disabled={busy}
+                      title="Esborra la publicació del feed d'Instagram + reset local"
+                      className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 hover:bg-red-200"
+                    >
+                      Esborrar IG
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>,
             slidesByPk[p.pk] ? (
-              <tr key={`${p.pk}-slides`}>
-                <td colSpan={7} className="bg-gray-50 p-3">
+              <tr key={`${p.pk}-slides`} className={rowBg}>
+                <td colSpan={7} className="p-3 border-b border-tq-ink/10">
                   <SlidesGallery slides={slidesByPk[p.pk]} />
                 </td>
               </tr>
             ) : null,
-          ]).filter(Boolean)}
+          ]
+          }).filter(Boolean)}
         </tbody>
       </Table>
 

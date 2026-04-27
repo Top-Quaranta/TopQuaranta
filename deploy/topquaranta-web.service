@@ -7,11 +7,18 @@ User=topquaranta
 Group=topquaranta
 WorkingDirectory=/home/topquaranta/app
 EnvironmentFile=/home/topquaranta/app/.env
-ExecStart=/home/topquaranta/app/.venv/bin/gunicorn topquaranta.wsgi:application --bind 127.0.0.1:8083 --workers 2 --timeout 120 --env DJANGO_SETTINGS_MODULE=topquaranta.settings.web_server
-# SIGHUP → gunicorn master reloads worker pool gracefully without
-# dropping the listening socket. Use `systemctl reload topquaranta-web`
-# instead of `restart` for code deploys so in-flight requests don't
-# see a 502 during the ~1-2 s worker boot gap.
+ExecStart=/home/topquaranta/app/.venv/bin/gunicorn topquaranta.wsgi:application --bind 127.0.0.1:8083 --workers 2 --timeout 120 --reload --env DJANGO_SETTINGS_MODULE=topquaranta.settings.web_server
+# `--reload` makes gunicorn watch every imported `.py` and
+# gracefully restart any worker whose source changed since boot.
+# Cost: a few stat() calls per request, negligible at our traffic.
+# Benefit: edits to renderer / payload / API code are picked up
+# automatically, no manual `systemctl reload` needed between
+# iterations. (Silent stale-code bug bit us 2026-04-27 on the social
+# renderer — gunicorn workers kept the previous `_feed_portada`
+# while the file on disk had already been updated.)
+#
+# SIGHUP still works as an explicit graceful reload — the deploy
+# script + the staff "Deploy" hook both fire it.
 ExecReload=/bin/kill -HUP $MAINPID
 KillSignal=SIGTERM
 Restart=always

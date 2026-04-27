@@ -204,6 +204,16 @@ def cancons_list(request: Request) -> Response:
         qs = qs.filter(whisper_processat_at__isnull=True).filter(
             Q(preview_url="") | Q(preview_url__isnull=True)
         )
+    # Recent-release shortcut: "últims 7 dies" + "últims 30 dies".
+    # Driven by the staff cançons page so the operator can spot
+    # newly released tracks without typing dates manually.
+    recent = (request.GET.get("recent") or "").strip()
+    if recent in ("7", "30", "90"):
+        import datetime
+
+        cutoff = datetime.date.today() - datetime.timedelta(days=int(recent))
+        qs = qs.filter(data_llancament__gte=cutoff)
+
     cerca = (request.GET.get("q") or "").strip()
     if cerca:
         qs = qs.annotate(

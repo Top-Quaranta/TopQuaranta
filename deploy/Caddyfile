@@ -41,12 +41,33 @@ www.topquaranta.cat {
 		file_server
 	}
 
+	# Social PNGs that Meta's media-fetcher downloads. Served as
+	# pure static files (no Django, no CSP/COOP/Vary headers) — the
+	# `instagram_content_publish` fetcher rejected the Django view
+	# response with code 9004 ("Only photo or video can be accepted
+	# as media type"). Pair with `SOCIAL_PUBLIC_BASE` =
+	# "https://www.topquaranta.cat/static/social" in settings.
+	handle_path /static/social/* {
+		root * /var/cache/topquaranta/social/renders
+		file_server
+		header Cache-Control "public, max-age=86400"
+	}
+
+	# Brand assets (BIMI SVG, etc.). Same simple-file-server pattern.
+	handle_path /static/brand/* {
+		root * /var/www/brand
+		file_server
+		header Cache-Control "public, max-age=86400"
+		header Content-Type "image/svg+xml"
+	}
+
 	# ── Django passthrough: only explicit paths still served by the
 	# old HTML backend. Everything else falls through to the SPA. ──
 	@django {
 		path /api/*
 		path /sitemap.xml
 		path /robots.txt
+		path /rss/*
 		path /compte/2fa/*
 		path /compte/activar/*
 		path /compte/nova-clau/*
@@ -111,4 +132,32 @@ www.topquaranta.cat {
 			roll_keep 5
 		}
 	}
+}
+
+# ── Stalwart Mail Server ──
+# Reverse-proxy to Stalwart's HTTP admin (bound to localhost:8080).
+# IMAP/SMTP traffic does NOT pass through Caddy — those listeners are
+# in Stalwart directly on ports 993/465/25/587.
+mail.topquaranta.cat {
+	# Mozilla Thunderbird autoconfig "well-known" lookup. Lookup
+	# order is: ISPDB → autoconfig.<domain> → <domain>/.well-known/
+	# autoconfig/... → MX-derived guess. We publish here AND on
+	# the dedicated `autoconfig.<domain>` site below to cover both.
+	handle /.well-known/autoconfig/mail/config-v1.1.xml {
+		root * /var/www/autoconfig/.well-known/autoconfig/mail
+		rewrite * /config-v1.1.xml
+		file_server
+		header Content-Type "application/xml; charset=utf-8"
+	}
+	reverse_proxy localhost:8080
+}
+
+# Subdomain that Thunderbird probes first (`autoconfig.<domain>/mail/
+# config-v1.1.xml`). Caddy will auto-issue a Let's Encrypt cert as
+# soon as the A record at CDMON points here. Pair with:
+#     A autoconfig → 188.245.60.20
+autoconfig.topquaranta.cat {
+	root * /var/www/autoconfig
+	file_server
+	header Content-Type "application/xml; charset=utf-8"
 }

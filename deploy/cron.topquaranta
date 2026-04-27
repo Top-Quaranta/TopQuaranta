@@ -116,3 +116,39 @@ PATH=/usr/local/bin:/usr/bin:/bin
 0 10 * * 2  topquaranta  /home/topquaranta/bin/tq-run publicar_social >> /var/log/topquaranta/social.log 2>&1
 # Monthly token refresh (1st of month, 03:00 UTC).
 0 3 1 * *   topquaranta  /home/topquaranta/bin/tq-run renovar_token_instagram >> /var/log/topquaranta/social.log 2>&1
+
+# ─────────────────────────────────────────────────────────────────────
+# Sprint I bis: multi-channel distribution (Mastodon, Bluesky, Newsletter)
+# ─────────────────────────────────────────────────────────────────────
+# Each channel has its own kill switch in ConfiguracioGlobal. The
+# cron entries fire unconditionally; the command short-circuits when
+# the relevant switch is off. Times are offset 5-30 min after the
+# Instagram cron so the IG post lands first (visibility) and the
+# other channels echo it shortly after.
+
+# Mastodon — same calendar as Instagram, +10 min after each slot.
+40 9 * * 6  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel mastodon >> /var/log/topquaranta/social.log 2>&1
+40 9 * * 3  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel mastodon >> /var/log/topquaranta/social.log 2>&1
+40 9 * * 1  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel mastodon >> /var/log/topquaranta/social.log 2>&1
+10 10 * * 5 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel mastodon >> /var/log/topquaranta/social.log 2>&1
+10 10 * * 2 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel mastodon >> /var/log/topquaranta/social.log 2>&1
+
+# Bluesky — same calendar, +20 min.
+50 9 * * 6  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel bluesky >> /var/log/topquaranta/social.log 2>&1
+50 9 * * 3  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel bluesky >> /var/log/topquaranta/social.log 2>&1
+50 9 * * 1  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel bluesky >> /var/log/topquaranta/social.log 2>&1
+20 10 * * 5 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel bluesky >> /var/log/topquaranta/social.log 2>&1
+20 10 * * 2 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel bluesky >> /var/log/topquaranta/social.log 2>&1
+
+# Telegram — same calendar, +25 min. Sends the full carousel
+# (Telegram supports up to 10 photos per media group).
+55 9 * * 6  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
+55 9 * * 3  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
+55 9 * * 1  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
+25 10 * * 5 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
+25 10 * * 2 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
+
+# Newsletter — only the Saturday top global goes by email (spamming
+# subscribers with 5 emails a week is a fast unsub trigger). +30 min
+# after the IG post.
+0 10 * * 6  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel newsletter --tipus top_ppcc >> /var/log/topquaranta/social.log 2>&1

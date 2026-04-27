@@ -24,9 +24,9 @@ from io import BytesIO
 from pathlib import Path
 
 from django.conf import settings
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
-from . import colors, fonts
+from . import colors, fonts, svg_assets
 from .cover_cache import fetch as fetch_cover
 
 logger = logging.getLogger(__name__)
@@ -116,9 +116,36 @@ def _cover(url: str | None, size: int, *, fallback_letter: str = "?") -> Image.I
     return img.resize((size, size), Image.LANCZOS)
 
 
-def _logo_block(draw: ImageDraw.ImageDraw, x: int, y: int, *, size: int = 36) -> int:
-    """Renders 'Top' (yellow) + 'Quaranta' (white). Returns the x of
-    the right edge so callers can lay things out next to it."""
+def _logo_block(
+    img_or_draw,
+    x: int,
+    y: int,
+    *,
+    size: int = 36,
+    width: int | None = None,
+) -> int:
+    """Paste the rectangular brand logo SVG. `size` is the *height*
+    (kept as the legacy parameter name); width auto-scales from the
+    logo's 4.93:1 aspect. Pass an explicit `width` to override.
+
+    Accepts either a PIL.Image (preferred — needed to alpha-blit the
+    SVG) or, for legacy callers, an ImageDraw object — in which case
+    we fall back to the old text composition. Returns the x of the
+    right edge so callers can lay things out next to it.
+    """
+    if width is None:
+        width = int(round(size * svg_assets.LOGO_ASPECT))
+    if isinstance(img_or_draw, Image.Image):
+        logo = svg_assets.logo_image(width)
+        if logo is not None:
+            img_or_draw.paste(logo, (x, y), logo)
+            return x + logo.size[0]
+        # SVG missing → fall through to text fallback below
+        draw = ImageDraw.Draw(img_or_draw)
+    else:
+        draw = img_or_draw
+
+    # Text fallback (kept for safety if cairosvg/asset is unavailable).
     f = fonts.display_bold(size)
     draw.text((x, y), "Top", font=f, fill=colors.COLOR_YELLOW)
     w_top = draw.textlength("Top", font=f)
@@ -131,6 +158,85 @@ def _footer(draw: ImageDraw.ImageDraw, w: int, h: int):
     text = "topquaranta.cat"
     tw = draw.textlength(text, font=f)
     draw.text(((w - tw) // 2, h - 40), text, font=f, fill=colors.COLOR_TEXT_SUBTLE)
+
+
+def _measure_pill(
+    *,
+    text: str,
+    font,
+    pad_x: int = 22,
+    pad_y: int = 12,
+    icon_codi: str | None = None,
+    icon_size: int = 36,
+) -> tuple[int, int]:
+    """Pill size without painting — useful when the caller needs to
+    right-align or center the pill before drawing it.
+
+    Returns (width, height). Mirrors `_pill`'s sizing exactly so a
+    measure-then-paint flow lands at the same dimensions.
+    """
+    # We need a Draw to measure text; a 1×1 image is enough.
+    d = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    tw = int(d.textlength(text, font=font)) if text else 0
+    icon_w = icon_size if icon_codi else 0
+    icon_gap = 10 if icon_codi else 0
+    inner_w = icon_w + icon_gap + tw
+    inner_h = max(icon_size if icon_codi else 0, _font_height(font))
+    return inner_w + pad_x * 2, inner_h + pad_y * 2
+
+
+def _pill(
+    img: Image.Image,
+    *,
+    x: int,
+    y: int,
+    text: str,
+    font,
+    fill: str,
+    text_fill: str = "#ffffff",
+    pad_x: int = 22,
+    pad_y: int = 12,
+    radius: int = 22,
+    icon_codi: str | None = None,
+    icon_size: int = 36,
+    icon_fill: str | None = None,
+) -> tuple[int, int]:
+    """Draw a rounded-rect pill with optional leading territory icon
+    + text. Returns the pill's outer (width, height). The pill is
+    pasted onto `img`; we use a one-off ImageDraw.
+
+    Used everywhere we need readable text on top of a photo (covers)
+    or to add a coloured tag (territory chip on slides)."""
+    d = ImageDraw.Draw(img)
+    tw = int(d.textlength(text, font=font)) if text else 0
+    icon = None
+    if icon_codi:
+        icon = svg_assets.territory_icon(icon_codi, icon_size, icon_fill or text_fill)
+    icon_gap = 10 if icon is not None else 0
+    icon_w = icon.size[0] if icon is not None else 0
+    inner_w = icon_w + icon_gap + tw
+    inner_h = max(icon.size[1] if icon is not None else 0, _font_height(font))
+    pill_w = inner_w + pad_x * 2
+    pill_h = inner_h + pad_y * 2
+    d.rounded_rectangle((x, y, x + pill_w, y + pill_h), radius=radius, fill=fill)
+    cur_x = x + pad_x
+    if icon is not None:
+        icon_y = y + (pill_h - icon.size[1]) // 2
+        img.paste(icon, (cur_x, icon_y), icon)
+        cur_x += icon_w + icon_gap
+    if text:
+        # Vertical centring is approximate (PIL's textlength has no
+        # bbox), so we drop a small fixed offset that looks right
+        # across the fonts we ship.
+        text_y = y + pad_y - 2
+        d.text((cur_x, text_y), text, font=font, fill=text_fill)
+    return pill_w, pill_h
+
+
+def _font_height(font) -> int:
+    """Best-effort font height for vertical pill sizing."""
+    bbox = font.getbbox("Hg") if hasattr(font, "getbbox") else (0, 0, 0, 32)
+    return max(bbox[3] - bbox[1], 24)
 
 
 def _trend_glyph(
@@ -170,144 +276,224 @@ def _feed_canvas() -> Image.Image:
     return Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
 
 
-def _feed_cover_with_overlay(url: str | None) -> Image.Image:
-    """4:5 background using the artist cover, blurred + dark overlay."""
+def _feed_cover_full(url: str | None) -> Image.Image:
+    """Full-bleed 1080×1350 cover via `ImageOps.fit` — preserves
+    proportions, centre-crops the overflow, no overlay or colour
+    cast on top.
+    """
     if url:
         img = fetch_cover(url)
         if img is not None:
-            img = img.resize((FEED_W, FEED_W), Image.LANCZOS)
-            img = img.filter(ImageFilter.GaussianBlur(8))
-            # Crop centre to fit 1350 height by stretching vertically
-            img = img.resize((FEED_W, FEED_H), Image.LANCZOS)
-            overlay = Image.new("RGB", img.size, colors.COLOR_BG)
-            return Image.blend(img, overlay, 0.6)
-    # Fallback: solid ink
+            return ImageOps.fit(
+                img.convert("RGB"),
+                (FEED_W, FEED_H),
+                method=Image.LANCZOS,
+            )
     return _feed_canvas()
 
 
 def _feed_portada(territori: str, setmana, hero_cover_url: str | None) -> Image.Image:
-    """Cover slide for the feed carousel."""
-    if territori and territori != "PPCC" and hero_cover_url:
-        img = _feed_cover_with_overlay(hero_cover_url)
+    """Cover slide — legacy layout, modern palette.
+
+    Layout (same for territorial + PPCC):
+      • full-bleed cover (scale-to-cover, no black bands)
+      • territory pill top-right (icon + name, white on territory colour)
+      • brand-logo pill mid-bottom (~75% wide), filled with the
+        territory colour; logo recoloured to whichever of white/ink
+        contrasts best with that fill
+      • small "Setmana N" pill bottom-left
+    No URL pill — keeps the cover as visible as the legacy did.
+    """
+    from .captions import TERRITORI_NOM, _setmana_label
+
+    accent = colors.terr_color(territori)
+    is_ppcc = (territori or "") == "PPCC"
+
+    # ── Background ───────────────────────────────────────────────
+    # Territorial covers use the album cover of song #1; PPCC/Global
+    # covers are solid ink — the brand-tri-colour logo (yellow + red
+    # + blue) reads at maximum contrast on `tq-ink`, which is also
+    # the SPA's body background. The PPCC accent (green) stays on
+    # the rest of the global surfaces (stories, list squares).
+    if is_ppcc:
+        img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
     else:
-        img = _feed_canvas()
+        img = _feed_cover_full(hero_cover_url)
     d = ImageDraw.Draw(img)
 
-    # Logo top-left
-    _logo_block(d, 60, 60, size=44)
-
-    # Territori pill top-right (only for non-PPCC)
-    if territori and territori != "PPCC":
-        from .captions import TERRITORI_NOM
-
-        text = TERRITORI_NOM.get(territori, territori)
-        f = fonts.sans_bold(28)
-        tw = d.textlength(text, font=f)
-        pad_x, pad_y = 22, 12
-        x1, y1 = FEED_W - 60 - tw - pad_x * 2, 60
-        d.rounded_rectangle(
-            (x1, y1, x1 + tw + pad_x * 2, y1 + 28 + pad_y * 2),
-            radius=18,
-            fill=colors.COLOR_CARD,
+    # ── Territory pill, top-right (territorial only) ─────────────
+    # PPCC has no chip — the green background already says "Global".
+    nom = TERRITORI_NOM.get(territori, territori or "")
+    if not is_ppcc:
+        f_nom = fonts.sans_bold(34)
+        chip_w, _ = _measure_pill(
+            text=nom,
+            font=f_nom,
+            pad_x=20,
+            pad_y=12,
+            icon_codi=territori or "PPCC",
+            icon_size=40,
         )
-        d.text((x1 + pad_x, y1 + pad_y - 4), text, font=f, fill=colors.COLOR_WHITE)
+        _pill(
+            img,
+            x=int(FEED_W - 30 - chip_w),
+            y=30,
+            text=nom,
+            font=f_nom,
+            fill=accent,
+            text_fill=colors.COLOR_WHITE,
+            pad_x=20,
+            pad_y=12,
+            radius=12,  # mm-design `--mm-radius-lg`
+            icon_codi=territori or "PPCC",
+            icon_size=40,
+            icon_fill=colors.COLOR_WHITE,
+        )
 
-    # Centred TOP / TOP 40 number
-    if territori == "PPCC":
-        big = "TOP 40"
-        f = fonts.display_bold(180)
-        tw = d.textlength(big, font=f)
-        d.text(
-            ((FEED_W - tw) // 2, FEED_H // 2 - 120),
-            big,
-            font=f,
-            fill=colors.COLOR_YELLOW,
-        )
-        sub = "Global"
-        f2 = fonts.display_regular(60)
-        tw2 = d.textlength(sub, font=f2)
-        d.text(
-            ((FEED_W - tw2) // 2, FEED_H // 2 + 60),
-            sub,
-            font=f2,
-            fill=colors.COLOR_WHITE,
-        )
+    # ── Logo block, lower band ───────────────────────────────────
+    # Width = 70% of canvas (756). Y shifted up 5% of canvas height
+    # (≈68px) from the legacy 75% mark. Logo and Setmana pill 20%
+    # larger than the earlier spec — logo h 106. Left-aligned to
+    # match the Setmana text below. Container radius
+    # `--mm-radius-lg` (12px).
+    #
+    # On territorial covers the logo sits inside an accent-coloured
+    # pill so it stays legible over the photo. On PPCC the
+    # background is already solid accent, so we drop the pill and
+    # render the original tri-colour logo directly — the brand
+    # marks (yellow/red/blue) pop on green.
+    pill_w = int(FEED_W * 0.70)  # 756
+    pill_x = 30
+    pill_y = 944  # 1012 − 5% × 1350 ≈ 68
+    logo_h = 106  # 88 × 1.20
+    logo_w = int(round(logo_h * svg_assets.LOGO_ASPECT))
+    pill_h = logo_h + 28  # 14px breathing each side
+    if is_ppcc:
+        # Original three-colour logo on the solid accent background —
+        # no pill, but kept at the same x/y/size as the territorial
+        # variant so the layout feels identical.
+        logo = svg_assets.logo_image(logo_w)
     else:
-        from .captions import TERRITORI_NOM
+        d.rounded_rectangle(
+            (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
+            radius=12,
+            fill=accent,
+        )
+        logo = svg_assets.logo_image_mono(logo_w, colors.COLOR_WHITE)
+    if logo is not None:
+        img.paste(
+            logo,
+            (
+                pill_x + 20,  # left-aligned
+                pill_y + (pill_h - logo.size[1]) // 2,  # vertical centre
+            ),
+            logo,
+        )
 
-        nom = TERRITORI_NOM.get(territori, territori)
-        f = fonts.display_bold(110)
-        tw = d.textlength(nom, font=f)
-        if tw > FEED_W - 120:
-            f = fonts.display_bold(80)
-            tw = d.textlength(nom, font=f)
-        d.text(((FEED_W - tw) // 2, FEED_H - 360), nom, font=f, fill=colors.COLOR_WHITE)
-
-    # Setmana pill bottom
-    from .captions import _setmana_label
-
-    label_text = f"Setmana del {_setmana_label(setmana)}"
-    f3 = fonts.sans_bold(28)
-    tw3 = d.textlength(label_text, font=f3)
-    pad_x, pad_y = 28, 14
-    x1 = (FEED_W - tw3 - pad_x * 2) // 2
-    y1 = FEED_H - 220
+    # ── Setmana pill, 15px below the logo pill ───────────────────
+    # Same width (756) so the two stack with a consistent column.
+    # 20% taller (70 → 84) and the text scales the same.
+    sm_x = 30
+    sm_y = pill_y + pill_h + 15
+    sm_w, sm_h = pill_w, 84  # 756×84
     d.rounded_rectangle(
-        (x1, y1, x1 + tw3 + pad_x * 2, y1 + 28 + pad_y * 2),
-        radius=22,
+        (sm_x, sm_y, sm_x + sm_w, sm_y + sm_h),
+        radius=12,
         fill=colors.COLOR_WHITE,
     )
-    d.text((x1 + pad_x, y1 + pad_y - 4), label_text, font=f3, fill=colors.COLOR_BG)
-
-    _footer(d, FEED_W, FEED_H)
+    f_sm = fonts.sans_bold(38)  # 32 × 1.20 ≈ 38
+    label = _setmana_label(setmana)
+    bbox = f_sm.getbbox(label)
+    text_h = bbox[3] - bbox[1]
+    d.text(
+        (sm_x + 20, sm_y + (sm_h - text_h) // 2 - bbox[1]),
+        label,
+        font=f_sm,
+        fill=colors.COLOR_BG,
+    )
     return img
 
 
 def _feed_list_slide(
     territori: str, entries: list[dict], start_pos: int, page: int, total_pages: int
 ) -> Image.Image:
-    """One feed slide listing up to 10 entries from the top."""
+    """One feed slide listing up to 10 entries from the top.
+
+    Territory accent recolours: position squares, kicker bar, header
+    chip, and the per-row territory icon (singles only — for top
+    lists the territory is the same on every row, so we don't repeat
+    it).
+    """
     img = _feed_canvas()
     d = ImageDraw.Draw(img)
-
-    # Header — logo + territori + page indicator
-    _logo_block(d, 60, 50, size=32)
+    accent = colors.terr_color(territori)
     from .captions import TERRITORI_NOM
 
+    # Header — brand logo top-left, territory chip top-right.
+    _logo_block(img, 60, 50, width=270)
     nom = TERRITORI_NOM.get(territori, territori)
-    f_h = fonts.sans_bold(22)
-    nom_text = f"Top {nom}"
-    nom_tw = d.textlength(nom_text, font=f_h)
-    d.text((FEED_W - 60 - nom_tw, 56), nom_text, font=f_h, fill=colors.COLOR_TEXT_MUTED)
+    f_h = fonts.sans_bold(24)
+    chip_w, _ = _measure_pill(
+        text=nom,
+        font=f_h,
+        pad_x=20,
+        pad_y=10,
+        icon_codi=territori or "PPCC",
+        icon_size=32,
+    )
+    _pill(
+        img,
+        x=int(FEED_W - 60 - chip_w),
+        y=44,
+        text=nom,
+        font=f_h,
+        fill=accent,
+        text_fill=colors.COLOR_WHITE,
+        pad_x=20,
+        pad_y=10,
+        radius=18,
+        icon_codi=territori or "PPCC",
+        icon_size=32,
+        icon_fill=colors.COLOR_WHITE,
+    )
+
+    # Accent rule under the header.
+    d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill=accent)
 
     # Layout
-    row_h = 100
-    list_top = 150
-    n = len(entries)
+    row_h = 105
+    list_top = 170
     f_pos = fonts.display_bold(38)
     f_song = fonts.display_bold(28)
     f_artist = fonts.sans_regular(22)
-    pos_w = 70
+    pos_w = 76
 
     for i, e in enumerate(entries[:10]):
         y = list_top + i * row_h
         pos = e["posicio"]
 
-        # Position number in a yellow square
+        # Tinted card behind each row — alternating depth so the eye
+        # has somewhere to land beyond the flat ink background.
+        card_fill = colors.darken(accent, 0.78 if i % 2 == 0 else 0.85)
         d.rounded_rectangle(
-            (60, y, 60 + pos_w, y + pos_w), radius=12, fill=colors.COLOR_YELLOW
+            (40, y - 6, FEED_W - 40, y + pos_w + 10),
+            radius=18,
+            fill=card_fill,
         )
+
+        # Position number — territory accent square (yellow only on PPCC).
+        d.rounded_rectangle((60, y, 60 + pos_w, y + pos_w), radius=14, fill=accent)
         pos_text = str(pos)
         ptw = d.textlength(pos_text, font=f_pos)
         d.text(
-            (60 + (pos_w - ptw) // 2, y + 10),
+            (60 + (pos_w - ptw) // 2, y + 14),
             pos_text,
             font=f_pos,
-            fill=colors.COLOR_BG,
+            fill=colors.COLOR_WHITE,
         )
 
-        # Trend indicator
-        _trend_glyph(d, 145, y + 22, pos, e.get("posicio_anterior"))
+        # Trend indicator just to the right of the position square.
+        _trend_glyph(d, 152, y + 26, pos, e.get("posicio_anterior"))
 
         # Cover thumbnail right side
         cover = _cover(
@@ -316,13 +502,14 @@ def _feed_list_slide(
         cover_r = _rounded(cover, 12)
         img.paste(cover_r, (FEED_W - 60 - 80, y), cover_r)
 
-        # Song + artist text block
-        text_x = 195
+        # Song + artist text block — leave room for the NOU pill that
+        # `_trend_glyph` may render up to ~60px wide.
+        text_x = 240
         text_w = (FEED_W - 60 - 80 - 20) - text_x
         song = _truncate(d, e["canco_nom"], f_song, text_w)
         artist = _truncate(d, e["artista_nom"], f_artist, text_w)
-        d.text((text_x, y + 8), song, font=f_song, fill=colors.COLOR_WHITE)
-        d.text((text_x, y + 50), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
+        d.text((text_x, y + 12), song, font=f_song, fill=colors.COLOR_WHITE)
+        d.text((text_x, y + 54), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
 
     # Page indicator
     if total_pages > 1:
@@ -380,36 +567,126 @@ def render_feed_top(
 
 
 def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
-    img = _feed_canvas()
-    d = ImageDraw.Draw(img)
-    _logo_block(d, 60, 60, size=44)
-    title = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"
-    f = fonts.display_bold(120)
-    tw = d.textlength(title, font=f)
-    if tw > FEED_W - 120:
-        f = fonts.display_bold(90)
-        tw = d.textlength(title, font=f)
-    d.text(
-        ((FEED_W - tw) // 2, FEED_H // 2 - 80), title, font=f, fill=colors.COLOR_YELLOW
-    )
+    """Cover slide for nous_albums / nous_singles.
 
+    Mirrors the territorial cover layout exactly — same pill sizes,
+    same vertical anchors, same fonts — with three substitutions:
+      • Background: solid ink (no album cover at all — novetats
+        aren't anchored to a single artist).
+      • Top-right pill: tipus label ("Nous àlbums" / "Nous singles"),
+        no leading icon. Fill = brand red (singles) or brand blue
+        (àlbums).
+      • Logo pill: same accent fill as the top-right chip, white
+        monochrome logo.
+    Setmana pill is identical to the territorial variant.
+    """
     from .captions import _setmana_label
 
-    sub = f"Setmana del {_setmana_label(setmana)}"
-    f2 = fonts.sans_bold(36)
-    tw2 = d.textlength(sub, font=f2)
-    d.text(
-        ((FEED_W - tw2) // 2, FEED_H // 2 + 80), sub, font=f2, fill=colors.COLOR_WHITE
+    accent = "#0047ba" if tipus == "nous_albums" else "#cf3339"
+    label = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"
+
+    img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
+    d = ImageDraw.Draw(img)
+
+    # ── Top-right pill (no icon, just the tipus label) ───────────
+    f_chip = fonts.sans_bold(34)
+    chip_w, _ = _measure_pill(text=label, font=f_chip, pad_x=20, pad_y=12)
+    _pill(
+        img,
+        x=int(FEED_W - 30 - chip_w),
+        y=30,
+        text=label,
+        font=f_chip,
+        fill=accent,
+        text_fill=colors.COLOR_WHITE,
+        pad_x=20,
+        pad_y=12,
+        radius=12,  # mm-design `--mm-radius-lg`
     )
-    _footer(d, FEED_W, FEED_H)
+
+    # ── Logo pill, lower band (geometry shared with territorial) ─
+    pill_w = int(FEED_W * 0.70)  # 756
+    pill_x = 30
+    pill_y = 944  # 1012 − 5% × 1350 ≈ 68
+    logo_h = 106  # 88 × 1.20
+    logo_w = int(round(logo_h * svg_assets.LOGO_ASPECT))
+    pill_h = logo_h + 28
+    d.rounded_rectangle(
+        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
+        radius=12,
+        fill=accent,
+    )
+    logo = svg_assets.logo_image_mono(logo_w, colors.COLOR_WHITE)
+    if logo is not None:
+        img.paste(
+            logo,
+            (
+                pill_x + 20,
+                pill_y + (pill_h - logo.size[1]) // 2,
+            ),
+            logo,
+        )
+
+    # ── Setmana pill (identical to territorial) ──────────────────
+    sm_x = 30
+    sm_y = pill_y + pill_h + 15
+    sm_w, sm_h = pill_w, 84
+    d.rounded_rectangle(
+        (sm_x, sm_y, sm_x + sm_w, sm_y + sm_h),
+        radius=12,
+        fill=colors.COLOR_WHITE,
+    )
+    f_sm = fonts.sans_bold(38)
+    txt = _setmana_label(setmana)
+    bbox = f_sm.getbbox(txt)
+    text_h = bbox[3] - bbox[1]
+    d.text(
+        (sm_x + 20, sm_y + (sm_h - text_h) // 2 - bbox[1]),
+        txt,
+        font=f_sm,
+        fill=colors.COLOR_BG,
+    )
     return img
 
 
 def _feed_album_slide(item: dict) -> Image.Image:
-    """One album per slide — the legacy treatment."""
+    """One album per slide.
+
+    Top-left: brand logo.
+    Top-right: territory icon-only pill in the artist's territory
+    colour (no text — the icon is enough).
+    Centre: big cover.
+    Bottom: title + artist.
+    """
     img = _feed_canvas()
     d = ImageDraw.Draw(img)
-    _logo_block(d, 60, 50, size=32)
+    _logo_block(img, 60, 50, width=270)
+
+    # Territory icon-only pill, top-right.
+    ter = item.get("artista_territori") or "PPCC"
+    ter_color = colors.terr_color(ter)
+    icon_pill_w, icon_pill_h = _measure_pill(
+        text="",
+        font=fonts.sans_bold(20),
+        pad_x=20,
+        pad_y=14,
+        icon_codi=ter,
+        icon_size=44,
+    )
+    _pill(
+        img,
+        x=int(FEED_W - 60 - icon_pill_w),
+        y=44,
+        text="",
+        font=fonts.sans_bold(20),
+        fill=ter_color,
+        pad_x=20,
+        pad_y=14,
+        radius=22,
+        icon_codi=ter,
+        icon_size=44,
+        icon_fill=colors.COLOR_WHITE,
+    )
 
     # Big cover centred
     cover = _cover(item.get("cover_url"), 800, fallback_letter=item.get("nom", "?")[:1])
@@ -439,34 +716,71 @@ def _feed_album_slide(item: dict) -> Image.Image:
 
 
 def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image.Image:
-    """Up to 10 singles in a list — same shape as the top list slide
-    but without position numbers (singles aren't ranked here)."""
+    """Up to 10 singles in a list. Each row carries the artist's
+    territory icon at the right edge so the slide stays colourful
+    even when titles are short."""
     img = _feed_canvas()
     d = ImageDraw.Draw(img)
-    _logo_block(d, 60, 50, size=32)
+    _logo_block(img, 60, 50, width=270)
 
-    f_h = fonts.sans_bold(22)
-    h = "Nous singles"
-    htw = d.textlength(h, font=f_h)
-    d.text((FEED_W - 60 - htw, 56), h, font=f_h, fill=colors.COLOR_TEXT_MUTED)
+    # "Nous singles" pill top-right in brand red.
+    f_h = fonts.sans_bold(24)
+    chip_w, _ = _measure_pill(text="Nous singles", font=f_h, pad_x=20, pad_y=10)
+    _pill(
+        img,
+        x=int(FEED_W - 60 - chip_w),
+        y=44,
+        text="Nous singles",
+        font=f_h,
+        fill="#cf3339",
+        text_fill=colors.COLOR_WHITE,
+        pad_x=20,
+        pad_y=10,
+        radius=18,
+    )
 
-    row_h = 100
-    list_top = 150
+    # Accent rule under the header.
+    d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill="#cf3339")
+
+    row_h = 105
+    list_top = 170
     f_song = fonts.display_bold(28)
     f_artist = fonts.sans_regular(22)
+    icon_size = 48
 
     for i, e in enumerate(items[:10]):
         y = list_top + i * row_h
+        ter = e.get("artista_territori") or "PPCC"
+        ter_color = colors.terr_color(ter)
+
+        # Tinted row card per territory so colour leaks through.
+        card_fill = colors.darken(ter_color, 0.78 if i % 2 == 0 else 0.85)
+        d.rounded_rectangle(
+            (40, y - 6, FEED_W - 40, y + 80 + 10),
+            radius=18,
+            fill=card_fill,
+        )
+
+        # Cover thumbnail left.
         cover = _cover(e.get("cover_url"), 80, fallback_letter=e.get("nom", "?")[:1])
         cover_r = _rounded(cover, 12)
         img.paste(cover_r, (60, y), cover_r)
 
+        # Territory icon at the right, in brand colour.
+        t_icon = svg_assets.territory_icon(ter, icon_size, ter_color)
+        if t_icon is not None:
+            img.paste(
+                t_icon,
+                (FEED_W - 60 - icon_size, y + (80 - icon_size) // 2),
+                t_icon,
+            )
+
         text_x = 175
-        text_w = (FEED_W - 60) - text_x
+        text_w = (FEED_W - 60 - icon_size - 20) - text_x
         song = _truncate(d, e["nom"], f_song, text_w)
         artist = _truncate(d, e["artista_nom"], f_artist, text_w)
-        d.text((text_x, y + 8), song, font=f_song, fill=colors.COLOR_WHITE)
-        d.text((text_x, y + 50), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
+        d.text((text_x, y + 12), song, font=f_song, fill=colors.COLOR_WHITE)
+        d.text((text_x, y + 54), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
 
     if total_pages > 1:
         f_p = fonts.sans_bold(22)
@@ -497,15 +811,28 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
             _feed_album_slide(item).save(p, "PNG")
             out.append(p)
     else:
-        # singles: list of 10 per slide
-        pages = max(1, (len(items) + 9) // 10)
+        # Singles: dynamic bin-packing so we never end with a slide
+        # holding 1-2 orphan rows. Up to 10 per slide is the hard cap
+        # (anything denser stops being legible). Within that cap we
+        # split as evenly as possible:
+        #   ≤10 → 1 slide
+        #   11-20 → 2 slides (e.g. 11 → 6+5, 13 → 7+6, 20 → 10+10)
+        #   21-30 → 3 slides, etc.
+        n = len(items)
+        n_slides = max(1, (n + 9) // 10)
+        per_slide = -(-n // n_slides)  # ceil-div
+        pages = n_slides
+        offset = 0
         for page in range(1, pages + 1):
-            chunk = items[(page - 1) * 10 : page * 10]
+            # Last slide may end up smaller; that's intentional.
+            chunk_size = per_slide if (offset + per_slide) <= n else n - offset
+            chunk = items[offset : offset + chunk_size]
             if not chunk:
                 break
             p = _path(tipus, "", setmana, page)
             _feed_singles_slide(chunk, page, pages).save(p, "PNG")
             out.append(p)
+            offset += chunk_size
     return out[:10]
 
 
@@ -517,48 +844,101 @@ def _story_canvas() -> Image.Image:
 
 
 def _story_intro(territori: str, setmana, *, label_top: str) -> Image.Image:
-    img = _story_canvas()
-    d = ImageDraw.Draw(img)
+    """Story intro slide.
 
-    card_w, card_h = 880, 700
-    cx, cy = (STORY_W - card_w) // 2, (STORY_H - card_h) // 2
-    d.rounded_rectangle(
-        (cx, cy, cx + card_w, cy + card_h), radius=32, fill=colors.COLOR_CARD
-    )
+    PPCC: brand logo + the senyera icon (no card behind it) + a big
+    "Setmana N" pill. No "TOP 40" or "Global" labels — the brand
+    logo + icon already say it.
 
-    # "TOP 40" / "TOP 5"
-    f_big = fonts.display_bold(120)
-    tw = d.textlength(label_top, font=f_big)
-    d.text(
-        (cx + (card_w - tw) // 2, cy + 90),
-        label_top,
-        font=f_big,
-        fill=colors.COLOR_YELLOW if territori == "PPCC" else colors.COLOR_YELLOW_DEEP,
-    )
-
-    # Territori name
+    Territorial: brand logo + territory icon (no card behind it) +
+    "TOP N" + territory name + the Setmana pill anchored
+    underneath the TOP+name block.
+    """
     from .captions import TERRITORI_NOM, _setmana_label
 
-    nom = TERRITORI_NOM.get(territori, territori)
-    f_nom = fonts.display_bold(64)
-    nom_tw = d.textlength(nom, font=f_nom)
-    d.text(
-        (cx + (card_w - nom_tw) // 2, cy + 280),
-        nom,
-        font=f_nom,
-        fill=colors.COLOR_WHITE,
-    )
+    img = _story_canvas()
+    d = ImageDraw.Draw(img)
+    accent = colors.terr_color(territori)
+    is_ppcc = (territori or "") == "PPCC"
 
-    # Setmana
-    label = f"Setmana del {_setmana_label(setmana)}"
-    f_sub = fonts.sans_regular(36)
-    sub_tw = d.textlength(label, font=f_sub)
-    d.text(
-        (cx + (card_w - sub_tw) // 2, cy + 450),
-        label,
-        font=f_sub,
-        fill=colors.COLOR_TEXT_MUTED,
-    )
+    # Brand logo top, centred (tri-colour on solid ink).
+    _logo_block(img, (STORY_W - 540) // 2, 200, width=540)
+
+    # Territory icon directly on ink — no card behind.
+    icon_size = 460
+    icon = svg_assets.territory_icon(territori or "PPCC", icon_size, accent)
+    icon_x = (STORY_W - icon_size) // 2
+    icon_y = 460
+    if icon is not None:
+        img.paste(icon, (icon_x, icon_y), icon)
+
+    if is_ppcc:
+        # No "TOP 40", no "Global" — info already conveyed by logo +
+        # senyera. Just a slightly bigger Setmana pill below the icon.
+        f_sm = fonts.sans_bold(48)
+        label = _setmana_label(setmana)
+        pill_w, pill_h = _measure_pill(
+            text=label,
+            font=f_sm,
+            pad_x=32,
+            pad_y=18,
+        )
+        _pill(
+            img,
+            x=int((STORY_W - pill_w) // 2),
+            y=icon_y + icon_size + 80,
+            text=label,
+            font=f_sm,
+            fill=colors.COLOR_WHITE,
+            text_fill=colors.COLOR_BG,
+            pad_x=32,
+            pad_y=18,
+            radius=12,  # mm-design --mm-radius-lg
+        )
+    else:
+        # Territorial intro: TOP N + territory name + Setmana pill.
+        # Pill sits under the TOP+name block (not under the icon).
+        f_big = fonts.display_bold(140)
+        tw = int(d.textlength(label_top, font=f_big))
+        top_y = icon_y + icon_size + 40
+        d.text(
+            ((STORY_W - tw) // 2, top_y),
+            label_top,
+            font=f_big,
+            fill=colors.COLOR_YELLOW,
+        )
+
+        nom = TERRITORI_NOM.get(territori, territori)
+        f_nom = fonts.display_bold(72)
+        nom_tw = int(d.textlength(nom, font=f_nom))
+        nom_y = top_y + 170
+        d.text(
+            ((STORY_W - nom_tw) // 2, nom_y),
+            nom,
+            font=f_nom,
+            fill=colors.COLOR_WHITE,
+        )
+
+        f_sub = fonts.sans_bold(36)
+        label = _setmana_label(setmana)
+        pill_w, _ = _measure_pill(
+            text=label,
+            font=f_sub,
+            pad_x=28,
+            pad_y=14,
+        )
+        _pill(
+            img,
+            x=int((STORY_W - pill_w) // 2),
+            y=nom_y + 130,
+            text=label,
+            font=f_sub,
+            fill=colors.COLOR_WHITE,
+            text_fill=colors.COLOR_BG,
+            pad_x=28,
+            pad_y=14,
+            radius=12,
+        )
 
     return img
 
@@ -566,20 +946,30 @@ def _story_intro(territori: str, setmana, *, label_top: str) -> Image.Image:
 def _story_canco(territori: str, e: dict) -> Image.Image:
     img = _story_canvas()
     d = ImageDraw.Draw(img)
+    accent = colors.terr_color(territori)
 
-    # Territori header
+    # Territori header — small icon + name in the accent colour.
     from .captions import TERRITORI_NOM
 
     nom = TERRITORI_NOM.get(territori, territori)
     f_h = fonts.sans_bold(36)
     htw = d.textlength(nom, font=f_h)
-    d.text(((STORY_W - htw) // 2, 100), nom, font=f_h, fill=colors.COLOR_WHITE)
+    icon = svg_assets.territory_icon(territori or "PPCC", 44, accent)
+    icon_w = 44 + 12 if icon else 0
+    total_w = htw + icon_w
+    base_x = int((STORY_W - total_w) // 2)
+    if icon is not None:
+        img.paste(icon, (base_x, 100), icon)
+    d.text((base_x + icon_w, 102), nom, font=f_h, fill=colors.COLOR_WHITE)
 
-    # Card
+    # Card — full-strength territory accent (no darken). The cover
+    # art fills the upper half so contrast is fine.
     card_w, card_h = 920, 1300
     cx, cy = (STORY_W - card_w) // 2, 220
     d.rounded_rectangle(
-        (cx, cy, cx + card_w, cy + card_h), radius=32, fill=colors.COLOR_CARD
+        (cx, cy, cx + card_w, cy + card_h),
+        radius=32,
+        fill=accent,
     )
 
     # Cover 750x750 centred at top of card
@@ -598,7 +988,7 @@ def _story_canco(territori: str, e: dict) -> Image.Image:
         fill=colors.COLOR_WHITE,
     )
 
-    # Cançó name (yellow, up to 2 lines)
+    # Song title — white on the colour card, bold and large.
     f_song = fonts.display_bold(44)
     lines = _wrap_two_lines(d, e["canco_nom"], f_song, card_w - 80)
     for i, line in enumerate(lines[:2]):
@@ -607,10 +997,10 @@ def _story_canco(territori: str, e: dict) -> Image.Image:
             (cx + (card_w - line_tw) // 2, cy + 940 + i * 60),
             line,
             font=f_song,
-            fill=colors.COLOR_YELLOW,
+            fill=colors.COLOR_WHITE,
         )
 
-    # Artista
+    # Artist — also white but lower weight so the title reads first.
     f_a = fonts.sans_regular(34)
     artist = _truncate(d, e["artista_nom"], f_a, card_w - 80)
     a_tw = d.textlength(artist, font=f_a)
@@ -618,7 +1008,7 @@ def _story_canco(territori: str, e: dict) -> Image.Image:
         (cx + (card_w - a_tw) // 2, cy + 1180),
         artist,
         font=f_a,
-        fill=colors.COLOR_TEXT_MUTED,
+        fill=colors.COLOR_WHITE,
     )
 
     return img

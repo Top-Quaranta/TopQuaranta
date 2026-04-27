@@ -77,8 +77,12 @@ def test_caption_top_includes_hashtags_and_mentions():
     ]
     text = captions.caption_top("top_ppcc", "PPCC", setmana, entries)
     assert "#topquaranta" in text
-    assert "#PaïsosCatalans" in text
+    assert "Països Catalans" not in text
+    assert "PaïsosCatalans" not in text
+    # When we have an IG handle the caption uses it *instead* of the
+    # display name (autolinks + notifies the artist on publish).
     assert "@sucisopes" in text
+    assert "Suc i Sopes" not in text
 
 
 def test_caption_truncates_to_2200_chars():
@@ -107,7 +111,11 @@ def test_caption_drops_malformed_handle():
         }
     ]
     text = captions.caption_top("top_ppcc", "PPCC", setmana, entries)
-    assert "@" not in text.split("\n\n")[1]  # body line has no mention
+    # Malformed URL → no @handle extractable, fall back to the display
+    # name. Body line should contain "Y" and zero @ mentions.
+    body = text.split("\n\n")[1]
+    assert "@" not in body
+    assert "Y" in body
 
 
 # ── publicar_social: real DB → render → DRY publish ──────────────────

@@ -205,6 +205,66 @@ afegida (migració `music 0054`). 12 tests nous (153 total).
 > requereix avaluar Insights Instagram durant 4 setmanes —
 > llindars documentats al fitxer del sprint o al panell staff.
 
+### Sprint I bis (post) — Redisseny renderer + multi-canal + email ✅ (2026-04-27)
+
+Tres blocs grossos en una sessió:
+
+**1. Redisseny editorial del renderer Instagram.** El primer disseny
+era massa fosc + monocrom + esquemàtic. Reescrits els 4 tipus de
+slide (top global, top territorial, nous singles, nous àlbums) +
+stories (intro, cançó individual, CTA): logo SVG real (substitueix
+"Top" + "Quaranta" sintetitzat), icones territorials (`vendor/mm-design/
+icons/territories/`) recolorejades dinàmicament, paleta brand
+mirrorejada a Python (`TERR_COLORS`), bin-packing dinàmic per a
+singles (≤10 → 1 slide, 11–20 → 2 slides equilibrats), pill-system
+amb format mm-design (`--mm-radius-lg`), cover full-bleed
+(`ImageOps.fit`), eliminació de tot referència a "Països Catalans"
+(sensibilitat política). Auto-tag d'artistes a feed posts via
+`user_tags` Graph API. Captions en project-week numbering (`Setmana
+N`) amb anchor a Sat 2026-04-25 = setmana 34, helper canònic a
+`music/dates.py`. Finestra de novetats anclada a la última
+publicació del mateix tipus (no "darrers 7 dies fix") per evitar
+duplicats entre setmanes consecutives. Staff page amb Preview/
+Veure slides/Reset/Esborrar IG buttons + project-week column +
+filtre "últims 7 dies" a /staff/cancons.
+
+**2. Distribució multi-canal.** Un sol comandament `publicar_canal
+--channel <name>` per als 4 nous canals + el setup d'Instagram
+existent. Models singletons per a cada credencial (`MastodonAuth`,
+`BlueskyAuth`, `TelegramAuth`); kill switches independents a
+`ConfiguracioGlobal.{mastodon,bluesky,telegram,newsletter,rss}_actiu`.
+Endpoints staff per gestionar credencials (`/staff/social/{mastodon,
+bluesky,telegram}/{,test/,clear/}`). Frontend amb panell unificat de
+canals + toggles. RSS Atom 1.0 a `/rss/{top,novetats}.xml` (kill-
+switched). Newsletter HTML setmanal via Brevo (utilitza la infra de
+consentiment del Sprint J). Crons escalonats: Sat IG 09:30 → Mastodon
+09:40 → Bluesky 09:50 → Telegram 09:55 → Newsletter 10:00. 8 tests
+nous (160 passing).
+
+**3. Email infrastructure** (necessari per verificar Mastodon/Bluesky/
+Telegram, però va créixer molt). Stalwart Mail Server v0.16.1
+configurat com a backend IMAP + receptor SMTP per `topquaranta.cat` i
+`cercol.team`. TLS Let's Encrypt sincronitzat des de Caddy via
+systemd path-watch. **Smarthost routing condicional** (Stalwart →
+Brevo per `@topquaranta.cat`, Stalwart → Resend per `@cercol.team`)
+configurat al panell amb 2 routes Relay + expressió `sender_domain ==
+'cercol.team' ? 'resend-relay' : 'brevo-relay'`. Hetzner Cloud
+Firewall configurat via API per obrir 25/465/587/993. CDMON DNS API
+integrat (`dns-backup/cdmon_clean.py`): netejada massiva de 18
+registres legacy (CDMON Micropla — imap/pop3/smtp/sogo/roundcube/
+autodiscover/etc.). Apex A actualitzat de CDMON IP a `188.245.60.20`.
+Brevo configurat com a relay outbound (DKIM via 2 CNAMEs `brevo*._
+domainkey`, SPF inclou `spf.brevo.com`). Resend pendent de
+verificació de domini cercol.team al panell Resend. BIMI publicat
+sense VMC (avatar a Yahoo/Fastmail; per Gmail cal Google Account per
+adreça). Autoconfig Mozilla Thunderbird a `https://mail.topquaranta.cat/
+.well-known/autoconfig/mail/config-v1.1.xml`. Documentació exhaustiva
+a `docs/EMAIL.md`.
+
+> **Operativament**: Mastodon i Telegram credencials posades + cron
+> actiu. Bluesky pendent de credencials. Newsletter pendent
+> d'activació quan hi hagi subscriptors. RSS live ja.
+
 ### Sprint J — Privacitat, cookies i corpus legal complet ✅ (2026-04-26)
 
 Paquet legal sencer (no només GDPR): 7 pàgines a `/legal/{avis-legal,

@@ -1,8 +1,10 @@
 # CLAUDE.md — TopQuaranta
 
 > Persistent memory for Claude Code. Read this file first on every session.
-> Last updated: 2026-04-26 — Post Sprints A–J ter (editorial redesign +
-> a11y baseline + shared editorial primitives).
+> Last updated: 2026-04-27 — Post Sprint I bis (renderer redesign +
+> multi-channel distribution: Mastodon/Bluesky/Telegram/Newsletter/RSS
+> + Stalwart mail with Brevo+Resend smarthost + BIMI + Hetzner Cloud
+> API + CDMON DNS API).
 
 ## Other docs
 
@@ -52,8 +54,11 @@ Django now owns only the API, a handful of auth flows and SEO:
     activar/*}           │    (session + CSRF + axes + django-otp +     │
   /sitemap.xml           │     ConfiguracioGlobal)                       │
   /robots.txt           │                                                │
+  /rss/*                │                                                │
                         │                                                │
   /static/*             │─▶  /home/topquaranta/app/staticfiles/          │
+  /static/social/*      │─▶  /var/cache/topquaranta/social/renders/      │
+                        │     (raw PNGs for IG media-fetcher)            │
                         │                                                │
   /beta/*               │─▶  301 → /                                     │
                         │                                                │
@@ -189,6 +194,12 @@ list.
 | **Grup C community (2026-04)** | `PerfilUsuari`, `Publicacio`, `Comentari`, `Missatge` — directori, feed moderat, DM 1-to-1, comentaris. Missatge té notificació email amb opt-out. Self-delete via email confirmation. |
 | **Mapa drill-down (2026-04-22)** | `/mapa` SVG dels PPCC amb 3 nivells (territori → comarca → municipi) i panell lateral amb KPIs + graella d'artistes ordenats per reproduccions. GeoJSON preprocessats (Douglas-Peucker 0.002°) a `web-react/public/geodata/` via `scripts/simplify_geodata.py`. |
 | **Public read cache (2026-04-25)** | Hot read endpoints `/api/v1/{ranking,artistes,mapa/artistes-top}/` cached **60 s for anonymous hits** in `pagecache` (LocMem per worker). Authenticated requests bypass. Each endpoint also exposes ETag + Last-Modified via Django's `condition` decorator (rooted at `RankingProvisional.data_calcul`, `Artista.created_at`, `SenyalDiari.data` respectively) — re-fetching clients get a 304 in ~5 ms. Helper at `web/api/utils.py::cache_for_anon`. |
+| **Multi-channel distribution (Sprint I bis, 2026-04-27)** | Same payload, five channels: **Instagram** (feed + stories), **Mastodon**, **Bluesky**, **Telegram** (full carousel via media-group, up to 10 photos), **Newsletter** (HTML email via Brevo to `Usuari.vol_newsletter=True`), **RSS** (`/rss/{top,novetats}.xml`, Atom 1.0). One command `publicar_canal --channel <name>` for the four non-IG channels; auth singletons `{Mastodon,Bluesky,Telegram}Auth`; staff endpoints `/staff/social/{name}/{,test/,clear/}`; toggles in `ConfiguracioGlobal.{instagram,mastodon,bluesky,telegram,newsletter,rss}_actiu`. Cron staggered: Sat IG 09:30 → Mastodon 09:40 → Bluesky 09:50 → Telegram 09:55 → Newsletter 10:00. Auto-tag artists on feed posts via `user_tags` Graph API. |
+| **Renderer editorial redesign (2026-04-27)** | First-pass renderer was monochrome + dark + schematic. Rewrote 4 slide kinds + stories: SVG-rasterised brand logo (`vendor/mm-design/icons/brand/logo-topquaranta-rect.svg`) and territory icons (mm-design SVGs), `colors.terr_color()` mirroring SPA's `TERR_COLORS`, `colors.best_text_on()` for monochromatic logo over coloured pills, `ImageOps.fit` cover-fit (no black bars), pill-system using mm-design `--mm-radius-lg`. Caption uses project-week numbering (`music.dates.project_week_number`, anchor Sat 2026-04-25 = wk 34). Novetats window anchored to last publication of same tipus (no fixed 7-day rolling). Eliminated all "Països Catalans" references. |
+| **Static social PNG hosting (2026-04-27)** | Meta's media fetcher rejected our Django view (CSP/COOP headers caused code 9004). Caddy now serves `/static/social/*` directly from `/var/cache/topquaranta/social/renders/` as plain files. Setting `SOCIAL_PUBLIC_BASE` in `web_server.py` switches the URL builder. The Django view at `/api/v1/social/render/` stays as fallback. |
+| **Gunicorn `--reload`** | Added to `deploy/topquaranta-web.service` after a silent stale-code bug (renderer changes not picked up). Cost: a few stat() per request, negligible. Edits to `.py` files are now picked up automatically without `systemctl reload`. |
+| **Mail infrastructure (Sprint I bis, 2026-04-27)** | **Stalwart Mail Server** v0.16.1 on the Hetzner box for inbound + IMAP for `topquaranta.cat` and `cercol.team`. **Outbound via smarthost routing** in Stalwart's MTA strategy: `sender_domain == 'cercol.team' ? 'resend-relay' : 'brevo-relay'`. Brevo (free tier 300/day) for TopQuaranta, Resend for Cercol. Hetzner blocks port 25 outbound, hence smarthosts. TLS cert Let's Encrypt: Caddy obtains it for `mail.topquaranta.cat`; a systemd `path` unit (`stalwart-cert-sync.path` + `.service`) syncs the cert into `/etc/stalwart/certs/` on rotation. **BIMI** TXT at `default._bimi.topquaranta.cat` + Tiny PS SVG at `https://www.topquaranta.cat/static/brand/bimi.svg` (no VMC). **Mozilla autoconfig** at `mail.topquaranta.cat/.well-known/autoconfig/...` so clients self-configure. Full architecture at `docs/EMAIL.md`. |
+| **Hetzner Cloud + CDMON DNS APIs (2026-04-27)** | `HETZNER_API_TOKEN` in `.env` + `hcloud` CLI installed; we manage firewall rules via API (e.g. opening 25/465/587/993 was scripted). `CDMON_API_KEY` in `.env`; `dns-backup/cdmon_clean.py` script for batch DNS ops (used to drop 18 legacy CDMON-Micropla records). API endpoint: `https://api-domains.cdmon.services/api-domains/`, header `apikey:`. Caveat: `dnsrecords/create` rejects A apex with bogus error "Destination to redirect not valid"; that one record needs the web panel. |
 
 ## 7. Shared constants
 

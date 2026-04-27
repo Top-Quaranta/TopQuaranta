@@ -44,6 +44,7 @@ const DEFAULTS = {
   deezer: '',
   mb: '',
   preview: '',
+  recent: '',
   sort: '-ml_confianca',
 }
 
@@ -61,9 +62,10 @@ export default function StaffCanconsPage() {
     deezer:     urlParams.get('deezer')     ?? DEFAULTS.deezer,
     mb:         urlParams.get('mb')         ?? DEFAULTS.mb,
     preview:    urlParams.get('preview')    ?? DEFAULTS.preview,
+    recent:     urlParams.get('recent')     ?? DEFAULTS.recent,
     sort:       urlParams.get('sort')       ?? DEFAULTS.sort,
   })
-  const { verificada, ml_classe: mlClasse, whisper, deezer, mb, preview, sort } = applied
+  const { verificada, ml_classe: mlClasse, whisper, deezer, mb, preview, recent, sort } = applied
   const artistaPk = urlParams.get('artista_pk') || ''
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
@@ -74,13 +76,13 @@ export default function StaffCanconsPage() {
 
   function load() {
     const params = new URLSearchParams({
-      q, verificada, ml_classe: mlClasse, whisper, deezer, mb, preview, sort, page,
+      q, verificada, ml_classe: mlClasse, whisper, deezer, mb, preview, recent, sort, page,
     })
     if (artistaPk) params.set('artista_pk', artistaPk)
     api.get(`/staff/cancons/?${params}`).then(setData).catch(() => setData(null))
   }
 
-  useEffect(load, [q, verificada, mlClasse, whisper, deezer, mb, preview, sort, page, artistaPk])
+  useEffect(load, [q, verificada, mlClasse, whisper, deezer, mb, preview, recent, sort, page, artistaPk])
 
   const allSelected = data?.results?.length && data.results.every(r => sel.has(r.pk))
 
@@ -159,6 +161,28 @@ export default function StaffCanconsPage() {
           onChange={e => { setPage(1); setQ(e.target.value) }}
           className="flex-1 min-w-[14rem]"
         />
+        {/* Quick chip — most common moderation flow is "spot what
+            was released this week", so we surface it next to the
+            search box rather than burying it inside the panel. */}
+        <button
+          type="button"
+          onClick={() => {
+            setApplied(prev => ({
+              ...prev,
+              recent: prev.recent === '7' ? '' : '7',
+              sort: '-data_llancament',
+            }))
+            setPage(1)
+          }}
+          className={`text-xs px-3 py-1.5 rounded border ${
+            recent === '7'
+              ? 'bg-tq-ink text-tq-yellow border-tq-ink'
+              : 'bg-white text-tq-ink border-tq-ink/20 hover:bg-tq-yellow/10'
+          }`}
+          title="Llançades en els últims 7 dies"
+        >
+          Últims 7 dies {recent === '7' ? '✓' : ''}
+        </button>
         <FilterPanel
           applied={applied}
           defaults={DEFAULTS}
@@ -213,6 +237,14 @@ export default function StaffCanconsPage() {
                   <option value="sense_cobertura">Sense cobertura</option>
                   <option value="cat">Lletra cat</option>
                   <option value="artista_dissolt">Artista dissolt</option>
+                </Select>
+              </Field>
+              <Field label="Llançament recent">
+                <Select value={p.recent} onChange={e => setP({ recent: e.target.value })}>
+                  <option value="">Qualsevol data</option>
+                  <option value="7">Últims 7 dies</option>
+                  <option value="30">Últims 30 dies</option>
+                  <option value="90">Últims 90 dies</option>
                 </Select>
               </Field>
               <Field label="Ordenació">

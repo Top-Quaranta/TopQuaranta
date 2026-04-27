@@ -69,16 +69,28 @@ from web.api.staff.senyal import (  # noqa: F401
     senyal_list,
 )
 from web.api.staff.social import (  # noqa: F401
+    social_bluesky_clear,
+    social_bluesky_save,
+    social_bluesky_test,
     social_credentials_clear,
     social_credentials_save,
     social_credentials_test,
+    social_eliminar_instagram,
     social_fase,
     social_list,
+    social_mastodon_clear,
+    social_mastodon_save,
+    social_mastodon_test,
     social_preview,
+    social_preview_all,
     social_publicar_ara,
     social_render_serve,
+    social_reset,
     social_slides_for,
     social_story_cap,
+    social_telegram_clear,
+    social_telegram_save,
+    social_telegram_test,
     social_toggle,
 )
 from web.api.staff.solicituds import (  # noqa: F401

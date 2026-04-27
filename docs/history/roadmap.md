@@ -96,6 +96,24 @@ Items petits per fer en sessions curtes:
       va cobrir part.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
+- [ ] **Stalwart polish** (post Sprint I bis):
+  - [ ] Habilitar port 587 STARTTLS submission (ara només 465 SMTPS).
+        Útil per a clients mòbils que no accepten SMTPS implicit.
+  - [ ] Crear bústia o alias `postmaster@topquaranta.cat` per a rebre
+        els reports DMARC (`rua=mailto:postmaster@…`). Ara queden en
+        cua sense destinació real.
+  - [ ] Integrar parsejat de DMARC reports al panell staff (gràfic de
+        què passa SPF/DKIM en nom nostre + alertes de potencial
+        spoofing). Alternativa: subscriure'ns a [dmarcian.com](https://dmarcian.com)
+        free tier i delegar el parseig.
+- [ ] Verificar `cercol.team` a Resend (panell Resend → Domains) per
+      a que el smarthost route per Cercol funcioni de veritat. Mentre
+      no estigui, els correus de `hello@cercol.team` reben 550.
+- [ ] **Gmail avatar** per `info@`/`admin@` quan se reseti el límit
+      del telèfon (ara només `miquel@` té Google Account associat).
+- [ ] (Quan Hetzner ens desbloca port 25 outbound) considerar treure
+      els relays Brevo/Resend i fer entrega directa des de Stalwart.
+      Implica warm-up d'IP de 4-8 setmanes + maintenance més pesat.
 
 > **Sprint K — Capa editorial pública**: descartat. La intenció
 > original (donar entrada clara a un visitant nou) la va cobrir

@@ -116,6 +116,49 @@ def _normalize_title(s: str) -> str:
     return s.strip()
 
 
+def validate_artista_area(artista) -> tuple[bool, str]:
+    """Sanity-check the artista's currently-assigned MBID against our
+    own location data.
+
+    Returns `(is_mismatch, reason)`. `is_mismatch=True` means the MB
+    record's area is explicitly non-PPCC while our `Artista` has PPCC
+    `localitats` — i.e. we almost certainly auto-matched a homonym
+    from elsewhere and should unassign.
+
+    Conservative by design:
+      * No localitats on our side → can't tell, return ok ("inconclusive
+        but don't touch").
+      * MBID empty → ok (nothing to validate).
+      * MB area empty/unknown → ok (don't penalise low-metadata MB
+        records; many small PPCC bands lack area).
+      * MB area present AND PPCC → ok.
+      * MB area present AND non-PPCC → MISMATCH.
+
+    Cost: one MB API call (`get_artist`). Used by the cron, so the
+    1 req/s rate limit applies.
+    """
+    if not artista.musicbrainz_id:
+        return False, "no-mbid"
+    if not artista.localitats.exists():
+        return False, "no-localitats"
+    try:
+        data = mb.get_artist(artista.musicbrainz_id)
+    except Exception:
+        logger.exception(
+            "MB validate_artista_area fetch failed for %s", artista.musicbrainz_id
+        )
+        return False, "fetch-error"
+    if not data:
+        return False, "mb-record-missing"
+    area_name = (data.get("area") or {}).get("name", "").strip()
+    disamb = data.get("disambiguation", "") or ""
+    if not area_name:
+        return False, "mb-area-empty"
+    if _looks_ppcc(area_name, disamb):
+        return False, "ok-ppcc"
+    return True, f"mb-area-non-ppcc:{area_name}"
+
+
 def resolve_mbid(artista) -> str | None:
     """Search MB by name; return a single confident match or None.
 

@@ -153,6 +153,15 @@ Single-instance `fcntl.flock` on `/tmp/mb_sync.lock`; MB's 1 req/s
 rate limit is globally enforced by the client.
 
 Per artist the flow is:
+  0. **Validate the existing MBID** (added 2026-04-29). If the
+     artista has both an MBID and PPCC `localitats`, fetch the MB
+     artist's `area` and check it's PPCC-compatible. If MB explicitly
+     says non-PPCC (e.g. "United States"), the MBID is auto-unassigned
+     + added to `mb_blocked_mbids` + audit-logged
+     (`artista_mbid_auto_unassign`) + the artist's Cançons/Albums
+     have their MB fingerprints reset. This catches accumulated drift
+     from the pre-2026-04-29 score-based auto-resolver. After
+     unassign, step 1 re-attempts a clean match.
   1. If no `musicbrainz_id`: `resolve_mbid(artista)` →
      `search_artist(nom)` then disambiguate ourselves on **name +
      location**, ignoring MB's Lucene score as a quality signal.

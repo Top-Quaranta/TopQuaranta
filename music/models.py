@@ -797,6 +797,7 @@ class StaffAuditLog(models.Model):
         ("artista_fusionar", "Artista: fusionar"),
         ("artista_crear", "Artista: crear"),
         ("artista_edit", "Artista: edició"),
+        ("artista_mbid_auto_unassign", "Artista: MBID auto-rebutjat"),
         # Artistes pendents (auto-discovered)
         ("pendent_aprovar", "Pendent: aprovar"),
         ("pendent_descartar", "Pendent: descartar"),

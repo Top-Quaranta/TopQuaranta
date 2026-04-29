@@ -140,3 +140,59 @@ def test_score_floor_50_lets_low_score_ppcc_through(cat_artist):
     )
     with patch("music.mb_sync.mb.search_artist", return_value=cands):
         assert resolve_mbid(cat_artist) == "cat-id"
+
+
+# ── validate_artista_area ─────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_validate_flags_non_ppcc_mbid_when_artist_is_ppcc(cat_artist):
+    """The cron's defence-in-depth: even if a previous run assigned
+    the wrong MBID, the next iteration must catch it."""
+    from music.mb_sync import validate_artista_area
+
+    cat_artist.musicbrainz_id = "us-rapper-id"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "us-rapper-id", "area": {"name": "United States"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, reason = validate_artista_area(cat_artist)
+    assert mismatch is True
+    assert "non-ppcc" in reason
+
+
+@pytest.mark.django_db
+def test_validate_accepts_ppcc_mbid(cat_artist):
+    from music.mb_sync import validate_artista_area
+
+    cat_artist.musicbrainz_id = "cat-band-id"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "cat-band-id", "area": {"name": "Catalunya"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, reason = validate_artista_area(cat_artist)
+    assert mismatch is False
+
+
+@pytest.mark.django_db
+def test_validate_skips_when_no_localitats(no_loc_artist):
+    """Without our own location anchor we can't tell — return ok."""
+    from music.mb_sync import validate_artista_area
+
+    no_loc_artist.musicbrainz_id = "any-id"
+    no_loc_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "any-id", "area": {"name": "Brazil"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, _ = validate_artista_area(no_loc_artist)
+    assert mismatch is False
+
+
+@pytest.mark.django_db
+def test_validate_skips_when_mb_area_empty(cat_artist):
+    """Many small PPCC bands lack area on MB — don't penalise them."""
+    from music.mb_sync import validate_artista_area
+
+    cat_artist.musicbrainz_id = "no-area-id"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "no-area-id", "area": None}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, _ = validate_artista_area(cat_artist)
+    assert mismatch is False

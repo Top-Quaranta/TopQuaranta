@@ -27,8 +27,9 @@ from django.core.management.base import BaseCommand
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 
-from music.mb_sync import resolve_mbid, sync_from_mbid
-from music.models import Artista
+from music.audit import log_staff_action
+from music.mb_sync import resolve_mbid, sync_from_mbid, validate_artista_area
+from music.models import Album, Artista, Canco
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +115,73 @@ class Command(BaseCommand):
                 self.stdout.write(f"Límit de {limit} artistes aconseguit. Sortint.")
                 break
 
+    def _unassign_wrong_mbid(
+        self, artista: Artista, bad_mbid: str, reason: str
+    ) -> None:
+        """Drop a wrongly-assigned MBID, block it, and reset cançons/
+        albums tagged from its discography.
+
+        Mirrors the reset block at the start of `sync_from_mbid()` but
+        runs *before* the new MBID is resolved — necessary because the
+        new MBID may not be found in this iteration (multi-PPCC
+        ambiguity → staff disambiguation), and we don't want stale MB
+        IDs surviving in that case.
+
+        Adds the bad MBID to `mb_blocked_mbids` so `resolve_mbid()`
+        skips it on the retry. Logs an audit row.
+        """
+        blocked = list(artista.mb_blocked_mbids or [])
+        if bad_mbid not in blocked:
+            blocked.append(bad_mbid)
+        artista.mb_blocked_mbids = blocked
+        artista.musicbrainz_id = None
+        artista.save(update_fields=["mb_blocked_mbids", "musicbrainz_id"])
+
+        Album.objects.filter(artista=artista).update(
+            mb_release_group_id="",
+            mb_type_secondary="",
+            mb_status="",
+            mbrainz_confirmed=None,
+        )
+        Canco.objects.filter(artista=artista).update(
+            mb_recording_id="",
+            mb_work_id="",
+            mb_lyrics_language="",
+            mbrainz_confirmed=None,
+        )
+
+        try:
+            log_staff_action(
+                None,
+                "artista_mbid_auto_unassign",
+                target=artista,
+                mbid=bad_mbid,
+                reason=reason,
+            )
+        except Exception:
+            logger.exception("Audit log failed for auto-unassign")
+
     def _process(self, artista: Artista) -> None:
         try:
+            # Step 1: validate the existing MBID against our own
+            # location data. If MB says "United States" and we have
+            # PPCC localitats, the MBID was almost certainly assigned
+            # by a previous run that trusted Lucene score over
+            # location (caught 2026-04-29 with the "Casual" case).
+            # Unassign + block + reset stale Canco/Album MB fields,
+            # then fall through to step 2 to find the right MBID.
+            if artista.musicbrainz_id:
+                mismatch, reason = validate_artista_area(artista)
+                if mismatch:
+                    bad_mbid = artista.musicbrainz_id
+                    self._unassign_wrong_mbid(artista, bad_mbid, reason)
+                    self.stdout.write(
+                        f"  [unassign] {artista.nom} (pk={artista.pk}) "
+                        f"MBID {bad_mbid} dropped: {reason}"
+                    )
+
+            # Step 2: assign an MBID if missing (post-step-1 the
+            # artista may have just had its bad MBID stripped).
             if not artista.musicbrainz_id:
                 mbid = resolve_mbid(artista)
                 if mbid:

@@ -117,19 +117,40 @@ def _normalize_title(s: str) -> str:
 
 
 def resolve_mbid(artista) -> str | None:
-    """Search MB by name; return a single strong PPCC match or None.
+    """Search MB by name; return a single confident match or None.
 
-    Strict rules to avoid false positives:
-      * exact-name match (case-insensitive) AND score ≥ AUTO_MATCH_SCORE
-      * only one candidate passes the above; ambiguous → None
-      * prefer candidates with PPCC-area hint, but don't demand it
-        (some groups lack area on MB even when they're from here).
+    We deliberately do NOT trust MB's Lucene score as a quality signal
+    — it favours well-edited mainstream artists (a heavy bias against
+    PPCC music). Instead we filter ourselves on:
+
+      1. **Exact name** (case-insensitive). No fuzzy guesses.
+      2. **Location**: if our artist has any `localitats`, the MB
+         candidate's `area` must match PPCC (`_looks_ppcc`). One
+         match → accept. Multiple → ambiguous, refuse. Zero → refuse
+         (do NOT fall back on a non-PPCC homonym, even if it's the
+         only candidate; that's how the "Casual" bug happened).
+      3. **No localitats on our artist** → refuse auto-match. Better
+         to let staff set localitats first or pick the MBID by hand
+         than risk mis-tagging downstream MB-derived ML features.
+
+    The Lucene score still appears as a sanity floor (>= 50, set in
+    `MB_AUTO_MATCH_SCORE`) so we don't waste cycles on garbage like
+    edit-distance 8 hits.
+
+    Staff escape hatches:
+      * `mb_auto_match_disabled` — skip this artist forever.
+      * `mb_blocked_mbids` — never propose any of these IDs again.
+
+    History:
+      * Pre-2026-04-29: `score >= 95 + len(strong) == 1` → returned
+        blindly. "Casual" matched the US rapper.
+      * 2026-04-29 first patch: PPCC-aware but kept score 95 floor.
+      * 2026-04-29 (this version): drop score reliance entirely;
+        trust our localitats.
     """
     name = artista.nom.strip()
     if not name:
         return None
-    # Staff-controlled escape hatches: stop auto-matching entirely, or
-    # skip previously-rejected MBIDs. Both survive re-runs of the cron.
     if getattr(artista, "mb_auto_match_disabled", False):
         return None
     blocked = set(getattr(artista, "mb_blocked_mbids", []) or [])
@@ -140,32 +161,32 @@ def resolve_mbid(artista) -> str | None:
         return None
 
     want = name.lower()
-    strong = []
-    for c in candidates:
-        if c.get("score", 0) < AUTO_MATCH_SCORE:
-            continue
-        if c.get("name", "").lower() != want:
-            continue
-        if c.get("id") in blocked:
-            continue
-        strong.append(c)
-
-    if not strong:
-        return None
-    if len(strong) == 1:
-        return strong[0]["id"]
-    # Multiple exact-name matches → disambiguate by PPCC area if possible.
-    ppcc_hits = [
+    matches = [
         c
-        for c in strong
-        if _looks_ppcc(
+        for c in candidates
+        if c.get("name", "").lower() == want
+        and c.get("score", 0) >= AUTO_MATCH_SCORE
+        and c.get("id") not in blocked
+    ]
+    if not matches:
+        return None
+
+    # Without our own localitats we can't disambiguate honestly →
+    # refuse rather than mis-tag. Staff workflow: add localitats, or
+    # set the MBID manually.
+    if not artista.localitats.exists():
+        return None
+
+    def _is_ppcc(c):
+        return _looks_ppcc(
             (c.get("area") or {}).get("name", ""),
             c.get("disambiguation", ""),
         )
-    ]
-    if len(ppcc_hits) == 1:
-        return ppcc_hits[0]["id"]
-    return None  # still ambiguous — let staff pick
+
+    ppcc_matches = [c for c in matches if _is_ppcc(c)]
+    if len(ppcc_matches) == 1:
+        return ppcc_matches[0]["id"]
+    return None  # zero PPCC matches → refuse; >1 → staff picks
 
 
 def _field_for_relation(rel_type: str, url: str) -> str | None:

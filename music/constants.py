@@ -47,11 +47,15 @@ TFIDF_MAX_FEATURES = 30
 RATIO_PRIOR_K = 5
 RATIO_PRIOR_P = 0.5
 
-# MusicBrainz auto-match score threshold. Candidates below this never
-# auto-resolve (require staff to paste the MBID by hand). 95 reflects
-# MB's own scoring scale — anything lower is too lossy on close-name
-# homonyms (Crim, Apa, …).
-MB_AUTO_MATCH_SCORE = 95
+# MB's Lucene score is a *search-relevance* metric, not a quality
+# signal — it reflects how well-edited the MB record is, which biases
+# hard towards mainstream international artists. For PPCC music (a
+# niche on MB) the right answer often scores lower than a popular
+# homonym. We set the floor low enough that MB's own ranking stops
+# being the gatekeeper, and disambiguate ourselves via name+location
+# in `mb_sync.resolve_mbid` (caught 2026-04-29 with the "Casual"
+# case: US rapper at 100 vs CAT band at 91).
+MB_AUTO_MATCH_SCORE = 50
 
 # API rate limits (seconds between calls)
 DEEZER_RATE_LIMIT = 1.0

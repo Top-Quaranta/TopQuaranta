@@ -153,26 +153,52 @@ Single-instance `fcntl.flock` on `/tmp/mb_sync.lock`; MB's 1 req/s
 rate limit is globally enforced by the client.
 
 Per artist the flow is:
-  1. If no `musicbrainz_id`: `search_artist(nom)` — strict exact-name
-     + score ≥ 95 + PPCC area disambiguation. Ambiguous names (Crim,
-     Apa, …) are skipped and left to staff.
+  1. If no `musicbrainz_id`: `resolve_mbid(artista)` →
+     `search_artist(nom)` then disambiguate ourselves on **name +
+     location**, ignoring MB's Lucene score as a quality signal.
+     Rules (post 2026-04-29):
+       * Exact-name match (case-insensitive), score ≥ 50 (loose
+         floor — see `MB_AUTO_MATCH_SCORE`).
+       * If our `Artista` has **localitats** in PPCC: keep candidates
+         whose MB `area` matches PPCC. One match → accept. Zero or
+         multiple → refuse (staff picks).
+       * If our `Artista` has **no localitats**: refuse — we can't
+         disambiguate honestly without a location anchor.
+     History: pre-2026-04-29 the score floor was 95 and the location
+     check only ran on multi-candidate ties; the "Casual" homonym bug
+     (US rapper at 100 vs CAT band at 91) prompted the rewrite.
+     Ambiguous names (Crim, Apa, …) still get skipped; staff sets
+     the MBID by hand.
   2. Otherwise: `get_artist` + `get_artist_release_groups` +
      `get_release_group_with_recordings` → fills type/gender/area/
      begin_date/end_date/disambiguation/sort_name/aliases/tags/rating,
      plus URL relationships (bandcamp/spotify/youtube/youtube music/
      soundcloud/wikipedia/viasona/facebook/myspace — never overwriting
      values staff already set).
-  3. Reconciles Albums by normalised title (fuzzy 0.9+) →
+  3. **Reset** stale MB-reconciliation fields on this artist's
+     existing Albums + Cançons (`mb_release_group_id`,
+     `mb_recording_id`, `mb_work_id`, `mb_lyrics_language`,
+     `mbrainz_confirmed`) so a corrected MBID purges its predecessor's
+     fingerprints. The same `sync_from_mbid()` is also auto-invoked by
+     `artista_detail` PATCH whenever staff changes the MBID — caught
+     2026-04-29 ("Casual" case).
+  4. Reconciles Albums by normalised title (fuzzy 0.9+) →
      `mb_release_group_id`, `mb_type_secondary`, `mb_status`,
      `mbrainz_confirmed=True`.
-  4. Reconciles Cançons by ISRC first, then normalised title →
+  5. Reconciles Cançons by ISRC first, then normalised title →
      `mb_recording_id`, `mb_work_id`, `mb_lyrics_language`,
      `mbrainz_confirmed=True`. A `Work.language=='cat'` is logged
      and feeds the `mb_lyrics_cat` ML feature.
-  5. Caches `{isrcs, titles}` on `Artista.mb_discography_cache` for
+  6. Caches `{isrcs, titles}` on `Artista.mb_discography_cache` for
      quick future matches.
-  6. Stamps `mb_last_sync` regardless of outcome, so idle retries
+  7. Stamps `mb_last_sync` regardless of outcome, so idle retries
      don't thrash.
+
+There is also a one-shot audit command `auditar_mb_orphans` (added
+2026-04-29) that sweeps existing rows looking for `mb_recording_id` /
+`mb_release_group_id` values that no longer belong to the artist's
+current MB discography (i.e. residue from a previous wrong MBID
+auto-resolve). `--dry-run` lists; `--apply` resets.
 
 Queue priority: aprovat > pendent > descartat; within each, oldest
 `mb_last_sync` first. Refresh every 7 days by default. The cron

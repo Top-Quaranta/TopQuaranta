@@ -9,6 +9,9 @@ module and let the shim handle the re-export.
 from __future__ import annotations
 
 import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -275,6 +278,25 @@ def artista_detail(request: Request, pk: int) -> Response:
             if artista.aprovat and artista.pendent_review:
                 artista.pendent_review = False
         artista.save()
+
+        # If staff just changed the MBID (or set one for the first
+        # time), re-sync MB metadata. Without this, stale fields
+        # (`mb_recording_id`, `mb_work_id`, `mbrainz_confirmed`) on
+        # the artist's Cançons survive the change and corrupt
+        # downstream MB-derived ML features. Caught 2026-04-29 on
+        # the "Casual" case — the auto-resolver had matched the wrong
+        # (US) MBID, staff PATCH'd to the correct (CAT) one, but the
+        # cançons stayed tagged with the US recording IDs.
+        new_mbid_value = (artista.musicbrainz_id or "").strip()
+        if new_mbid_value and new_mbid_value != (old_mbid or ""):
+            from music.mb_sync import sync_from_mbid
+
+            try:
+                sync_from_mbid(artista)
+            except Exception:
+                logger.exception(
+                    "Auto-sync after MBID change failed for artista %s", artista.pk
+                )
 
         # Replace locations if sent (array of {municipi_id} or {manual}).
         if "localitats" in data:

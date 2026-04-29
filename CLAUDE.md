@@ -1,10 +1,9 @@
 # CLAUDE.md — TopQuaranta
 
 > Persistent memory for Claude Code. Read this file first on every session.
-> Last updated: 2026-04-27 — Post Sprint I bis (renderer redesign +
-> multi-channel distribution: Mastodon/Bluesky/Telegram/Newsletter/RSS
-> + Stalwart mail with Brevo+Resend smarthost + BIMI + Hetzner Cloud
-> API + CDMON DNS API).
+> Last updated: 2026-04-29 — Post MB auto-match rewrite (drop Lucene
+> score reliance, trust name + PPCC localitats; auto re-sync on staff
+> MBID change; `auditar_mb_orphans` cleanup command).
 
 ## Other docs
 
@@ -191,6 +190,7 @@ list.
 | **Spotify as playlist output** | One-time OAuth → long-lived refresh_token → daily sync cron. Premium needed on the app owner, free for listeners. Catalog reads via Client Credentials also require app-owner Premium (policy change late 2024) — we don't rely on them. |
 | **Invariant: aprovat ⇒ Deezer ID OR MBID** | Enforced by `post_delete` signal on ArtistaDeezer (2026-04-21; relaxed 2026-04-22). An artist needs ≥1 external anchor. Motivation: Crim-style collisions where two PPCC artists share a Deezer ID — one keeps Deezer, the other lives off MusicBrainz. |
 | **MusicBrainz as disambiguation oracle** (2026-04-22) | Deezer stays primary (discovery + previews + scale). MB adds an always-on cron every 15 min (`obtenir_metadata_musicbrainz`) that pulls MBID + area + begin/end dates + URL relations + aliases + tags + full discography (release-groups/recordings/ISRCs/Work language). Reconciles Albums/Cançons via ISRC then normalised title fuzzy. Feeds 3 ML features (`mbrainz_confirmed`, `mb_lyrics_cat`, `artista_te_mbid`). Staff pins MBID manually on collision cases. |
+| **MB auto-match — name + location, ignore Lucene score** (2026-04-29) | `resolve_mbid()` rewritten after the "Casual" bug (US rapper at score 100 vs CAT band at score 91 — old logic auto-picked the rapper). MB's Lucene score is a search-relevance metric biased toward well-edited mainstream artists; for PPCC music it's actively misleading. New rules: exact-name match + score ≥ 50 (loose floor); then if `Artista` has PPCC `localitats`, keep MB candidates whose `area` is PPCC and require exactly one match. No localitats → refuse auto-match. Empty area on candidates → refuse (can't verify honestly). Plus: `artista_detail` PATCH now auto-triggers `sync_from_mbid()` on MBID change so cançons don't carry orphan `mb_recording_id` from the previous wrong MBID. New audit command `auditar_mb_orphans` cleans up legacy residue. |
 | **Grup C community (2026-04)** | `PerfilUsuari`, `Publicacio`, `Comentari`, `Missatge` — directori, feed moderat, DM 1-to-1, comentaris. Missatge té notificació email amb opt-out. Self-delete via email confirmation. |
 | **Mapa drill-down (2026-04-22)** | `/mapa` SVG dels PPCC amb 3 nivells (territori → comarca → municipi) i panell lateral amb KPIs + graella d'artistes ordenats per reproduccions. GeoJSON preprocessats (Douglas-Peucker 0.002°) a `web-react/public/geodata/` via `scripts/simplify_geodata.py`. |
 | **Public read cache (2026-04-25)** | Hot read endpoints `/api/v1/{ranking,artistes,mapa/artistes-top}/` cached **60 s for anonymous hits** in `pagecache` (LocMem per worker). Authenticated requests bypass. Each endpoint also exposes ETag + Last-Modified via Django's `condition` decorator (rooted at `RankingProvisional.data_calcul`, `Artista.created_at`, `SenyalDiari.data` respectively) — re-fetching clients get a 304 in ~5 ms. Helper at `web/api/utils.py::cache_for_anon`. |

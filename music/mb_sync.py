@@ -26,7 +26,10 @@ from ingesta.clients import musicbrainz as mb
 
 logger = logging.getLogger(__name__)
 
-# PPCC-area MB names we consider a positive territori signal.
+# PPCC-area MB names we consider a positive territori signal. This
+# only covers regional / country-level names; for specific
+# municipalities (Vic, Mataró, Pego, Bunyola, …) we cross-reference
+# our own `Municipi` table (see `_looks_ppcc`).
 _PPCC_AREA_TOKENS = {
     "Catalonia",
     "Catalunya",
@@ -47,6 +50,29 @@ _PPCC_AREA_TOKENS = {
     "Alghero",
     "Perpignan",
     "Northern Catalonia",
+}
+
+# Countries that contain PPCC territory but, on their own, don't tell
+# us anything: an MB record with area="Spain" could be Catalan,
+# Valencian, Mallorquí, OR a Spanish-speaking artist from anywhere
+# else in Spain. Treating these as MISMATCH would unassign every
+# artist whose MB record hasn't been drilled down past country level
+# (caught 2026-04-30: 207 of 302 auto-unassigns had reason="Spain",
+# almost all false positives). For these countries we return
+# `inconclusive` and let the cron leave the MBID alone — the cost of
+# a false negative (leaving a wrong MBID assigned) is much lower than
+# the cost of a false positive (destroying the correct MB metadata).
+_INCONCLUSIVE_COUNTRIES = {
+    "Spain",
+    "España",
+    "Espanya",
+    "France",
+    "Francia",
+    "França",
+    "Italy",
+    "Italia",
+    "Itàlia",
+    "Andorra",
 }
 
 # MB URL relationship types → our Artista field.
@@ -87,8 +113,39 @@ from music.constants import MB_AUTO_MATCH_SCORE as AUTO_MATCH_SCORE  # noqa: E40
 
 
 def _looks_ppcc(area_name: str, disambiguation: str = "") -> bool:
+    """True if the MB area / disambiguation reads as PPCC.
+
+    Two paths:
+      1. Token match against `_PPCC_AREA_TOKENS` (regional names).
+      2. Cross-reference against our `Municipi` table — covers every
+         municipality that appears in our `ArtistaLocalitat` data
+         without needing to maintain a parallel hardcoded list.
+
+    The second path was added 2026-04-30 after the first version
+    treated "Vic", "Mataró", "Sant Boi de Llobregat", "Bunyola",
+    "Olot" etc. as non-PPCC and unassigned ~30 correct MBIDs.
+    """
+    if not area_name:
+        return False
     text = f"{area_name} {disambiguation}".lower()
-    return any(tok.lower() in text for tok in _PPCC_AREA_TOKENS)
+    if any(tok.lower() in text for tok in _PPCC_AREA_TOKENS):
+        return True
+    # Municipi cross-reference. Cheap (indexed exact-match against
+    # ~5 000 rows). PPCC territoris from `music.constants`.
+    from music.constants import TERRITORIS_VALIDS
+    from music.models import Municipi
+
+    return Municipi.objects.filter(
+        nom__iexact=area_name.strip(),
+        territori__codi__in=TERRITORIS_VALIDS,
+    ).exists()
+
+
+def _is_inconclusive_country(area_name: str) -> bool:
+    """True if the MB area is a country that contains PPCC territory.
+    These names alone don't tell us if the artist is PPCC or
+    elsewhere-in-the-country — refuse to penalise."""
+    return area_name.strip() in _INCONCLUSIVE_COUNTRIES
 
 
 def _parse_date(raw: str) -> datetime.date | None:
@@ -125,14 +182,22 @@ def validate_artista_area(artista) -> tuple[bool, str]:
     `localitats` — i.e. we almost certainly auto-matched a homonym
     from elsewhere and should unassign.
 
-    Conservative by design:
-      * No localitats on our side → can't tell, return ok ("inconclusive
-        but don't touch").
+    Conservative by design — we'd rather leave a wrong MBID assigned
+    (false negative) than destroy a correct MB record's metadata
+    (false positive). The 2026-04-30 audit caught 207/302 unassigns
+    being false positives because `area="Spain"` was being treated as
+    "non-PPCC". Fixed by:
+      * `_looks_ppcc` cross-references our `Municipi` table.
+      * Country-level areas that contain PPCC territory (Spain,
+        France, Italy, Andorra) are now `inconclusive`, not mismatch.
+
+    Decision flow:
+      * No localitats on our side → ok (can't tell).
       * MBID empty → ok (nothing to validate).
-      * MB area empty/unknown → ok (don't penalise low-metadata MB
-        records; many small PPCC bands lack area).
-      * MB area present AND PPCC → ok.
-      * MB area present AND non-PPCC → MISMATCH.
+      * MB area empty/unknown → ok (low-metadata MB record).
+      * MB area is PPCC (token match OR Municipi lookup) → ok.
+      * MB area is an inconclusive country → ok (Spain, France, …).
+      * MB area is some other place → MISMATCH.
 
     Cost: one MB API call (`get_artist`). Used by the cron, so the
     1 req/s rate limit applies.
@@ -156,6 +221,8 @@ def validate_artista_area(artista) -> tuple[bool, str]:
         return False, "mb-area-empty"
     if _looks_ppcc(area_name, disamb):
         return False, "ok-ppcc"
+    if _is_inconclusive_country(area_name):
+        return False, f"ok-inconclusive-country:{area_name}"
     return True, f"mb-area-non-ppcc:{area_name}"
 
 

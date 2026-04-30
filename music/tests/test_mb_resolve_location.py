@@ -196,3 +196,92 @@ def test_validate_skips_when_mb_area_empty(cat_artist):
     with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
         mismatch, _ = validate_artista_area(cat_artist)
     assert mismatch is False
+
+
+# ── Spain / France / Italy / Andorra are inconclusive (2026-04-30) ────
+
+
+@pytest.mark.django_db
+def test_validate_treats_spain_as_inconclusive(cat_artist):
+    """`area='Spain'` doesn't tell us if the artist is PPCC or
+    elsewhere-in-Spain. Caught 2026-04-30: 207 of 302 auto-unassigns
+    had reason='Spain', virtually all false positives."""
+    from music.mb_sync import validate_artista_area
+
+    cat_artist.musicbrainz_id = "spain-mbid"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "spain-mbid", "area": {"name": "Spain"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, reason = validate_artista_area(cat_artist)
+    assert mismatch is False
+    assert "inconclusive" in reason
+
+
+@pytest.mark.django_db
+def test_validate_treats_france_as_inconclusive(cat_artist):
+    """`area='France'` covers Catalunya Nord — never auto-unassign."""
+    from music.mb_sync import validate_artista_area
+
+    cat_artist.musicbrainz_id = "fr-mbid"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "fr-mbid", "area": {"name": "France"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, _ = validate_artista_area(cat_artist)
+    assert mismatch is False
+
+
+# ── Specific PPCC municipalities recognised via Municipi table ────────
+
+
+@pytest.mark.django_db
+def test_looks_ppcc_recognises_municipi_by_name():
+    """A small PPCC town (Vic, Mataró, Bunyola, …) appears in our
+    Municipi table; `_looks_ppcc` cross-references the table so
+    short MB area strings still match."""
+    from music.mb_sync import _looks_ppcc
+    from music.models import Municipi, Territori
+
+    cat_terr, _ = Territori.objects.get_or_create(
+        codi="CAT", defaults={"nom": "Catalunya"}
+    )
+    Municipi.objects.create(nom="Vic", comarca="Osona", territori=cat_terr)
+    assert _looks_ppcc("Vic") is True
+    assert _looks_ppcc("vic") is True  # case-insensitive
+    # A foreign town isn't in our Municipi table.
+    assert _looks_ppcc("Leeds") is False
+
+
+@pytest.mark.django_db
+def test_validate_accepts_ppcc_municipi(cat_artist):
+    """A specific Catalan town shouldn't get unassigned — it's in
+    our Municipi table under territori=CAT."""
+    from music.mb_sync import validate_artista_area
+    from music.models import Municipi, Territori
+
+    cat_terr, _ = Territori.objects.get_or_create(
+        codi="CAT", defaults={"nom": "Catalunya"}
+    )
+    Municipi.objects.create(nom="Vic", comarca="Osona", territori=cat_terr)
+    cat_artist.musicbrainz_id = "vic-band"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "vic-band", "area": {"name": "Vic"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, reason = validate_artista_area(cat_artist)
+    assert mismatch is False
+    assert reason == "ok-ppcc"
+
+
+@pytest.mark.django_db
+def test_validate_still_catches_real_non_ppcc_country(cat_artist):
+    """The whole point: a US / MX / JP area still triggers a
+    legitimate unassignment. The fix is meant to stop false
+    positives, not deactivate the defence-in-depth altogether."""
+    from music.mb_sync import validate_artista_area
+
+    cat_artist.musicbrainz_id = "mexican-band"
+    cat_artist.save(update_fields=["musicbrainz_id"])
+    mb_data = {"id": "mexican-band", "area": {"name": "Mexico"}}
+    with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
+        mismatch, reason = validate_artista_area(cat_artist)
+    assert mismatch is True
+    assert "non-ppcc" in reason

@@ -85,6 +85,7 @@ export default function LocationCascade({ value, onChange }) {
   return (
     <div className="flex flex-wrap gap-1">
       <select
+        aria-label="Territori"
         value={territori}
         onChange={e => {
           const next = e.target.value
@@ -109,6 +110,7 @@ export default function LocationCascade({ value, onChange }) {
 
       {isAlt ? (
         <input
+          aria-label="Nom de la localitat"
           value={value?.manual || ''}
           onChange={e =>
             onChange({ ...value, manual: e.target.value })
@@ -119,6 +121,7 @@ export default function LocationCascade({ value, onChange }) {
       ) : (
         <>
           <select
+            aria-label="Comarca"
             value={comarca}
             onChange={e =>
               onChange({
@@ -139,6 +142,7 @@ export default function LocationCascade({ value, onChange }) {
             ))}
           </select>
           <select
+            aria-label="Municipi"
             value={value?.municipi_id ?? ''}
             onChange={e => pickMunicipi(e.target.value)}
             disabled={!comarca}

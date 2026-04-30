@@ -21,7 +21,7 @@ function Row({ label, value }) {
   const rendered = Array.isArray(value) ? value.join(', ') : value
   return (
     <div className="flex gap-3 text-sm border-b border-tq-ink/5 py-1.5 last:border-0">
-      <span className="w-36 text-[11px] uppercase tracking-wide text-tq-ink/60 shrink-0">
+      <span className="w-36 text-[11px] uppercase tracking-wide text-tq-ink/75 shrink-0">
         {label}
       </span>
       <span className="min-w-0 break-words">{rendered}</span>
@@ -72,7 +72,7 @@ export default function LastfmPanel({ data }) {
       )}
 
       {!hasAnything && !data?.auto_match_disabled && (
-        <p className="text-xs text-tq-ink/60 italic mb-2">
+        <p className="text-xs text-tq-ink/75 italic mb-2">
           Aquest artista encara no s'ha sincronitzat amb Last.fm. El cron
           (05:00 UTC) l'agafarà segons la cua de prioritat. Per forçar-ho
           ara, executa{' '}
@@ -114,7 +114,7 @@ export default function LastfmPanel({ data }) {
 
       {data?.bio_summary && (
         <details className="mt-3 text-xs text-tq-ink/80">
-          <summary className="cursor-pointer font-semibold text-tq-ink/60 uppercase tracking-wide text-[11px]">
+          <summary className="cursor-pointer font-semibold text-tq-ink/75 uppercase tracking-wide text-[11px]">
             Bio (resum)
           </summary>
           <div
@@ -123,7 +123,7 @@ export default function LastfmPanel({ data }) {
           />
           {data.bio_content && data.bio_content !== data.bio_summary && (
             <details className="mt-2">
-              <summary className="cursor-pointer font-semibold text-tq-ink/60 text-[11px]">
+              <summary className="cursor-pointer font-semibold text-tq-ink/75 text-[11px]">
                 veure bio sencera
               </summary>
               <div

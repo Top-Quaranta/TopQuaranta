@@ -37,7 +37,7 @@ export default function PropostesPage() {
       <PageHeader title="Propostes d'artistes" subtitle={data ? `${data.total} propostes` : 'Carregant…'} />
 
       <div className="flex gap-2 mb-3">
-        <Select value={estat} onChange={e => { setPage(1); setEstat(e.target.value) }}>
+        <Select aria-label="Estat" value={estat} onChange={e => { setPage(1); setEstat(e.target.value) }}>
           <option value="pendent">Pendents</option>
           <option value="aprovat">Aprovades</option>
           <option value="rebutjat">Rebutjades</option>

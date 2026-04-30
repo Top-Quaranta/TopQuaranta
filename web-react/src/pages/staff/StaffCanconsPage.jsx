@@ -191,14 +191,14 @@ export default function StaffCanconsPage() {
           {(p, setP) => (
             <>
               <Field label="Estat de verificació">
-                <Select value={p.verificada} onChange={e => setP({ verificada: e.target.value })}>
+                <Select aria-label="Verificació" value={p.verificada} onChange={e => setP({ verificada: e.target.value })}>
                   <option value="0">No verificades</option>
                   <option value="1">Verificades</option>
                   <option value="">Totes</option>
                 </Select>
               </Field>
               <Field label="Classe ML">
-                <Select value={p.ml_classe} onChange={e => setP({ ml_classe: e.target.value })}>
+                <Select aria-label="Classe ML" value={p.ml_classe} onChange={e => setP({ ml_classe: e.target.value })}>
                   <option value="">Totes</option>
                   <option value="A">Classe A</option>
                   <option value="B">Classe B</option>
@@ -206,7 +206,7 @@ export default function StaffCanconsPage() {
                 </Select>
               </Field>
               <Field label="Whisper LID">
-                <Select value={p.whisper} onChange={e => setP({ whisper: e.target.value })}>
+                <Select aria-label="Whisper LID" value={p.whisper} onChange={e => setP({ whisper: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="ca">Català</option>
                   <option value="no_ca">No-català</option>
@@ -214,21 +214,21 @@ export default function StaffCanconsPage() {
                 </Select>
               </Field>
               <Field label="Preview Deezer">
-                <Select value={p.preview} onChange={e => setP({ preview: e.target.value })}>
+                <Select aria-label="Preview" value={p.preview} onChange={e => setP({ preview: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="si">Té preview</option>
                   <option value="no">Sense preview</option>
                 </Select>
               </Field>
               <Field label="Deezer ID">
-                <Select value={p.deezer} onChange={e => setP({ deezer: e.target.value })}>
+                <Select aria-label="Deezer" value={p.deezer} onChange={e => setP({ deezer: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="si">Amb Deezer</option>
                   <option value="no">Sense Deezer</option>
                 </Select>
               </Field>
               <Field label="MusicBrainz">
-                <Select value={p.mb} onChange={e => setP({ mb: e.target.value })}>
+                <Select aria-label="MusicBrainz" value={p.mb} onChange={e => setP({ mb: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="confirmat">Confirmat ✓</option>
                   <option value="no_confirmat">No confirmat ✗</option>
@@ -240,7 +240,7 @@ export default function StaffCanconsPage() {
                 </Select>
               </Field>
               <Field label="Llançament recent">
-                <Select value={p.recent} onChange={e => setP({ recent: e.target.value })}>
+                <Select aria-label="Recents" value={p.recent} onChange={e => setP({ recent: e.target.value })}>
                   <option value="">Qualsevol data</option>
                   <option value="7">Últims 7 dies</option>
                   <option value="30">Últims 30 dies</option>
@@ -248,7 +248,7 @@ export default function StaffCanconsPage() {
                 </Select>
               </Field>
               <Field label="Ordenació">
-                <Select value={p.sort} onChange={e => setP({ sort: e.target.value })}>
+                <Select aria-label="Ordenació" value={p.sort} onChange={e => setP({ sort: e.target.value })}>
                   <option value="-ml_confianca">ML conf. ↓</option>
                   <option value="ml_confianca">ML conf. ↑</option>
                   <option value="-data_llancament">Data ↓ (més recents)</option>
@@ -267,7 +267,7 @@ export default function StaffCanconsPage() {
       {sel.size > 0 && (
         <div className="flex flex-wrap gap-2 mb-3 p-2 bg-tq-yellow/90 text-tq-ink rounded">
           <span className="text-sm font-semibold">{sel.size} seleccionades</span>
-          <Select value={motiu} onChange={e => setMotiu(e.target.value)}>
+          <Select aria-label="Motiu" value={motiu} onChange={e => setMotiu(e.target.value)}>
             {MOTIUS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </Select>
           <Btn onClick={() => act('aprovar')} disabled={busy}>Aprovar</Btn>
@@ -282,7 +282,7 @@ export default function StaffCanconsPage() {
         <Table>
           <THead>
             <tr>
-              <Th className="w-8"><input type="checkbox" checked={!!allSelected} onChange={toggleAll} /></Th>
+              <Th className="w-8"><input type="checkbox" aria-label="Selecciona-ho tot" checked={!!allSelected} onChange={toggleAll} /></Th>
               <Th>Cançó</Th>
               <Th>Artista</Th>
               <Th>Àlbum</Th>
@@ -300,7 +300,7 @@ export default function StaffCanconsPage() {
             {data?.results?.map(c => (
               <Tr key={c.pk} onClick={() => navigate(`/staff/cancons/${c.pk}`)}>
                 <Td className="w-8" onClick={e => e.stopPropagation()}>
-                  <input type="checkbox" checked={sel.has(c.pk)} onChange={() => toggle(c.pk)} />
+                  <input type="checkbox" aria-label={`Selecciona la cançó ${c.nom}`} checked={sel.has(c.pk)} onChange={() => toggle(c.pk)} />
                 </Td>
                 <Td>
                   <div className="font-semibold">{c.nom}</div>
@@ -320,12 +320,12 @@ export default function StaffCanconsPage() {
                   {c.ml_confianca != null && <span className="text-[11px] ml-1 opacity-60">{Math.round(c.ml_confianca * 100)}%</span>}
                 </Td>
                 <Td>
-                  {c.whisper_lang ? <Pill tone={c.whisper_lang === 'ca' ? 'green' : 'red'}>{c.whisper_lang}</Pill> : <span className="opacity-40 text-xs">—</span>}
+                  {c.whisper_lang ? <Pill tone={c.whisper_lang === 'ca' ? 'green' : 'red'}>{c.whisper_lang}</Pill> : <span className="opacity-60 text-xs">—</span>}
                 </Td>
                 <Td>
                   {c.mbrainz_confirmed === true && <Pill tone="green">✓</Pill>}
                   {c.mbrainz_confirmed === false && <Pill tone="red">✗</Pill>}
-                  {c.mbrainz_confirmed == null && <span className="opacity-40 text-xs">—</span>}
+                  {c.mbrainz_confirmed == null && <span className="opacity-60 text-xs">—</span>}
                   {c.mb_lyrics_language === 'cat' && (
                     <span className="ml-1 text-[10px] font-semibold text-emerald-700" title="MusicBrainz Work.language = cat">cat</span>
                   )}
@@ -346,7 +346,7 @@ export default function StaffCanconsPage() {
                       ▶ Deezer
                     </a>
                   ) : (
-                    <span className="text-[11px] opacity-40">—</span>
+                    <span className="text-[11px] opacity-60">—</span>
                   )}
                 </Td>
               </Tr>

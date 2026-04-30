@@ -51,9 +51,9 @@ export default function SenyalPage() {
       <PageHeader title="Senyal diari" subtitle={rows ? `${rows.total} rows` : 'Carregant…'} />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Input type="date" value={data} onChange={e => { setPage(1); setData(e.target.value) }} />
-        <Select value={mena} onChange={e => { setPage(1); setMena(e.target.value) }}>
+        <Input aria-label="Cerca" placeholder="Cerca…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
+        <Input aria-label="Data" type="date" value={data} onChange={e => { setPage(1); setData(e.target.value) }} />
+        <Select aria-label="Mena de senyal" value={mena} onChange={e => { setPage(1); setMena(e.target.value) }}>
           <option value="">Tots</option>
           <option value="errors">Errors</option>
           <option value="correccions">Correccions</option>

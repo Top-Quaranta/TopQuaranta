@@ -67,7 +67,7 @@ export default function StaffAlbumsPage() {
           {(p, setP) => (
             <>
               <Field label="Tipus">
-                <Select value={p.tipus} onChange={e => setP({ tipus: e.target.value })}>
+                <Select aria-label="Tipus d'àlbum" value={p.tipus} onChange={e => setP({ tipus: e.target.value })}>
                   <option value="">Tots els tipus</option>
                   <option value="album">Àlbum</option>
                   <option value="single">Single</option>
@@ -75,14 +75,14 @@ export default function StaffAlbumsPage() {
                 </Select>
               </Field>
               <Field label="Estat">
-                <Select value={p.descartat} onChange={e => setP({ descartat: e.target.value })}>
+                <Select aria-label="Descartat" value={p.descartat} onChange={e => setP({ descartat: e.target.value })}>
                   <option value="">Tots</option>
                   <option value="0">No descartats</option>
                   <option value="1">Descartats</option>
                 </Select>
               </Field>
               <Field label="MusicBrainz">
-                <Select value={p.mb} onChange={e => setP({ mb: e.target.value })}>
+                <Select aria-label="MusicBrainz" value={p.mb} onChange={e => setP({ mb: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="confirmat">Confirmat ✓</option>
                   <option value="no_confirmat">No confirmat ✗</option>
@@ -166,7 +166,7 @@ export default function StaffAlbumsPage() {
                       ▶ Deezer
                     </a>
                   ) : (
-                    <span className="text-[11px] opacity-40">—</span>
+                    <span className="text-[11px] opacity-60">—</span>
                   )}
                 </Td>
               </Tr>

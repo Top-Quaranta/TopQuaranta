@@ -105,10 +105,15 @@ export function Pill({ children, tone = 'ink' }) {
       </span>
     )
   }
+  // Pills sit on white card backgrounds in the staff panel. The
+  // foreground uses the *-deep tokens (AA on white at small text);
+  // the background is a soft tint of the same hue. Hardcoded hex
+  // here would break the design-system rule, so we go through the
+  // mm-design CSS variables.
   const sem = {
-    green: { bg: 'rgba(16, 185, 129, 0.16)', fg: 'var(--color-tq-success)' },
-    red:   { bg: 'rgba(239, 68, 68, 0.16)',  fg: 'var(--color-tq-danger)' },
-    gray:  { bg: 'rgba(156, 163, 175, 0.20)', fg: 'var(--color-tq-neutral, #6b7280)' },
+    green: { bg: 'rgba(16, 185, 129, 0.18)', fg: 'var(--color-tq-success-deep)' },
+    red:   { bg: 'rgba(239, 68, 68, 0.18)',  fg: 'var(--color-tq-danger-deep)' },
+    gray:  { bg: 'rgba(156, 163, 175, 0.25)', fg: 'var(--color-tq-neutral-deep)' },
   }
   const s = sem[tone] || sem.gray
   return (
@@ -187,7 +192,7 @@ export function Select({ children, ...props }) {
 export function Pagination({ meta, onPage }) {
   if (!meta || meta.num_pages <= 1) return null
   return (
-    <div className="flex items-center gap-2 px-3 py-2 text-xs text-tq-ink/60">
+    <div className="flex items-center gap-2 px-3 py-2 text-xs text-tq-ink/75">
       <Btn
         tone="secondary"
         disabled={!meta.has_previous}

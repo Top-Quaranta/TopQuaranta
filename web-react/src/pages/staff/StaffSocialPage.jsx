@@ -379,7 +379,7 @@ export default function StaffSocialPage() {
     <section className="bg-white text-tq-ink rounded-lg shadow-md p-4 md:p-6 space-y-6">
       <header>
         <h1 className="text-2xl font-bold font-display">Distribució — Instagram</h1>
-        <p className="text-sm text-tq-ink/60 mt-1">
+        <p className="text-sm text-tq-ink/75 mt-1">
           Control del calendari setmanal. Cada slot publica via Graph
           API. Mode <strong>{config.dry_run ? 'DRY-RUN' : 'PRODUCCIÓ'}</strong>
           {' '} (les credencials viuen a la fila singleton{' '}
@@ -394,7 +394,7 @@ export default function StaffSocialPage() {
           ? 'border-emerald-300 bg-emerald-50'
           : 'border-yellow-300 bg-yellow-50')
       }>
-        <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1">
+        <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1">
           Credencials Instagram
         </p>
         {credentials.configured ? (
@@ -424,7 +424,7 @@ export default function StaffSocialPage() {
                 type="button"
                 onClick={clearCredentials}
                 disabled={busy}
-                className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700"
+                className="px-3 py-1.5 bg-red-700 text-white rounded text-xs font-semibold hover:bg-red-800"
               >
                 Esborrar credencials
               </button>
@@ -454,7 +454,7 @@ export default function StaffSocialPage() {
                 placeholder="IGAA..."
                 className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
               />
-              <span className="block text-[10px] text-tq-ink/60 mt-1">
+              <span className="block text-[10px] text-tq-ink/75 mt-1">
                 El token es genera a developers.facebook.com →
                 Instagram → API setup → Generate token.
               </span>
@@ -481,7 +481,7 @@ export default function StaffSocialPage() {
           >
             Desar
           </button>
-          <p className="text-[10px] text-tq-ink/60 mt-1">
+          <p className="text-[10px] text-tq-ink/75 mt-1">
             En desar, el backend confirma el token amb una crida a la
             Graph API i extreu el teu Instagram user ID
             automàticament. El token només es desa al servidor (fila
@@ -494,7 +494,7 @@ export default function StaffSocialPage() {
       {/* ── Config controls ───────────────────────────────────── */}
       <div className="grid sm:grid-cols-3 gap-3">
         <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60">Kill switch</p>
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Kill switch</p>
           <button
             type="button"
             onClick={toggle}
@@ -502,8 +502,8 @@ export default function StaffSocialPage() {
             className={
               'mt-2 px-3 py-1.5 rounded-md text-sm font-semibold ' +
               (config.instagram_actiu
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-red-600 text-white hover:bg-red-700')
+                ? 'bg-emerald-700 text-white hover:bg-emerald-800'
+                : 'bg-red-700 text-white hover:bg-red-800')
             }
           >
             {config.instagram_actiu ? 'ACTIU — clica per pausar' : 'PAUSAT — clica per activar'}
@@ -511,7 +511,7 @@ export default function StaffSocialPage() {
         </div>
 
         <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60">Fase distribució</p>
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Fase distribució</p>
           <div className="flex gap-1 mt-2">
             {[1, 2, 3, 4, 5].map(n => (
               <button
@@ -530,13 +530,13 @@ export default function StaffSocialPage() {
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-tq-ink/60 mt-1">
+          <p className="text-[10px] text-tq-ink/75 mt-1">
             1=dissabte · 2=+dimecres · 3=+dilluns · 4=+divendres · 5=+dimarts
           </p>
         </div>
 
         <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60">Token Instagram</p>
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Token Instagram</p>
           <span className={'inline-block mt-2 px-2 py-0.5 rounded text-xs font-semibold ' + tokenTone}>
             {config.token_days_left == null ? 'No configurat' :
              `${config.token_days_left} dies fins caducar`}
@@ -545,16 +545,15 @@ export default function StaffSocialPage() {
       </div>
 
       <div className="p-3 border rounded-md max-w-md">
-        <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1">
+        <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1">
           Story cap Global (cançons)
         </p>
-        <Select
-          value={config.story_max_cancons_ppcc}
+        <Select aria-label="Story cap Global (cançons)" value={config.story_max_cancons_ppcc}
           onChange={e => setStoryCap(parseInt(e.target.value, 10))}
         >
           {[5, 10, 15, 20, 30, 40].map(n => <option key={n} value={n}>{n} stories</option>)}
         </Select>
-        <p className="text-[10px] text-tq-ink/60 mt-1">
+        <p className="text-[10px] text-tq-ink/75 mt-1">
           Si la story completion rate cau per sota del 25 % al story #N,
           baixa aquí a N.
         </p>
@@ -565,7 +564,7 @@ export default function StaffSocialPage() {
         <h2 className="text-base font-bold font-display mb-2">
           Canals addicionals
         </h2>
-        <p className="text-xs text-tq-ink/60 mb-3">
+        <p className="text-xs text-tq-ink/75 mb-3">
           Mateix payload setmanal que Instagram, distribuït a 4 canals més.
           Cada canal té el seu kill switch independent. Activa'ls quan
           tinguis les credencials posades; sense credencials el cron salta
@@ -583,7 +582,7 @@ export default function StaffSocialPage() {
           ].map(c => (
             <div key={c.key} className="p-3 border rounded-md flex items-center justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-tq-ink/60">{c.label}</p>
+                <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">{c.label}</p>
                 <p className="text-sm mt-1">{c.val ? 'Actiu' : 'Pausat'}</p>
               </div>
               <button
@@ -593,8 +592,8 @@ export default function StaffSocialPage() {
                 className={
                   'px-3 py-1 rounded text-xs font-semibold ' +
                   (c.val
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'bg-red-600 text-white hover:bg-red-700')
+                    ? 'bg-emerald-700 text-white hover:bg-emerald-800'
+                    : 'bg-red-700 text-white hover:bg-red-800')
                 }
               >
                 {c.val ? 'Pausar' : 'Activar'}
@@ -622,7 +621,7 @@ export default function StaffSocialPage() {
               </button>
             </p>
           ) : (
-            <p className="text-xs text-tq-ink/60">
+            <p className="text-xs text-tq-ink/75">
               Sense credencials. Crea una "App" a la teva instància (Settings → Development →
               New Application, scopes: <code>write:media write:statuses</code>) i enganxa el token.
             </p>
@@ -632,11 +631,11 @@ export default function StaffSocialPage() {
               {mastodon.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
             </summary>
             <div className="grid sm:grid-cols-3 gap-2 mt-2">
-              <Input placeholder="https://mastodont.cat" value={mstInstance}
+              <Input aria-label="Instància de Mastodon" placeholder="https://mastodont.cat" value={mstInstance}
                      onChange={e => setMstInstance(e.target.value)} />
-              <Input placeholder="access_token" value={mstToken}
+              <Input aria-label="Access token de Mastodon" placeholder="access_token" value={mstToken}
                      onChange={e => setMstToken(e.target.value)} type="password" />
-              <Input placeholder="handle (opcional)" value={mstHandle}
+              <Input aria-label="Handle de Mastodon (opcional)" placeholder="handle (opcional)" value={mstHandle}
                      onChange={e => setMstHandle(e.target.value)} />
             </div>
             <button type="button" onClick={saveMastodon} disabled={busy || !mstInstance || !mstToken}
@@ -665,7 +664,7 @@ export default function StaffSocialPage() {
               </button>
             </p>
           ) : (
-            <p className="text-xs text-tq-ink/60">
+            <p className="text-xs text-tq-ink/75">
               Sense credencials. Crea una <strong>App Password</strong> a {' '}
               <a className="underline" href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener">
                 bsky.app/settings/app-passwords
@@ -677,9 +676,9 @@ export default function StaffSocialPage() {
               {bluesky.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
             </summary>
             <div className="grid sm:grid-cols-2 gap-2 mt-2">
-              <Input placeholder="topquaranta.bsky.social" value={bskyHandle}
+              <Input aria-label="Handle de Bluesky" placeholder="topquaranta.bsky.social" value={bskyHandle}
                      onChange={e => setBskyHandle(e.target.value)} />
-              <Input placeholder="app password" value={bskyPwd}
+              <Input aria-label="App password de Bluesky" placeholder="app password" value={bskyPwd}
                      onChange={e => setBskyPwd(e.target.value)} type="password" />
             </div>
             <button type="button" onClick={saveBluesky} disabled={busy || !bskyHandle || !bskyPwd}
@@ -708,7 +707,7 @@ export default function StaffSocialPage() {
               </button>
             </p>
           ) : (
-            <p className="text-xs text-tq-ink/60">
+            <p className="text-xs text-tq-ink/75">
               Sense credencials. Parla amb {' '}
               <a className="underline" href="https://t.me/BotFather" target="_blank" rel="noopener">
                 @BotFather
@@ -721,9 +720,9 @@ export default function StaffSocialPage() {
               {telegram.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
             </summary>
             <div className="grid sm:grid-cols-2 gap-2 mt-2">
-              <Input placeholder="bot_token (de @BotFather)" value={tgToken}
+              <Input aria-label="Bot token de Telegram" placeholder="bot_token (de @BotFather)" value={tgToken}
                      onChange={e => setTgToken(e.target.value)} type="password" />
-              <Input placeholder="@canal o ID numèric" value={tgChatId}
+              <Input aria-label="Canal de Telegram" placeholder="@canal o ID numèric" value={tgChatId}
                      onChange={e => setTgChatId(e.target.value)} />
             </div>
             <button type="button" onClick={saveTelegram} disabled={busy || !tgToken || !tgChatId}
@@ -733,7 +732,7 @@ export default function StaffSocialPage() {
           </details>
         </div>
 
-        <p className="text-[11px] text-tq-ink/60">
+        <p className="text-[11px] text-tq-ink/75">
           La <strong>newsletter</strong> usa l'SMTP configurat a <code>EMAIL_HOST</code>;
           envia automàticament cada dissabte als usuaris amb <code>vol_newsletter=True</code>.
           L'<strong>RSS</strong> es serveix a <code>/rss/top.xml</code> + <code>/rss/novetats.xml</code> sense altres credencials.
@@ -745,7 +744,7 @@ export default function StaffSocialPage() {
         <h2 className="text-base font-bold font-display mb-2">
           Calendari d'aquesta setmana
         </h2>
-        <p className="text-xs text-tq-ink/60 mb-2">
+        <p className="text-xs text-tq-ink/75 mb-2">
           El cron entra cada dia, però només publica si la fase actual
           inclou aquell slot. La rotació territorial està resolta — així
           ja saps quin top toca abans de prémer res.
@@ -759,7 +758,7 @@ export default function StaffSocialPage() {
           >
             Generar totes les slides de la setmana (dry-run)
           </button>
-          <span className="text-[11px] text-tq-ink/60 ml-2">
+          <span className="text-[11px] text-tq-ink/75 ml-2">
             Renderitza tots els slots (PPCC + territoris + novetats) sense publicar.
             Després pots veure'ls amb "Veure slides" a la taula de baix.
           </span>
@@ -781,10 +780,10 @@ export default function StaffSocialPage() {
                 const inFase = config.fase_distribucio >= s.min_fase
                 return (
                   <tr key={`${s.platform}-${s.tipus}-${s.weekday}`}
-                      className={inFase ? '' : 'opacity-60'}>
+                      className={inFase ? '' : 'opacity-80'}>
                     <td className="py-1 pr-3" title={s.publication_date}>
                       <strong>{s.weekday_name}</strong>{' '}
-                      <span className="text-tq-ink/60">
+                      <span className="text-tq-ink/75">
                         · setm. {s.project_week}
                       </span>
                     </td>
@@ -795,7 +794,7 @@ export default function StaffSocialPage() {
                     <td className="py-1">
                       {inFase
                         ? <span className="text-emerald-700 font-semibold">actiu</span>
-                        : <span className="text-tq-ink/50">cal fase ≥ {s.min_fase}</span>}
+                        : <span className="text-tq-ink/70">cal fase ≥ {s.min_fase}</span>}
                     </td>
                   </tr>
                 )
@@ -820,7 +819,7 @@ export default function StaffSocialPage() {
           </a>{' '}
           o a la mateixa app d'Instagram (Profile → Insights).
         </p>
-        <p className="text-tq-ink/60 mt-1">
+        <p className="text-tq-ink/75 mt-1">
           Sprint K integrarà el subset rellevant directament al panell
           (Insights API + comptadors interns ètics). De moment, mira
           cada dilluns: si en 4 setmanes consecutives la fase actual
@@ -865,7 +864,7 @@ export default function StaffSocialPage() {
             <tr key={p.pk} className={`${rowBg} align-top border-t border-tq-ink/10`}>
               <td className="font-semibold whitespace-nowrap" title={`Publicació: ${p.publication_date}`}>
                 Setmana {p.project_week}
-                <div className="text-[10px] text-tq-ink/50 font-normal">
+                <div className="text-[10px] text-tq-ink/70 font-normal">
                   {p.publication_date}
                 </div>
               </td>
@@ -946,7 +945,7 @@ export default function StaffSocialPage() {
       </Table>
 
       {results.length === 0 && (
-        <p className="text-sm text-tq-ink/60 italic">
+        <p className="text-sm text-tq-ink/75 italic">
           Encara no hi ha cap publicació. Utilitza Preview per generar-ne en mode dry-run.
         </p>
       )}
@@ -958,7 +957,7 @@ function SlidesGallery({ slides }) {
   const both = (slides.feed?.length || 0) + (slides.stories?.length || 0)
   if (both === 0) {
     return (
-      <p className="text-xs text-tq-ink/60 italic">
+      <p className="text-xs text-tq-ink/75 italic">
         Cap PNG renderitzat. Fes "Preview" primer per generar-los.
       </p>
     )
@@ -967,7 +966,7 @@ function SlidesGallery({ slides }) {
     <div className="space-y-3">
       {slides.feed?.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1.5">
             Feed · {slides.feed.length} {slides.feed.length === 1 ? 'slide' : 'slides'}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -983,7 +982,7 @@ function SlidesGallery({ slides }) {
       )}
       {slides.stories?.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1.5">
             Stories · {slides.stories.length} {slides.stories.length === 1 ? 'story' : 'stories'}
           </p>
           <div className="flex flex-wrap gap-2">

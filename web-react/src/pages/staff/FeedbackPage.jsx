@@ -82,13 +82,13 @@ export default function FeedbackPage() {
       <PageHeader title="Feedback d'usuaris" subtitle={data ? `${data.total} entrades` : 'Carregant…'} />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Select value={resolt} onChange={e => { setPage(1); setResolt(e.target.value) }}>
+        <Input aria-label="Cerca" placeholder="Cerca…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
+        <Select aria-label="Estat (resolt / pendent)" value={resolt} onChange={e => { setPage(1); setResolt(e.target.value) }}>
           <option value="0">Pendents</option>
           <option value="1">Resoltes</option>
           <option value="">Totes</option>
         </Select>
-        <Select value={targetType} onChange={e => { setPage(1); setTargetType(e.target.value) }}>
+        <Select aria-label="Tipus de target" value={targetType} onChange={e => { setPage(1); setTargetType(e.target.value) }}>
           <option value="">Qualsevol target</option>
           <option value="artista">Artista</option>
           <option value="album">Àlbum</option>
@@ -123,7 +123,7 @@ export default function FeedbackPage() {
                   <Td>
                     <Pill>{fb.target_type}</Pill>
                     <div className="text-xs mt-1">
-                      {fb.target_label || <span className="opacity-50">(sense nom)</span>}
+                      {fb.target_label || <span className="opacity-70">(sense nom)</span>}
                     </div>
                   </Td>
                   <Td className="text-sm max-w-md">

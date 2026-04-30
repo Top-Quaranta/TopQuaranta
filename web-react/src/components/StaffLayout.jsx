@@ -125,7 +125,7 @@ export default function StaffLayout({ children }) {
               }
             >
               <p
-                className="hidden md:block text-[10px] uppercase tracking-widest text-white/40 px-3 mt-2 mb-1 select-none"
+                className="hidden md:block text-[10px] uppercase tracking-widest text-white/70 px-3 mt-2 mb-1 select-none"
                 aria-hidden="true"
               >
                 {group.label}

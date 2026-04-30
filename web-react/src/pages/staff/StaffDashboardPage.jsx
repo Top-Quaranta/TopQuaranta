@@ -66,7 +66,7 @@ export default function StaffDashboardPage() {
         <p className="text-sm text-white/70">
           Eines d'administració TopQuaranta
           {counts && (
-            <span className="ml-2 opacity-60">
+            <span className="ml-2 opacity-90">
               · {c.usuaris_total} usuaris actius
             </span>
           )}

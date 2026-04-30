@@ -111,7 +111,7 @@ export default function CancoEditPage() {
                 onChange={next => patch({ artista: next })}
               />
             </div>
-            <p className="mt-1 text-[11px] font-normal text-tq-ink/60">
+            <p className="mt-1 text-[11px] font-normal text-tq-ink/75">
               Si l'artista correcte no existeix, clica "+ Crear" per afegir-lo
               primer, després torna aquí i tria'l de la llista.
             </p>
@@ -143,7 +143,7 @@ export default function CancoEditPage() {
               onChange={e => patch({ lastfm_nom: e.target.value })}
               className="w-full mt-1 font-normal"
             />
-            <p className="mt-1 text-[11px] font-normal text-tq-ink/60">
+            <p className="mt-1 text-[11px] font-normal text-tq-ink/75">
               Si Last.fm no troba la cançó, el pipeline queda bloquejat fins demà.
               Desa el canvi i prem "Reintentar Last.fm" per forçar la consulta ara.
               Recorda que també pot ser el <em>Nom a Last.fm</em> de l'artista el que falla.

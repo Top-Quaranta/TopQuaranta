@@ -151,28 +151,28 @@ export default function StaffArtistesPage() {
           {(p, setP) => (
             <>
               <Field label="Estat d'aprovació">
-                <Select value={p.aprovat} onChange={e => setP({ aprovat: e.target.value })}>
+                <Select aria-label="Estat d'aprovació" value={p.aprovat} onChange={e => setP({ aprovat: e.target.value })}>
                   <option value="1">Aprovats</option>
                   <option value="0">No aprovats</option>
                   <option value="">Tots</option>
                 </Select>
               </Field>
               <Field label="Deezer">
-                <Select value={p.deezer} onChange={e => setP({ deezer: e.target.value })}>
+                <Select aria-label="Deezer" value={p.deezer} onChange={e => setP({ deezer: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="si">Té Deezer</option>
                   <option value="no">Sense Deezer</option>
                 </Select>
               </Field>
               <Field label="Territori">
-                <Select value={p.territori} onChange={e => setP({ territori: e.target.value })}>
+                <Select aria-label="Territori" value={p.territori} onChange={e => setP({ territori: e.target.value })}>
                   {TERRITORIS.map(([c, l]) => (
                     <option key={c} value={c}>{l}</option>
                   ))}
                 </Select>
               </Field>
               <Field label="MusicBrainz">
-                <Select value={p.mb} onChange={e => setP({ mb: e.target.value })}>
+                <Select aria-label="MusicBrainz" value={p.mb} onChange={e => setP({ mb: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="amb_mbid">Amb MBID</option>
                   <option value="sense_mbid">Sense MBID (qualsevol)</option>
@@ -183,14 +183,14 @@ export default function StaffArtistesPage() {
                 </Select>
               </Field>
               <Field label="Instagram">
-                <Select value={p.instagram} onChange={e => setP({ instagram: e.target.value })}>
+                <Select aria-label="Instagram" value={p.instagram} onChange={e => setP({ instagram: e.target.value })}>
                   <option value="">Qualsevol</option>
                   <option value="si">Té Instagram</option>
                   <option value="no">Sense Instagram</option>
                 </Select>
               </Field>
               <Field label="Ordenació">
-                <Select value={p.sort} onChange={e => setP({ sort: e.target.value })}>
+                <Select aria-label="Ordenació" value={p.sort} onChange={e => setP({ sort: e.target.value })}>
                   <option value="">Alfabètic (A→Z)</option>
                   <option value="cancons_tops_desc">Cançons al top ↓ (més populars)</option>
                 </Select>
@@ -213,7 +213,7 @@ export default function StaffArtistesPage() {
           <span className="text-sm font-semibold">
             {selList.length} seleccionats
           </span>
-          <Select value={targetPk ?? ''} onChange={e => setTargetPk(e.target.value ? Number(e.target.value) : null)}>
+          <Select aria-label="Destí de la fusió" value={targetPk ?? ''} onChange={e => setTargetPk(e.target.value ? Number(e.target.value) : null)}>
             <option value="">Destí de la fusió…</option>
             {selList.map(s => (
               <option key={s.pk} value={s.pk}>{s.nom} (#{s.pk})</option>
@@ -279,9 +279,9 @@ export default function StaffArtistesPage() {
                   </div>
                 </Td>
                 <Td className="text-xs">
-                  {a.localitat ? (a.localitat.municipi_nom || a.localitat.manual) : <span className="opacity-40">—</span>}
+                  {a.localitat ? (a.localitat.municipi_nom || a.localitat.manual) : <span className="opacity-60">—</span>}
                 </Td>
-                <Td className="text-xs">{a.deezer_ids.length ? a.deezer_ids.join(', ') : <span className="opacity-40">—</span>}</Td>
+                <Td className="text-xs">{a.deezer_ids.length ? a.deezer_ids.join(', ') : <span className="opacity-60">—</span>}</Td>
                 <Td onClick={e => e.stopPropagation()}>
                   {a.instagram_url ? (
                     <a
@@ -294,7 +294,7 @@ export default function StaffArtistesPage() {
                       ↗
                     </a>
                   ) : (
-                    <span className="opacity-40 text-xs">—</span>
+                    <span className="opacity-60 text-xs">—</span>
                   )}
                 </Td>
                 <Td>
@@ -303,7 +303,7 @@ export default function StaffArtistesPage() {
                   ) : a.mb_last_sync ? (
                     <Pill tone="gray">Sense MBID</Pill>
                   ) : (
-                    <span className="opacity-40 text-xs">—</span>
+                    <span className="opacity-60 text-xs">—</span>
                   )}
                   {a.mb_end_date && (
                     <Pill tone="red">Dissolt {a.mb_end_date.slice(0, 4)}</Pill>
@@ -313,13 +313,13 @@ export default function StaffArtistesPage() {
                   {a.nb_similars_lastfm > 0 ? (
                     <span
                       className="font-semibold"
-                      style={{ color: 'var(--color-tq-yellow-deep)' }}
+                      style={{ color: 'var(--color-tq-warning-deep)' }}
                       title={`Recomanat per ${a.nb_similars_lastfm} artista(es) aprovats nostres`}
                     >
                       {a.nb_similars_lastfm}×
                     </span>
                   ) : (
-                    <span className="opacity-30">—</span>
+                    <span className="opacity-60">—</span>
                   )}
                 </Td>
                 <Td>

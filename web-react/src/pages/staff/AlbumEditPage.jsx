@@ -141,7 +141,7 @@ export default function AlbumEditPage() {
                     <Td>{c.nom}</Td>
                     <Td className="text-xs">
                       {cols.length === 0 ? (
-                        <span className="opacity-40">—</span>
+                        <span className="opacity-60">—</span>
                       ) : (
                         cols.map((col, i) => (
                           <span key={col.pk}>

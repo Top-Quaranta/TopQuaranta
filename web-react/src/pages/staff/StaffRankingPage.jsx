@@ -80,7 +80,7 @@ export default function StaffRankingPage() {
       />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Select value={territori} onChange={e => setTerritori(e.target.value)}>
+        <Select aria-label="Territori" value={territori} onChange={e => setTerritori(e.target.value)}>
           {data?.territoris?.map(t => (
             <option key={t.codi} value={t.codi}>{t.codi} — {t.nom}</option>
           ))}
@@ -91,7 +91,7 @@ export default function StaffRankingPage() {
       {sel.size > 0 && (
         <div className="flex flex-wrap gap-2 mb-3 p-2 bg-tq-yellow/90 text-tq-ink rounded">
           <span className="text-sm font-semibold">{sel.size} seleccionades</span>
-          <Select value={motiu} onChange={e => setMotiu(e.target.value)}>
+          <Select aria-label="Motiu" value={motiu} onChange={e => setMotiu(e.target.value)}>
             {/* MOTIUS_REBUIG arrives as [value, label] tuples. Unpack so
                 the <option value> holds the key the backend accepts. */}
             {data?.motius?.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -125,7 +125,7 @@ export default function StaffRankingPage() {
             )}
             {data?.entries?.map(e => (
               <Tr key={e.pk}>
-                <Td><input type="checkbox" checked={sel.has(e.pk)} onChange={() => toggle(e.pk)} /></Td>
+                <Td><input type="checkbox" aria-label={`Selecciona ${e.canco_nom || `entrada ${e.pk}`}`} checked={sel.has(e.pk)} onChange={() => toggle(e.pk)} /></Td>
                 <Td className="font-bold">{e.posicio}</Td>
                 <Td>
                   {e.canco_pk ? (

@@ -61,18 +61,18 @@ export default function UsuarisPage() {
       <PageHeader title="Usuaris" subtitle={data ? `${data.total} usuaris` : 'Carregant…'} />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca email / username / nom públic…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Select value={estat} onChange={e => { setPage(1); setEstat(e.target.value) }}>
+        <Input aria-label="Cerca" placeholder="Cerca email / username / nom públic…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
+        <Select aria-label="Estat" value={estat} onChange={e => { setPage(1); setEstat(e.target.value) }}>
           <option value="">Estat: tots</option>
           <option value="actius">Actius</option>
           <option value="inactius">Inactius</option>
         </Select>
-        <Select value={rol} onChange={e => { setPage(1); setRol(e.target.value) }}>
+        <Select aria-label="Rol musical" value={rol} onChange={e => { setPage(1); setRol(e.target.value) }}>
           <option value="">Rol: tots</option>
           <option value="staff">Staff</option>
           <option value="usuari">Usuari</option>
         </Select>
-        <Select value={directori} onChange={e => { setPage(1); setDirectori(e.target.value) }}>
+        <Select aria-label="Visibilitat al directori" value={directori} onChange={e => { setPage(1); setDirectori(e.target.value) }}>
           <option value="">Directori: tots</option>
           <option value="1">Al directori</option>
           <option value="0">Ocult</option>
@@ -109,13 +109,13 @@ export default function UsuarisPage() {
                   {u.nom_public ? (
                     <span>{u.nom_public}</span>
                   ) : (
-                    <span className="opacity-40">—</span>
+                    <span className="opacity-60">—</span>
                   )}
                   {u.rol_musical && (
                     <Pill tone="ink">{u.rol_musical}</Pill>
                   )}
                 </Td>
-                <Td className="text-xs">{u.localitat || <span className="opacity-40">—</span>}</Td>
+                <Td className="text-xs">{u.localitat || <span className="opacity-60">—</span>}</Td>
                 <Td>
                   {u.is_active ? <Pill tone="green">Actiu</Pill> : <Pill tone="gray">Inactiu</Pill>}
                   {u.is_staff && <Pill tone="yellow">Staff</Pill>}

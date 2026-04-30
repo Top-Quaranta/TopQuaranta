@@ -17,7 +17,7 @@ function Row({ label, value }) {
   const rendered = Array.isArray(value) ? value.join(', ') : value
   return (
     <div className="flex gap-3 text-sm border-b border-tq-ink/5 py-1.5 last:border-0">
-      <span className="w-36 text-[11px] uppercase tracking-wide text-tq-ink/60 shrink-0">
+      <span className="w-36 text-[11px] uppercase tracking-wide text-tq-ink/75 shrink-0">
         {label}
       </span>
       <span className="min-w-0 break-words">{rendered}</span>
@@ -98,7 +98,7 @@ export default function MusicBrainzPanel({ kind, data, onSync, onClear, busy }) 
       </div>
 
       {!hasId && kind !== 'artista' && (
-        <p className="text-xs text-tq-ink/60 italic">
+        <p className="text-xs text-tq-ink/75 italic">
           Aquest {kind === 'album' ? 'àlbum' : 'cançó'} encara no està relacionat amb
           cap entrada de MusicBrainz. Apareixerà quan el cron sincronitzi
           l'artista (o prem "Sincronitzar ara" a la pàgina de l'artista).
@@ -108,7 +108,7 @@ export default function MusicBrainzPanel({ kind, data, onSync, onClear, busy }) 
       {kind === 'artista' && (
         <>
           {!hasId && (
-            <p className="text-xs text-tq-ink/60 italic mb-2">
+            <p className="text-xs text-tq-ink/75 italic mb-2">
               Aquest artista encara no té MBID assignat.{' '}
               {data?.auto_match_disabled ? (
                 <span>
@@ -135,7 +135,7 @@ export default function MusicBrainzPanel({ kind, data, onSync, onClear, busy }) 
           )}
           {Array.isArray(data?.blocked_mbids) && data.blocked_mbids.length > 0 && (
             <div className="text-[11px] text-tq-ink/70 mb-2 flex flex-wrap gap-1 items-center">
-              <span className="uppercase tracking-wide text-tq-ink/60">
+              <span className="uppercase tracking-wide text-tq-ink/75">
                 MBIDs bloquejats:
               </span>
               {data.blocked_mbids.map(id => (
@@ -191,7 +191,7 @@ export default function MusicBrainzPanel({ kind, data, onSync, onClear, busy }) 
               ) : data?.mbrainz_confirmed === false ? (
                 <Pill tone="red">No confirmat</Pill>
               ) : (
-                <span className="text-tq-ink/50">?</span>
+                <span className="text-tq-ink/70">?</span>
               )
             }
           />
@@ -225,7 +225,7 @@ export default function MusicBrainzPanel({ kind, data, onSync, onClear, busy }) 
               ) : data?.mbrainz_confirmed === false ? (
                 <Pill tone="red">No confirmat</Pill>
               ) : (
-                <span className="text-tq-ink/50">?</span>
+                <span className="text-tq-ink/70">?</span>
               )
             }
           />

@@ -151,7 +151,7 @@ function Row({ a, onApproved, onDiscarded }) {
           </a>
         </div>
         {hasExistingLoc && (
-          <div className="text-[11px] text-tq-ink/60 mt-0.5">
+          <div className="text-[11px] text-tq-ink/75 mt-0.5">
             Ja té localitat:{' '}
             {a.localitat.municipi_nom ||
               `${a.localitat.manual} (manual)`}
@@ -178,13 +178,13 @@ function Row({ a, onApproved, onDiscarded }) {
         {a.nb_similars_lastfm > 0 ? (
           <span
             className="font-semibold"
-            style={{ color: 'var(--color-tq-yellow-deep)' }}
+            style={{ color: 'var(--color-tq-warning-deep)' }}
             title={`Recomanat per ${a.nb_similars_lastfm} artista(es) aprovats nostres a Last.fm`}
           >
             {a.nb_similars_lastfm}×
           </span>
         ) : (
-          <span className="opacity-30">—</span>
+          <span className="opacity-60">—</span>
         )}
       </Td>
       <Td className="text-right">
@@ -269,7 +269,7 @@ export default function PendentsPage() {
             neteja
           </button>
         )}
-        <Select value={font} onChange={e => { setPage(1); setFont(e.target.value) }}>
+        <Select aria-label="Font de descobriment" value={font} onChange={e => { setPage(1); setFont(e.target.value) }}>
           <option value="">Font: qualsevol</option>
           <option value="lastfm_similar">Last.fm similar</option>
           <option value="proposta_usuari">Proposta d'usuari</option>
@@ -279,7 +279,7 @@ export default function PendentsPage() {
           <option value="collaborador">Col·laborador</option>
           <option value="deezer_contributor">Deezer contributor</option>
         </Select>
-        <Select value={sort} onChange={e => { setPage(1); setSort(e.target.value) }}>
+        <Select aria-label="Ordenació" value={sort} onChange={e => { setPage(1); setSort(e.target.value) }}>
           <option value="">Ordre per defecte</option>
           <option value="similars_lastfm">Similars Last.fm ↓</option>
         </Select>

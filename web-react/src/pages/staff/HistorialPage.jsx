@@ -37,13 +37,13 @@ export default function HistorialPage() {
       <PageHeader title="Historial de decisions" subtitle={data ? `${data.total} entrades` : 'Carregant…'} />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Select value={decisio} onChange={e => { setPage(1); setDecisio(e.target.value) }}>
+        <Input aria-label="Cerca" placeholder="Cerca…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
+        <Select aria-label="Decisió" value={decisio} onChange={e => { setPage(1); setDecisio(e.target.value) }}>
           <option value="">Decisió: totes</option>
           <option value="aprovada">Aprovades</option>
           <option value="rebutjada">Rebutjades</option>
         </Select>
-        <Select value={motiu} onChange={e => { setPage(1); setMotiu(e.target.value) }}>
+        <Select aria-label="Motiu" value={motiu} onChange={e => { setPage(1); setMotiu(e.target.value) }}>
           <option value="">Motiu: qualsevol</option>
           {/* MOTIUS_REBUIG arrives as [value, label] tuples. */}
           {data?.motius?.map(([v, l]) => <option key={v} value={v}>{l}</option>)}

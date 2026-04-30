@@ -183,7 +183,7 @@ export default function ArtistaEditPage() {
               <Input value={a.genere || ''} onChange={e => patch({ genere: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
             <label className="text-xs font-semibold">% femení
-              <Select value={a.percentatge_femeni || ''} onChange={e => patch({ percentatge_femeni: e.target.value })} className="w-full mt-1 font-normal">
+              <Select aria-label="Percentatge femení" value={a.percentatge_femeni || ''} onChange={e => patch({ percentatge_femeni: e.target.value })} className="w-full mt-1 font-normal">
                 <option value="">—</option>
                 {a.percentatge_choices.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </Select>
@@ -274,7 +274,7 @@ export default function ArtistaEditPage() {
                 placeholder="UUID (ex: 1068d2b9-596a-4fdf-9b87-b779b9f25dd3)"
                 className="w-full font-mono text-[12px]"
               />
-              <p className="text-[11px] text-tq-ink/60 mt-1">
+              <p className="text-[11px] text-tq-ink/75 mt-1">
                 Si deixes el camp buit, el cron l'intentarà resoldre pel nom.
                 Per artistes homònims (Crim, Apa…) cerca l'UUID correcte a
                 musicbrainz.org i enganxa'l aquí. Desa i després prem

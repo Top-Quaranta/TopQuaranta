@@ -14,13 +14,21 @@
   --color-tq-border:      #27272a;
 
   /* Semantic state colours — used by charts, pills, badges. Keep in
-     the design system so call-sites never hardcode hexes. */
-  --color-tq-success:     #10b981;  /* verificat / aprovat / català */
-  --color-tq-warning:     #facc15;  /* pendent / dubte — matches tq-yellow */
-  --color-tq-danger:      #ef4444;  /* rebutjat / error / no-català */
-  --color-tq-neutral:     #9ca3af;  /* inactiu / descartat / sense dades */
-  --color-tq-neutral-soft:#d1d5db;  /* sense-estat / placeholder-light */
-  --color-tq-accent:      #ea580c;  /* gradient-end / top-decile accent */
+     the design system so call-sites never hardcode hexes.
+     The `-deep` variants are AA-on-white pairs for small text on
+     light tints (used by the staff-panel Pill, Badge, etc.). The
+     non-deep variants stay for filled backgrounds and chart fills
+     where contrast is already guaranteed by the surrounding bg. */
+  --color-tq-success:      #10b981;  /* verificat / aprovat / català */
+  --color-tq-success-deep: #047857;  /* AA on white (5.4:1) */
+  --color-tq-warning:      #facc15;  /* pendent / dubte — matches tq-yellow */
+  --color-tq-warning-deep: #854d0e;  /* AA on white (7.6:1) */
+  --color-tq-danger:       #ef4444;  /* rebutjat / error / no-català */
+  --color-tq-danger-deep:  #b91c1c;  /* AA on white (5.9:1) */
+  --color-tq-neutral:      #9ca3af;  /* inactiu / descartat / sense dades */
+  --color-tq-neutral-deep: #4b5563;  /* AA on white (7.5:1) */
+  --color-tq-neutral-soft: #d1d5db;  /* sense-estat / placeholder-light */
+  --color-tq-accent:       #ea580c;  /* gradient-end / top-decile accent */
 
   --font-display: 'Playfair Display', Georgia, serif;
   --font-sans:    'Roboto', system-ui, sans-serif;

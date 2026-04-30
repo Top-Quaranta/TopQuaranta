@@ -37,9 +37,9 @@ export default function AuditlogPage() {
       <PageHeader title="Auditoria staff" subtitle={data ? `${data.total} accions` : 'Carregant…'} />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca etiqueta target…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Input placeholder="Actor email…" value={actor} onChange={e => { setPage(1); setActor(e.target.value) }} />
-        <Select value={action} onChange={e => { setPage(1); setAction(e.target.value) }}>
+        <Input aria-label="Cerca" placeholder="Cerca etiqueta target…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
+        <Input aria-label="Actor (email)" placeholder="Actor email…" value={actor} onChange={e => { setPage(1); setActor(e.target.value) }} />
+        <Select aria-label="Acció" value={action} onChange={e => { setPage(1); setAction(e.target.value) }}>
           <option value="">Tots els tipus</option>
           {data?.action_choices?.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
         </Select>
@@ -59,7 +59,7 @@ export default function AuditlogPage() {
                 <Td className="text-xs whitespace-nowrap">{r.created_at?.slice(0, 16).replace('T', ' ')}</Td>
                 <Td className="text-xs">{r.actor_email}</Td>
                 <Td><Pill>{r.action}</Pill></Td>
-                <Td className="text-xs">{r.target_label} <span className="opacity-50">({r.target_type}#{r.target_id})</span></Td>
+                <Td className="text-xs">{r.target_label} <span className="opacity-70">({r.target_type}#{r.target_id})</span></Td>
                 <Td className="text-[11px] max-w-md">
                   {r.metadata && Object.keys(r.metadata).length > 0 && (
                     <code className="opacity-70 break-all">{JSON.stringify(r.metadata)}</code>

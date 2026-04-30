@@ -48,7 +48,7 @@ export default function SolicitudsPage() {
       <PageHeader title="Sol·licituds de gestió" subtitle={data ? `${data.total} sol·licituds` : 'Carregant…'} />
 
       <div className="flex gap-2 mb-3">
-        <Select value={verificat} onChange={e => { setPage(1); setVerificat(e.target.value) }}>
+        <Select aria-label="Verificat" value={verificat} onChange={e => { setPage(1); setVerificat(e.target.value) }}>
           <option value="">Totes</option>
           <option value="0">No verificades</option>
           <option value="1">Verificades</option>

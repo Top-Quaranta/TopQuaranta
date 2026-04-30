@@ -72,8 +72,8 @@ export default function StaffPublicacionsPage() {
       />
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <Input placeholder="Cerca títol, cos o autor…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
-        <Select value={estat} onChange={e => { setPage(1); setEstat(e.target.value) }}>
+        <Input aria-label="Cerca" placeholder="Cerca títol, cos o autor…" value={q} onChange={e => { setPage(1); setQ(e.target.value) }} />
+        <Select aria-label="Estat" value={estat} onChange={e => { setPage(1); setEstat(e.target.value) }}>
           <option value="">Totes</option>
           {(data?.estat_choices || [
             ['esborrany', 'Esborrany'],

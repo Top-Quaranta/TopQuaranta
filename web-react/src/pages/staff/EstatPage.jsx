@@ -29,18 +29,32 @@ function BigNumber({ label, value, sub, tone = 'ink', to }) {
     ink:    'bg-white text-tq-ink',
     yellow: 'bg-tq-yellow text-tq-ink',
   }
+  // Semantic tones sit on the dark page background (the BigNumber's
+  // tinted bg blends with `tq-ink` → dark teal/red/gray cards), so
+  // the foreground needs to be *light*: we use the base
+  // `--color-tq-success` etc. (emerald-500 / red-500 / gray-400) —
+  // the *-deep variants are reserved for white-bg surfaces (Pill,
+  // sub-tier table). Dropping opacity on label + sub for these
+  // tones because the tint already de-emphasises them, and
+  // stacking opacity here drops contrast below AA.
   const semStyle = {
-    green:  { background: 'rgba(16, 185, 129, 0.16)', color: 'var(--color-tq-success)'                  },
-    red:    { background: 'rgba(239, 68, 68, 0.16)',  color: 'var(--color-tq-danger)'                   },
-    gray:   { background: 'rgba(156, 163, 175, 0.16)', color: 'var(--color-tq-neutral, #6b7280)'        },
+    green:  { background: 'rgba(16, 185, 129, 0.18)', color: 'var(--color-tq-success)' },
+    red:    { background: 'rgba(239, 68, 68, 0.18)',  color: 'var(--color-tq-danger)'  },
+    gray:   { background: 'rgba(156, 163, 175, 0.22)', color: 'var(--color-tq-neutral-soft)' },
   }
+  const isSemantic = !!semStyle[tone]
+  // On `ink` / `yellow` we keep the slight opacity drop on label/sub
+  // — black at 70 % on white (or on yellow) still passes AA. On
+  // semantic tones we go full-opacity to keep contrast.
+  const labelOpacity = isSemantic ? '' : 'opacity-70'
+  const subOpacity = isSemantic ? '' : 'opacity-60'
   const inner = (
     <>
-      <p className="text-[10px] uppercase tracking-widest opacity-70">{label}</p>
+      <p className={`text-[10px] uppercase tracking-widest ${labelOpacity}`}>{label}</p>
       <p className="text-3xl font-bold font-display tabular-nums mt-1">
         {typeof value === 'number' ? value.toLocaleString('ca') : value ?? '—'}
       </p>
-      {sub && <p className="text-[11px] opacity-60 mt-0.5">{sub}</p>}
+      {sub && <p className={`text-[11px] ${subOpacity} mt-0.5`}>{sub}</p>}
     </>
   )
   const cls = tones[tone] || tones.ink
@@ -67,10 +81,12 @@ function StatRow({ label, value, to, accent }) {
   // `accent` accepts a semantic tone key (success | danger | warning)
   // and resolves to the matching design-system colour token. Falls
   // through to ink for the default text colour.
+  // Use the *-deep tokens for AA contrast — these sit on white card
+  // backgrounds and the lighter variants don't pass on small text.
   const accentColor = {
-    success: 'var(--color-tq-success)',
-    danger:  'var(--color-tq-danger)',
-    warning: 'var(--color-tq-yellow-deep)',
+    success: 'var(--color-tq-success-deep)',
+    danger:  'var(--color-tq-danger-deep)',
+    warning: 'var(--color-tq-warning-deep)',
   }[accent]
   const valNode = (
     <span
@@ -374,7 +390,7 @@ export default function EstatPage() {
                     <div className="text-[10px] tabular-nums opacity-70 truncate w-full text-center">
                       {w.n.toLocaleString('ca')}
                     </div>
-                    <div className="text-[9px] opacity-50 truncate w-full text-center">
+                    <div className="text-[9px] opacity-70 truncate w-full text-center">
                       {w.label}
                     </div>
                   </div>
@@ -399,7 +415,10 @@ export default function EstatPage() {
               <ul className="divide-y divide-tq-ink/10">
                 {flux.top_artistes_backlog.map(a => (
                   <li key={a.pk} className="py-2 flex items-center gap-3">
-                    <span className="text-xl font-bold font-display tabular-nums text-tq-yellow-deep w-12 text-right shrink-0">
+                    <span
+                      className="text-xl font-bold font-display tabular-nums w-12 text-right shrink-0"
+                      style={{ color: 'var(--color-tq-warning-deep)' }}
+                    >
                       {a.n_backlog}
                     </span>
                     <div className="flex-1 min-w-0">
@@ -413,7 +432,7 @@ export default function EstatPage() {
                         {a.musicbrainz_id && (
                           <span
                             className="text-[10px] uppercase font-semibold px-1.5 rounded"
-                            style={{ background: 'rgba(16, 185, 129, 0.16)', color: 'var(--color-tq-success)' }}
+                            style={{ background: 'rgba(16, 185, 129, 0.18)', color: 'var(--color-tq-success-deep)' }}
                           >
                             MBID
                           </span>
@@ -661,7 +680,7 @@ export default function EstatPage() {
             </div>
 
             {homonimia.casos_sospitosos === 0 ? (
-              <p className="text-xs italic text-tq-ink/60">
+              <p className="text-xs italic text-tq-ink/75">
                 Cap cas pendent ara mateix. Quan rebutgis una cançó amb
                 "perfil Deezer no és el nostre artista", apareixerà aquí
                 si el Deezer ID continua lligat i té cançons verificades.
@@ -772,7 +791,7 @@ export default function EstatPage() {
           <ul>
             {crons.map(c => <CronStatus key={c.name} cron={c} />)}
             {crons.length === 0 && (
-              <p className="text-xs text-tq-ink/60 p-3">
+              <p className="text-xs text-tq-ink/75 p-3">
                 Sense dades de cron disponibles. Comprova que
                 <code>/var/log/topquaranta/status/</code> existeix i és llegible.
               </p>

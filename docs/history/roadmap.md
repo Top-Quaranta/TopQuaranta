@@ -99,16 +99,19 @@ Items petits per fer en sessions curtes:
 - [ ] **Stalwart polish** (post Sprint I bis):
   - [ ] Habilitar port 587 STARTTLS submission (ara només 465 SMTPS).
         Útil per a clients mòbils que no accepten SMTPS implicit.
-  - [ ] Crear bústia o alias `postmaster@topquaranta.cat` per a rebre
-        els reports DMARC (`rua=mailto:postmaster@…`). Ara queden en
-        cua sense destinació real.
+  - [ ] Crear alias `postmaster@topquaranta.cat` per a rebre els
+        reports DMARC (`rua=mailto:postmaster@…`). El build OSS de
+        Stalwart 0.16.1 actual no exposa `/api/principal*`; el camí
+        és (a) servir el webadmin OSS (`stalwartlabs/webadmin`
+        v0.1.37) afegint un `handle /webadmin/*` a Caddy o (b) parar
+        el servei un moment i usar `stalwart -c … -o` (store
+        console). Mentrestant, **quick-fix**: canviar `rua` del
+        DMARC TXT a `admin@topquaranta.cat` (que ja existeix), via
+        `dns-backup/cdmon_clean.py`-style script.
   - [ ] Integrar parsejat de DMARC reports al panell staff (gràfic de
         què passa SPF/DKIM en nom nostre + alertes de potencial
         spoofing). Alternativa: subscriure'ns a [dmarcian.com](https://dmarcian.com)
         free tier i delegar el parseig.
-- [ ] Verificar `cercol.team` a Resend (panell Resend → Domains) per
-      a que el smarthost route per Cercol funcioni de veritat. Mentre
-      no estigui, els correus de `hello@cercol.team` reben 550.
 - [ ] **Gmail avatar** per `info@`/`admin@` quan se reseti el límit
       del telèfon (ara només `miquel@` té Google Account associat).
 - [ ] (Quan Hetzner ens desbloca port 25 outbound) considerar treure

@@ -135,7 +135,45 @@ class Command(BaseCommand):
             blocked.append(bad_mbid)
         artista.mb_blocked_mbids = blocked
         artista.musicbrainz_id = None
-        artista.save(update_fields=["mb_blocked_mbids", "musicbrainz_id"])
+        # Clear every artist-level mb_* field copied from the wrong
+        # MBID. Otherwise the dashboard keeps showing stale data
+        # (caught with Guillotina 2026-04-30: the Mexican band's
+        # `mb_end_date=2011-01-01`, `mb_area='Mexico'`, etc. lingered
+        # on our PPCC artist after unassign, making the Estat panel
+        # report a live PPCC band as "dissolved"). `mb_last_sync`
+        # stays so the cron's queue ordering doesn't loop on this
+        # row; `mb_blocked_mbids` and `mb_auto_match_disabled` stay
+        # for the same reason — they're staff-side controls.
+        artista.mb_type = ""
+        artista.mb_gender = ""
+        artista.mb_area = ""
+        artista.mb_area_hierarchy = []
+        artista.mb_begin_date = None
+        artista.mb_end_date = None
+        artista.mb_disambiguation = ""
+        artista.mb_sort_name = ""
+        artista.mb_aliases = []
+        artista.mb_tags = []
+        artista.mb_rating = None
+        artista.mb_discography_cache = {}
+        artista.save(
+            update_fields=[
+                "mb_blocked_mbids",
+                "musicbrainz_id",
+                "mb_type",
+                "mb_gender",
+                "mb_area",
+                "mb_area_hierarchy",
+                "mb_begin_date",
+                "mb_end_date",
+                "mb_disambiguation",
+                "mb_sort_name",
+                "mb_aliases",
+                "mb_tags",
+                "mb_rating",
+                "mb_discography_cache",
+            ]
+        )
 
         Album.objects.filter(artista=artista).update(
             mb_release_group_id="",

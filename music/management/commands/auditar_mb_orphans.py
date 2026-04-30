@@ -162,5 +162,73 @@ class Command(BaseCommand):
             f"\n{verb} {total_orphan_albums} albums + {total_orphan_cancons} "
             f"cançons across {artists_touched} artists."
         )
-        if not apply and (total_orphan_albums or total_orphan_cancons):
-            self.stdout.write("Re-run with --apply to commit.")
+
+        # ── Pass 2: Artist-level orphan metadata ─────────────────────────
+        # Artists whose MBID has been auto-unassigned (or staff-cleared)
+        # but whose mb_area / mb_end_date / mb_disambiguation / etc.
+        # still hold the wrong artist's data. Caught with Guillotina
+        # 2026-04-30: MBID was correctly auto-unassigned (Mexican
+        # dissolved band) but `mb_end_date=2011-01-01` lingered, making
+        # the staff Estat panel show a live PPCC band as "dissolved".
+        #
+        # Detection: musicbrainz_id is empty/null AND any of the
+        # discography-derived fields are populated. Reset is total —
+        # nothing about a former MB artist should bleed into our row.
+        artist_meta_fields = (
+            "mb_type",
+            "mb_gender",
+            "mb_area",
+            "mb_disambiguation",
+            "mb_sort_name",
+            "mb_begin_date",
+            "mb_end_date",
+        )
+        meta_qs = Artista.objects.filter(
+            Q(musicbrainz_id__isnull=True) | Q(musicbrainz_id="")
+        )
+        if artist_pk:
+            meta_qs = meta_qs.filter(pk=artist_pk)
+        cond = Q()
+        for f in artist_meta_fields:
+            cond |= (
+                ~Q(**{f: ""})
+                if f not in ("mb_begin_date", "mb_end_date")
+                else Q(**{f"{f}__isnull": False})
+            )
+        meta_qs = meta_qs.filter(cond)
+
+        meta_orphans = list(meta_qs)
+        if meta_orphans:
+            self.stdout.write(
+                f"\nArtistes sense MBID però amb metadata MB residual "
+                f"({len(meta_orphans)}):"
+            )
+            for a in meta_orphans:
+                bits = []
+                if a.mb_area:
+                    bits.append(f"area={a.mb_area!r}")
+                if a.mb_end_date:
+                    bits.append(f"end_date={a.mb_end_date}")
+                if a.mb_disambiguation:
+                    bits.append(f"disamb={a.mb_disambiguation!r}")
+                self.stdout.write(
+                    f"  [artist] {a.nom!r:30s} (pk={a.pk}) {' '.join(bits)}"
+                )
+            if apply:
+                meta_qs.update(
+                    mb_type="",
+                    mb_gender="",
+                    mb_area="",
+                    mb_area_hierarchy=[],
+                    mb_begin_date=None,
+                    mb_end_date=None,
+                    mb_disambiguation="",
+                    mb_sort_name="",
+                    mb_aliases=[],
+                    mb_tags=[],
+                    mb_rating=None,
+                    mb_discography_cache={},
+                )
+
+        if not apply and (total_orphan_albums or total_orphan_cancons or meta_orphans):
+            self.stdout.write("\nRe-run with --apply to commit.")

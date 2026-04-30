@@ -85,6 +85,21 @@ def aprovar_canco(canco: Canco) -> None:
     canco.save(update_fields=["verificada"])
 
 
+def aprovar_canco_auto_ml(canco: Canco) -> None:
+    """ML auto-approval (A++ blind-trust path).
+
+    Same outcome as `aprovar_canco` but tags the historial entry with
+    `motiu="auto_ml"` so the training pipeline can filter these rows
+    out — otherwise the model would learn from its own decisions and
+    drift toward over-confidence.
+    """
+    from .constants import MOTIU_AUTO_ML
+
+    crear_historial(canco, "aprovada", MOTIU_AUTO_ML)
+    canco.verificada = True
+    canco.save(update_fields=["verificada"])
+
+
 def rebutjar_album(album: Album, motiu: str) -> int:
     """
     Reject all unverified tracks in an album, mark album as descartat.

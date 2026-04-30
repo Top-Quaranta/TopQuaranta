@@ -38,6 +38,56 @@ MIN_NEW_DECISIONS = 5  # new decisions since last recalc to trigger retrain
 # tightened the decision boundary without losing signal.
 TFIDF_MAX_FEATURES = 30
 
+# Fixed ML sub-tier boundaries used by the staff status dashboard
+# and the auto-approval logic. Within each main class A/B/C the band
+# is split into 4 sub-bands by `ml_confianca`. The boundaries are
+# fixed (not data-dependent quartiles) so auto-status decisions stay
+# reproducible across reloads, and so a sub-tier definition lasts
+# across retrains. Re-tune after each retrain if the distribution
+# shifts noticeably.
+#
+# Boundaries derived from the 2026-04-30 audit on the live
+# HistorialRevisio (n=4 798): A++ shows 502/502 = 100.0 % accuracy,
+# A+ 99.4 %, the rest grey-zone. C-- and C- bordered 95 % rejection
+# but didn't qualify for auto-reject.
+ML_SUBTIER_BOUNDS: dict[str, list[tuple[str, float, float]]] = {
+    "A": [
+        ("A--", 0.000, 0.820),
+        ("A-", 0.820, 0.950),
+        ("A+", 0.950, 0.990),
+        ("A++", 0.990, 1.001),
+    ],
+    "B": [
+        ("B--", 0.000, 0.440),
+        ("B-", 0.440, 0.510),
+        ("B+", 0.510, 0.590),
+        ("B++", 0.590, 1.001),
+    ],
+    "C": [
+        ("C--", 0.000, 0.130),
+        ("C-", 0.130, 0.240),
+        ("C+", 0.240, 0.310),
+        ("C++", 0.310, 1.001),
+    ],
+}
+
+# A sub-tier becomes a blind-trust candidate when its accuracy on
+# the last N decisions exceeds the threshold AND the sample size is
+# large enough.
+ML_AUTO_APPROVE_THRESHOLD = 0.995
+ML_AUTO_REJECT_THRESHOLD = 0.995
+ML_AUTO_MIN_SAMPLES = 200
+
+# Sub-tiers that are currently auto-decided. Pinned manually here —
+# threshold-passing alone makes a sub-tier a *candidate* on the
+# dashboard, but graduating it to auto requires a deliberate edit.
+# Auto-decided cançons land in HistorialRevisio with
+# motiu="auto_ml" so they're excluded from the training set
+# (avoids the model reinforcing its own decisions).
+ML_AUTO_APPROVE_SUBTIERS: tuple[str, ...] = ("A++",)
+ML_AUTO_REJECT_SUBTIERS: tuple[str, ...] = ()
+MOTIU_AUTO_ML = "auto_ml"
+
 # Bayesian smoothing on the three "ratio_rebuig_*" ML features. With
 # few decisions the raw ratio rej/total is extremely noisy (two
 # rejections in a row push it to 100 % and feed a reinforcement loop).

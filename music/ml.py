@@ -28,8 +28,11 @@ from django.db.models import QuerySet
 from .constants import (
     MIN_NEW_DECISIONS,
     MIN_TRAINING_SAMPLES,
+    ML_AUTO_APPROVE_SUBTIERS,
     ML_CLASSE_A_THRESHOLD,
     ML_CLASSE_B_THRESHOLD,
+    ML_SUBTIER_BOUNDS,
+    MOTIU_AUTO_ML,
     RATIO_PRIOR_K,
     RATIO_PRIOR_P,
     TFIDF_MAX_FEATURES,
@@ -451,7 +454,10 @@ def entrenar_model() -> bool:
 
     from music.models import HistorialRevisio
 
-    recs = list(HistorialRevisio.objects.all())
+    # Exclude ML auto-decisions from training: a model that learns
+    # from its own outputs reinforces its biases and over-fits to the
+    # easy cases. Auto-approvals carry motiu=MOTIU_AUTO_ML.
+    recs = list(HistorialRevisio.objects.exclude(motiu=MOTIU_AUTO_ML))
     if len(recs) < MIN_TRAINING_SAMPLES:
         logger.info(
             "Not enough training data (%d < %d)", len(recs), MIN_TRAINING_SAMPLES
@@ -629,12 +635,48 @@ def _heuristic_classificar(canco) -> dict:
     return {"classe": classe, "confiança": round(score, 2), "raons": raons}
 
 
+def _is_auto_approve_subtier(classe: str, confianca: float | None) -> bool:
+    """Return True if (classe, confianca) lands in a sub-tier that has
+    been graduated to ML auto-approval (see
+    `music.constants.ML_AUTO_APPROVE_SUBTIERS`)."""
+    if confianca is None:
+        return False
+    bands = ML_SUBTIER_BOUNDS.get(classe, [])
+    for label, lo, hi in bands:
+        if lo <= confianca < hi and label in ML_AUTO_APPROVE_SUBTIERS:
+            return True
+    return False
+
+
+def maybe_auto_decide(canco) -> str | None:
+    """Apply ML auto-approval / auto-rejection if the canco's current
+    (ml_classe, ml_confianca) lands in a graduated sub-tier.
+
+    Returns the action taken ("aprovada" / "rebutjada") or None.
+    Only acts on tracks that are still pending verification.
+    """
+    if canco.verificada:
+        return None
+    if _is_auto_approve_subtier(canco.ml_classe, canco.ml_confianca):
+        from music.services import aprovar_canco_auto_ml
+
+        aprovar_canco_auto_ml(canco)
+        return "aprovada"
+    # No auto-reject sub-tier graduated yet (see ML_AUTO_REJECT_SUBTIERS).
+    return None
+
+
 def classificar_i_guardar(canco) -> None:
-    """Compute ML classification and save to the canco's db fields."""
+    """Compute ML classification and save to the canco's db fields.
+
+    Triggers auto-decision (aprovació / rebuig) for graduated
+    sub-tiers right after persisting the score.
+    """
     result = pre_classificar(canco)
     canco.ml_classe = result["classe"]
     canco.ml_confianca = result["confiança"]
     canco.save(update_fields=["ml_classe", "ml_confianca"])
+    maybe_auto_decide(canco)
 
 
 def recalcular_ml(qs: QuerySet | None = None, limit: int | None = None) -> int:
@@ -654,6 +696,7 @@ def recalcular_ml(qs: QuerySet | None = None, limit: int | None = None) -> int:
         qs = qs[:limit]
 
     updated = 0
+    auto_decided = 0
     for canco in qs.iterator() if not limit else qs:
         result = pre_classificar(canco)
         canco.ml_classe = result["classe"]
@@ -662,7 +705,12 @@ def recalcular_ml(qs: QuerySet | None = None, limit: int | None = None) -> int:
             canco.save(update_fields=["ml_classe", "ml_confianca"])
             updated += 1
         except Exception:
-            pass
+            continue
+        try:
+            if maybe_auto_decide(canco):
+                auto_decided += 1
+        except Exception:
+            logger.exception("auto-decide failed for canco %s", canco.pk)
 
     try:
         with open(LAST_RECALC_FILE, "w") as f:
@@ -670,7 +718,9 @@ def recalcular_ml(qs: QuerySet | None = None, limit: int | None = None) -> int:
     except OSError:
         pass
 
-    logger.info("ML recalculated for %d cancons", updated)
+    logger.info(
+        "ML recalculated for %d cancons (auto-decided: %d)", updated, auto_decided
+    )
     return updated
 
 

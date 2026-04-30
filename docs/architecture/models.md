@@ -354,9 +354,19 @@ Flat comment attached to a `Publicacio`. No nested threads.
 
 ## Migrations
 
-- `music/` 0001–0050. Latest: `0050_lastfm_artist_metadata` (Last.fm `lastfm_*` block + `nb_similars_lastfm`, 2026-04-25). `0049_artista_instagram_url_artista_twitter_url` (2026-04-25). `0048_artista_mb_auto_match_disabled_and_more` (MB lockouts: `mb_blocked_mbids` + `mb_auto_match_disabled`). `0047_album_mb_release_group_id_album_mb_status_and_more` (MusicBrainz fields, 2026-04-22).
-  Notable recent: `0042_artista_pendent_review_constraint` (CheckConstraint
-  on `aprovat` / `pendent_review`), `0045_canco_slug` (unique slug on Canco),
-  `0044_drop_deezer_no_trobat` (dropped the stale cache flag).
-- `ranking/` 0001–0012. Latest: `0012_sprint_a_cleanup` (renames `RankingProvisional.lastfm_playcount` → `escoltes_setmanals`, drops `dies_en_top`, promotes `PPCC_PENALITZACIO_PER_POSICIO` from a hardcoded constant to `ConfiguracioGlobal.ppcc_penalitzacio_per_posicio`, 2026-04-25). `0011_rankingprovisional_age_factor_and_more` (per-cançó algorithm breakdown, 2026-04-24). `0010_remove_configuracioglobal_max_factor_a_and_more` (drops `score_entrada`, the four `max_factor_*` clamps, `penalitzacio_descens`, `penalitzacio_setmana_0..2`, `suavitat`; bumps `coeficient_penalitzacio_top` default to 0.04 and carries that over to the live row when it still held the pre-v2.0 0.075).
-- `comptes/` 0001–0012. Latest: `0012_perfilusuari_twitter_url_and_more` (Instagram/X on PropostaArtista, X on PerfilUsuari, 2026-04-25). `0011_alter_perfilusuari_rol_musical` (oïdor/a + músic/a + productor/a label update). Notable recent: `0009_perfilusuari_notificar_comentaris_email_and_more` (Missatge, Comentari, notification opt-outs), `0010_rename_auth_user_m2m_columns` (aligned auth_user_groups / auth_user_user_permissions column names with the custom Usuari model so cascade deletes stop hitting ProgrammingError).
+- `music/` 0001–0055. Latest: `0055_alter_staffauditlog_action`
+  (added `artista_mbid_auto_unassign` action, 2026-04-29 — defence-in-
+  depth audit on every MB cron iteration). `0054_*` (social_publicat
+  audit, Sprint I, 2026-04-26). `0050_lastfm_artist_metadata` (Last.fm
+  block + `nb_similars_lastfm`, 2026-04-25).
+- `ranking/` 0001–0017. Latest: `0017_configuracioglobal_telegram_actiu`
+  (Telegram kill switch, Sprint I bis, 2026-04-27). `0016_…_bluesky_actiu_and_more`
+  (Mastodon/Bluesky/Newsletter/RSS toggles, 2026-04-27). `0012_sprint_a_cleanup`
+  (Sprint A renames + ppcc_penalitzacio_per_posicio, 2026-04-25).
+- `social/` 0001–0004. Latest: `0004_alter_socialpost_platform_telegramauth`
+  (TelegramAuth singleton + PLATFORM_TELEGRAM choice, 2026-04-27).
+  `0003_…_blueskyauth_mastodonauth` (the other relay singletons,
+  2026-04-27). `0002_…_instagramauth` (initial IG infra, Sprint I).
+- `comptes/` 0001–0013. Latest: `0013_legal_consent_fields` (Sprint J:
+  `vol_newsletter`, `consent_newsletter_at`, etc., 2026-04-26).
+  `0012_perfilusuari_twitter_url_and_more` (2026-04-25).

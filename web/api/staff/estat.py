@@ -223,6 +223,98 @@ def _homonym_suspects_qs():
     return Artista.objects.filter(pk__in=pks)
 
 
+def _ml_subtier_stats() -> dict:
+    """Per-sub-tier accuracy + auto-decision status.
+
+    Each main ML class (A/B/C) is split into 4 sub-bands by
+    `ml_confianca` using the fixed boundaries in
+    `music.constants.ML_SUBTIER_BOUNDS`. We compute approval/
+    rejection accuracy from `HistorialRevisio` (the snapshot of
+    every staff decision, captured with the ml_classe/ml_confianca
+    at decision time — survives retrains), then derive a status
+    badge:
+
+      * `auto_aprovacio_activa` — sub-tier already pinned at
+        `ML_AUTO_APPROVE_SUBTIERS`; tracks landing here are
+        auto-approved by the system.
+      * `auto_rebuig_activa`    — same for rejection.
+      * `candidat_aprovacio`    — passes the threshold (≥99.5 %
+        verified on n≥200 decisions) but hasn't been graduated yet.
+      * `candidat_rebuig`       — same for rejection.
+      * `mostra_insuficient`    — n < min samples, can't tell.
+      * `no_qualifica`          — accuracy below threshold.
+
+    Auto-approvals carry `motiu="auto_ml"` in HistorialRevisio
+    (filtered out of the training set in `entrenar_model`); we
+    exclude them here too so the accuracy figure reflects only
+    human decisions, not the model agreeing with itself.
+    """
+    from music.constants import (
+        ML_AUTO_APPROVE_SUBTIERS,
+        ML_AUTO_APPROVE_THRESHOLD,
+        ML_AUTO_MIN_SAMPLES,
+        ML_AUTO_REJECT_SUBTIERS,
+        ML_AUTO_REJECT_THRESHOLD,
+        ML_SUBTIER_BOUNDS,
+        MOTIU_AUTO_ML,
+    )
+
+    out: dict[str, list[dict]] = {}
+    for tier, bands in ML_SUBTIER_BOUNDS.items():
+        rows = []
+        for label, lo, hi in bands:
+            qs = HistorialRevisio.objects.filter(
+                ml_classe_decisio=tier,
+                ml_confianca_decisio__gte=lo,
+                ml_confianca_decisio__lt=hi,
+            ).exclude(motiu=MOTIU_AUTO_ML)
+            n = qs.count()
+            verif = qs.filter(decisio="aprovada").count()
+            rej = qs.filter(decisio="rebutjada").count()
+            approve_acc = (verif / n) if n else None
+            reject_acc = (rej / n) if n else None
+
+            if label in ML_AUTO_APPROVE_SUBTIERS:
+                status = "auto_aprovacio_activa"
+            elif label in ML_AUTO_REJECT_SUBTIERS:
+                status = "auto_rebuig_activa"
+            elif n < ML_AUTO_MIN_SAMPLES:
+                status = "mostra_insuficient"
+            elif approve_acc is not None and approve_acc >= ML_AUTO_APPROVE_THRESHOLD:
+                status = "candidat_aprovacio"
+            elif reject_acc is not None and reject_acc >= ML_AUTO_REJECT_THRESHOLD:
+                status = "candidat_rebuig"
+            else:
+                status = "no_qualifica"
+
+            rows.append(
+                {
+                    "label": label,
+                    "conf_lo": round(lo, 3),
+                    "conf_hi": round(min(hi, 1.0), 3),
+                    "n": n,
+                    "verif": verif,
+                    "rej": rej,
+                    "approve_accuracy": (
+                        round(approve_acc, 4) if approve_acc is not None else None
+                    ),
+                    "reject_accuracy": (
+                        round(reject_acc, 4) if reject_acc is not None else None
+                    ),
+                    "status": status,
+                }
+            )
+        out[tier] = rows
+    return {
+        "tiers": out,
+        "auto_approve_threshold": ML_AUTO_APPROVE_THRESHOLD,
+        "auto_reject_threshold": ML_AUTO_REJECT_THRESHOLD,
+        "auto_min_samples": ML_AUTO_MIN_SAMPLES,
+        "auto_approved": list(ML_AUTO_APPROVE_SUBTIERS),
+        "auto_rejected": list(ML_AUTO_REJECT_SUBTIERS),
+    }
+
+
 def _musicbrainz_stats() -> dict:
     """Summary of MusicBrainz coverage across our catalog.
 
@@ -580,6 +672,10 @@ def estat(request: Request) -> Response:
         ml["confianca_avg"] = round(float(conf_agg["avg"]), 3)
         ml["confianca_min"] = round(float(conf_agg["mn"]), 3)
         ml["confianca_max"] = round(float(conf_agg["mx"]), 3)
+
+    # Sub-tier accuracy + auto-decision status (the table below the
+    # main ML panel on the staff dashboard).
+    ml["subtiers"] = _ml_subtier_stats()
 
     return Response(
         {

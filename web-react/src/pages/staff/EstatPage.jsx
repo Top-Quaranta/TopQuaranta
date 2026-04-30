@@ -14,7 +14,7 @@
  * polling (daily data doesn't change that fast), but the page
  * refreshes every 60 s in case staff leaves it open.
  */
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { PageHeader, Pill, TableCard } from '../../components/staff/StaffTable'
@@ -860,7 +860,132 @@ export default function EstatPage() {
             )}
           </div>
         </div>
+
+        {ml.subtiers && <MLSubTierTable subtiers={ml.subtiers} />}
       </section>
     </section>
+  )
+}
+
+// ── ML sub-tier accuracy table ───────────────────────────────────────
+//
+// Each main class (A/B/C) is split into 4 confidence sub-bands. The
+// table tells staff at a glance:
+//   * which sub-tier is already auto-decided by the system (green),
+//   * which would qualify for auto-decision but hasn't been graduated
+//     yet (yellow "candidat"),
+//   * which is below threshold or has too few samples (neutral).
+//
+// Backend computes accuracy from HistorialRevisio (decision-time
+// snapshots), excluding rows tagged motiu="auto_ml" so the model
+// can't artificially inflate its own numbers.
+
+function StatusBadge({ status }) {
+  const map = {
+    auto_aprovacio_activa: {
+      label: 'Auto-aprovació activa',
+      style: 'bg-tq-success text-white',
+    },
+    auto_rebuig_activa: {
+      label: 'Auto-rebuig actiu',
+      style: 'bg-tq-danger text-white',
+    },
+    candidat_aprovacio: {
+      label: 'Candidat per auto-aprovació',
+      style: 'bg-tq-warning text-tq-ink',
+    },
+    candidat_rebuig: {
+      label: 'Candidat per auto-rebuig',
+      style: 'bg-tq-warning text-tq-ink',
+    },
+    mostra_insuficient: {
+      label: 'Mostra insuficient',
+      style: 'bg-tq-neutral-soft text-tq-ink',
+    },
+    no_qualifica: {
+      label: 'No qualifica',
+      style: 'bg-tq-neutral-soft text-tq-ink',
+    },
+  }
+  const b = map[status] || { label: status, style: 'bg-tq-neutral-soft text-tq-ink' }
+  return (
+    <span className={`inline-block text-[10px] uppercase tracking-wider font-semibold rounded px-2 py-0.5 ${b.style}`}>
+      {b.label}
+    </span>
+  )
+}
+
+function fmtPct(v) {
+  if (v == null) return '—'
+  return (v * 100).toFixed(1) + '%'
+}
+
+function MLSubTierTable({ subtiers }) {
+  const { tiers, auto_approve_threshold, auto_reject_threshold, auto_min_samples } = subtiers
+  const tierOrder = ['A', 'B', 'C']
+  return (
+    <div className="bg-white text-tq-ink rounded-lg p-4 mt-3">
+      <h3 className="text-sm font-semibold mb-1">
+        Accuracy per sub-tier (decisions humanes)
+      </h3>
+      <p className="text-[11px] opacity-70 mb-3">
+        Llindars d'auto-decisió: {fmtPct(auto_approve_threshold)} aprov. /{' '}
+        {fmtPct(auto_reject_threshold)} rebuig sobre n ≥ {auto_min_samples}.
+        Files marcades com a "auto" ja no requereixen HITL — el sistema
+        decideix tot sol per a noves cançons que entren en eixe rang de
+        confiança.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-[11px] uppercase tracking-wider opacity-70 text-left">
+            <tr>
+              <th className="py-1 pr-3">Sub-tier</th>
+              <th className="py-1 pr-3">Confiança</th>
+              <th className="py-1 pr-3 text-right">N</th>
+              <th className="py-1 pr-3 text-right">Verif.</th>
+              <th className="py-1 pr-3 text-right">Rebut.</th>
+              <th className="py-1 pr-3 text-right">Acc. aprov.</th>
+              <th className="py-1 pr-3 text-right">Acc. rebuig</th>
+              <th className="py-1 pr-3">Estat</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tierOrder.map(tier => {
+              const rows = tiers[tier] || []
+              return (
+                <Fragment key={tier}>
+                  {rows.map((r, idx) => (
+                    <tr
+                      key={r.label}
+                      className={
+                        'border-t border-tq-ink/10 ' +
+                        (idx === 0 ? 'border-t-2 border-tq-ink/30 ' : '')
+                      }
+                    >
+                      <td className="py-1.5 pr-3 font-mono font-semibold">{r.label}</td>
+                      <td className="py-1.5 pr-3 font-mono text-xs opacity-80">
+                        [{r.conf_lo.toFixed(3)} – {r.conf_hi.toFixed(3)})
+                      </td>
+                      <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono">{r.verif}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono">{r.rej}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono">
+                        {fmtPct(r.approve_accuracy)}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right font-mono">
+                        {fmtPct(r.reject_accuracy)}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <StatusBadge status={r.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

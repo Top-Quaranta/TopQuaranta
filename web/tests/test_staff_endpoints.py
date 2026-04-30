@@ -79,6 +79,29 @@ def test_staff_estat_returns_full_payload(staff_client):
         assert key in data, f"Missing top-level key: {key}"
     assert "casos_sospitosos" in data["homonimia"]
     assert "casos" in data["homonimia"]
+    # Sub-tier accuracy block (Sprint K bis, 2026-04-30).
+    assert "subtiers" in data["ml"]
+    sub = data["ml"]["subtiers"]
+    assert set(sub["tiers"].keys()) == {"A", "B", "C"}
+    # Each main tier has 4 sub-bands, each with the expected schema.
+    for tier_rows in sub["tiers"].values():
+        assert len(tier_rows) == 4
+        for r in tier_rows:
+            for k in (
+                "label",
+                "conf_lo",
+                "conf_hi",
+                "n",
+                "verif",
+                "rej",
+                "approve_accuracy",
+                "reject_accuracy",
+                "status",
+            ):
+                assert k in r
+    # A++ must be marked as currently auto-decided.
+    a_plusplus = next(r for r in sub["tiers"]["A"] if r["label"] == "A++")
+    assert a_plusplus["status"] == "auto_aprovacio_activa"
 
 
 def test_staff_top_list_responds(staff_client):

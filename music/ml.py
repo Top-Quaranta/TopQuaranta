@@ -31,7 +31,7 @@ from .constants import (
     ML_AUTO_APPROVE_SUBTIERS,
     ML_CLASSE_A_THRESHOLD,
     ML_CLASSE_B_THRESHOLD,
-    ML_SUBTIER_BOUNDS,
+    ML_SUBTIERS,
     MOTIU_AUTO_ML,
     RATIO_PRIOR_K,
     RATIO_PRIOR_P,
@@ -635,17 +635,24 @@ def _heuristic_classificar(canco) -> dict:
     return {"classe": classe, "confiança": round(score, 2), "raons": raons}
 
 
+def subtier_for(classe: str, confianca: float | None) -> str | None:
+    """Return the sub-tier label (e.g. 'A++') for a (classe, confianca)
+    pair, or None if the score is missing or out of range."""
+    if confianca is None or classe not in ("A", "B", "C"):
+        return None
+    for label, lo, hi in ML_SUBTIERS:
+        if label[0] != classe:
+            continue
+        if lo <= confianca < hi:
+            return label
+    return None
+
+
 def _is_auto_approve_subtier(classe: str, confianca: float | None) -> bool:
-    """Return True if (classe, confianca) lands in a sub-tier that has
-    been graduated to ML auto-approval (see
-    `music.constants.ML_AUTO_APPROVE_SUBTIERS`)."""
-    if confianca is None:
-        return False
-    bands = ML_SUBTIER_BOUNDS.get(classe, [])
-    for label, lo, hi in bands:
-        if lo <= confianca < hi and label in ML_AUTO_APPROVE_SUBTIERS:
-            return True
-    return False
+    """True iff (classe, confianca) is in a sub-tier graduated to
+    ML auto-approval (see `music.constants.ML_AUTO_APPROVE_SUBTIERS`)."""
+    label = subtier_for(classe, confianca)
+    return label is not None and label in ML_AUTO_APPROVE_SUBTIERS
 
 
 def maybe_auto_decide(canco) -> str | None:

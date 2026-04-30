@@ -1,15 +1,20 @@
-"""ML auto-decision (A++ blind-trust) and sub-tier accuracy.
+"""ML auto-decision plumbing + sub-tier classification.
 
-Sprint K bis (2026-04-30): Classe A++ (ml_classe='A' AND
-ml_confianca >= 0.99) is auto-approved without HITL after the
-2026-04-30 audit showed 502/502 = 100% accuracy on that band.
-Auto-decisions land in HistorialRevisio with motiu="auto_ml" and
-must be filtered out of the training set.
+Originally added (and reverted) on 2026-04-30 after a target-leakage
+bug in the diagnostic: live `Canco.ml_classe` / `ml_confianca` had
+been re-scored by retrains that were trained on the same approvals
+they were now being measured against, falsely showing A++ at 100 %
+accuracy. The honest measure (HistorialRevisio decision-time
+snapshot, motiu!='auto_ml') is 93.1 % — far below the 99.5 %
+threshold for blind-trust.
+
+The hooks (`maybe_auto_decide`, `aprovar_canco_auto_ml`,
+`subtier_for`) stay so the system is ready to graduate a sub-tier
+the day one actually clears the bar; meanwhile
+`ML_AUTO_APPROVE_SUBTIERS` and `ML_AUTO_REJECT_SUBTIERS` are empty.
 """
 
 from __future__ import annotations
-
-from unittest.mock import patch
 
 import pytest
 
@@ -17,9 +22,11 @@ from music.constants import (
     ML_AUTO_APPROVE_SUBTIERS,
     ML_AUTO_APPROVE_THRESHOLD,
     ML_AUTO_MIN_SAMPLES,
+    ML_AUTO_REJECT_SUBTIERS,
+    ML_SUBTIERS,
     MOTIU_AUTO_ML,
 )
-from music.ml import _is_auto_approve_subtier, maybe_auto_decide
+from music.ml import _is_auto_approve_subtier, maybe_auto_decide, subtier_for
 from music.models import Album, Artista, Canco, HistorialRevisio
 from music.services import aprovar_canco_auto_ml
 
@@ -42,57 +49,103 @@ def canco(db, artista):
     )
 
 
+# ── subtier_for ───────────────────────────────────────────────────────
+
+
+def test_subtier_for_correct_band():
+    """Quartile assignment within each main class."""
+    # A: [0.70, 1.00], split as A-- A- A+ A++
+    assert subtier_for("A", 0.995) == "A++"
+    assert subtier_for("A", 0.97) == "A+"
+    assert subtier_for("A", 0.90) == "A-"
+    assert subtier_for("A", 0.75) == "A--"
+    # B: [0.40, 0.70)
+    assert subtier_for("B", 0.65) == "B++"
+    assert subtier_for("B", 0.50) == "B+"
+    assert subtier_for("B", 0.46) == "B-"
+    assert subtier_for("B", 0.41) == "B--"
+    # C: [0.00, 0.40)
+    assert subtier_for("C", 0.30) == "C++"
+    assert subtier_for("C", 0.20) == "C+"
+    assert subtier_for("C", 0.10) == "C-"
+    assert subtier_for("C", 0.02) == "C--"
+
+
+def test_subtier_for_out_of_range():
+    """A confidence outside its class's range returns None."""
+    # 0.65 is class B territory, not class A's.
+    assert subtier_for("A", 0.65) is None
+    assert subtier_for("C", 0.50) is None
+
+
+def test_subtier_for_no_confianca():
+    assert subtier_for("A", None) is None
+
+
+def test_subtiers_cover_full_axis_no_overlap():
+    """The 12 sub-tiers should cover [0.0, 1.0] without gaps and
+    without overlap (a confidence is in exactly one sub-tier per
+    class). Crucially: A-- starts at 0.70 (not 0.00) — the
+    pre-2026-04-30 boundaries were wrong on this and would have
+    placed every C cançó in A--."""
+    a_bands = [(lo, hi) for label, lo, hi in ML_SUBTIERS if label.startswith("A")]
+    b_bands = [(lo, hi) for label, lo, hi in ML_SUBTIERS if label.startswith("B")]
+    c_bands = [(lo, hi) for label, lo, hi in ML_SUBTIERS if label.startswith("C")]
+    # Sort ascending and check consecutivity.
+    for bands, lo_class, hi_class in (
+        (sorted(a_bands), 0.70, 1.0),
+        (sorted(b_bands), 0.40, 0.70),
+        (sorted(c_bands), 0.00, 0.40),
+    ):
+        assert bands[0][0] == lo_class
+        assert bands[-1][1] >= hi_class
+        for i in range(len(bands) - 1):
+            assert bands[i][1] == bands[i + 1][0], f"gap/overlap: {bands}"
+
+
+def test_subtiers_high_to_low_order():
+    """Display order: A++ first, C-- last."""
+    labels = [label for label, _, _ in ML_SUBTIERS]
+    assert labels[0] == "A++"
+    assert labels[-1] == "C--"
+    assert labels == [
+        "A++",
+        "A+",
+        "A-",
+        "A--",
+        "B++",
+        "B+",
+        "B-",
+        "B--",
+        "C++",
+        "C+",
+        "C-",
+        "C--",
+    ]
+
+
 # ── _is_auto_approve_subtier ──────────────────────────────────────────
 
 
-def test_a_plusplus_is_auto():
-    """A++ band (>=0.99) maps to an auto-approve sub-tier."""
-    assert _is_auto_approve_subtier("A", 0.995) is True
-    assert _is_auto_approve_subtier("A", 0.99) is True
-    assert _is_auto_approve_subtier("A", 1.0) is True
-
-
-def test_a_plus_is_not_auto():
-    """A+ (0.95–0.99) is NOT yet graduated. Even at 99.4 % accuracy
-    the sub-tier is a candidat, not auto."""
-    assert _is_auto_approve_subtier("A", 0.985) is False
-    assert _is_auto_approve_subtier("A", 0.95) is False
-
-
-def test_b_and_c_never_auto():
-    assert _is_auto_approve_subtier("B", 0.99) is False
-    assert _is_auto_approve_subtier("C", 0.05) is False
-
-
-def test_no_confianca_means_no_auto():
-    assert _is_auto_approve_subtier("A", None) is False
+def test_no_subtier_is_currently_auto():
+    """As of 2026-04-30 no sub-tier has been graduated to auto-decision
+    — the original A++ pin was based on a flawed metric."""
+    assert ML_AUTO_APPROVE_SUBTIERS == ()
+    assert ML_AUTO_REJECT_SUBTIERS == ()
+    # And the helper returns False for every band.
+    for label, lo, _ in ML_SUBTIERS:
+        assert _is_auto_approve_subtier(label[0], lo + 0.001) is False
 
 
 # ── maybe_auto_decide ─────────────────────────────────────────────────
 
 
 @pytest.mark.django_db
-def test_a_plusplus_canco_gets_auto_approved(canco):
+def test_no_auto_decision_today(canco):
+    """No sub-tier qualifies today, so even an A++ canco is left
+    alone for HITL."""
     canco.ml_classe = "A"
-    canco.ml_confianca = 0.995
-    canco.save()
-
-    result = maybe_auto_decide(canco)
-
-    assert result == "aprovada"
-    canco.refresh_from_db()
-    assert canco.verificada is True
-    h = HistorialRevisio.objects.filter(canco_deezer_id=canco.deezer_id).first()
-    assert h is not None
-    assert h.decisio == "aprovada"
-    assert h.motiu == MOTIU_AUTO_ML
-
-
-@pytest.mark.django_db
-def test_a_plus_canco_not_touched(canco):
-    """A+ (0.95–0.99) is a candidat but not auto."""
-    canco.ml_classe = "A"
-    canco.ml_confianca = 0.97
+    canco.ml_confianca = 0.999
     canco.save()
 
     result = maybe_auto_decide(canco)
@@ -105,16 +158,12 @@ def test_a_plus_canco_not_touched(canco):
 
 @pytest.mark.django_db
 def test_already_verified_skipped(canco):
-    """Don't re-approve a track that's already verified."""
     canco.ml_classe = "A"
     canco.ml_confianca = 0.999
     canco.verificada = True
     canco.save()
 
-    result = maybe_auto_decide(canco)
-
-    assert result is None
-    # No new historial — we didn't touch it.
+    assert maybe_auto_decide(canco) is None
     assert HistorialRevisio.objects.count() == 0
 
 
@@ -123,24 +172,15 @@ def test_already_verified_skipped(canco):
 
 @pytest.mark.django_db
 def test_auto_ml_decisions_excluded_from_training(canco):
-    """A model that learns from its own outputs reinforces its biases.
-    Training must exclude motiu='auto_ml'."""
+    """If a sub-tier is graduated in the future, auto-decisions must
+    not feed back into the training set."""
     aprovar_canco_auto_ml(canco)
-    # Sanity: the historial row is there, just tagged.
     assert HistorialRevisio.objects.filter(motiu=MOTIU_AUTO_ML).count() == 1
-    # The training query in entrenar_model uses .exclude(motiu=…).
     trainable = HistorialRevisio.objects.exclude(motiu=MOTIU_AUTO_ML).count()
     assert trainable == 0
 
 
 # ── Constants invariants ─────────────────────────────────────────────
-
-
-def test_a_plusplus_pinned_in_auto_subtiers():
-    """The whole feature hinges on A++ being in
-    ML_AUTO_APPROVE_SUBTIERS. If someone removes it the auto-approval
-    silently turns off — guard against that."""
-    assert "A++" in ML_AUTO_APPROVE_SUBTIERS
 
 
 def test_thresholds_are_strict():

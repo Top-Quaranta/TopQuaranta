@@ -39,52 +39,79 @@ MIN_NEW_DECISIONS = 5  # new decisions since last recalc to trigger retrain
 TFIDF_MAX_FEATURES = 30
 
 # Fixed ML sub-tier boundaries used by the staff status dashboard
-# and the auto-approval logic. Within each main class A/B/C the band
-# is split into 4 sub-bands by `ml_confianca`. The boundaries are
-# fixed (not data-dependent quartiles) so auto-status decisions stay
-# reproducible across reloads, and so a sub-tier definition lasts
-# across retrains. Re-tune after each retrain if the distribution
-# shifts noticeably.
+# and the auto-decision logic. Each main class A/B/C has a *fixed*
+# overall range driven by ML_CLASSE_*_THRESHOLD:
+#   A: [0.70, 1.00]   (ML_CLASSE_A_THRESHOLD = 0.70)
+#   B: [0.40, 0.70)   (ML_CLASSE_B_THRESHOLD = 0.40)
+#   C: [0.00, 0.40)
+# Within each class we cut into 4 sub-bands by quartile of the live
+# HistorialRevisio confidence distribution at decision time. The
+# bounds are pinned (not recomputed dynamically) so auto-status
+# decisions stay reproducible — re-tune after each retrain if the
+# distribution shifts noticeably.
 #
-# Boundaries derived from the 2026-04-30 audit on the live
-# HistorialRevisio (n=4 798): A++ shows 502/502 = 100.0 % accuracy,
-# A+ 99.4 %, the rest grey-zone. C-- and C- bordered 95 % rejection
-# but didn't qualify for auto-reject.
-ML_SUBTIER_BOUNDS: dict[str, list[tuple[str, float, float]]] = {
-    "A": [
-        ("A--", 0.000, 0.820),
-        ("A-", 0.820, 0.950),
-        ("A+", 0.950, 0.990),
-        ("A++", 0.990, 1.001),
-    ],
-    "B": [
-        ("B--", 0.000, 0.440),
-        ("B-", 0.440, 0.510),
-        ("B+", 0.510, 0.590),
-        ("B++", 0.590, 1.001),
-    ],
-    "C": [
-        ("C--", 0.000, 0.130),
-        ("C-", 0.130, 0.240),
-        ("C+", 0.240, 0.310),
-        ("C++", 0.310, 1.001),
-    ],
-}
+# Listed HIGH-to-LOW confidence: A++ (most confident "approve") at
+# the top, C-- (most confident "reject") at the bottom. The list
+# is iterated in this order by the staff dashboard, so the visual
+# order matches the actual confidence axis.
+#
+# Honest accuracy (HistorialRevisio decision-time snapshot,
+# excluding motiu='auto_ml' to avoid feedback-loop bias) audited
+# 2026-04-30 on n=7 893:
+#
+#   A++  conf [0.99, 1.00)  acc-ap 93.1 %  ← NOT auto-approve material
+#   A+   conf [0.95, 0.99)  acc-ap 97.8 %
+#   A−   conf [0.85, 0.95)  acc-ap 92.7 %
+#   A−−  conf [0.70, 0.85)  acc-ap 85.1 %
+#   B++  conf [0.58, 0.70)  acc-ap 57.0 %
+#   B+   conf [0.49, 0.58)  acc-ap 36.2 %
+#   B−   conf [0.44, 0.49)  acc-ap 22.4 %
+#   B−−  conf [0.40, 0.44)  acc-ap 14.1 %
+#   C++  conf [0.27, 0.40)  acc-rej 95.2 %
+#   C+   conf [0.17, 0.27)  acc-rej 97.4 %
+#   C−   conf [0.05, 0.17)  acc-rej 98.9 %
+#   C−−  conf [0.00, 0.05)  acc-rej 99.2 %  ← closest to auto-reject
+#
+# No tier currently clears the 99.5 % bar. Auto-decision lists are
+# both empty.
+#
+# Earlier (now-corrected) figures relied on live Canco.ml_classe /
+# ml_confianca, which the model has re-scored after retrains
+# (target leakage). HistorialRevisio is the only honest source.
+ML_SUBTIERS: list[tuple[str, float, float]] = [
+    # Class A — confidence ≥ 0.70
+    ("A++", 0.99, 1.001),
+    ("A+", 0.95, 0.99),
+    ("A-", 0.85, 0.95),
+    ("A--", 0.70, 0.85),
+    # Class B — 0.40 ≤ confidence < 0.70
+    ("B++", 0.58, 0.70),
+    ("B+", 0.49, 0.58),
+    ("B-", 0.44, 0.49),
+    ("B--", 0.40, 0.44),
+    # Class C — confidence < 0.40
+    ("C++", 0.27, 0.40),
+    ("C+", 0.17, 0.27),
+    ("C-", 0.05, 0.17),
+    ("C--", 0.00, 0.05),
+]
 
 # A sub-tier becomes a blind-trust candidate when its accuracy on
-# the last N decisions exceeds the threshold AND the sample size is
-# large enough.
+# the historical decisions exceeds the threshold AND the sample
+# size is large enough.
 ML_AUTO_APPROVE_THRESHOLD = 0.995
 ML_AUTO_REJECT_THRESHOLD = 0.995
 ML_AUTO_MIN_SAMPLES = 200
 
-# Sub-tiers that are currently auto-decided. Pinned manually here —
-# threshold-passing alone makes a sub-tier a *candidate* on the
-# dashboard, but graduating it to auto requires a deliberate edit.
-# Auto-decided cançons land in HistorialRevisio with
-# motiu="auto_ml" so they're excluded from the training set
-# (avoids the model reinforcing its own decisions).
-ML_AUTO_APPROVE_SUBTIERS: tuple[str, ...] = ("A++",)
+# Sub-tiers that are currently auto-decided. EMPTY by default —
+# graduate a sub-tier here only after the dashboard shows it as
+# "candidat" stably across multiple weeks. Auto-decided cançons
+# land in HistorialRevisio with motiu="auto_ml" and are excluded
+# from training (entrenar_model) to avoid the model reinforcing
+# its own decisions. As of 2026-04-30 no sub-tier qualifies — the
+# 100 %-on-A++ figure that originally suggested otherwise was a
+# leaked metric from live (re-scored) Canco fields.
+ML_AUTO_APPROVE_SUBTIERS: tuple[str, ...] = ()
 ML_AUTO_REJECT_SUBTIERS: tuple[str, ...] = ()
 MOTIU_AUTO_ML = "auto_ml"
 

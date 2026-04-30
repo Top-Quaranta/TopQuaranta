@@ -14,7 +14,7 @@
  * polling (daily data doesn't change that fast), but the page
  * refreshes every 60 s in case staff leaves it open.
  */
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { PageHeader, Pill, TableCard } from '../../components/staff/StaffTable'
@@ -921,19 +921,26 @@ function fmtPct(v) {
 }
 
 function MLSubTierTable({ subtiers }) {
-  const { tiers, auto_approve_threshold, auto_reject_threshold, auto_min_samples } = subtiers
-  const tierOrder = ['A', 'B', 'C']
+  const {
+    rows = [],
+    auto_approve_threshold,
+    auto_reject_threshold,
+    auto_min_samples,
+  } = subtiers
+  // Render in API order (A++ → C--). Add a separator before each
+  // class transition so the visual blocks read naturally.
   return (
     <div className="bg-white text-tq-ink rounded-lg p-4 mt-3">
       <h3 className="text-sm font-semibold mb-1">
-        Accuracy per sub-tier (decisions humanes)
+        Accuracy per sub-tier (decisions humanes, més confiança a dalt)
       </h3>
       <p className="text-[11px] opacity-70 mb-3">
         Llindars d'auto-decisió: {fmtPct(auto_approve_threshold)} aprov. /{' '}
         {fmtPct(auto_reject_threshold)} rebuig sobre n ≥ {auto_min_samples}.
-        Files marcades com a "auto" ja no requereixen HITL — el sistema
-        decideix tot sol per a noves cançons que entren en eixe rang de
-        confiança.
+        Cap sub-tier auto-decideix avui — quan algun creui el llindar de
+        manera estable, es graduarà manualment a
+        {' '}<code>ML_AUTO_APPROVE_SUBTIERS</code>. Càlcul fet sobre
+        <code>HistorialRevisio</code> (snapshot al moment de la decisió).
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -950,37 +957,37 @@ function MLSubTierTable({ subtiers }) {
             </tr>
           </thead>
           <tbody>
-            {tierOrder.map(tier => {
-              const rows = tiers[tier] || []
+            {rows.map((r, i) => {
+              const prevTier = i > 0 ? rows[i - 1].tier : null
+              const tierBoundary = prevTier !== null && prevTier !== r.tier
               return (
-                <Fragment key={tier}>
-                  {rows.map((r, idx) => (
-                    <tr
-                      key={r.label}
-                      className={
-                        'border-t border-tq-ink/10 ' +
-                        (idx === 0 ? 'border-t-2 border-tq-ink/30 ' : '')
-                      }
-                    >
-                      <td className="py-1.5 pr-3 font-mono font-semibold">{r.label}</td>
-                      <td className="py-1.5 pr-3 font-mono text-xs opacity-80">
-                        [{r.conf_lo.toFixed(3)} – {r.conf_hi.toFixed(3)})
-                      </td>
-                      <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
-                      <td className="py-1.5 pr-3 text-right font-mono">{r.verif}</td>
-                      <td className="py-1.5 pr-3 text-right font-mono">{r.rej}</td>
-                      <td className="py-1.5 pr-3 text-right font-mono">
-                        {fmtPct(r.approve_accuracy)}
-                      </td>
-                      <td className="py-1.5 pr-3 text-right font-mono">
-                        {fmtPct(r.reject_accuracy)}
-                      </td>
-                      <td className="py-1.5 pr-3">
-                        <StatusBadge status={r.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
+                <tr
+                  key={r.label}
+                  className={
+                    tierBoundary
+                      ? 'border-t-2 border-tq-ink/30'
+                      : i > 0
+                      ? 'border-t border-tq-ink/10'
+                      : ''
+                  }
+                >
+                  <td className="py-1.5 pr-3 font-mono font-semibold">{r.label}</td>
+                  <td className="py-1.5 pr-3 font-mono text-xs opacity-80">
+                    [{r.conf_lo.toFixed(2)} – {r.conf_hi.toFixed(2)})
+                  </td>
+                  <td className="py-1.5 pr-3 text-right font-mono">{r.n}</td>
+                  <td className="py-1.5 pr-3 text-right font-mono">{r.verif}</td>
+                  <td className="py-1.5 pr-3 text-right font-mono">{r.rej}</td>
+                  <td className="py-1.5 pr-3 text-right font-mono">
+                    {fmtPct(r.approve_accuracy)}
+                  </td>
+                  <td className="py-1.5 pr-3 text-right font-mono">
+                    {fmtPct(r.reject_accuracy)}
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    <StatusBadge status={r.status} />
+                  </td>
+                </tr>
               )
             })}
           </tbody>

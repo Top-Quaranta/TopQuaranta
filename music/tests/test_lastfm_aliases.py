@@ -115,6 +115,88 @@ def test_only_confirmed_aliases_sum_into_signal(artista):
 
 
 @pytest.mark.django_db
+def test_get_track_info_literal_skips_case_fold_collapse():
+    """Critical: even with autocorrect=0, Last.fm case-folds the
+    artist name and returns the canonical page's data. Caught
+    2026-05-01 with 'ADRIÀ PUNTÍ' returning the same playcount
+    (117 347) as 'Adrià Puntí'. The literal-page lookup must
+    detect this and return None so we don't double-count.
+    """
+    from ingesta.clients import lastfm
+
+    def fake_get(url, params, timeout):
+        # Last.fm's response: track is real but the artist field
+        # carries the *canonical* name even though we asked for
+        # 'ADRIÀ PUNTÍ' (case-fold).
+        class FakeR:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "track": {
+                        "playcount": 117347,
+                        "listeners": 5000,
+                        "artist": {"name": "Adrià Puntí"},
+                    }
+                }
+
+        return FakeR()
+
+    with patch("ingesta.clients.lastfm.requests.get", side_effect=fake_get):
+        # Without canonical guard → returns the (double-counting) playcount.
+        no_guard = lastfm.get_track_info_literal("ADRIÀ PUNTÍ", "Penyora")
+        assert no_guard["playcount"] == 117347
+
+        # With the canonical guard → recognises the case-fold
+        # collapse and returns None (don't sum).
+        with_guard = lastfm.get_track_info_literal(
+            "ADRIÀ PUNTÍ", "Penyora", canonical_artist="Adrià Puntí"
+        )
+        assert with_guard is None
+
+
+@pytest.mark.django_db
+def test_get_track_info_literal_keeps_genuine_variant():
+    """Counterpart to the case-fold test: a genuine variant page
+    (different artist name in the response, e.g. typographic
+    apostrophe vs ASCII) must still sum normally."""
+    from ingesta.clients import lastfm
+
+    def fake_get(url, params, timeout):
+        class FakeR:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                # 'Anna Roig…' vs 'Anna Roig…' (typographic apostrophe).
+                return {
+                    "track": {
+                        "playcount": 25530,
+                        "listeners": 1200,
+                        "artist": {"name": "Anna Roig i L’ombre de ton chien"},
+                    }
+                }
+
+        return FakeR()
+
+    with patch("ingesta.clients.lastfm.requests.get", side_effect=fake_get):
+        result = lastfm.get_track_info_literal(
+            "Anna Roig i L’ombre de ton chien",
+            "Track",
+            canonical_artist="Anna Roig i L'ombre de ton chien",
+        )
+        # Names differ in the apostrophe character → the response's
+        # artist matches what we asked for (typographic), not the
+        # canonical (ASCII) → sum normally.
+        assert result["playcount"] == 25530
+
+
+@pytest.mark.django_db
 def test_alias_str_states():
     """__str__ varies by state — used in admin + audit logs."""
     art = Artista.objects.create(nom="X", lastfm_nom="X")

@@ -53,6 +53,33 @@ def _norm(name: str) -> str:
     return " ".join(s.split())
 
 
+def _normalize_lastfm_url(u: str) -> str:
+    """Compare-friendly form of a Last.fm artist URL.
+
+    Critical for variant detection — `autocorrect=0` on `getInfo`
+    DOES NOT prevent Last.fm from case-folding the artist name
+    internally. Searching 'ADRIÀ PUNTÍ' returns a hit with URL
+    `…/music/ADRI%C3%80+PUNT%C3%8D` (different bytes), but a
+    follow-up `getInfo?artist=ADRIÀ+PUNTÍ&autocorrect=0` returns
+    URL `…/music/+noredirect/Adri%C3%A0+Punt%C3%AD` — i.e. the
+    canonical page with case folded. Same playcount, same top
+    tracks. The 'variant' isn't a real one.
+
+    Strip the `+noredirect/` wrapper, lowercase, and compare paths
+    only (not host) so two pages that resolve to the same canonical
+    look identical. Caught 2026-05-01 with Adrià Puntí (75 candidates
+    inserted; many were case-only false positives).
+    """
+    if not u:
+        return ""
+    from urllib.parse import urlparse
+
+    path = urlparse(u).path
+    # +noredirect/ wrapper appears only on autocorrect=0 responses.
+    path = path.replace("/+noredirect/", "/")
+    return path.lower()
+
+
 def _search_artist(name: str, limit: int = 8) -> list[dict]:
     data = lastfm._artist_api_call("artist.search", artist=name, limit=limit)
     if not data:
@@ -217,6 +244,15 @@ class Command(BaseCommand):
                 v_data = _lastfm_call_no_autocorrect("artist.getInfo", artist=v_name)
                 v_info = (v_data or {}).get("artist") or {}
                 if not v_info:
+                    continue
+                # Critical filter: Last.fm sometimes returns the
+                # canonical page even with autocorrect=0 (case-only
+                # variants like 'ADRIÀ PUNTÍ'). Compare normalized
+                # URLs — if they match, the 'variant' is the same
+                # page in disguise and would double-count if summed.
+                if _normalize_lastfm_url(
+                    v_info.get("url", "")
+                ) == _normalize_lastfm_url(canon_info.get("url", "")):
                     continue
                 v_pc = int((v_info.get("stats") or {}).get("playcount", 0))
                 if not v_pc or v_pc < canon_pc * min_frag:

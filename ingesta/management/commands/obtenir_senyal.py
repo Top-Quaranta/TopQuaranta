@@ -205,7 +205,12 @@ class Command(BaseCommand):
             alias_names = aliases_by_artist.get(canco.artista_id, [])
             if result is not None and alias_names:
                 for alias in alias_names:
-                    extra = get_track_info_literal(alias, track_name)
+                    # Pass canonical_artist so the literal lookup can
+                    # detect Last.fm case-folding the alias into the
+                    # canonical page (would otherwise double-count).
+                    extra = get_track_info_literal(
+                        alias, track_name, canonical_artist=artist_name
+                    )
                     if extra is not None:
                         result["playcount"] += extra["playcount"]
                         result["listeners"] += extra["listeners"]

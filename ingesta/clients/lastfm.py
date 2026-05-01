@@ -206,7 +206,9 @@ def _extract_returned_names(track: dict) -> tuple[str, str]:
     return returned_track, returned_artist
 
 
-def get_track_info_literal(artist_name: str, track_name: str) -> dict | None:
+def get_track_info_literal(
+    artist_name: str, track_name: str, canonical_artist: str | None = None
+) -> dict | None:
     """Like `get_track_info` but with `autocorrect=0` — returns the
     LITERAL Last.fm page for the given (artist, track) string.
 
@@ -215,6 +217,13 @@ def get_track_info_literal(artist_name: str, track_name: str) -> dict | None:
     aggregate signal). With autocorrect=1 Last.fm silently
     redirects 'Böira' → 'Boira' and we'd double-count the canonical
     page. Returns None if the literal page doesn't exist.
+
+    `canonical_artist`: when provided, the response's artist URL is
+    compared against the canonical's. If they collapse to the same
+    page (Last.fm case-folds 'ADRIÀ PUNTÍ' → 'Adrià Puntí' even
+    with autocorrect=0), returns None instead of the playcount —
+    otherwise we'd double-count the canonical signal. Caught
+    2026-05-01 from Adrià Puntí showing pc_canon == pc_var.
     """
     params = {
         "method": "track.getInfo",
@@ -236,6 +245,23 @@ def get_track_info_literal(artist_name: str, track_name: str) -> dict | None:
                 # SOME tracks but not others.
                 return None
             track = data.get("track") or {}
+            # Case-fold guard: if the response's artist name (after
+            # Last.fm's silent normalisation) matches the canonical
+            # artist name we were asked to *not* double-count, treat
+            # the alias as a duplicate page and return None.
+            if canonical_artist:
+                returned_artist_field = track.get("artist")
+                if isinstance(returned_artist_field, dict):
+                    returned_name = (returned_artist_field.get("name") or "").strip()
+                else:
+                    returned_name = str(returned_artist_field or "").strip()
+                if (
+                    returned_name
+                    and returned_name.lower() == canonical_artist.lower()
+                    and returned_name != artist_name
+                ):
+                    # Same page as canonical → don't sum.
+                    return None
             return {
                 "playcount": int(track.get("playcount", 0)),
                 "listeners": int(track.get("listeners", 0)),

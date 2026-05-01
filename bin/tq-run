@@ -73,21 +73,53 @@ while true; do
     attempt=$((attempt+1))
 done
 
-# Write the status file atomically (mktemp + mv).
+# Exit 75 = EX_TEMPFAIL (Unix convention) means "skipped because
+# another instance holds the lock". We must NOT update `last_run` in
+# that case — otherwise an hourly cron tick that's been hitting the
+# lock for days masks a hung previous run by always showing a fresh
+# last_run timestamp. See music/locks.py for the design rationale
+# (caught 2026-05-01 with `obtenir_novetats` stuck for ~12 days).
 status_file="$STATUS_DIR/$tag.status"
 tmp_status=$(mktemp)
-{
-    echo "command=$cmd"
-    echo "args=$*"
-    echo "last_run=$ts"
-    echo "exit_code=$rc"
-    echo "attempts=$attempt"
-    echo "max_attempts=$max_attempts"
-    if [[ $rc -eq 0 ]]; then echo "status=OK"; else echo "status=FAIL"; fi
-    echo "last_output<<EOF"
-    tail -n 20 "$tmpout"
-    echo "EOF"
-} > "$tmp_status"
+if [[ $rc -eq 75 ]]; then
+    # Preserve previous last_run if any. Read it back, else leave blank
+    # (which `tq-health` reads as never-run).
+    prev_last_run=""
+    prev_skip_count=0
+    if [[ -f "$status_file" ]]; then
+        prev_last_run=$(grep '^last_run=' "$status_file" | cut -d= -f2-)
+        prev_skip_count=$(grep '^consecutive_skips=' "$status_file" | cut -d= -f2 || echo 0)
+        prev_skip_count=${prev_skip_count:-0}
+    fi
+    {
+        echo "command=$cmd"
+        echo "args=$*"
+        echo "last_run=$prev_last_run"
+        echo "last_skip=$ts"
+        echo "exit_code=$rc"
+        echo "attempts=$attempt"
+        echo "max_attempts=$max_attempts"
+        echo "status=SKIPPED_BY_LOCK"
+        echo "consecutive_skips=$((prev_skip_count + 1))"
+        echo "last_output<<EOF"
+        tail -n 20 "$tmpout"
+        echo "EOF"
+    } > "$tmp_status"
+else
+    {
+        echo "command=$cmd"
+        echo "args=$*"
+        echo "last_run=$ts"
+        echo "exit_code=$rc"
+        echo "attempts=$attempt"
+        echo "max_attempts=$max_attempts"
+        if [[ $rc -eq 0 ]]; then echo "status=OK"; else echo "status=FAIL"; fi
+        echo "consecutive_skips=0"
+        echo "last_output<<EOF"
+        tail -n 20 "$tmpout"
+        echo "EOF"
+    } > "$tmp_status"
+fi
 mv "$tmp_status" "$status_file"
 
 exit "$rc"

@@ -59,19 +59,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        lock_file = "/tmp/mb_sync.lock"
-        try:
-            lock = open(lock_file, "w")
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError:
-            self.stdout.write("Ja hi ha una instància corrent. Sortint.")
-            return
+        # See `music.locks.SingletonLock` for why we exit 75 on lock
+        # contention rather than 0 (preserves `last_run` so health
+        # checks fire when an instance hangs).
+        from music.locks import SingletonLock
 
-        try:
+        with SingletonLock("mb_sync"):
             self._run(**opts)
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
-            lock.close()
 
     def _run(self, **opts):
         refresh_days = opts["refresh_days"]

@@ -11,9 +11,26 @@
 
 set -u
 
+# --email-on-fail: capture the report and only mail it to admin if
+# overall=1 (something stale or failed). Designed for hourly cron
+# without spamming when everything is healthy.
+EMAIL_ON_FAIL=0
+EMAIL_TO="${TQ_HEALTH_EMAIL:-admin@topquaranta.cat}"
+for arg in "$@"; do
+    case "$arg" in
+        --email-on-fail) EMAIL_ON_FAIL=1 ;;
+    esac
+done
+
 STATUS_DIR=/var/log/topquaranta/status
 ERRORS_LOG=/var/log/topquaranta/errors.log
 NOW=$(date +%s)
+
+# Capture all output if --email-on-fail so we can mail it later.
+if (( EMAIL_ON_FAIL )); then
+    REPORT=$(mktemp)
+    exec 3>&1 1>"$REPORT"
+fi
 
 # Per-command max age in hours before we flag STALE.
 # Tune carefully: the cron is hourly for novetats, daily for the rest,
@@ -42,14 +59,27 @@ for cmd in "${!MAX_AGE_HOURS[@]}"; do
         continue
     fi
     status=$(grep '^status=' "$f" | cut -d= -f2)
-    last=$(grep '^last_run=' "$f" | cut -d= -f2)
+    last=$(grep '^last_run=' "$f" | cut -d= -f2-)
     last_ts=$(date -d "$last" +%s 2>/dev/null || echo 0)
     age_h=$(( (NOW - last_ts) / 3600 ))
     max_h=${MAX_AGE_HOURS[$cmd]}
+    skips=$(grep '^consecutive_skips=' "$f" | cut -d= -f2)
+    skips=${skips:-0}
 
+    # Order matters: STALE (last_run too old) is the most informative
+    # signal. SKIPPED_BY_LOCK alone is fine — it means a long run is
+    # in progress; only when it persists past MAX_AGE_HOURS does it
+    # become STALE. Pre-2026-05-01 the bug was that lock-skip was
+    # written as status=OK with last_run=now, masking stale state.
     if [[ $age_h -gt $max_h ]]; then
-        display="STALE(${age_h}h)"
+        if [[ "$status" == "SKIPPED_BY_LOCK" ]] && (( skips > 0 )); then
+            display="STUCK(${age_h}h, ${skips}skips)"
+        else
+            display="STALE(${age_h}h)"
+        fi
         overall=1
+    elif [[ "$status" == "SKIPPED_BY_LOCK" ]]; then
+        display="SKIP(${skips})"
     elif [[ "$status" != "OK" ]]; then
         display="FAIL"
         overall=1
@@ -78,6 +108,31 @@ if [[ -f "$ERRORS_LOG" ]]; then
     fi
 else
     echo "(errors log not present yet: $ERRORS_LOG)"
+fi
+
+if (( EMAIL_ON_FAIL )); then
+    # Restore stdout so the rest of the script can still print.
+    exec 1>&3 3>&-
+    if (( overall != 0 )); then
+        # Use Django's `mail_admins` (Brevo SMTP) — `mail`/`mailx`
+        # binaries aren't installed on the box and we don't want a
+        # new system dep just for this. Subject summarises the bad
+        # lines so the inbox preview is useful at a glance.
+        bad=$(grep -E "STALE|STUCK|FAIL|NO_STATUS" "$REPORT" | head -3 | tr '\n' ' | ')
+        cd /home/topquaranta/app
+        DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
+            /home/topquaranta/app/.venv/bin/python -c "
+import sys
+import django
+django.setup()
+from django.core.mail import mail_admins
+body = sys.stdin.read()
+subject = '[TopQuaranta] Pipeline alert: ' + ${bad@Q}
+mail_admins(subject, body)
+" < "$REPORT" 2>/dev/null \
+            || cat "$REPORT" >&2  # fall back to stderr if mail fails
+    fi
+    rm -f "$REPORT"
 fi
 
 exit $overall

@@ -79,18 +79,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        lock_file = "/tmp/lastfm_artist_sync.lock"
-        try:
-            lock = open(lock_file, "w")
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError:
-            self.stdout.write("Ja hi ha una instància corrent. Sortint.")
-            return
-        try:
+        # See `music.locks.SingletonLock` for the exit-75 design.
+        from music.locks import SingletonLock
+
+        with SingletonLock("lastfm_artist_sync"):
             self._run(**opts)
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
-            lock.close()
 
     def _run(self, **opts):
         limit = opts["limit"]

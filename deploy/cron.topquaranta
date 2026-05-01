@@ -88,6 +88,16 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # in tq-recover itself. (R7)
 */30 * * * * topquaranta   /home/topquaranta/bin/tq-recover >> /var/log/topquaranta/recover.log 2>&1
 
+# Health watchdog — emails admin@ if any expected cron is STALE,
+# STUCK, or FAILing. Silent when everything is OK. Caught 2026-05-01:
+# `obtenir_novetats` had been hung for ~12 days while every hourly
+# tick was reporting status=OK because the lock-skip path didn't
+# distinguish itself from a successful run. Now that lock-skip exits
+# 75 and `tq-run` writes status=SKIPPED_BY_LOCK without refreshing
+# `last_run`, the same hang would surface within the command's
+# max-age window (2 h for `obtenir_novetats`).
+15 * * * *  topquaranta   /home/topquaranta/bin/tq-health --email-on-fail > /dev/null 2>&1
+
 # Monthly: verify the latest daily backup is restorable. (R14)
 30 4 1 * *  postgres      /home/topquaranta/bin/tq-restore-test >> /var/log/topquaranta/restore-test.log 2>&1
 

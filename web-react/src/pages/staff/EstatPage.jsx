@@ -230,13 +230,35 @@ function HorizontalBars({ items, max, formatValue, showDirection }) {
 }
 
 function CronStatus({ cron }) {
-  const ok = cron.status === 'OK'
-  const tone = ok ? 'green' : 'red'
+  // status semantics (post 2026-05-01 lock-detection refactor):
+  //   OK              — last run completed cleanly.
+  //   FAIL            — last run exited non-zero.
+  //   SKIPPED_BY_LOCK — cron tick fired while a previous instance
+  //                     was still running. Benign in moderation;
+  //                     dangerous if it persists (likely hang).
+  // The `consecutive_skips` counter rises every blocked tick and
+  // resets on the next successful run. A high count + stale
+  // `last_run` is the symptom that masked our 12-day novetats hang.
+  const skips = cron.consecutive_skips || 0
+  let tone, label
+  if (cron.status === 'OK') {
+    tone = 'green'
+    label = 'OK'
+  } else if (cron.status === 'SKIPPED_BY_LOCK') {
+    // 1-2 skips are typical for hourly crons whose work occasionally
+    // overruns the hour. ≥3 is suspicious — the previous instance
+    // is hanging, not just slow.
+    tone = skips >= 3 ? 'red' : 'gray'
+    label = `SKIP×${skips}`
+  } else {
+    tone = 'red'
+    label = cron.status || '—'
+  }
   const when = cron.last_run ? cron.last_run.slice(0, 16).replace('T', ' ') : '—'
   const attempts = cron.attempts && cron.attempts !== '1' ? ` · ${cron.attempts}×` : ''
   return (
     <li className="flex items-center gap-3 text-xs py-1.5 border-t border-black/5 first:border-t-0">
-      <Pill tone={tone}>{cron.status || '—'}</Pill>
+      <Pill tone={tone}>{label}</Pill>
       <span className="font-mono font-semibold text-tq-ink/80 flex-1 truncate">
         {cron.name}
       </span>

@@ -587,9 +587,18 @@ def estat(request: Request) -> Response:
                     "command": parsed.get("command", ""),
                     "args": parsed.get("args", ""),
                     "last_run": parsed.get("last_run", ""),
+                    "last_skip": parsed.get("last_skip", ""),
                     "status": parsed.get("status", ""),
                     "exit_code": parsed.get("exit_code", ""),
                     "attempts": parsed.get("attempts", ""),
+                    # `consecutive_skips` is the number of cron ticks
+                    # that have been blocked by an in-flight (and
+                    # potentially hung) instance — written by tq-run
+                    # whenever the wrapped command exits 75. A value
+                    # >0 paired with stale `last_run` is the signal
+                    # of a stuck process (caught 2026-05-01 with
+                    # `obtenir_novetats` hung ~12 days).
+                    "consecutive_skips": int(parsed.get("consecutive_skips") or 0),
                 }
             )
 

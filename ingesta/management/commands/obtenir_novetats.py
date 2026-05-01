@@ -65,21 +65,17 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true")
 
     def handle(self, *args, **options):
-        lock_file = "/tmp/obtenir_novetats.lock"
-        try:
-            lock = open(lock_file, "w")
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError:
-            self.stdout.write("Ja hi ha una instància corrent. Sortint.")
-            return
+        # `SingletonLock` exits with code 75 (EX_TEMPFAIL) if the
+        # lock is already held — `tq-run` then writes
+        # `status=SKIPPED_BY_LOCK` without refreshing `last_run`,
+        # so a hung instance triggers `tq-health` STALE after the
+        # max-age window. See `music.locks` docstring for context.
+        from music.locks import SingletonLock
 
-        try:
-            self._run(lock, *args, **options)
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
-            lock.close()
+        with SingletonLock("obtenir_novetats"):
+            self._run(*args, **options)
 
-    def _run(self, lock, *args, **options):
+    def _run(self, *args, **options):
         limit = options["limit"]
         dry_run = options["dry_run"]
 

@@ -33,6 +33,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -410,10 +411,116 @@ def artista_detail(request: Request, pk: int) -> Response:
                 ),
                 "nb_similars": artista.nb_similars_lastfm or 0,
                 "auto_match_disabled": artista.lastfm_auto_match_disabled,
+                "aliases": [
+                    {
+                        "pk": a.pk,
+                        "nom": a.nom,
+                        "confirmat": a.confirmat,
+                        "rebutjat": a.rebutjat,
+                        "descobert_at": a.descobert_at.isoformat(),
+                        "playcount_canonical": a.playcount_canonical,
+                        "playcount_variant": a.playcount_variant,
+                        "top_tracks_overlap": a.top_tracks_overlap,
+                    }
+                    for a in artista.lastfm_aliases.all().order_by(
+                        "-confirmat", "rebutjat", "-descobert_at"
+                    )
+                ],
             },
         }
     )
     return Response(row)
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def artista_lastfm_alias_action(request: Request, pk: int, alias_pk: int) -> Response:
+    """Confirm or reject a Last.fm alias candidate.
+
+    Body: {"action": "confirm" | "reject" | "delete"}.
+
+    Confirmed aliases start contributing to the signal sum on the
+    next `obtenir_senyal` run. Rejected aliases stay in the DB so
+    `detectar_lastfm_aliases` doesn't re-propose the same homonym.
+    Delete is for outright removal (e.g. the alias was confirmed by
+    mistake and we want to start over).
+    """
+    from music.models import ArtistaLastfmAlias
+
+    artista = get_object_or_404(Artista, pk=pk)
+    alias = get_object_or_404(ArtistaLastfmAlias, pk=alias_pk, artista=artista)
+    action = (request.data or {}).get("action", "")
+    if action == "confirm":
+        alias.confirmat = True
+        alias.rebutjat = False
+        alias.confirmat_at = timezone.now()
+        alias.confirmat_per = request.user if request.user.is_authenticated else None
+        alias.save()
+        log_staff_action(
+            request,
+            "lastfm_alias_confirm",
+            target=artista,
+            alias_pk=alias.pk,
+            alias_nom=alias.nom,
+        )
+    elif action == "reject":
+        alias.confirmat = False
+        alias.rebutjat = True
+        alias.save()
+        log_staff_action(
+            request,
+            "lastfm_alias_reject",
+            target=artista,
+            alias_pk=alias.pk,
+            alias_nom=alias.nom,
+        )
+    elif action == "delete":
+        alias_nom = alias.nom
+        alias.delete()
+        log_staff_action(
+            request,
+            "lastfm_alias_delete",
+            target=artista,
+            alias_nom=alias_nom,
+        )
+    else:
+        return Response({"error": "action must be confirm/reject/delete"}, status=400)
+    return Response({"ok": True})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def artista_lastfm_alias_create(request: Request, pk: int) -> Response:
+    """Manually add a Last.fm alias (already confirmed) for cases
+    where staff knows about a variant the auto-detector missed."""
+    from music.models import ArtistaLastfmAlias
+
+    artista = get_object_or_404(Artista, pk=pk)
+    nom = ((request.data or {}).get("nom") or "").strip()
+    if not nom:
+        return Response({"error": "nom required"}, status=400)
+    alias, created = ArtistaLastfmAlias.objects.get_or_create(
+        artista=artista,
+        nom=nom,
+        defaults={
+            "confirmat": True,
+            "confirmat_at": timezone.now(),
+            "confirmat_per": (request.user if request.user.is_authenticated else None),
+        },
+    )
+    if not created and not alias.confirmat:
+        alias.confirmat = True
+        alias.rebutjat = False
+        alias.confirmat_at = timezone.now()
+        alias.confirmat_per = request.user if request.user.is_authenticated else None
+        alias.save()
+    log_staff_action(
+        request,
+        "lastfm_alias_manual_add",
+        target=artista,
+        alias_nom=nom,
+    )
+    return Response({"ok": True, "pk": alias.pk, "created": created})
 
 
 @api_view(["POST"])

@@ -105,6 +105,16 @@ urlpatterns = [
         name="staff_artista_mb_clear",
     ),
     path(
+        "staff/artistes/<int:pk>/lastfm-aliases/",
+        staff_views.artista_lastfm_alias_create,
+        name="staff_artista_lastfm_alias_create",
+    ),
+    path(
+        "staff/artistes/<int:pk>/lastfm-aliases/<int:alias_pk>/",
+        staff_views.artista_lastfm_alias_action,
+        name="staff_artista_lastfm_alias_action",
+    ),
+    path(
         "staff/artistes/<int:pk>/sync-mb/",
         staff_views.artista_sync_mb,
         name="staff_artista_sync_mb",

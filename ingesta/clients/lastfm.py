@@ -206,6 +206,46 @@ def _extract_returned_names(track: dict) -> tuple[str, str]:
     return returned_track, returned_artist
 
 
+def get_track_info_literal(artist_name: str, track_name: str) -> dict | None:
+    """Like `get_track_info` but with `autocorrect=0` — returns the
+    LITERAL Last.fm page for the given (artist, track) string.
+
+    Used by `obtenir_senyal` to sum playcounts across spelling
+    variants of the same artist (e.g. 'Boira' + 'Böira' → one
+    aggregate signal). With autocorrect=1 Last.fm silently
+    redirects 'Böira' → 'Boira' and we'd double-count the canonical
+    page. Returns None if the literal page doesn't exist.
+    """
+    params = {
+        "method": "track.getInfo",
+        "api_key": settings.LASTFM_API_KEY,
+        "artist": unicodedata.normalize("NFC", artist_name),
+        "track": unicodedata.normalize("NFC", track_name),
+        "format": "json",
+        "autocorrect": 0,
+    }
+    for attempt in range(MAX_RETRIES):
+        try:
+            time.sleep(RATE_LIMIT_SLEEP)
+            r = requests.get(LASTFM_API_URL, params=params, timeout=10)
+            r.raise_for_status()
+            data = r.json()
+            if "error" in data:
+                # Track or artist not found at this literal spelling
+                # — common for aliases that have a Last.fm page for
+                # SOME tracks but not others.
+                return None
+            track = data.get("track") or {}
+            return {
+                "playcount": int(track.get("playcount", 0)),
+                "listeners": int(track.get("listeners", 0)),
+            }
+        except requests.RequestException:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2**attempt)
+    return None
+
+
 def get_track_info(artist_name: str, track_name: str) -> dict | None:
     """
     Fetch cumulative playcount and listeners for a track from Last.fm.

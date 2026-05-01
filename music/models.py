@@ -419,6 +419,109 @@ class ArtistaDeezer(models.Model):
         return f"{self.artista.nom} → {self.deezer_id}"
 
 
+class ArtistaLastfmAlias(models.Model):
+    """Additional Last.fm name(s) for an artist whose scrobbles are
+    fragmented across multiple Last.fm pages (typographic apostrophe
+    vs ASCII, missing diacritics, casing — typical for PPCC artists).
+
+    The signal collector (`obtenir_senyal`) sums playcounts/listeners
+    across the canonical `Artista.lastfm_nom` AND every confirmed
+    alias. A track that scrobbled as 'Boira' (1 681 plays) and
+    'Böira' (21 487 plays) becomes a single 23 168-play signal in
+    our DB.
+
+    Lifecycle:
+      * `detectar_lastfm_aliases` populates rows with confirmat=False
+        for every candidate found via top-tracks overlap (≥50% top-5
+        match). The detector NEVER auto-confirms — homonyms can leak
+        through if their top tracks happen to coincide.
+      * Staff confirms (or rejects) each candidate at
+        /staff/artistes/<pk>. Confirmation flips `confirmat=True`
+        and the alias starts contributing to the signal sum from
+        the next `obtenir_senyal` run.
+      * Rejected aliases stay in the table with `confirmat=False`
+        + `rebutjat=True`, so re-running the detector doesn't
+        re-propose the same homonym.
+
+    Caught 2026-05-01 from the Delên case + audit; see
+    `scripts/lastfm_alias_audit.py` and roadmap entry for context.
+    """
+
+    artista = models.ForeignKey(
+        Artista,
+        on_delete=models.CASCADE,
+        related_name="lastfm_aliases",
+    )
+    nom = models.CharField(
+        max_length=255,
+        help_text=(
+            "Variant Last.fm name (e.g. 'Böira' alongside 'Boira'). "
+            "Stored case-sensitive — Last.fm's URL is case-insensitive "
+            "but the API requires the exact spelling for `autocorrect=0` "
+            "queries."
+        ),
+    )
+    descobert_at = models.DateTimeField(auto_now_add=True)
+    confirmat = models.BooleanField(
+        default=False,
+        help_text="Staff has confirmed this alias is the same artist.",
+    )
+    confirmat_at = models.DateTimeField(null=True, blank=True)
+    confirmat_per = models.ForeignKey(
+        "comptes.Usuari",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    rebutjat = models.BooleanField(
+        default=False,
+        help_text=(
+            "Staff has explicitly rejected this candidate as a homonym. "
+            "Kept in DB so re-running the detector doesn't re-propose it."
+        ),
+    )
+    # Detection-time evidence — useful for staff to evaluate the
+    # candidate without leaving the page.
+    playcount_canonical = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Last.fm playcount of the canonical page at detection time.",
+    )
+    playcount_variant = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Last.fm playcount of this variant at detection time.",
+    )
+    top_tracks_overlap = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Share of top-5 tracks that match between the two pages "
+            "(0..1). Higher is more confident; the detector requires "
+            "≥0.5."
+        ),
+    )
+
+    class Meta:
+        verbose_name = "Artista Last.fm alias"
+        verbose_name_plural = "Artista Last.fm aliases"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["artista", "nom"],
+                name="uniq_artista_lastfm_alias_nom",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        state = (
+            "confirmat"
+            if self.confirmat
+            else "rebutjat" if self.rebutjat else "pendent"
+        )
+        return f"{self.artista.nom} ↔ {self.nom} [{state}]"
+
+
 class ArtistaLocalitat(models.Model):
     """Links an artist to one or more municipalities (locations).
 
@@ -799,6 +902,10 @@ class StaffAuditLog(models.Model):
         ("artista_edit", "Artista: edició"),
         ("artista_mbid_auto_unassign", "Artista: MBID auto-rebutjat"),
         ("artista_mbid_auto_restore", "Artista: MBID restaurat (correcció)"),
+        ("lastfm_alias_confirm", "Last.fm alias: confirmat"),
+        ("lastfm_alias_reject", "Last.fm alias: rebutjat (homònim)"),
+        ("lastfm_alias_delete", "Last.fm alias: eliminat"),
+        ("lastfm_alias_manual_add", "Last.fm alias: afegit manualment"),
         # Artistes pendents (auto-discovered)
         ("pendent_aprovar", "Pendent: aprovar"),
         ("pendent_descartar", "Pendent: descartar"),

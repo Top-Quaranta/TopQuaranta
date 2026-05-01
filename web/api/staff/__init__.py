@@ -18,6 +18,8 @@ from web.api.staff.albums import album_detail, albums_list  # noqa: F401
 from web.api.staff.artistes import (  # noqa: F401
     artista_crear,
     artista_detail,
+    artista_lastfm_alias_action,
+    artista_lastfm_alias_create,
     artista_mb_clear,
     artista_sync_mb,
     artistes_fusionar,

@@ -5,7 +5,11 @@ from difflib import SequenceMatcher
 
 from django.core.management.base import BaseCommand, CommandError
 
-from ingesta.clients.lastfm import _normalize_track, get_track_info
+from ingesta.clients.lastfm import (
+    _normalize_track,
+    get_track_info,
+    get_track_info_literal,
+)
 from music.constants import DIES_CADUCITAT
 from music.models import Canco
 from ranking.models import SenyalDiari
@@ -172,6 +176,16 @@ class Command(BaseCommand):
                 SenyalDiari.objects.bulk_create(b, ignore_conflicts=True)
                 b.clear()
 
+        # Pre-fetch confirmed aliases per artist to avoid an N+1 query.
+        # Most artists have 0 aliases; the dict stays cheap.
+        from music.models import ArtistaLastfmAlias
+
+        aliases_by_artist: dict[int, list[str]] = {}
+        for a in ArtistaLastfmAlias.objects.filter(
+            confirmat=True, rebutjat=False
+        ).values("artista_id", "nom"):
+            aliases_by_artist.setdefault(a["artista_id"], []).append(a["nom"])
+
         for i, canco in enumerate(cancons.iterator(), 1):
             if canco.pk in already_ingested:
                 skipped += 1
@@ -181,6 +195,20 @@ class Command(BaseCommand):
             track_name = canco.lastfm_lookup_nom
 
             result = get_track_info(artist_name, track_name)
+
+            # Sum playcounts/listeners across confirmed aliases of this
+            # artist — the Last.fm fragmentation fix (2026-05-01). For
+            # 'Boira' + 'Böira' this turns 1 681 plays into 23 168.
+            # Aliases are queried with autocorrect=0 (literal page),
+            # otherwise Last.fm redirects them all to the canonical and
+            # we'd double-count.
+            alias_names = aliases_by_artist.get(canco.artista_id, [])
+            if result is not None and alias_names:
+                for alias in alias_names:
+                    extra = get_track_info_literal(alias, track_name)
+                    if extra is not None:
+                        result["playcount"] += extra["playcount"]
+                        result["listeners"] += extra["listeners"]
 
             if result is not None:
                 # R5: compare what Last.fm ACTUALLY returned vs what we asked

@@ -37,6 +37,10 @@ const DEFAULTS = {
   // Driven by the dashboard click-through; also exposed in the panel.
   homonim_sospitos: '',
   instagram: '',
+  // Last.fm alias state — '' (qualsevol) / 'pendents' / 'confirmats' /
+  // 'rebutjats'. Lets staff process the candidate queue produced by
+  // `detectar_lastfm_aliases` without leaving the artistes list.
+  lastfm_alias: '',
   sort: '',  // backend default = alphabetical
 }
 
@@ -64,9 +68,19 @@ export default function StaffArtistesPage() {
     mb:               urlParams.get('mb')               ?? DEFAULTS.mb,
     homonim_sospitos: urlParams.get('homonim_sospitos') ?? DEFAULTS.homonim_sospitos,
     instagram:        urlParams.get('instagram')        ?? DEFAULTS.instagram,
+    lastfm_alias:     urlParams.get('lastfm_alias')     ?? DEFAULTS.lastfm_alias,
     sort:             urlParams.get('sort')             ?? DEFAULTS.sort,
   })
-  const { aprovat, deezer, territori, mb, homonim_sospitos, instagram, sort } = applied
+  const {
+    aprovat,
+    deezer,
+    territori,
+    mb,
+    homonim_sospitos,
+    instagram,
+    lastfm_alias,
+    sort,
+  } = applied
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
 
@@ -79,10 +93,10 @@ export default function StaffArtistesPage() {
 
   useEffect(() => {
     const params = new URLSearchParams({
-      q, aprovat, deezer, territori, mb, homonim_sospitos, instagram, sort, page,
+      q, aprovat, deezer, territori, mb, homonim_sospitos, instagram, lastfm_alias, sort, page,
     })
     api.get(`/staff/artistes/?${params}`).then(setData).catch(() => setData(null))
-  }, [q, aprovat, deezer, territori, mb, homonim_sospitos, instagram, sort, page])
+  }, [q, aprovat, deezer, territori, mb, homonim_sospitos, instagram, lastfm_alias, sort, page])
 
   function toggleSel(a) {
     setSel(prev => {
@@ -187,6 +201,18 @@ export default function StaffArtistesPage() {
                   <option value="">Qualsevol</option>
                   <option value="si">Té Instagram</option>
                   <option value="no">Sense Instagram</option>
+                </Select>
+              </Field>
+              <Field label="Aliases Last.fm">
+                <Select
+                  aria-label="Aliases Last.fm"
+                  value={p.lastfm_alias}
+                  onChange={e => setP({ lastfm_alias: e.target.value })}
+                >
+                  <option value="">Qualsevol</option>
+                  <option value="pendents">Té candidats per revisar</option>
+                  <option value="confirmats">Té aliases confirmats</option>
+                  <option value="rebutjats">Té candidats rebutjats</option>
                 </Select>
               </Field>
               <Field label="Ordenació">
@@ -323,9 +349,21 @@ export default function StaffArtistesPage() {
                   )}
                 </Td>
                 <Td>
-                  {a.aprovat && <Pill tone="green">Aprovat</Pill>}
-                  {!a.aprovat && a.pendent_review && <Pill tone="yellow">Pendent</Pill>}
-                  {!a.aprovat && !a.pendent_review && <Pill tone="gray">Descartat</Pill>}
+                  <div className="flex flex-wrap gap-1">
+                    {a.aprovat && <Pill tone="green">Aprovat</Pill>}
+                    {!a.aprovat && a.pendent_review && <Pill tone="yellow">Pendent</Pill>}
+                    {!a.aprovat && !a.pendent_review && <Pill tone="gray">Descartat</Pill>}
+                    {a.lastfm_aliases_pendents > 0 && (
+                      <Pill tone="yellow">
+                        {a.lastfm_aliases_pendents} alies a revisar
+                      </Pill>
+                    )}
+                    {a.lastfm_aliases_confirmats > 0 && (
+                      <Pill tone="green">
+                        +{a.lastfm_aliases_confirmats} alies
+                      </Pill>
+                    )}
+                  </div>
                 </Td>
                 <Td className="text-right">
                   <Link

@@ -8,10 +8,142 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { Btn, Input, PageHeader, Select, TableCard } from '../../components/staff/StaffTable'
+import { Btn, Input, PageHeader, Pill, Select, TableCard } from '../../components/staff/StaffTable'
 import LocationCascade from '../../components/staff/LocationCascade'
 import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'
 import LastfmPanel from '../../components/staff/LastfmPanel'
+
+
+// Inline editor for Last.fm name aliases. Mirrors the Deezer-IDs
+// list pattern: same artist, multiple identifiers, all summed into
+// one signal. Candidates come from `manage.py detectar_lastfm_aliases`
+// (top-tracks overlap ≥50%) and need staff confirmation before they
+// start contributing to the playcount sum.
+function LastfmAliasesInline({ pk, aliases, onChange }) {
+  const [showAdd, setShowAdd] = useState(false)
+  const [newNom, setNewNom] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function action(aliasPk, name) {
+    setBusy(true); setErr('')
+    try {
+      await api.post(`/staff/artistes/${pk}/lastfm-aliases/${aliasPk}/`, { action: name })
+      await onChange()
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  async function add() {
+    if (!newNom.trim()) return
+    setBusy(true); setErr('')
+    try {
+      await api.post(`/staff/artistes/${pk}/lastfm-aliases/`, { nom: newNom.trim() })
+      setNewNom(''); setShowAdd(false)
+      await onChange()
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  const visible = aliases.filter(a => !a.rebutjat)
+  const rejected = aliases.filter(a => a.rebutjat)
+
+  return (
+    <div className="text-xs">
+      <div className="flex items-center gap-2 mb-1 text-tq-ink/75 font-semibold">
+        <span>Aliases Last.fm</span>
+        <span className="opacity-80 font-normal">(es sumen al senyal quan estan confirmats)</span>
+      </div>
+      {visible.length === 0 && (
+        <p className="italic text-tq-ink/75 mb-1">Cap variant detectada o afegida.</p>
+      )}
+      <ul>
+        {visible.map(al => (
+          <li key={al.pk} className="py-1 border-b border-tq-ink/5 last:border-0 flex items-center gap-2 flex-wrap">
+            {al.confirmat
+              ? <Pill tone="green">Confirmat</Pill>
+              : <Pill tone="yellow">Candidat</Pill>}
+            <code className="font-mono font-semibold">{al.nom}</code>
+            {al.top_tracks_overlap != null && (
+              <span className="text-tq-ink/75">
+                {(al.top_tracks_overlap * 100).toFixed(0)}% top-tracks
+                {al.playcount_variant != null && (
+                  <> · {al.playcount_variant.toLocaleString('ca')} plays</>
+                )}
+              </span>
+            )}
+            <a
+              href={`https://www.last.fm/music/${encodeURIComponent(al.nom)}`}
+              target="_blank"
+              rel="noopener"
+              className="underline text-tq-ink/70 hover:text-tq-ink"
+            >
+              obrir ↗
+            </a>
+            <span className="ml-auto flex gap-1">
+              {!al.confirmat && (
+                <Btn tone="primary" disabled={busy} onClick={() => action(al.pk, 'confirm')}>
+                  Confirmar
+                </Btn>
+              )}
+              {!al.confirmat && (
+                <Btn tone="secondary" disabled={busy} onClick={() => action(al.pk, 'reject')}>
+                  Rebutjar
+                </Btn>
+              )}
+              {al.confirmat && (
+                <Btn tone="ghost" disabled={busy} onClick={() => action(al.pk, 'delete')}>
+                  Esborrar
+                </Btn>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {rejected.length > 0 && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-tq-ink/75 italic text-[11px]">
+            {rejected.length} alies rebutjats (homònims)
+          </summary>
+          <ul className="mt-1">
+            {rejected.map(al => (
+              <li key={al.pk} className="py-0.5 flex gap-2 items-center text-tq-ink/75">
+                <Pill tone="gray">Rebutjat</Pill>
+                <code className="font-mono">{al.nom}</code>
+                <Btn tone="ghost" disabled={busy} onClick={() => action(al.pk, 'delete')}>
+                  Esborrar (re-proposable)
+                </Btn>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <div className="mt-1">
+        {!showAdd ? (
+          <Btn tone="ghost" onClick={() => setShowAdd(true)}>+ Afegir alies manualment</Btn>
+        ) : (
+          <div className="flex gap-1 items-center flex-wrap">
+            <input
+              aria-label="Nom alies Last.fm"
+              type="text"
+              value={newNom}
+              onChange={e => setNewNom(e.target.value)}
+              placeholder="ex. Böira"
+              className="text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink focus:outline-none focus:ring-2 focus:ring-tq-yellow"
+            />
+            <Btn tone="primary" disabled={busy || !newNom.trim()} onClick={add}>Afegir</Btn>
+            <Btn tone="ghost" onClick={() => { setShowAdd(false); setNewNom(''); setErr('') }}>
+              Cancel·lar
+            </Btn>
+          </div>
+        )}
+      </div>
+      {err && <p className="text-[11px] text-red-700 mt-1">{err}</p>}
+    </div>
+  )
+}
 
 export default function ArtistaEditPage() {
   const { pk } = useParams()
@@ -24,6 +156,17 @@ export default function ArtistaEditPage() {
   useEffect(() => {
     api.get(`/staff/artistes/${pk}/`).then(setA).catch(e => setErr(e.message))
   }, [pk])
+
+  // Soft refresh — used by the inline aliases editor to refetch
+  // after a confirm/reject without forcing a full page reload.
+  async function reload() {
+    try {
+      const fresh = await api.get(`/staff/artistes/${pk}/`)
+      setA(fresh)
+    } catch (e) {
+      setErr(e.message)
+    }
+  }
 
   if (err) return <p className="text-sm text-red-300">{err}</p>
   if (!a) return <p className="text-sm text-white/70">Carregant…</p>
@@ -179,6 +322,16 @@ export default function ArtistaEditPage() {
             <label className="text-xs font-semibold">Nom a Last.fm
               <Input value={a.lastfm_nom || ''} onChange={e => patch({ lastfm_nom: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
+            {/* Alias names — sum into the canonical signal once
+                confirmed. Same pattern as deezer_ids, just per
+                Last.fm. Surfaces detector candidates inline so the
+                edit page is the single point of artist editing. */}
+            <LastfmAliasesInline
+              pk={a.pk}
+              aliases={a.lastfm?.aliases || []}
+              onChange={reload}
+            />
+
             <label className="text-xs font-semibold">Gènere
               <Input value={a.genere || ''} onChange={e => patch({ genere: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
@@ -220,6 +373,7 @@ export default function ArtistaEditPage() {
             {a.deezer_ids.map((id, i) => (
               <div key={i} className="flex gap-2">
                 <Input
+                  aria-label={`Deezer ID #${i + 1}`}
                   value={id}
                   onChange={e => setDeezerIds(a.deezer_ids.map((x, j) => j === i ? e.target.value : x))}
                   className="flex-1"

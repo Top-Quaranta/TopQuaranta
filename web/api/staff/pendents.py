@@ -164,6 +164,17 @@ def _artista_card(a) -> dict:
         "lastfm_last_sync": (
             a.lastfm_last_sync.isoformat() if a.lastfm_last_sync else None
         ),
+        # Alias counts surface in the artistes list so staff can see
+        # which artists have outstanding alias review work without
+        # opening each one. The numbers come from the related
+        # manager — cheap thanks to prefetch_related, but never N+1
+        # in the worst case (small per-artist sets).
+        "lastfm_aliases_pendents": sum(
+            1 for x in a.lastfm_aliases.all() if not x.confirmat and not x.rebutjat
+        ),
+        "lastfm_aliases_confirmats": sum(
+            1 for x in a.lastfm_aliases.all() if x.confirmat
+        ),
     }
 
 

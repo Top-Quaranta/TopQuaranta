@@ -89,7 +89,7 @@ from web.api.staff.pendents import _artista_card
 @permission_classes([IsStaff])
 def artistes_list(request: Request) -> Response:
     qs = Artista.objects.prefetch_related(
-        "territoris", "localitats__municipi", "deezer_ids"
+        "territoris", "localitats__municipi", "deezer_ids", "lastfm_aliases"
     )
     aprovat = request.GET.get("aprovat", "1")
     if aprovat == "1":
@@ -138,6 +138,22 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(Q(instagram_url="") | Q(instagram_url__isnull=True))
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
+
+    # Last.fm alias state — surfaces the 35 candidates the detector
+    # produced (or any future runs). `pendents` = ≥1 candidate
+    # awaiting staff review; `confirmats` = ≥1 alias actively summing
+    # into the signal; `rebutjats` = ≥1 candidate explicitly rejected
+    # (kept in DB so the detector doesn't re-propose homonyms).
+    lastfm_alias = request.GET.get("lastfm_alias", "")
+    if lastfm_alias == "pendents":
+        qs = qs.filter(
+            lastfm_aliases__confirmat=False,
+            lastfm_aliases__rebutjat=False,
+        )
+    elif lastfm_alias == "confirmats":
+        qs = qs.filter(lastfm_aliases__confirmat=True)
+    elif lastfm_alias == "rebutjats":
+        qs = qs.filter(lastfm_aliases__rebutjat=True)
 
     cerca = (request.GET.get("q") or "").strip()
     if cerca:

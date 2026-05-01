@@ -448,6 +448,91 @@ def artista_detail(request: Request, pk: int) -> Response:
     return Response(row)
 
 
+def _absorb_lastfm_duplicate_pendents(artista: Artista, alias_nom: str) -> int:
+    """When an alias is confirmed (or manually added), look for
+    pendent Artistes that the Last.fm-similars cron previously
+    created at the same literal name, and absorb them into the
+    canonical row.
+
+    Caught 2026-05-01 with Anna Roig and Sabor de Gràcia: the
+    pre-alias-era cron auto-created pendents for typographic-
+    apostrophe / case-only spellings, and they kept reappearing in
+    the staff queue forever. Confirming an alias is the staff's
+    explicit signal that the variant belongs to the canonical, so
+    that's the moment to clean up.
+
+    Safety rules — only delete if ALL of the following hold:
+      * `aprovat=False` (never touch approved data).
+      * `font_descoberta == 'lastfm_similar'` (created by the
+        similars cron, not via a UserPropostaArtista or manual
+        add — those carry user intent and need staff review).
+      * 0 Cançons.
+      * 0 Deezer IDs.
+      * 0 territoris.
+      * No verified Cançons referencing it via collab.
+
+    Before deletion, redirect any `ArtistaLastfmSimilar` rows
+    pointing at the duplicate to the canonical (skipping any that
+    would violate the source/target unique constraint), then drop
+    the duplicate. Recompute the canonical's `nb_similars_lastfm`
+    cache.
+
+    Returns the count of duplicates absorbed.
+    """
+    from music.models import ArtistaLastfmSimilar
+
+    name = (alias_nom or "").strip()
+    if not name:
+        return 0
+    candidates = (
+        Artista.objects.filter(aprovat=False)
+        .filter(font_descoberta="lastfm_similar")
+        .filter(Q(lastfm_nom__iexact=name) | Q(nom__iexact=name))
+        .exclude(pk=artista.pk)
+    )
+    absorbed = 0
+    for dup in candidates:
+        # Safety gates: anything with non-trivial data stays put
+        # for human review.
+        has_cancons = dup.cancons.exists()
+        has_deezer = dup.deezer_ids.exists()
+        has_terr = dup.territoris.exists()
+        # Check collaborations — if anything still references this
+        # pendent as a guest, don't delete or we'll lose the link.
+        has_collab = dup.participacions.exists()
+        if has_cancons or has_deezer or has_terr or has_collab:
+            continue
+
+        # Redirect similar rows. The unique(source, target) means
+        # we can't blindly UPDATE if a pair (source, canonical)
+        # already exists — drop those duplicates instead.
+        existing_canon_sources = set(
+            ArtistaLastfmSimilar.objects.filter(target=artista).values_list(
+                "source_id", flat=True
+            )
+        )
+        for row in ArtistaLastfmSimilar.objects.filter(target=dup):
+            if row.source_id in existing_canon_sources:
+                row.delete()
+            else:
+                row.target = artista
+                row.save(update_fields=["target"])
+                existing_canon_sources.add(row.source_id)
+        # Same for outgoing rows from the duplicate (it shouldn't
+        # have any — pendents aren't a similars source — but be
+        # defensive).
+        ArtistaLastfmSimilar.objects.filter(source=dup).delete()
+
+        dup.delete()
+        absorbed += 1
+
+    if absorbed:
+        # Recompute the cached count from the now-correct table.
+        new_count = ArtistaLastfmSimilar.objects.filter(target=artista).count()
+        Artista.objects.filter(pk=artista.pk).update(nb_similars_lastfm=new_count)
+    return absorbed
+
+
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def artista_lastfm_alias_action(request: Request, pk: int, alias_pk: int) -> Response:
@@ -472,12 +557,18 @@ def artista_lastfm_alias_action(request: Request, pk: int, alias_pk: int) -> Res
         alias.confirmat_at = timezone.now()
         alias.confirmat_per = request.user if request.user.is_authenticated else None
         alias.save()
+        # Sweep pre-existing Last.fm-cron-created pendents at the
+        # same literal name into the canonical artist. See
+        # `_absorb_lastfm_duplicate_pendents` docstring for safety
+        # rules. Audit-log if anything actually got absorbed.
+        absorbed = _absorb_lastfm_duplicate_pendents(artista, alias.nom)
         log_staff_action(
             request,
             "lastfm_alias_confirm",
             target=artista,
             alias_pk=alias.pk,
             alias_nom=alias.nom,
+            absorbed_pendents=absorbed,
         )
     elif action == "reject":
         alias.confirmat = False
@@ -530,13 +621,19 @@ def artista_lastfm_alias_create(request: Request, pk: int) -> Response:
         alias.confirmat_at = timezone.now()
         alias.confirmat_per = request.user if request.user.is_authenticated else None
         alias.save()
+    # Manual additions are confirmed by definition (staff knew the
+    # variant), so absorb any pre-existing pendent at that name too.
+    absorbed = _absorb_lastfm_duplicate_pendents(artista, nom)
     log_staff_action(
         request,
         "lastfm_alias_manual_add",
         target=artista,
         alias_nom=nom,
+        absorbed_pendents=absorbed,
     )
-    return Response({"ok": True, "pk": alias.pk, "created": created})
+    return Response(
+        {"ok": True, "pk": alias.pk, "created": created, "absorbed": absorbed}
+    )
 
 
 @api_view(["POST"])

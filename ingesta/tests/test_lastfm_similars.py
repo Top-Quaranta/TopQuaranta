@@ -165,6 +165,99 @@ def test_count_accumulates_across_distinct_sources(db, cmd, delen):
 
 
 @pytest.mark.django_db
+def test_absorb_helper_deletes_clean_lastfm_pendent(db):
+    """Anna Roig topology: confirmed alias on the canonical, plus a
+    stale pendent at the same literal name. The absorb helper must
+    delete the pendent and redirect any similars rows."""
+    from web.api.staff.artistes import _absorb_lastfm_duplicate_pendents
+
+    canon = Artista.objects.create(
+        nom="Anna Roig i L'ombre de ton chien",
+        lastfm_nom="Anna Roig i L'ombre de ton chien",
+        aprovat=True,
+    )
+    typographic = "Anna Roig i L’ombre de ton chien"
+    ArtistaLastfmAlias.objects.create(artista=canon, nom=typographic, confirmat=True)
+    dup = Artista.objects.create(
+        nom=typographic,
+        lastfm_nom=typographic,
+        aprovat=False,
+        pendent_review=True,
+        font_descoberta="lastfm_similar",
+    )
+    # A similars row pointing at the duplicate — it should be
+    # redirected to the canonical, not deleted.
+    other = Artista.objects.create(nom="Other", lastfm_nom="Other", aprovat=True)
+    ArtistaLastfmSimilar.objects.create(source=other, target=dup)
+
+    n = _absorb_lastfm_duplicate_pendents(canon, typographic)
+    assert n == 1
+    assert not Artista.objects.filter(pk=dup.pk).exists()
+    # Similar redirected.
+    redirected = ArtistaLastfmSimilar.objects.get(source=other)
+    assert redirected.target_id == canon.pk
+    canon.refresh_from_db()
+    assert canon.nb_similars_lastfm == 1
+
+
+@pytest.mark.django_db
+def test_absorb_helper_preserves_pendent_with_data(db):
+    """A pendent that already has Cançons / deezer_ids / territoris
+    / collabs is NOT a clean dup — keep it for human review."""
+    from music.models import Album, Canco
+    from web.api.staff.artistes import _absorb_lastfm_duplicate_pendents
+
+    canon = Artista.objects.create(
+        nom="Sabor de Gràcia",
+        lastfm_nom="Sabor de Gràcia",
+        aprovat=True,
+    )
+    ArtistaLastfmAlias.objects.create(
+        artista=canon, nom="Sabor De Gracia", confirmat=True
+    )
+    dup = Artista.objects.create(
+        nom="Sabor De Gracia",
+        lastfm_nom="Sabor De Gracia",
+        aprovat=False,
+        pendent_review=True,
+        font_descoberta="lastfm_similar",
+    )
+    # Attach a Cançó so the dup looks like it has real ingestion
+    # behind it. This is the safety floor — we never auto-delete
+    # rows with downstream content.
+    album = Album.objects.create(nom="Album X", artista=dup)
+    Canco.objects.create(nom="Track X", artista=dup, album=album, deezer_id=99999)
+
+    n = _absorb_lastfm_duplicate_pendents(canon, "Sabor De Gracia")
+    assert n == 0
+    assert Artista.objects.filter(pk=dup.pk).exists()
+
+
+@pytest.mark.django_db
+def test_absorb_helper_only_acts_on_lastfm_similar_source(db):
+    """A pendent created via UserPropostaArtista (or any non-cron
+    path) carries human intent — never auto-delete it just because
+    its name matches a confirmed alias."""
+    from web.api.staff.artistes import _absorb_lastfm_duplicate_pendents
+
+    canon = Artista.objects.create(
+        nom="Some Band", lastfm_nom="Some Band", aprovat=True
+    )
+    ArtistaLastfmAlias.objects.create(artista=canon, nom="some band", confirmat=True)
+    dup = Artista.objects.create(
+        nom="some band",
+        lastfm_nom="some band",
+        aprovat=False,
+        pendent_review=True,
+        font_descoberta="proposta_usuari",  # not lastfm_similar
+    )
+
+    n = _absorb_lastfm_duplicate_pendents(canon, "some band")
+    assert n == 0
+    assert Artista.objects.filter(pk=dup.pk).exists()
+
+
+@pytest.mark.django_db
 def test_unique_constraint_source_target(db, manel, delen):
     """The DB-level UNIQUE constraint blocks accidental duplicates,
     in case a future call site forgets to dedup."""

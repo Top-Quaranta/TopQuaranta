@@ -229,44 +229,109 @@ function HorizontalBars({ items, max, formatValue, showDirection }) {
   )
 }
 
+// ── Cron status row ──────────────────────────────────────────────────
+//
+// A cron has one of these states (post 2026-05-01 lock-detection refactor):
+//
+//   OK              — last run completed cleanly.
+//   FAIL            — last run exited non-zero.
+//   SKIPPED_BY_LOCK — cron tick fired while a previous instance was
+//                     still running. Benign in moderation (long
+//                     overrun); dangerous if it persists (likely
+//                     hang). The `consecutive_skips` counter rises
+//                     every blocked tick and resets on the next
+//                     successful run.
+//
+// `skip_concern` (from CRON_META on the backend) is the count at
+// which a still-running instance becomes suspicious — typically 3
+// for hourly crons (1-2 long-runs is normal) and 1 for daily crons
+// (the next tick is 24 h away; a single skip means a real overrun).
+
+function _ageHumanCa(isoStr) {
+  if (!isoStr) return '—'
+  const t = Date.parse(isoStr)
+  if (!t) return '—'
+  const minutes = Math.floor((Date.now() - t) / 60_000)
+  if (minutes < 1) return 'fa pocs segons'
+  if (minutes < 60) return `fa ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `fa ${hours}h`
+  return `fa ${Math.floor(hours / 24)} dies`
+}
+
+function _maxAgeHumanCa(h) {
+  if (h == null) return ''
+  if (h < 26) return `${h}h`
+  if (h < 170) return `${Math.round(h / 24)} dies`
+  if (h < 720) return `${Math.round(h / 24 / 7)} setmanes`
+  if (h < 24 * 365) return `${Math.round(h / 24 / 30)} mesos`
+  return `${Math.round(h / 24 / 365)} anys`
+}
+
 function CronStatus({ cron }) {
-  // status semantics (post 2026-05-01 lock-detection refactor):
-  //   OK              — last run completed cleanly.
-  //   FAIL            — last run exited non-zero.
-  //   SKIPPED_BY_LOCK — cron tick fired while a previous instance
-  //                     was still running. Benign in moderation;
-  //                     dangerous if it persists (likely hang).
-  // The `consecutive_skips` counter rises every blocked tick and
-  // resets on the next successful run. A high count + stale
-  // `last_run` is the symptom that masked our 12-day novetats hang.
   const skips = cron.consecutive_skips || 0
-  let tone, label
-  if (cron.status === 'OK') {
+  const concern = cron.skip_concern || 3
+
+  // Health bucket — drives the pill colour. Mirrors tq-health's
+  // logic so dashboard and watchdog agree on what's healthy.
+  let tone, label, worry
+  const lastTs = cron.last_run ? Date.parse(cron.last_run) : 0
+  const ageHours = lastTs ? (Date.now() - lastTs) / 3_600_000 : Infinity
+  const stale = cron.max_age_hours != null && ageHours > cron.max_age_hours
+
+  if (cron.status === 'OK' && !stale) {
     tone = 'green'
     label = 'OK'
+    worry = ''
   } else if (cron.status === 'SKIPPED_BY_LOCK') {
-    // 1-2 skips are typical for hourly crons whose work occasionally
-    // overruns the hour. ≥3 is suspicious — the previous instance
-    // is hanging, not just slow.
-    tone = skips >= 3 ? 'red' : 'gray'
-    label = `SKIP×${skips}`
+    if (skips >= concern || stale) {
+      tone = 'red'
+      label = `STUCK×${skips}`
+      worry = 'L\'execució anterior està penjada — caldria mirar-ho.'
+    } else {
+      tone = 'gray'
+      label = `SKIP×${skips}`
+      worry = `OK fins a ${concern - 1} skips. Si arriba a ${concern}, probablement està penjada.`
+    }
+  } else if (stale) {
+    tone = 'red'
+    label = `STALE`
+    worry = `Hauria d'haver corregut fa ≤${_maxAgeHumanCa(cron.max_age_hours)}.`
   } else {
     tone = 'red'
     label = cron.status || '—'
+    worry = 'Última execució ha fallat.'
   }
-  const when = cron.last_run ? cron.last_run.slice(0, 16).replace('T', ' ') : '—'
-  const attempts = cron.attempts && cron.attempts !== '1' ? ` · ${cron.attempts}×` : ''
+
+  const last = _ageHumanCa(cron.last_run)
+  // Bump opacity to /80 so attempts text passes AA on white. /60
+  // failed at 2.88:1 (caught by the post-redesign axe run).
+  const attempts = cron.attempts && cron.attempts !== '1' ? ` · ${cron.attempts} intents` : ''
+  const maxAge = cron.max_age_hours ? `STALE >${_maxAgeHumanCa(cron.max_age_hours)}` : ''
+  const skipNote = concern && concern < 99
+    ? `SKIP ≥${concern}`
+    : ''
+  const concernText = [maxAge, skipNote].filter(Boolean).join(' · ')
+
   return (
-    <li className="flex items-center gap-3 text-xs py-1.5 border-t border-black/5 first:border-t-0">
-      <Pill tone={tone}>{label}</Pill>
-      <span className="font-mono font-semibold text-tq-ink/80 flex-1 truncate">
+    <tr className="border-t border-black/5 align-top">
+      <td className="py-1.5 pr-3 whitespace-nowrap">
+        <Pill tone={tone}>{label}</Pill>
+      </td>
+      <td className="py-1.5 pr-3 font-mono font-semibold text-tq-ink/80">
         {cron.name}
-      </span>
-      <span className="opacity-60 whitespace-nowrap">
-        {when}
-        {attempts}
-      </span>
-    </li>
+      </td>
+      <td className="py-1.5 pr-3 text-tq-ink/70 whitespace-nowrap">
+        {cron.frequency_label || '—'}
+      </td>
+      <td className="py-1.5 pr-3 text-tq-ink/70 whitespace-nowrap">
+        {last}
+        <span className="opacity-80">{attempts}</span>
+      </td>
+      <td className="py-1.5 pr-3 text-[11px] text-tq-ink/70">
+        {worry || concernText}
+      </td>
+    </tr>
   )
 }
 
@@ -809,16 +874,35 @@ export default function EstatPage() {
         <h2 className="text-sm uppercase tracking-widest text-white/60 mb-2">
           Pipelines (cron)
         </h2>
-        <div className="bg-white text-tq-ink rounded-lg p-3">
-          <ul>
-            {crons.map(c => <CronStatus key={c.name} cron={c} />)}
-            {crons.length === 0 && (
-              <p className="text-xs text-tq-ink/75 p-3">
-                Sense dades de cron disponibles. Comprova que
-                <code>/var/log/topquaranta/status/</code> existeix i és llegible.
-              </p>
-            )}
-          </ul>
+        <div
+          className="bg-white text-tq-ink rounded-lg p-3 overflow-x-auto"
+          tabIndex={0}
+          role="region"
+          aria-label="Estat dels crons del pipeline"
+        >
+          {crons.length === 0 ? (
+            <p className="text-xs text-tq-ink/75 p-3">
+              Sense dades de cron disponibles. Comprova que
+              <code>/var/log/topquaranta/status/</code> existeix i és llegible.
+            </p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="text-[10px] uppercase tracking-widest text-tq-ink/70">
+                <tr className="border-b border-black/10">
+                  <th className="text-left pb-2 pr-3">Estat</th>
+                  <th className="text-left pb-2 pr-3">Cron</th>
+                  <th className="text-left pb-2 pr-3">Freqüència</th>
+                  <th className="text-left pb-2 pr-3">Última execució</th>
+                  <th className="text-left pb-2 pr-3" title="Quan preocupar-se">
+                    Llindar / nota
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {crons.map(c => <CronStatus key={c.name} cron={c} />)}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 

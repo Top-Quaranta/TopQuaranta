@@ -28,8 +28,16 @@ export function TableCard({ children, className = '' }) {
  * just inside that mask.
  */
 export function Table({ children }) {
+  // tabIndex + role+aria-label so the horizontally-scrollable
+  // region is reachable by keyboard (axe-core
+  // scrollable-region-focusable, WCAG 2.1.1).
   return (
-    <div className="overflow-x-auto">
+    <div
+      className="overflow-x-auto"
+      tabIndex={0}
+      role="region"
+      aria-label="Taula desplaçable"
+    >
       <table className="w-full min-w-[640px] text-sm">{children}</table>
     </div>
   )

@@ -80,22 +80,12 @@ secció _completats_ amb la data i el detall.
 
 Items petits per fer en sessions curtes:
 
-- [ ] **Sumar senyal de variants ortogràfiques de Last.fm**
-      (descobert 2026-05-01 a partir del cas Delên de l'usuari).
-      L'auditoria `scripts/lastfm_alias_audit.py` ha detectat **35
-      artistes** (1,8 %) amb la senyal Last.fm fragmentada en
-      diverses pàgines per diacrítics absents (è/e, í/i, ç/c…),
-      apòstrof tipogràfic ’ vs ASCII, o capitalització. Casos més
-      greus: Boira (93 % de plays no comptats), Sabor de Gràcia (87
-      %), Bèrnia, Efímer (~99 % els dos), Delên (34 %), Anna Roig,
-      Silvia Pérez Cruz, Una Bèstia Incontrolable. **Pla**: model
-      `ArtistaLastfmAlias(artista, nom, descobert_at)` (M2M com
-      ArtistaDeezer). El recopilador de senyal suma els playcounts
-      de tots els alies. Una comanda `detectar_lastfm_aliases`
-      executa l'auditoria i insereix candidats amb `descobert_at`
-      perquè staff els revisi/confirmi a `/staff/artistes/<pk>` —
-      cap aliasing automàtic sense revisió. Llista completa al
-      TSV: `/tmp/lastfm_alias_audit.tsv`. Cost estimat: ~3h.
+- [ ] Revisar els ~51 candidats Last.fm pendents al panell staff
+      (`/staff/artistes?lastfm_alias=pendents`). El detector ha
+      proposat les variants reals de cada artista; staff confirma o
+      rebutja. Cada confirmació també activa l'absorbència
+      automàtica de pendents duplicats al mateix nom (vegeu
+      `_absorb_lastfm_duplicate_pendents`).
 - [ ] **Re-autoritzar Spotify OAuth (cron `actualitzar_playlists_spotify`
       en FAIL des del 21 abril)**. La taula `SpotifyAuth` està buida
       (refresh token caducat o esborrat per migració). Acció: l'usuari
@@ -153,6 +143,63 @@ Items petits per fer en sessions curtes:
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
+
+### Sprint — Last.fm aliases + cron watchdog ✅ (2026-05-01)
+
+Triga d'una sola sessió arran del cas «Delên» que reportes l'usuari:
+mateix artista escrobllejat sota múltiples grafies a Last.fm
+(diacrítics, apòstrof tipogràfic vs ASCII, capitalització) → la
+senyal queda fragmentada en pàgines separades. Audit a
+`scripts/lastfm_alias_audit.py` va trobar 35 (1,8 %) afectats; els
+casos més greus perdent el 87-99 % de plays (Boira, Sabor de
+Gràcia, Bèrnia, Efímer).
+
+* **Models nous**:
+  `ArtistaLastfmAlias(artista, nom, confirmat, rebutjat,
+  playcount_canonical, playcount_variant, top_tracks_overlap)` —
+  variants ortogràfiques que sumen al senyal quan estan
+  confirmades. `ArtistaLastfmSimilar(source, target, last_seen,
+  match)` — row-per-recommendation que substitueix l'antic
+  comptador integer de `nb_similars_lastfm` (ara cache
+  recomputada). Migracions `0057`, `0058`, `0059`.
+* **Cron `obtenir_metadata_lastfm`** reescrit perquè:
+  - resolgui similars de manera alias-aware (alias-of-approved
+    bat un pendent literal),
+  - dedupliqui variants per source,
+  - reemplaci wholesale les rows de cada source (idempotent).
+* **Cron `obtenir_senyal`** suma playcounts/listeners dels alies
+  confirmats per a cada cançó, amb una salvaguarda contra el
+  case-fold silenciós de Last.fm (autocorrect=0 NO impedeix el
+  fold cap a la canònica; comparem la URL retornada amb la
+  canònica i descartem si col·lapsa).
+* **Comanda `detectar_lastfm_aliases`** com a port net del script
+  inicial. Filtre top-tracks ≥50 % per evitar homònims; comparació
+  de URL normalitzada (sense `+noredirect/`) per evitar
+  case-fold false positives. Re-runnable.
+* **Auto-absorbència de pendents duplicats**: en confirmar un
+  alies (o afegir-ne un manualment), el sistema busca pendents
+  amb el mateix nom literal, font_descoberta=lastfm_similar,
+  sense cançons / Deezer / territoris / collabs, i els absorbeix
+  cap al canònic (redirigint similar rows que poden col·lidir per
+  unique(source, target)). Comanda one-shot
+  `netejar_duplicats_lastfm` per al backfill.
+* **UI staff**: nova `LastfmAliasesCard` a
+  `/staff/artistes/<pk>` aparellada amb el `LastfmPanel`
+  (esquerra editable + dreta info), patró equivalent al del
+  MusicBrainz. Filtre nou `lastfm_alias=pendents/confirmats/
+  rebutjats` a `/staff/artistes` + pills informatives a la llista.
+* **Watchdog `tq-health`** schedulat per primera vegada (cron
+  cada hora xx:15 amb `--email-on-fail`). En engegar-lo va
+  destapar el bug del lock-skip que ens havia deixat 12 dies
+  sense ingestió real de novetats. Refactoritzada la lògica de
+  `tq-run` perquè exit-75 (lock contention) no actualitzi
+  `last_run`; nou helper `music.locks.SingletonLock`. Panel
+  `/staff/estat` ara mostra freqüència + llindar de cada cron i
+  pill colored per estat (OK / SKIP / STUCK / STALE / FAIL +
+  silenced flag).
+
+Tests: 207 passing post-sprint, 8 skipped (eren 187 pre-sprint).
+Auditoria a11y axe-core 0 violacions a les 17 pàgines staff.
 
 ### Sprint A — Tancar deute acumulat ✅ (2026-04-25)
 

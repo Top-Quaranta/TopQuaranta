@@ -85,6 +85,45 @@ queue-membership flag, a conflation the 0042 migration resolved.
 - `deezer_id` BigInteger(unique)
 - `principal` BooleanField — the canonical one, used by `deezer_id_principal`
 
+### `ArtistaLastfmAlias` — `music_artistalastfmalias` (2026-05-01)
+1:N — one artist may scrobble to multiple Last.fm pages (variant
+spellings). Confirmed aliases sum playcounts into the canonical at
+`obtenir_senyal`. Caught from the «Delên» case + audit
+(35 of 1958 approved artists affected, worst losing 87-99 % of plays).
+- `artista` FK → Artista (CASCADE, related_name="lastfm_aliases")
+- `nom` CharField — the literal Last.fm name (case-sensitive)
+- `confirmat` Bool / `rebutjat` Bool — staff workflow state
+- `confirmat_at` / `confirmat_per` — audit
+- `playcount_canonical` / `playcount_variant` / `top_tracks_overlap`
+  — detection-time evidence kept for staff review
+- UNIQUE(artista, nom) — re-running `detectar_lastfm_aliases` is
+  idempotent
+
+Lifecycle: `manage.py detectar_lastfm_aliases` proposes candidates
+(artist.search → top-tracks ≥50 % overlap); staff confirms or
+rejects from the LastfmAliasesCard at `/staff/artistes/<pk>`.
+Confirming auto-absorbs any pendent at the same name created by
+the cron pre-alias-era (see
+`web.api.staff.artistes._absorb_lastfm_duplicate_pendents`).
+
+### `ArtistaLastfmSimilar` — `music_artistalastfmsimilar` (2026-05-01)
+Row-per-recommendation table — one row = one source artist
+recommending one target. Replaces the previous integer
+`Artista.nb_similars_lastfm` counter (now a recomputed cache
+= COUNT(*) WHERE target=…).
+- `source` FK → Artista (CASCADE, related_name="similars_recomanats")
+- `target` FK → Artista (CASCADE, related_name="recomanat_per")
+- `last_seen` DateTime / `match` Float
+- UNIQUE(source, target)
+
+Why a table not a counter: when Last.fm lists the same artist
+under multiple spellings within a single source's getSimilar
+response, the integer went up by 2 when the actual signal is 1
+unique recommender. With the table the cron resolves variant
+names through `ArtistaLastfmAlias` and dedups before insert.
+Re-running for the same source REPLACES the row set, so the
+cache stays honest across re-pulls.
+
 ### `ArtistaLocalitat` — `music_artistalocalitat`
 N:M between Artista and Municipi, with optional free-text override.
 - `artista` FK → Artista (CASCADE, related_name="localitats")
@@ -354,11 +393,16 @@ Flat comment attached to a `Publicacio`. No nested threads.
 
 ## Migrations
 
-- `music/` 0001–0055. Latest: `0055_alter_staffauditlog_action`
+- `music/` 0001–0059. Latest: `0059_artistalastfmsimilar`
+  (row-per-recommendation table replacing the integer counter,
+  2026-05-01). `0058_alter_staffauditlog_action` (alias workflow
+  actions). `0057_artistalastfmalias` (variant Last.fm names that
+  sum into the canonical signal). `0056_alter_staffauditlog_action`
+  (added `artista_mbid_auto_restore` for the area-validation false-
+  positive cleanup). `0055_alter_staffauditlog_action`
   (added `artista_mbid_auto_unassign` action, 2026-04-29 — defence-in-
-  depth audit on every MB cron iteration). `0054_*` (social_publicat
-  audit, Sprint I, 2026-04-26). `0050_lastfm_artist_metadata` (Last.fm
-  block + `nb_similars_lastfm`, 2026-04-25).
+  depth audit on every MB cron iteration). `0050_lastfm_artist_metadata`
+  (Last.fm block + `nb_similars_lastfm`, 2026-04-25).
 - `ranking/` 0001–0017. Latest: `0017_configuracioglobal_telegram_actiu`
   (Telegram kill switch, Sprint I bis, 2026-04-27). `0016_…_bluesky_actiu_and_more`
   (Mastodon/Bluesky/Newsletter/RSS toggles, 2026-04-27). `0012_sprint_a_cleanup`

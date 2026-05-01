@@ -1,9 +1,12 @@
 # CLAUDE.md — TopQuaranta
 
 > Persistent memory for Claude Code. Read this file first on every session.
-> Last updated: 2026-04-29 — Post MB auto-match rewrite (drop Lucene
-> score reliance, trust name + PPCC localitats; auto re-sync on staff
-> MBID change; `auditar_mb_orphans` cleanup command).
+> Last updated: 2026-05-01 — Last.fm aliases (`ArtistaLastfmAlias`)
+> sum playcounts across spelling variants; row-per-similar table
+> (`ArtistaLastfmSimilar`) replaces the integer counter so dedup is
+> by source; `tq-run` exits 75 on lock contention so `tq-health`
+> hourly mail can detect 12-day hangs; cron status table on
+> `/staff/estat` shows frequency + concern threshold.
 
 ## Other docs
 
@@ -192,6 +195,9 @@ list.
 | **MusicBrainz as disambiguation oracle** (2026-04-22) | Deezer stays primary (discovery + previews + scale). MB adds an always-on cron every 15 min (`obtenir_metadata_musicbrainz`) that pulls MBID + area + begin/end dates + URL relations + aliases + tags + full discography (release-groups/recordings/ISRCs/Work language). Reconciles Albums/Cançons via ISRC then normalised title fuzzy. Feeds 3 ML features (`mbrainz_confirmed`, `mb_lyrics_cat`, `artista_te_mbid`). Staff pins MBID manually on collision cases. |
 | **MB auto-match — name + location, ignore Lucene score** (2026-04-29) | `resolve_mbid()` rewritten after the "Casual" bug (US rapper at score 100 vs CAT band at score 91 — old logic auto-picked the rapper). MB's Lucene score is a search-relevance metric biased toward well-edited mainstream artists; for PPCC music it's actively misleading. New rules: exact-name match + score ≥ 50 (loose floor); then if `Artista` has PPCC `localitats`, keep MB candidates whose `area` is PPCC and require exactly one match. No localitats → refuse auto-match. Empty area on candidates → refuse (can't verify honestly). Plus: `artista_detail` PATCH now auto-triggers `sync_from_mbid()` on MBID change so cançons don't carry orphan `mb_recording_id` from the previous wrong MBID. New audit command `auditar_mb_orphans` cleans up legacy residue. |
 | **MB defence-in-depth at the cron** (2026-04-29) | The `obtenir_metadata_musicbrainz` cron now validates each artista's existing MBID against PPCC localitats every iteration via `validate_artista_area()`. On mismatch (MB says non-PPCC, our localitats say PPCC): auto-unassign + add to `mb_blocked_mbids` + reset stale `mb_*` fields on Cançons/Albums + audit-log (`artista_mbid_auto_unassign`). The cron then re-attempts `resolve_mbid()` in the same iteration with the new strict rules. This sweeps drift accumulated by the pre-2026-04-29 score-based resolver across the whole DB without a one-shot migration. |
+| **Last.fm aliases sum signal** (2026-05-01) | `ArtistaLastfmAlias(artista, nom, confirmat, rebutjat, …)` — staff-curated variant names that `obtenir_senyal` sums into the canonical track playcount via `get_track_info_literal(canonical_artist=…)` (autocorrect=0 + URL guard against Last.fm's silent case-fold collapse). Detector `detectar_lastfm_aliases` proposes candidates with top-tracks ≥50 % overlap; staff confirms via `LastfmAliasesCard` at `/staff/artistes/<pk>`. Confirming an alias auto-absorbs any pendent at the same name with no Cançons/Deezer/territoris/collabs (saves manual cleanup). Caught from the user's «Delên» case; 35 of 1958 approved artists affected, worst losing 87-99 % of plays (Boira, Sabor de Gràcia). |
+| **Last.fm similars row-per-edge** (2026-05-01) | `ArtistaLastfmSimilar(source, target, last_seen, match)` UNIQUE(source, target). The integer `Artista.nb_similars_lastfm` becomes a recomputed cache (`COUNT(*) WHERE target=…`). Cron resolves variant names through `ArtistaLastfmAlias` (alias-of-approved beats stale-pendent), dedups within a source, and replaces wholesale per source (idempotent re-run). Caught simultaneously with the alias work — same artist appearing twice in a source's similars under different spellings was double-counting. |
+| **`tq-health` watchdog + lock-skip detection** (2026-05-01) | `obtenir_novetats` had been hung for ~12 days while every hourly tick reported `status=OK` because the lock-skip path exited 0. New `music.locks.SingletonLock` exits 75 (EX_TEMPFAIL) on contention; `tq-run` writes `status=SKIPPED_BY_LOCK` without refreshing `last_run`. `tq-health` distinguishes `SKIP(N)` (under threshold, gray) from `STUCK(Nh, Nskips)` (red, alert). New cron line `15 * * * * tq-health --email-on-fail` mails admin@ via Django's `mail_admins` (Brevo SMTP) when overall != 0; silent when healthy. `silenced` flag in CRON_META for known-acceptable failures (e.g. `actualitzar_playlists_spotify` waiting for Spotify Premium re-OAuth). Panel `/staff/estat` cron table sorts by frequency + shows per-row concern threshold and worry text. |
 | **Grup C community (2026-04)** | `PerfilUsuari`, `Publicacio`, `Comentari`, `Missatge` — directori, feed moderat, DM 1-to-1, comentaris. Missatge té notificació email amb opt-out. Self-delete via email confirmation. |
 | **Mapa drill-down (2026-04-22)** | `/mapa` SVG dels PPCC amb 3 nivells (territori → comarca → municipi) i panell lateral amb KPIs + graella d'artistes ordenats per reproduccions. GeoJSON preprocessats (Douglas-Peucker 0.002°) a `web-react/public/geodata/` via `scripts/simplify_geodata.py`. |
 | **Public read cache (2026-04-25)** | Hot read endpoints `/api/v1/{ranking,artistes,mapa/artistes-top}/` cached **60 s for anonymous hits** in `pagecache` (LocMem per worker). Authenticated requests bypass. Each endpoint also exposes ETag + Last-Modified via Django's `condition` decorator (rooted at `RankingProvisional.data_calcul`, `Artista.created_at`, `SenyalDiari.data` respectively) — re-fetching clients get a 304 in ~5 ms. Helper at `web/api/utils.py::cache_for_anon`. |
@@ -238,7 +244,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **92 passed, 5 skipped**.
+Mock all external HTTP — no real API calls. Current suite: **207 passed, 8 skipped**.
 Run: `.venv/bin/python -m pytest -q`.
 
 React SPA: Vitest not yet wired for runtime tests; builds validated via

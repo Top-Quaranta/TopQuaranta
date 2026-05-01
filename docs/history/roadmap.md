@@ -80,6 +80,30 @@ secció _completats_ amb la data i el detall.
 
 Items petits per fer en sessions curtes:
 
+- [ ] **Sumar senyal de variants ortogràfiques de Last.fm**
+      (descobert 2026-05-01 a partir del cas Delên de l'usuari).
+      L'auditoria `scripts/lastfm_alias_audit.py` ha detectat **35
+      artistes** (1,8 %) amb la senyal Last.fm fragmentada en
+      diverses pàgines per diacrítics absents (è/e, í/i, ç/c…),
+      apòstrof tipogràfic ’ vs ASCII, o capitalització. Casos més
+      greus: Boira (93 % de plays no comptats), Sabor de Gràcia (87
+      %), Bèrnia, Efímer (~99 % els dos), Delên (34 %), Anna Roig,
+      Silvia Pérez Cruz, Una Bèstia Incontrolable. **Pla**: model
+      `ArtistaLastfmAlias(artista, nom, descobert_at)` (M2M com
+      ArtistaDeezer). El recopilador de senyal suma els playcounts
+      de tots els alies. Una comanda `detectar_lastfm_aliases`
+      executa l'auditoria i insereix candidats amb `descobert_at`
+      perquè staff els revisi/confirmi a `/staff/artistes/<pk>` —
+      cap aliasing automàtic sense revisió. Llista completa al
+      TSV: `/tmp/lastfm_alias_audit.tsv`. Cost estimat: ~3h.
+- [ ] **Investigar `calcular_ranking_provisional` STALE 155 h** i
+      **`actualitzar_score_entrada` NO_STATUS** — descobert
+      2026-05-01 quan vaig executar `tq-health` per primera vegada.
+      Tots dos són crons que no avisaven a ningú perquè el watchdog
+      no estava schedulat. Ara sí. Cal anar a veure per què cap
+      execució recent no ha arribat al `tq-run` per al primer (és
+      un alias del `calcular_top --provisional`?) i si el segon
+      hauria d'estar al cron.
 - [ ] Demucs → Whisper pipeline com a recall booster per les ~3-4
       false negatives on Whisper sent `es` a tracks catalans
       (Jonatan Penalba × 2, Adrien Broadway). Cost ~3× més lent;

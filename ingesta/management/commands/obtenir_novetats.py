@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from ingesta.clients import deezer
@@ -179,10 +179,31 @@ class Command(BaseCommand):
                 continue
 
             # --- P3: approved artists, oldest checked first ---
+            #
+            # Filter to artists either never checked OR last checked
+            # ≥24h ago. Without this gate the QuerySet was always
+            # non-empty (just re-ordering existing rows), the
+            # `if not artista: break` never fired, and a single
+            # invocation kept iterating the queue forever — caught
+            # 2026-05-01 with the 12-day-stuck process. Now the
+            # natural exit is: when every approved+deezer artist has
+            # been refreshed within the cooldown window, the query
+            # returns nothing → break.
+            #
+            # Cadence implication: hourly cron + 24h cooldown means
+            # ~70-80 artistes/hour become eligible at steady state
+            # (1.860 ÷ 24). First post-deploy run does the full
+            # initial sweep (~30 min); subsequent ticks handle only
+            # the rolling slice.
+            check_cutoff = timezone.now() - timedelta(hours=24)
             p3_qs = (
                 Artista.objects.filter(
                     aprovat=True,
                     deezer_ids__isnull=False,
+                )
+                .filter(
+                    Q(last_checked_deezer__isnull=True)
+                    | Q(last_checked_deezer__lt=check_cutoff)
                 )
                 .distinct()
                 .order_by(F("last_checked_deezer").asc(nulls_first=True))

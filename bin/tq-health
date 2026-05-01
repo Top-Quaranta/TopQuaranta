@@ -50,10 +50,18 @@ declare -A MAX_AGE_HOURS=(
     [calcular_top]=170         # weekly: 7 days + 2 h buffer
     [tq-restore-test]=840      # monthly: 35 days + 4d buffer
     [analitzar_whisper]=48     # nightly: 1 day + buffer
+    [actualitzar_playlists_spotify]=26  # daily; silenced (see below)
     # `arxivar_senyal_vell` runs quarterly via cron but the first run
     # post-deploy hasn't happened yet — leaving it out until a status
     # file exists, otherwise it floods the watchdog with NO_STATUS
     # noise. Re-add when we see the first run land.
+)
+
+# Crons whose FAIL/STALE we accept temporarily — show red on the
+# dashboard but don't trigger watchdog emails. Reason logged so
+# whoever next inherits this knows why.
+declare -A SILENCED=(
+    [actualitzar_playlists_spotify]="Esperant Spotify Premium per re-OAuth"
 )
 
 overall=0
@@ -80,18 +88,19 @@ for cmd in "${!MAX_AGE_HOURS[@]}"; do
     # in progress; only when it persists past MAX_AGE_HOURS does it
     # become STALE. Pre-2026-05-01 the bug was that lock-skip was
     # written as status=OK with last_run=now, masking stale state.
+    silenced=${SILENCED[$cmd]:-}
     if [[ $age_h -gt $max_h ]]; then
         if [[ "$status" == "SKIPPED_BY_LOCK" ]] && (( skips > 0 )); then
             display="STUCK(${age_h}h, ${skips}skips)"
         else
             display="STALE(${age_h}h)"
         fi
-        overall=1
+        if [[ -z "$silenced" ]]; then overall=1; else display="$display [silenced]"; fi
     elif [[ "$status" == "SKIPPED_BY_LOCK" ]]; then
         display="SKIP(${skips})"
     elif [[ "$status" != "OK" ]]; then
         display="FAIL"
-        overall=1
+        if [[ -z "$silenced" ]]; then overall=1; else display="FAIL [silenced]"; fi
     else
         display="OK(${age_h}h)"
     fi

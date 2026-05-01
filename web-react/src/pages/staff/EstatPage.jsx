@@ -320,6 +320,16 @@ function CronStatus({ cron }) {
     worry = 'Última execució ha fallat.'
   }
 
+  // Silenced overrides: still red on the dashboard but the worry
+  // text reads as 'acceptat per ara' so staff don't dedicate time
+  // to debugging it. Watchdog email is suppressed at the bash level
+  // (bin/tq-health SILENCED dict).
+  if (cron.silenced && tone === 'red') {
+    tone = 'gray'
+    label = `${label} (silenciat)`
+    worry = cron.silenced_reason || 'Fallada acceptada — sense email d\'alarma.'
+  }
+
   const last = _ageHumanCa(cron.last_run)
   // Bump opacity to /80 so attempts text passes AA on white. /60
   // failed at 2.88:1 (caught by the post-redesign axe run).

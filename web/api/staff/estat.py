@@ -139,6 +139,14 @@ CRON_META: dict[str, dict] = {
         "frequency_label": "Cada dia 07:15",
         "max_age_hours": 26,
         "skip_concern": 1,
+        # Pre-Premium: Spotify OAuth requires the app owner to have
+        # Premium. While we're waiting for that, the cron fails
+        # daily with "No hi ha autorització Spotify". Marked silenced
+        # so the watchdog email doesn't spam — still shows red FAIL
+        # on the dashboard so we don't forget. Remove `silenced`
+        # once we re-authorise. (User decision 2026-05-01.)
+        "silenced": True,
+        "silenced_reason": "Esperant Spotify Premium per re-OAuth",
     },
     "tq-restore-test": {
         "frequency_label": "Mensual (dia 1, 04:30)",
@@ -697,6 +705,8 @@ def estat(request: Request) -> Response:
                     "frequency_label": meta.get("frequency_label", ""),
                     "max_age_hours": meta.get("max_age_hours"),
                     "skip_concern": meta.get("skip_concern"),
+                    "silenced": meta.get("silenced", False),
+                    "silenced_reason": meta.get("silenced_reason", ""),
                     "_sort_key": _sort_key,
                 }
             )

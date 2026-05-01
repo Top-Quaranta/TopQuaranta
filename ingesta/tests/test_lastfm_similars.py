@@ -65,6 +65,39 @@ def test_resolver_uses_confirmed_alias(cmd, delen):
 
 
 @pytest.mark.django_db
+def test_resolver_alias_of_approved_beats_stale_pendent(cmd):
+    """Anna Roig case (caught 2026-05-01): the canonical artist is
+    approved (ASCII apostrophe), with a confirmed alias for the
+    typographic spelling. Before the alias path existed, the
+    similars cron created a separate pendent at the typographic
+    spelling — that stale pendent must NOT win against the alias
+    of the approved artist when the same name re-appears now."""
+    canon = Artista.objects.create(
+        nom="Anna Roig i L'ombre de ton chien",
+        lastfm_nom="Anna Roig i L'ombre de ton chien",
+        aprovat=True,
+    )
+    ArtistaLastfmAlias.objects.create(
+        artista=canon,
+        nom="Anna Roig i L’ombre de ton chien",  # typographic apostrophe
+        confirmat=True,
+    )
+    stale_pendent = Artista.objects.create(
+        nom="Anna Roig i L’ombre de ton chien",  # typographic
+        lastfm_nom="Anna Roig i L’ombre de ton chien",
+        aprovat=False,
+        pendent_review=True,
+    )
+
+    target, created = cmd._resolve_similar_target(
+        "Anna Roig i L’ombre de ton chien", dry_run=False
+    )
+    assert target.pk == canon.pk
+    assert target.pk != stale_pendent.pk
+    assert created is False
+
+
+@pytest.mark.django_db
 def test_resolver_creates_pendent_when_no_match(cmd):
     """An unknown name becomes a pendent placeholder, same as
     before — the alias path is purely additive."""

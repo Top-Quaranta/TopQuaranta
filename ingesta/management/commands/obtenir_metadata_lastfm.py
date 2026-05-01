@@ -284,40 +284,72 @@ class Command(BaseCommand):
     ) -> tuple[Artista | None, bool]:
         """Resolve a similar-name to a canonical Artista, alias-aware.
 
-        Lookup order (case-insensitive):
-          1. `Artista.lastfm_nom == sim_name`
-          2. `Artista.nom == sim_name`
-          3. `ArtistaLastfmAlias.nom == sim_name AND confirmat=True`
-             → return the linked Artista. Avoids creating a new
-             pendent for a known variant ('dêlen' → existing Delên).
+        Lookup order (case-insensitive). Step 2 (alias-of-approved)
+        beats step 3 (literal-match of pendent) by design — this is
+        what catches stale duplicates created before the alias path
+        existed.
 
-        If nothing matches, create a pendent placeholder. Counts
-        are NOT touched here — the caller writes a row to
+        Caught 2026-05-01 with Anna Roig: the canonical (ASCII
+        apostrophe) was approved at pk=6717 with a confirmed alias
+        for the typographic spelling. A stale pendent at pk=7078
+        also held that typographic spelling as its lastfm_nom from
+        a previous similars-cron run. The first version of this
+        function found pk=7078 first (literal lastfm_nom match,
+        ordered by aprovat-desc but no approved row at that
+        spelling) and kept treating it as a separate entity. New
+        order resolves the alias to pk=6717.
+
+          1. APPROVED Artista with lastfm_nom OR nom matching.
+          2. APPROVED Artista via confirmed ArtistaLastfmAlias.
+          3. NON-approved Artista with lastfm_nom OR nom matching
+             (pendent / descartat — pre-existing rows from before
+             the alias path existed).
+          4. Create new pendent placeholder.
+
+        Returns (artista_or_None, created_flag). Counts are NOT
+        touched here — the caller writes a row to
         `ArtistaLastfmSimilar` and `_replace_similars` recomputes
         the cached `nb_similars_lastfm`.
-
-        Returns (artista_or_None, created_flag).
         """
-        target = (
-            Artista.objects.filter(
-                Q(lastfm_nom__iexact=sim_name) | Q(nom__iexact=sim_name)
-            )
-            .order_by("-aprovat", "pk")
-            .first()
-        )
-        if target is not None:
-            return target, False
-
         from music.models import ArtistaLastfmAlias
 
+        # 1. Approved artist by canonical name.
+        approved = (
+            Artista.objects.filter(aprovat=True)
+            .filter(Q(lastfm_nom__iexact=sim_name) | Q(nom__iexact=sim_name))
+            .order_by("pk")
+            .first()
+        )
+        if approved is not None:
+            return approved, False
+
+        # 2. Approved artist via a confirmed alias. Beats step 3:
+        # an alias-of-approved is more authoritative than a stale
+        # pendent that happens to share the literal spelling.
         alias = (
-            ArtistaLastfmAlias.objects.filter(nom__iexact=sim_name, confirmat=True)
+            ArtistaLastfmAlias.objects.filter(
+                nom__iexact=sim_name,
+                confirmat=True,
+                artista__aprovat=True,
+            )
             .select_related("artista")
+            .order_by("artista__pk")
             .first()
         )
         if alias is not None:
             return alias.artista, False
 
+        # 3. Any non-approved artist matching the literal name.
+        non_approved = (
+            Artista.objects.filter(aprovat=False)
+            .filter(Q(lastfm_nom__iexact=sim_name) | Q(nom__iexact=sim_name))
+            .order_by("pk")
+            .first()
+        )
+        if non_approved is not None:
+            return non_approved, False
+
+        # 4. Nothing matched → create a pendent placeholder.
         if dry_run:
             return None, True
         target = Artista.objects.create(

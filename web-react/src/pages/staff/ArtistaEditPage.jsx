@@ -14,12 +14,15 @@ import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'
 import LastfmPanel from '../../components/staff/LastfmPanel'
 
 
-// Inline editor for Last.fm name aliases. Mirrors the Deezer-IDs
-// list pattern: same artist, multiple identifiers, all summed into
-// one signal. Candidates come from `manage.py detectar_lastfm_aliases`
-// (top-tracks overlap ≥50%) and need staff confirmation before they
-// start contributing to the playcount sum.
-function LastfmAliasesInline({ pk, aliases, onChange }) {
+// LastfmAliasesCard — alias-list editor as its own TableCard, in
+// the same visual rhythm as Deezer IDs / Localitats / MusicBrainz.
+// Why a separate card: the same artist scrobbles to multiple
+// Last.fm pages when the name has accents, apostrophes, or case
+// variants. Confirmed aliases sum into the canonical signal at
+// `obtenir_senyal`. Candidates come from
+// `manage.py detectar_lastfm_aliases` (top-tracks overlap ≥50% to
+// filter homonyms); staff confirms each one before it contributes.
+function LastfmAliasesCard({ pk, aliases, onChange }) {
   const [showAdd, setShowAdd] = useState(false)
   const [newNom, setNewNom] = useState('')
   const [busy, setBusy] = useState(false)
@@ -47,91 +50,127 @@ function LastfmAliasesInline({ pk, aliases, onChange }) {
     } finally { setBusy(false) }
   }
 
-  const visible = aliases.filter(a => !a.rebutjat)
-  const rejected = aliases.filter(a => a.rebutjat)
+  const pendents = aliases.filter(a => !a.confirmat && !a.rebutjat)
+  const confirmats = aliases.filter(a => a.confirmat)
+  const rebutjats = aliases.filter(a => a.rebutjat)
 
   return (
-    <div className="text-xs">
-      <div className="flex items-center gap-2 mb-1 text-tq-ink/75 font-semibold">
-        <span>Aliases Last.fm</span>
-        <span className="opacity-80 font-normal">(es sumen al senyal quan estan confirmats)</span>
+    <TableCard className="p-4">
+      <div className="flex justify-between items-center mb-3 gap-2 flex-wrap">
+        <div>
+          <h2 className="font-semibold">Aliases Last.fm</h2>
+          <p className="text-[11px] text-tq-ink/75 mt-0.5">
+            Variants ortogràfiques que sumen al senyal quan estan confirmades.
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {pendents.length > 0 && <Pill tone="yellow">{pendents.length} a revisar</Pill>}
+          {confirmats.length > 0 && <Pill tone="green">{confirmats.length} actius</Pill>}
+        </div>
       </div>
-      {visible.length === 0 && (
-        <p className="italic text-tq-ink/75 mb-1">Cap variant detectada o afegida.</p>
+
+      {aliases.length === 0 && (
+        <p className="text-xs italic text-tq-ink/75">
+          Cap variant detectada ni afegida. Si saps que aquest artista es
+          troba a Last.fm amb una grafia alternativa, afegeix-la sota.
+        </p>
       )}
-      <ul>
-        {visible.map(al => (
-          <li key={al.pk} className="py-1 border-b border-tq-ink/5 last:border-0 flex items-center gap-2 flex-wrap">
-            {al.confirmat
-              ? <Pill tone="green">Confirmat</Pill>
-              : <Pill tone="yellow">Candidat</Pill>}
-            <code className="font-mono font-semibold">{al.nom}</code>
-            {al.top_tracks_overlap != null && (
-              <span className="text-tq-ink/75">
-                {(al.top_tracks_overlap * 100).toFixed(0)}% top-tracks
-                {al.playcount_variant != null && (
-                  <> · {al.playcount_variant.toLocaleString('ca')} plays</>
-                )}
-              </span>
-            )}
-            <a
-              href={`https://www.last.fm/music/${encodeURIComponent(al.nom)}`}
-              target="_blank"
-              rel="noopener"
-              className="underline text-tq-ink/70 hover:text-tq-ink"
+
+      {(pendents.length > 0 || confirmats.length > 0) && (
+        <ul className="flex flex-col gap-2">
+          {[...pendents, ...confirmats].map(al => (
+            <li
+              key={al.pk}
+              className="border border-tq-ink/10 rounded-md p-2.5 flex flex-col gap-1.5"
             >
-              obrir ↗
-            </a>
-            <span className="ml-auto flex gap-1">
-              {!al.confirmat && (
-                <Btn tone="primary" disabled={busy} onClick={() => action(al.pk, 'confirm')}>
-                  Confirmar
-                </Btn>
+              <div className="flex items-center gap-2 flex-wrap">
+                {al.confirmat
+                  ? <Pill tone="green">Confirmat</Pill>
+                  : <Pill tone="yellow">Candidat</Pill>}
+                <code className="font-mono font-semibold text-sm">{al.nom}</code>
+                <a
+                  href={`https://www.last.fm/music/${encodeURIComponent(al.nom)}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-[11px] underline text-tq-ink/75 hover:text-tq-ink"
+                >
+                  obrir a Last.fm ↗
+                </a>
+                <span className="ml-auto flex gap-1">
+                  {!al.confirmat && (
+                    <Btn tone="primary" disabled={busy} onClick={() => action(al.pk, 'confirm')}>
+                      Confirmar
+                    </Btn>
+                  )}
+                  {!al.confirmat && (
+                    <Btn tone="secondary" disabled={busy} onClick={() => action(al.pk, 'reject')}>
+                      Rebutjar
+                    </Btn>
+                  )}
+                  {al.confirmat && (
+                    <Btn tone="ghost" disabled={busy} onClick={() => action(al.pk, 'delete')}>
+                      Esborrar
+                    </Btn>
+                  )}
+                </span>
+              </div>
+              {(al.top_tracks_overlap != null || al.playcount_variant != null) && (
+                <p className="text-[11px] text-tq-ink/75">
+                  {al.top_tracks_overlap != null && (
+                    <span>{(al.top_tracks_overlap * 100).toFixed(0)}% top-tracks coincideixen</span>
+                  )}
+                  {al.playcount_variant != null && (
+                    <span>
+                      {' · '}
+                      {al.playcount_variant.toLocaleString('ca')} plays
+                      {al.playcount_canonical != null && (
+                        <> vs {al.playcount_canonical.toLocaleString('ca')} canònic</>
+                      )}
+                    </span>
+                  )}
+                </p>
               )}
-              {!al.confirmat && (
-                <Btn tone="secondary" disabled={busy} onClick={() => action(al.pk, 'reject')}>
-                  Rebutjar
-                </Btn>
-              )}
-              {al.confirmat && (
-                <Btn tone="ghost" disabled={busy} onClick={() => action(al.pk, 'delete')}>
-                  Esborrar
-                </Btn>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {rejected.length > 0 && (
-        <details className="mt-1">
-          <summary className="cursor-pointer text-tq-ink/75 italic text-[11px]">
-            {rejected.length} alies rebutjats (homònims)
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {rebutjats.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[11px] text-tq-ink/75 italic">
+            {rebutjats.length} alies rebutjats (homònims)
           </summary>
-          <ul className="mt-1">
-            {rejected.map(al => (
-              <li key={al.pk} className="py-0.5 flex gap-2 items-center text-tq-ink/75">
+          <ul className="mt-2 flex flex-col gap-1">
+            {rebutjats.map(al => (
+              <li
+                key={al.pk}
+                className="flex gap-2 items-center text-[11px] text-tq-ink/75"
+              >
                 <Pill tone="gray">Rebutjat</Pill>
                 <code className="font-mono">{al.nom}</code>
                 <Btn tone="ghost" disabled={busy} onClick={() => action(al.pk, 'delete')}>
-                  Esborrar (re-proposable)
+                  Esborrar
                 </Btn>
               </li>
             ))}
           </ul>
         </details>
       )}
-      <div className="mt-1">
+
+      <div className="mt-3 pt-3 border-t border-tq-ink/10">
         {!showAdd ? (
-          <Btn tone="ghost" onClick={() => setShowAdd(true)}>+ Afegir alies manualment</Btn>
+          <Btn tone="secondary" onClick={() => setShowAdd(true)}>
+            + Afegir alies manualment
+          </Btn>
         ) : (
-          <div className="flex gap-1 items-center flex-wrap">
+          <div className="flex gap-2 items-center flex-wrap">
             <input
               aria-label="Nom alies Last.fm"
               type="text"
               value={newNom}
               onChange={e => setNewNom(e.target.value)}
               placeholder="ex. Böira"
-              className="text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink focus:outline-none focus:ring-2 focus:ring-tq-yellow"
+              className="text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink focus:outline-none focus:ring-2 focus:ring-tq-yellow flex-1 min-w-[180px]"
             />
             <Btn tone="primary" disabled={busy || !newNom.trim()} onClick={add}>Afegir</Btn>
             <Btn tone="ghost" onClick={() => { setShowAdd(false); setNewNom(''); setErr('') }}>
@@ -139,9 +178,9 @@ function LastfmAliasesInline({ pk, aliases, onChange }) {
             </Btn>
           </div>
         )}
+        {err && <p className="text-[11px] text-red-700 mt-2">{err}</p>}
       </div>
-      {err && <p className="text-[11px] text-red-700 mt-1">{err}</p>}
-    </div>
+    </TableCard>
   )
 }
 
@@ -322,16 +361,6 @@ export default function ArtistaEditPage() {
             <label className="text-xs font-semibold">Nom a Last.fm
               <Input value={a.lastfm_nom || ''} onChange={e => patch({ lastfm_nom: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
-            {/* Alias names — sum into the canonical signal once
-                confirmed. Same pattern as deezer_ids, just per
-                Last.fm. Surfaces detector candidates inline so the
-                edit page is the single point of artist editing. */}
-            <LastfmAliasesInline
-              pk={a.pk}
-              aliases={a.lastfm?.aliases || []}
-              onChange={reload}
-            />
-
             <label className="text-xs font-semibold">Gènere
               <Input value={a.genere || ''} onChange={e => patch({ genere: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
@@ -385,6 +414,12 @@ export default function ArtistaEditPage() {
             {a.deezer_ids.length === 0 && <p className="text-xs opacity-60">Cap Deezer ID.</p>}
           </div>
         </TableCard>
+
+        <LastfmAliasesCard
+          pk={a.pk}
+          aliases={a.lastfm?.aliases || []}
+          onChange={reload}
+        />
 
         <TableCard className="p-4">
           <div className="flex justify-between items-center mb-3">

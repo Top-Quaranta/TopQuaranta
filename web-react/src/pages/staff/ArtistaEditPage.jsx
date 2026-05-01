@@ -415,12 +415,6 @@ export default function ArtistaEditPage() {
           </div>
         </TableCard>
 
-        <LastfmAliasesCard
-          pk={a.pk}
-          aliases={a.lastfm?.aliases || []}
-          onChange={reload}
-        />
-
         <TableCard className="p-4">
           <div className="flex justify-between items-center mb-3">
             <h2 className="font-semibold">Localitats</h2>
@@ -477,6 +471,14 @@ export default function ArtistaEditPage() {
             onSync={syncMB}
             onClear={clearMB}
             busy={busy}
+          />
+          {/* Last.fm row: editable card on the left (alias names that
+              sum into the canonical signal), read-only info panel on
+              the right — same left/right pattern as MusicBrainz above. */}
+          <LastfmAliasesCard
+            pk={a.pk}
+            aliases={a.lastfm?.aliases || []}
+            onChange={reload}
           />
           <LastfmPanel data={{ ...(a.lastfm || {}), pk: a.pk }} />
         </div>

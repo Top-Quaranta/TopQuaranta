@@ -22,7 +22,7 @@ import LastfmPanel from '../../components/staff/LastfmPanel'
 // `obtenir_senyal`. Candidates come from
 // `manage.py detectar_lastfm_aliases` (top-tracks overlap ≥50% to
 // filter homonyms); staff confirms each one before it contributes.
-function LastfmAliasesCard({ pk, aliases, onChange }) {
+function LastfmAliasesCard({ pk, aliases, lastfmNom, onLastfmNomChange, onChange }) {
   const [showAdd, setShowAdd] = useState(false)
   const [newNom, setNewNom] = useState('')
   const [busy, setBusy] = useState(false)
@@ -58,9 +58,10 @@ function LastfmAliasesCard({ pk, aliases, onChange }) {
     <TableCard className="p-4">
       <div className="flex justify-between items-center mb-3 gap-2 flex-wrap">
         <div>
-          <h2 className="font-semibold">Aliases Last.fm</h2>
+          <h2 className="font-semibold">Last.fm</h2>
           <p className="text-[11px] text-tq-ink/75 mt-0.5">
-            Variants ortogràfiques que sumen al senyal quan estan confirmades.
+            Nom canònic + variants ortogràfiques (sumen al senyal quan
+            estan confirmades).
           </p>
         </div>
         <div className="flex gap-1">
@@ -69,6 +70,22 @@ function LastfmAliasesCard({ pk, aliases, onChange }) {
         </div>
       </div>
 
+      {/* Canonical name — moved out of the 'Bàsics' card so every
+          Last.fm-related field lives in one place, mirroring the
+          'MusicBrainz ID' card on the row above. */}
+      <label className="text-xs font-semibold flex flex-col gap-1 mb-4">
+        Nom canònic a Last.fm
+        <Input
+          value={lastfmNom || ''}
+          onChange={e => onLastfmNomChange(e.target.value)}
+          className="w-full font-normal"
+          placeholder="ex. Boira"
+        />
+      </label>
+
+      <h3 className="text-xs uppercase tracking-wide text-tq-ink/75 mb-2 font-semibold">
+        Aliases (variants)
+      </h3>
       {aliases.length === 0 && (
         <p className="text-xs italic text-tq-ink/75">
           Cap variant detectada ni afegida. Si saps que aquest artista es
@@ -358,9 +375,9 @@ export default function ArtistaEditPage() {
             <label className="text-xs font-semibold">Nom
               <Input value={a.nom} onChange={e => patch({ nom: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
-            <label className="text-xs font-semibold">Nom a Last.fm
-              <Input value={a.lastfm_nom || ''} onChange={e => patch({ lastfm_nom: e.target.value })} className="w-full mt-1 font-normal" />
-            </label>
+            {/* `lastfm_nom` lives in the LastfmAliasesCard below
+                (paired with LastfmPanel) so all Last.fm-related
+                editing is in one place, mirroring the MusicBrainz row. */}
             <label className="text-xs font-semibold">Gènere
               <Input value={a.genere || ''} onChange={e => patch({ genere: e.target.value })} className="w-full mt-1 font-normal" />
             </label>
@@ -478,6 +495,8 @@ export default function ArtistaEditPage() {
           <LastfmAliasesCard
             pk={a.pk}
             aliases={a.lastfm?.aliases || []}
+            lastfmNom={a.lastfm_nom}
+            onLastfmNomChange={v => patch({ lastfm_nom: v })}
             onChange={reload}
           />
           <LastfmPanel data={{ ...(a.lastfm || {}), pk: a.pk }} />

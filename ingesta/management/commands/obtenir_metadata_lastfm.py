@@ -146,6 +146,14 @@ class Command(BaseCommand):
             if not dry_run:
                 self._fill_artist_fields(artista, info)
             similar = get_artist_similar(name, limit=100)
+            # Per-source dedup: many Last.fm pages list the same
+            # artist under multiple spellings ('Delên' AND 'dêlen'
+            # in the same response). Resolving each candidate
+            # through the alias table collapses the variants onto
+            # one target, so the count of unique recommenders stays
+            # honest. Caught 2026-05-01.
+            seen_target_pks: set[int] = set()
+            new_targets: list[tuple[Artista, float]] = []
             for sim in similar:
                 try:
                     match = float(sim.get("match") or 0)
@@ -156,11 +164,25 @@ class Command(BaseCommand):
                 sim_name = (sim.get("name") or "").strip()
                 if not sim_name:
                     continue
-                created = self._touch_similar(sim_name, dry_run=dry_run)
+                target, created = self._resolve_similar_target(
+                    sim_name, dry_run=dry_run
+                )
+                if target is None:
+                    continue
+                if target.pk == artista.pk:
+                    # Last.fm sometimes lists the artist as similar
+                    # to itself via a variant spelling; ignore.
+                    continue
+                if target.pk in seen_target_pks:
+                    continue
+                seen_target_pks.add(target.pk)
+                new_targets.append((target, match))
                 if created:
                     new_pendents += 1
                 else:
                     bumped_similars += 1
+            if not dry_run:
+                self._replace_similars(artista, new_targets)
 
         if not dry_run:
             artista.lastfm_last_sync = timezone.now()
@@ -257,13 +279,24 @@ class Command(BaseCommand):
             ]
         )
 
-    def _touch_similar(self, sim_name: str, *, dry_run: bool) -> bool:
-        """Find or create an Artista for a similar-name match.
+    def _resolve_similar_target(
+        self, sim_name: str, *, dry_run: bool
+    ) -> tuple[Artista | None, bool]:
+        """Resolve a similar-name to a canonical Artista, alias-aware.
 
-        Returns True when a new pendent was created, False otherwise.
-        Increments `nb_similars_lastfm` either way (counts the
-        recommendation; idempotency is guaranteed by the source-artist
-        recency gate one level up).
+        Lookup order (case-insensitive):
+          1. `Artista.lastfm_nom == sim_name`
+          2. `Artista.nom == sim_name`
+          3. `ArtistaLastfmAlias.nom == sim_name AND confirmat=True`
+             → return the linked Artista. Avoids creating a new
+             pendent for a known variant ('dêlen' → existing Delên).
+
+        If nothing matches, create a pendent placeholder. Counts
+        are NOT touched here — the caller writes a row to
+        `ArtistaLastfmSimilar` and `_replace_similars` recomputes
+        the cached `nb_similars_lastfm`.
+
+        Returns (artista_or_None, created_flag).
         """
         target = (
             Artista.objects.filter(
@@ -272,23 +305,60 @@ class Command(BaseCommand):
             .order_by("-aprovat", "pk")
             .first()
         )
-        created = False
-        if target is None:
-            if dry_run:
-                return True
-            target = Artista.objects.create(
-                nom=sim_name,
-                lastfm_nom=sim_name,
-                aprovat=False,
-                pendent_review=True,
-                auto_descobert=True,
-                font_descoberta="lastfm_similar",
-                nb_similars_lastfm=1,
+        if target is not None:
+            return target, False
+
+        from music.models import ArtistaLastfmAlias
+
+        alias = (
+            ArtistaLastfmAlias.objects.filter(nom__iexact=sim_name, confirmat=True)
+            .select_related("artista")
+            .first()
+        )
+        if alias is not None:
+            return alias.artista, False
+
+        if dry_run:
+            return None, True
+        target = Artista.objects.create(
+            nom=sim_name,
+            lastfm_nom=sim_name,
+            aprovat=False,
+            pendent_review=True,
+            auto_descobert=True,
+            font_descoberta="lastfm_similar",
+        )
+        return target, True
+
+    def _replace_similars(
+        self, source: Artista, targets: list[tuple[Artista, float]]
+    ) -> None:
+        """Replace `source`'s entire set of similar→target rows with
+        the freshly-resolved one, then recompute the cached
+        `nb_similars_lastfm` on every affected target.
+
+        Idempotent: re-running for the same source produces the same
+        end state regardless of how many times Last.fm's response
+        has shifted between calls.
+        """
+        from music.models import ArtistaLastfmSimilar
+
+        # Capture the previous targets so their cached counts get
+        # recomputed too (in case some are no longer recommended).
+        previous_target_ids = set(
+            ArtistaLastfmSimilar.objects.filter(source=source).values_list(
+                "target_id", flat=True
             )
-            created = True
-        else:
-            if not dry_run:
-                Artista.objects.filter(pk=target.pk).update(
-                    nb_similars_lastfm=(target.nb_similars_lastfm or 0) + 1
-                )
-        return created
+        )
+        ArtistaLastfmSimilar.objects.filter(source=source).delete()
+        ArtistaLastfmSimilar.objects.bulk_create(
+            [
+                ArtistaLastfmSimilar(source=source, target=t, match=m)
+                for t, m in targets
+            ],
+            ignore_conflicts=True,
+        )
+        affected_target_ids = previous_target_ids | {t.pk for t, _ in targets}
+        for tid in affected_target_ids:
+            count = ArtistaLastfmSimilar.objects.filter(target_id=tid).count()
+            Artista.objects.filter(pk=tid).update(nb_similars_lastfm=count)

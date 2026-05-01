@@ -522,6 +522,76 @@ class ArtistaLastfmAlias(models.Model):
         return f"{self.artista.nom} ↔ {self.nom} [{state}]"
 
 
+class ArtistaLastfmSimilar(models.Model):
+    """One row per (source_artist → target_artist) recommendation
+    seen at Last.fm's `artist.getSimilar`.
+
+    Why a row-per-recommendation rather than the previous integer
+    counter `Artista.nb_similars_lastfm`:
+
+    Two design issues with the integer:
+
+      1. **Double-counting variants**: if Manel's similars include
+         both 'Delên' and 'dêlen' (the same artist with different
+         spellings), the old counter went up by 2 when the actual
+         signal is 1 unique recommender. With this table we dedup
+         per `source_artist` — multiple variant names resolving to
+         the same target collapse into one row.
+
+      2. **No way to recompute**: a fresh-pull from Last.fm couldn't
+         correct over-counted targets without remembering who had
+         recommended whom. The integer was append-only. This table
+         lets each source's recommendation set be REPLACED on every
+         re-pull, so the count stays honest.
+
+    Caught 2026-05-01 in the same investigation as
+    `ArtistaLastfmAlias` (Boira/Böira → 14× signal loss for the
+    canonical, similar inflation on the targets it recommends).
+
+    The integer `Artista.nb_similars_lastfm` is kept as a denorm
+    cache (= COUNT(*) FROM this table WHERE target_id=…) to avoid
+    a JOIN on every artistes-list query.
+    """
+
+    source = models.ForeignKey(
+        Artista,
+        on_delete=models.CASCADE,
+        related_name="similars_recomanats",
+        help_text="Artist whose getSimilar response surfaced this row.",
+    )
+    target = models.ForeignKey(
+        Artista,
+        on_delete=models.CASCADE,
+        related_name="recomanat_per",
+        help_text=(
+            "Artist being recommended (resolved through the alias table "
+            "so 'Delên' and 'dêlen' map to the same target)."
+        ),
+    )
+    last_seen = models.DateTimeField(auto_now=True)
+    match = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Last.fm's similarity score for this pair (0–1).",
+    )
+
+    class Meta:
+        verbose_name = "Last.fm similar (source→target)"
+        verbose_name_plural = "Last.fm similars (source→target)"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "target"],
+                name="uniq_lastfm_similar_source_target",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["target"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.source.nom} → {self.target.nom}"
+
+
 class ArtistaLocalitat(models.Model):
     """Links an artist to one or more municipalities (locations).
 

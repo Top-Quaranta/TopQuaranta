@@ -96,14 +96,13 @@ Items petits per fer en sessions curtes:
       perquè staff els revisi/confirmi a `/staff/artistes/<pk>` —
       cap aliasing automàtic sense revisió. Llista completa al
       TSV: `/tmp/lastfm_alias_audit.tsv`. Cost estimat: ~3h.
-- [ ] **Investigar `calcular_ranking_provisional` STALE 155 h** i
-      **`actualitzar_score_entrada` NO_STATUS** — descobert
-      2026-05-01 quan vaig executar `tq-health` per primera vegada.
-      Tots dos són crons que no avisaven a ningú perquè el watchdog
-      no estava schedulat. Ara sí. Cal anar a veure per què cap
-      execució recent no ha arribat al `tq-run` per al primer (és
-      un alias del `calcular_top --provisional`?) i si el segon
-      hauria d'estar al cron.
+- [ ] **Re-autoritzar Spotify OAuth (cron `actualitzar_playlists_spotify`
+      en FAIL des del 21 abril)**. La taula `SpotifyAuth` està buida
+      (refresh token caducat o esborrat per migració). Acció: l'usuari
+      executa `manage.py autoritzar_spotify` per la URL d'OAuth, fa
+      login amb el compte Spotify Premium, autoritza, i la callback a
+      `/spotify/callback` desa els tokens. Detectat 2026-05-01 quan el
+      nou watchdog `tq-health` va engegar per primera vegada.
 - [ ] Demucs → Whisper pipeline com a recall booster per les ~3-4
       false negatives on Whisper sent `es` a tracks catalans
       (Jonatan Penalba × 2, Adrien Broadway). Cost ~3× més lent;

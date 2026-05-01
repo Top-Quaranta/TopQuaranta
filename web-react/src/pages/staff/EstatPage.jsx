@@ -279,24 +279,41 @@ function CronStatus({ cron }) {
   const ageHours = lastTs ? (Date.now() - lastTs) / 3_600_000 : Infinity
   const stale = cron.max_age_hours != null && ageHours > cron.max_age_hours
 
+  // STUCK is keyed *only* on `skips >= concern`, not on `stale`. A
+  // long-running instance that legitimately overruns its hourly
+  // window is benign — the previous version flagged it red as soon
+  // as the run passed max_age_hours, even with skips=1, which was
+  // alarmist (caught 2026-05-01: a manual catch-up of obtenir_novetats
+  // running 1.5 h showed STUCK×2 despite making steady progress).
+  // STALE only fires when there's no in-flight instance either
+  // (status=OK + last_run too old → cron stopped firing entirely).
   if (cron.status === 'OK' && !stale) {
     tone = 'green'
     label = 'OK'
     worry = ''
   } else if (cron.status === 'SKIPPED_BY_LOCK') {
-    if (skips >= concern || stale) {
+    if (skips >= concern) {
       tone = 'red'
       label = `STUCK×${skips}`
-      worry = 'L\'execució anterior està penjada — caldria mirar-ho.'
+      worry =
+        `${skips} ticks consecutius bloquejats per la mateixa execució — ` +
+        `probablement està penjada, caldria mirar-ho.`
     } else {
       tone = 'gray'
       label = `SKIP×${skips}`
-      worry = `OK fins a ${concern - 1} skips. Si arriba a ${concern}, probablement està penjada.`
+      worry =
+        concern > 1
+          ? `OK fins a ${concern - 1} skips consecutius. Si arriba a ${concern}, ` +
+            `probablement està penjada.`
+          : `Aquest cron no hauria de saltar mai (la pròxima execució és lluny). ` +
+            `Si persisteix, l'execució anterior està penjada.`
     }
   } else if (stale) {
     tone = 'red'
     label = `STALE`
-    worry = `Hauria d'haver corregut fa ≤${_maxAgeHumanCa(cron.max_age_hours)}.`
+    worry =
+      `Cap execució recent ni en curs. Hauria d'haver corregut fa ` +
+      `≤${_maxAgeHumanCa(cron.max_age_hours)}.`
   } else {
     tone = 'red'
     label = cron.status || '—'

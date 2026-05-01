@@ -671,6 +671,11 @@ def estat(request: Request) -> Response:
             if not parsed:
                 continue
             meta = CRON_META.get(f.stem, {})
+            # `_sort_key` is a temporary field popped before serialising;
+            # we sort by max_age (frequency proxy) then name so the
+            # dashboard reads top-down: hourly → daily → weekly →
+            # monthly → quarterly. Unknown commands sink to the end.
+            _sort_key = (meta.get("max_age_hours") or 10**9, f.stem)
             crons.append(
                 {
                     "name": f.stem,
@@ -692,8 +697,11 @@ def estat(request: Request) -> Response:
                     "frequency_label": meta.get("frequency_label", ""),
                     "max_age_hours": meta.get("max_age_hours"),
                     "skip_concern": meta.get("skip_concern"),
+                    "_sort_key": _sort_key,
                 }
             )
+
+        crons.sort(key=lambda c: c.pop("_sort_key"))
 
     # ── ML ──────────────────────────────────────────────────────────────
     ml = {

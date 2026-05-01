@@ -35,16 +35,25 @@ fi
 # Per-command max age in hours before we flag STALE.
 # Tune carefully: the cron is hourly for novetats, daily for the rest,
 # weekly for official ranking. We add a buffer for human-timed drift.
+#
+# Names must match the management command's name (which `tq-run` uses
+# as the status filename). Keep this in sync with deploy/cron.topquaranta.
+# Last reviewed 2026-05-01 — the renames from `calcular_ranking*` to
+# `calcular_top*` (Sprint M) and the removal of `actualitzar_score_entrada`
+# (Sprint A) had not been propagated, so the watchdog was firing on
+# stale or never-existent names.
 declare -A MAX_AGE_HOURS=(
     [obtenir_novetats]=2
     [obtenir_senyal]=26
-    [actualitzar_score_entrada]=26
     [netejar_caducades]=26
-    [calcular_ranking_provisional]=26
-    [calcular_ranking]=170     # 7 days + 2h buffer
-    [tq-restore-test]=840      # 35 days (monthly + 4d buffer)
-    [arxivar_senyal_vell]=2400 # 100 days (quarterly + 8d buffer)
-    [analitzar_whisper]=48     # nightly + 1 day buffer
+    [calcular_top_provisional]=26
+    [calcular_top]=170         # weekly: 7 days + 2 h buffer
+    [tq-restore-test]=840      # monthly: 35 days + 4d buffer
+    [analitzar_whisper]=48     # nightly: 1 day + buffer
+    # `arxivar_senyal_vell` runs quarterly via cron but the first run
+    # post-deploy hasn't happened yet — leaving it out until a status
+    # file exists, otherwise it floods the watchdog with NO_STATUS
+    # noise. Re-add when we see the first run land.
 )
 
 overall=0

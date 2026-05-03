@@ -12,7 +12,7 @@ from ingesta.clients import deezer
 from ingesta.clients.deezer import _parse_date
 from music.constants import DIES_CADUCITAT
 from music.ml import classificar_i_guardar
-from music.models import Album, Artista, ArtistaDeezer, Canco
+from music.models import Album, Artista, ArtistaDeezer, Canco, HistorialRevisio
 from music.titlecase_catala import titlecase_catala
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,33 @@ RECORD_TYPE_MAP = {
     "ep": "ep",
     "compile": "album",
 }
+
+
+def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
+    """Has this recording (by ISRC or by Deezer track id) ever been
+    rejected by staff?
+
+    Looks at HistorialRevisio, which keeps `canco_isrc` and
+    `canco_deezer_id` denormalised so the rejection trail survives
+    even when the Canco row itself was deleted (rebutjar_album does
+    a `cancons.delete()`; netejar_caducades used to wipe rejected
+    rows after 365 days too, until the May-2026 fix).
+
+    Returns True for any prior `decisio="rebutjada"` match. Both
+    ISRC and deezer_id are checked because a recording can come
+    back via either path: same master under a re-issued album (new
+    deezer_id, same ISRC) or under a re-uploaded track (new ISRC,
+    same deezer_id — rare but possible). If either dimension flags
+    a prior rejection, we skip.
+    """
+    if not isrc and not deezer_id:
+        return False
+    q = Q()
+    if isrc:
+        q |= Q(canco_isrc=isrc)
+    if deezer_id:
+        q |= Q(canco_deezer_id=deezer_id)
+    return HistorialRevisio.objects.filter(decisio="rebutjada").filter(q).exists()
 
 
 def _get_or_create_artista(deezer_id: int, name: str) -> Artista | None:
@@ -348,6 +375,26 @@ class Command(BaseCommand):
 
         # Skip if already exists by deezer_id
         if Canco.objects.filter(deezer_id=dz_id).exists():
+            return False
+
+        # Rejection memory: if this ISRC or this deezer_id has ever
+        # been rejected by staff, skip creation. Without this guard,
+        # songs that came in via a rejected album reappear as soon
+        # as Deezer re-publishes the same recording under a different
+        # `deezer_id` (re-issue, label change) or under a different
+        # album of the same artist — the original Canco row is gone
+        # (rebutjar_album physically deletes it) so the dedup-by-row
+        # checks above find nothing. HistorialRevisio keeps the
+        # rejection trail denormalised on `canco_isrc` /
+        # `canco_deezer_id` precisely for this case.
+        if _previously_rejected(isrc, dz_id):
+            logger.info(
+                "Skipping track «%s» (deezer_id=%s isrc=%s) — "
+                "previously rejected by staff.",
+                track_data.get("title", "?"),
+                dz_id,
+                isrc or "—",
+            )
             return False
 
         # ISRC dedup: if a Canco with this ISRC already exists, merge into it

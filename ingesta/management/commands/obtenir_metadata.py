@@ -4,14 +4,32 @@ from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from ingesta.clients import deezer
 from music.constants import DIES_CADUCITAT
-from music.models import Album, Artista, ArtistaDeezer, Canco
+from music.models import Album, Artista, ArtistaDeezer, Canco, HistorialRevisio
 from music.titlecase_catala import titlecase_catala
 
 logger = logging.getLogger(__name__)
+
+
+def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
+    """Has this recording (by ISRC or by Deezer track id) ever been
+    rejected by staff? See the equivalent helper in `obtenir_novetats`
+    for the full rationale — both ingest paths share the rejection-
+    memory check.
+    """
+    if not isrc and not deezer_id:
+        return False
+    q = Q()
+    if isrc:
+        q |= Q(canco_isrc=isrc)
+    if deezer_id:
+        q |= Q(canco_deezer_id=deezer_id)
+    return HistorialRevisio.objects.filter(decisio="rebutjada").filter(q).exists()
+
 
 RECORD_TYPE_MAP = {
     "album": "album",
@@ -407,6 +425,27 @@ class Command(BaseCommand):
             "data_llancament": album.data_llancament,
             "verificada": False,
         }
+
+        # Rejection memory (May-2026): if this ISRC or this Deezer
+        # track id has ever been rejected by staff, skip creation.
+        # Without this guard, songs that came in via a rejected
+        # album reappear as soon as Deezer re-publishes the recording
+        # under a different `deezer_id` (re-issue, label change) or
+        # under another album of the same artist — the original Canco
+        # row is gone (rebutjar_album physically deletes it) so the
+        # dedup-by-row checks below find nothing. HistorialRevisio
+        # keeps the trail denormalised on `canco_isrc` /
+        # `canco_deezer_id` precisely for this case.
+        isrc_check = defaults.get("isrc") or ""
+        if _previously_rejected(isrc_check, data["id"]):
+            logger.info(
+                "Skipping track «%s» (deezer_id=%s isrc=%s) — "
+                "previously rejected by staff.",
+                data.get("title", "?"),
+                data["id"],
+                isrc_check or "—",
+            )
+            return False
 
         # ISRC collisions on Deezer are routine and harmless: a single
         # is reissued inside a full album, or a featuring track is

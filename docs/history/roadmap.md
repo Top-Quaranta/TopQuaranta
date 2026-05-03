@@ -65,7 +65,96 @@ l'activitat des d'abril 2026 viu en sprints.
 Per ordre de prioritat (no alfabètic). Quan se'n fa un, es mou a la
 secció _completats_ amb la data i el detall.
 
-### 1. Sprint K — Analytics ètica (interna)
+### 1. Sprint — Distribució v2 (refinaments + estadístiques)
+
+> Iteració sobre la infraestructura multi-canal del Sprint I bis.
+> El renderer i els clients ja són sòlids; ara toca **mesurar què
+> arriba al públic**, **netejar la cua de pendents col·labs** que
+> el `_upsert_track` crea de manera massa generosa, i pulir
+> detalls de format que han anat sortint en l'ús real.
+
+**Estadístiques per canal** (sense vulnerar el manifest):
+- [ ] Camp nou `SocialPost.metrics_snapshot` (JSON) + cron diari
+      `recollir_metrics` que demana a cada API el rendiment del
+      post de la setmana anterior:
+      - **Instagram**: `/{media-id}/insights?metric=reach,impressions,
+        likes,comments,shares,saved` (Graph API).
+      - **Mastodon**: `/api/v1/statuses/:id` retorna
+        `reblogs_count`, `favourites_count`, `replies_count`.
+      - **Bluesky**: `app.bsky.feed.getPostThread` per al `repost_count`,
+        `like_count`, `reply_count`.
+      - **Telegram**: `getMessage` per al view count (només si el bot
+        és admin del canal).
+      - **Newsletter**: open-rate/click-rate via Brevo `/v3/smtp/
+        statistics/aggregatedReport` filtrat per tag setmanal.
+      - **RSS**: comptador de hits a `/rss/{top,novetats}.xml` via
+        GoAccess (Sprint K — analytics ètica).
+- [ ] Pàgina staff `/staff/social/metrics` amb gràfica per canal
+      (4 setmanes) + comparativa setmana actual vs mitjana.
+- [ ] Email digest setmanal (dilluns) als admins amb el resum de
+      la setmana publicada (top 3 posts + canal amb millor
+      engagement, sense PII).
+
+**Neteja de pendents col·labs brossa** (caçat 2026-05-03):
+- [ ] Comand `netejar_pendents_no_ppcc` que rebutgi automàticament
+      Artistes amb `font_descoberta=collaborador` + `aprovat=False`
+      + sense localitats PPCC + sense cançons pròpies + sense
+      activitat staff. Aplicar primer en dry-run; mostrar comptador
+      al panell `/staff/estat`.
+- [ ] A `_upsert_track` (i `obtenir_novetats._create_track`):
+      saltar la creació automàtica de pendents col·lab quan
+      l'artista origen té un Deezer profile mixt (heurística:
+      `nb_album > 30` + diversos labels al primer mostreig). Així
+      no inundem la cua MB amb soroll com el cas Àlex Pérez 1479910.
+
+**Refinaments del renderer** (post-feedback usuari):
+- [ ] **Slides de novetats**: re-aplicar el patró readability v3
+      (font sizes + tighter top padding) a `_feed_album_slide` i
+      `_feed_singles_slide`, que han quedat amb les mides antigues.
+- [ ] **Stories CTA** (`_story_cta`): veure si la mida del títol
+      «Top complet a» queda balancejat amb el nou volum del títol
+      cançó (80 pt). Possiblement bumpar de 56 → 64.
+- [ ] **Portada novetats**: aplicar el +54 px de marge esquerre
+      també a `_feed_novetats_portada` *si* es decideix mantenir
+      el patró (ara mateix ja està aplicat — verificar visualment).
+- [ ] Mode dark/light per al story footer: ara mateix
+      «topquaranta.cat» va sempre en `COLOR_TEXT_MUTED`. Verificar
+      contrast sobre territoris de color clar (amber/yellow) si
+      mai posem una targeta clara.
+
+**Refinaments operatius**:
+- [ ] Carrousel BS/Mastodon: actualment passa portada + 3 list
+      slides. Si el top és del tipus `novetats` (singles/albums),
+      el slide 0 és la portada de novetats (no llista) — s'haurien
+      de tractar diferent? Decidir entre:
+      (a) novetats també envien 4 imatges (portada + 3 album/single
+          slides); o
+      (b) novetats només envien la portada (singletons).
+- [ ] **Plantilla d'alt-text** més rica: ara «Top CAT, posicions
+      1-10» — a11y guidelines diuen que cal donar context. Provar
+      «Top setmanal de cançons en català de Catalunya — posicions
+      1 a 10: 1 Tutu Turú de Siderland, 2 Estrelles de Max
+      Navarro…». Fa l'alt-text més útil per a screen-readers.
+- [ ] **Programació flexible**: avui el calendari és fix (Sat
+      09:30 IG → 09:40 Mastodon → …). Posar el delay configurable
+      a `ConfiguracioGlobal` perquè staff pugui escampar més o
+      condensar segons el comportament observat (Insights diuen
+      "publica al matí" o "no agrupes" segons cas).
+- [ ] **Re-publicar amb correcció**: si una cançó del top resulta
+      ser rebutjada *després* de publicar el post, hauríem de
+      tenir un botó "Re-publicar" que (a) esborra el post remot,
+      (b) re-genera amb el top corregit, (c) re-publica. Avui
+      això és un seguit manual de Esborrar + Reset + Publicar.
+
+**A11y + i18n**:
+- [ ] Text alternatiu de les imatges al carrusel IG (l'API ho
+      permet via `alt_text` al moment d'`upload_carousel_item`).
+      Avui només Mastodon i Bluesky tenen alt-text.
+- [ ] Verificar contrast de tots els colors de territori sobre
+      les pastilles del slide list (alguna fila tinta vs
+      `COLOR_TEXT_MUTED` pot quedar baix-contrast).
+
+### 2. Sprint K — Analytics ètica (interna)
 
 > Mètriques agregades sense vulnerar el manifest. GoAccess sobre
 > logs Caddy + comptadors interns + UTM convention.
@@ -80,7 +169,7 @@ secció _completats_ amb la data i el detall.
 - [ ] Documentació al `docs/product/definition.md` i `/legal/privacitat`
       sobre què mesurem internament.
 
-### 2. Backlog menor
+### 3. Backlog menor
 
 Items petits per fer en sessions curtes:
 

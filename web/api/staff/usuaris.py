@@ -69,6 +69,8 @@ from ranking.models import (
 # public endpoints — see `web/api/search_utils.py`.
 from web.api.search_utils import normalize_search_term as _normalize_search_term
 from web.api.search_utils import unaccent_field as _unaccent_field
+from web.api.staff.propostes import _proposta_row
+from web.api.staff.solicituds import _solicitud_row
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.

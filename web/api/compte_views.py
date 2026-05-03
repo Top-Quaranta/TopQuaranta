@@ -119,12 +119,17 @@ def dashboard(request: Request) -> Response:
 
 
 def _profile_payload(user) -> dict:
+    # Newsletter preference lives on the related PerfilUsuari row,
+    # which is auto-created via post_save signal — but be defensive
+    # in case of legacy users created before the signal existed.
+    perfil = getattr(user, "perfil", None)
     return {
         "email": user.email,
         "username": user.username,
         "date_joined": user.date_joined.isoformat() if user.date_joined else None,
         "is_staff": bool(user.is_staff),
         "is_superuser": bool(user.is_superuser),
+        "vol_newsletter": bool(perfil and perfil.vol_newsletter),
     }
 
 
@@ -203,6 +208,21 @@ def perfil(request: Request) -> Response:
             user.set_password(new_password)
             user.save(update_fields=["password"])
             update_session_auth_hash(request, user)
+        # Newsletter opt-in/out — only touch the perfil row if the
+        # caller actually sent the field (so a PATCH with only an
+        # email change doesn't accidentally reset it).
+        if "vol_newsletter" in data:
+            from django.utils import timezone
+
+            from comptes.models import PerfilUsuari
+
+            perfil, _ = PerfilUsuari.objects.get_or_create(usuari=user)
+            wants = bool(data.get("vol_newsletter"))
+            if perfil.vol_newsletter != wants:
+                perfil.vol_newsletter = wants
+                if wants and not perfil.consent_newsletter_at:
+                    perfil.consent_newsletter_at = timezone.now()
+                perfil.save(update_fields=["vol_newsletter", "consent_newsletter_at"])
     except IntegrityError:
         return Response(
             {"errors": {"__all__": "Error de validació al desar."}},

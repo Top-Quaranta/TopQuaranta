@@ -21,6 +21,7 @@ export default function ComptePerfilPage() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [volNewsletter, setVolNewsletter] = useState(false)
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -31,6 +32,7 @@ export default function ComptePerfilPage() {
       setInitial(d)
       setEmail(d.email || '')
       setUsername(d.username || '')
+      setVolNewsletter(!!d.vol_newsletter)
     })
   }, [authLoading, profile])
 
@@ -54,6 +56,9 @@ export default function ComptePerfilPage() {
     if (newPassword) {
       payload.password = newPassword
       payload.current_password = currentPassword
+    }
+    if (volNewsletter !== !!initial.vol_newsletter) {
+      payload.vol_newsletter = volNewsletter
     }
     if (Object.keys(payload).length === 0) {
       setSuccess(true)
@@ -104,6 +109,25 @@ export default function ComptePerfilPage() {
           />
           <p className="text-xs text-gray-500 mt-1">Visible al teu perfil públic quan gestiones un artista.</p>
         </Field>
+
+        <div className="border-t border-gray-200 pt-4 mt-2">
+          <p className="text-sm font-semibold mb-2">Newsletter</p>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={volNewsletter}
+              onChange={e => setVolNewsletter(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-tq-ink focus:ring-tq-yellow"
+            />
+            <span className="text-sm text-tq-ink">
+              Vull rebre el resum setmanal del Top per correu electrònic.
+              <span className="block text-xs text-gray-500 mt-0.5">
+                Cada dissabte enviem el Top de la setmana. Pots desactivar-ho aquí mateix
+                en qualsevol moment.
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div className="border-t border-gray-200 pt-4 mt-2">
           <p className="text-sm font-semibold mb-2">Canviar contrasenya</p>

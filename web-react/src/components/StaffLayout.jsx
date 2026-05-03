@@ -26,7 +26,7 @@ const GROUPS = [
   {
     label: 'Visió general',
     items: [
-      { to: '/staff',       label: 'Panel', end: true },
+      { to: '/staff',       label: 'Panell', end: true },
       { to: '/staff/estat', label: 'Estat' },
     ],
   },

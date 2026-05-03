@@ -111,6 +111,29 @@ at the new + old URLs.
 | POST | `/staff/solicituds/<pk>/toggle/` | Toggle verificat. |
 | POST | `/staff/solicituds/<pk>/rebutjar/` | Mark rejected. |
 
+### Distribució multi-canal (`/staff/social`)
+
+Six channels share the same `SocialPost` model and the same staff
+surface. Channel column tints in the UI: IG pink, Mastodon indigo,
+Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/staff/social/` | Posts list ordered by `published_at` (nulls-last → `created_at`), Data column first, Setmana N second. Channel + per-credential payloads. |
+| POST | `/staff/social/preview/` | Render dry-run for a slot; returns the rendered PNG paths. |
+| POST | `/staff/social/publicar-ara/` | Force-run `publicar_social` / `publicar_canal` for a `(data, tipus, platform)` triple. |
+| POST | `/staff/social/eliminar-instagram/` | Legacy IG-only delete. Kept for back-compat. |
+| POST | `/staff/social/eliminar-remot/` | **(2026-05-03)** Platform-aware delete. Dispatches by `post.platform` to `instagram_client` (DELETE Graph node), `mastodon_client.delete_status`, `bluesky_client.delete_post` (parses AT URI → deleteRecord), or `telegram_client.delete_messages` (uses `metadata.message_ids` captured at publish time). |
+| POST | `/staff/social/toggle/` | Per-channel kill switch (`channel=instagram\|mastodon\|bluesky\|telegram\|newsletter\|rss`). |
+
+`publicar_canal` (Mastodon + Bluesky variants) publishes a 4-image
+carousel since 2026-05-03 — portada + first three list slides via
+`embed.images` / `media_ids[]` (both networks cap at 4). Per-slide
+alt text indicates the rank range covered. The `extra_meta` returned
+by each `_publish_*` is merged into `SocialPost.metadata`; for
+Telegram that includes `message_ids` so a later delete can target
+every message in the media-group (Telegram has no group-level delete).
+
 ### Feedback, senyal, historial, configuració, auditlog, usuaris
 | Method | Path | Purpose |
 |---|---|---|
@@ -129,10 +152,10 @@ at the new + old URLs.
 ## 4. React surface (`web-react/src/pages/staff/`)
 
 - **Layout** — `components/StaffLayout.jsx` renders a dark vertical sidebar
-  nested inside the public yellow header. The nav lists: Panel · Estat ·
+  nested inside the public yellow header. The nav lists: Panell · Estat ·
   Pendents · Artistes · Cançons · Albums · Ranking prov. · Propostes ·
   Sol·licituds · Feedback · Senyal · Historial · Configuració · Auditoria ·
-  Usuaris.
+  Usuaris · Social.
 - **Shared chrome** — `components/staff/StaffTable.jsx` exports `TableCard`,
   `Table`, `THead/Th/Td/Tr`, `Btn`, `Pill`, `Input`, `Select`, `Pagination`,
   `PageHeader`, `EmptyState`. Keeps every page under ~150 LOC.

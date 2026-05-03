@@ -102,13 +102,33 @@ python manage.py obtenir_novetats [--limit N] [--dry-run]
 ```
 Incremental Deezer ingestion with a 3-tier priority queue:
 - **P1** — tracks with `deezer_id` but no ISRC; fetches full track to backfill.
-- **P2** — albums with `cancons_obtingudes=False`; fetches tracks.
+- **P2** — every non-discarded album with a `deezer_id` re-checked on a
+  per-album cooldown (May-2026 redesign): <30 days since release → 24 h,
+  30-365 days → 7 days, >365 days or unknown date → 30 days. Gate is
+  `Album.last_album_check` (NULL = highest priority). Replaces the old
+  `cancons_obtingudes=False` flag, which masked ~3.7k phantom albums
+  marked OK with zero tracks because Deezer flake or quota_exhausted at
+  the wrong moment looked like "no tracks". `descartat=True` is the
+  only permanent exclusion. Idempotence is preserved by `_create_track`'s
+  `deezer_id` + ISRC dedup so a re-scan never duplicates rows.
 - **P3** — approved artists, oldest `last_checked_deezer` first; fetches albums
   released within `DIES_CADUCITAT` days.
 
 Uses an `fcntl.flock` on `/tmp/obtenir_novetats.lock` — if a run is still
-going, the next hour's run exits cleanly. All created Canco records start
-with `verificada=False`; `classificar_i_guardar(canco)` applies the ML class.
+going, the next hour's run exits with code 75 (EX_TEMPFAIL) so `tq-run`
+records `status=SKIPPED_BY_LOCK` without refreshing `last_run`. All
+created Canco records start with `verificada=False`;
+`classificar_i_guardar(canco)` applies the ML class.
+
+When `_create_track` finds a track whose ISRC already exists under a
+different `deezer_id` (single re-released inside an LP, or a featuring
+listed under both contributors) the second row is skipped silently and
+the existing main artist gets the contributor added as `artistes_col`
+when appropriate. The contributor-vs-self check compares against
+**every** Deezer ID of the existing artista, not just the principal —
+this guards against signal D5 self-collab errors when an artist has
+multiple Deezer profiles (autoedit + label, etc.; cron crashed for
+~12 h on 2026-05-02 with this exact case before the fix).
 
 ### 3.4 `obtenir_metadata` — on demand
 ```bash
@@ -121,6 +141,15 @@ flag is a stale cache — the signal-cleared M2M relation is the source
 of truth, so the command now targets `deezer_ids__isnull=True`
 artists. The flag is still written on the failure path for
 backwards-compat readers.
+
+When the artista has more than one `ArtistaDeezer` row (Deezer
+sometimes keeps separate profiles for the same person, e.g. an
+early autoedit + a later label profile), the command iterates **all**
+of them, principal first. The same multi-Deezer-ID guard described in
+§3.3 applies to the contributor check. ISRC collisions during track
+creation no longer abort the artista's transaction — they're caught,
+logged with the canonical owner, and the loop continues so the rest
+of the album processes cleanly.
 
 Not in the cron by default — run on demand when staff approves a
 batch of new artists without Deezer ids, or before a marketing push

@@ -17,12 +17,16 @@ Based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ## [Unreleased]
 
 Active development since `0.8.0`. See `roadmap.md` for the
-sprint-level breakdown (Sprints A–J ter, April 2026).
+sprint-level breakdown.
 
 Major lines: ranking algorithm v2.0; React SPA migration; community
 platform (Grup C); MusicBrainz oracle; staff panel split + tests +
 cache + ETag; editorial redesign of every public page with WCAG AA
-baseline; gestor self-service edits; comprehensive a11y audit.
+baseline; gestor self-service edits; comprehensive a11y audit;
+multi-channel distribution (Instagram + Mastodon + Bluesky + Telegram
++ newsletter + RSS) with platform-aware delete; Last.fm alias system;
+ingest robustness (cooldown-gated `obtenir_novetats` P2 after the
+phantom-album bug, multi-Deezer-ID support, ISRC collision skip).
 
 ---
 

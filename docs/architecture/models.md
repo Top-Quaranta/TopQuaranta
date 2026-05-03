@@ -140,8 +140,17 @@ current. This is what makes `algorisme.py`'s raw SQL territory join work.
 - `artista` FK → Artista (CASCADE, related_name="albums")
 - `nom`, `data_llancament`, `tipus` ("album" / "single" / "ep")
 - `imatge_url`
-- `cancons_obtingudes` ✦ — True when tracks have been pulled from Deezer
-- `descartat` ✦ — True if all tracks were rejected; skipped by obtenir_novetats
+- `cancons_obtingudes` ✦ — **DEPRECATED (2026-05-03)**. Used to gate
+  `obtenir_novetats` P2; replaced by `last_album_check` + age-based
+  cooldown after the cron was found marking ~3.7k albums OK with zero
+  tracks. Field kept for backward compat; nothing filters on it.
+- `last_album_check` (DateTimeField, nullable, indexed) ✦ — Last time
+  `obtenir_novetats` P2 fetched this album's tracks. Cooldown gate:
+  recent (<30d since release) → 24 h, mid-aged (30-365d) → 7 days,
+  old (>365d) or unknown date → 30 days. NULL = never checked → highest
+  priority.
+- `descartat` ✦ — True if all tracks were rejected; the only permanent
+  exclusion from `obtenir_novetats`
 - `mb_release_group_id` ✦ — MusicBrainz release-group UUID when matched
 - `mb_type_secondary` — Live/Remix/Compilation/Soundtrack (from MB)
 - `mb_status` — Official/Bootleg/Promotion (from MB)

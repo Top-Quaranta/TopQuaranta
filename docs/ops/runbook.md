@@ -77,6 +77,22 @@ tail -50 /var/log/topquaranta/<tag>.log     # e.g. senyal.log for obtenir_senyal
 - **Lock file held by a runaway process** (obtenir_novetats only):
   `ps auxf | grep obtenir_novetats`. If stuck, `kill` the PID and
   `rm /tmp/obtenir_novetats.lock`.
+- **Signal D5 self-collab** (ValidationError trace ending in
+  `prevent_self_collab`): an artista has multiple `ArtistaDeezer`
+  rows and Deezer returned the alternate as a contributor. Fixed
+  in code 2026-05-03 — if the trace recurs, check that
+  `_create_track`/`_upsert_track` still compare the contributor
+  against `artista.deezer_ids.values_list("deezer_id", flat=True)`
+  (the full set, not just `deezer_id_principal`). Quickest hot-fix
+  if you can't deploy: open the Django shell and remove the
+  offending alternate `ArtistaDeezer` row.
+- **`obtenir_novetats` re-checking thousands of albums every hour**:
+  by design after the 2026-05-03 P2 redesign — the cron now uses
+  `Album.last_album_check` + age-based cooldown (24 h / 7 d / 30 d).
+  After a deploy, NULL `last_album_check` rows take precedence and
+  drain in ~6-7 hours, then the steady-state queue shrinks. If
+  the queue never settles, check that the legacy
+  `cancons_obtingudes` filter wasn't reintroduced.
 
 **If you fixed it:** re-run manually to clear the FAIL:
 ```bash

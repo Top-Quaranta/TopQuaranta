@@ -3,7 +3,7 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-04-26.
+> Last updated: 2026-05-03.
 
 ---
 
@@ -19,11 +19,15 @@
   per la pàgina pública d'artistes.
 - **Auth**: sessions Django + CSRF + TOTP 2FA per staff.
 - **Pipeline**: nightly chain documentada a `docs/architecture/pipeline.md`.
-- **DB**: PostgreSQL 14, 37 taules. Volums actuals (2026-04-26):
-  ~1.9k artistes aprovats, ~2.4k cançons verificades, 5 territoris
-  amb top oficial actiu.
+- **DB**: PostgreSQL 14, 38 taules (nova `Album.last_album_check`).
+  Volums actuals (2026-05-03): ~1.9k artistes aprovats, ~2.5k cançons
+  verificades, 5 territoris amb top oficial actiu.
 - **ML**: 79 features, ROC-AUC 0.9994 (post Whisper + MB).
 - **Infra**: Caddy + gunicorn :8083 amb `ExecReload=HUP`.
+- **Distribució**: 6 canals actius o configurables — Instagram,
+  Mastodon, Bluesky (carrusel 4 imatges), Telegram (media-group),
+  newsletter, RSS. Esborrat remot real per a tots des de
+  `/staff/social`.
 
 Si vols més detall del que es va lliurar a cada sprint, vés a la
 secció [Sprints — completats](#sprints--completats) més avall.
@@ -80,33 +84,12 @@ secció _completats_ amb la data i el detall.
 
 Items petits per fer en sessions curtes:
 
-- [ ] Revisar els ~51 candidats Last.fm pendents al panell staff
-      (`/staff/artistes?lastfm_alias=pendents`). El detector ha
-      proposat les variants reals de cada artista; staff confirma o
-      rebutja. Cada confirmació també activa l'absorbència
-      automàtica de pendents duplicats al mateix nom (vegeu
-      `_absorb_lastfm_duplicate_pendents`).
-- [ ] **Re-autoritzar Spotify OAuth (cron `actualitzar_playlists_spotify`
-      en FAIL des del 21 abril)**. La taula `SpotifyAuth` està buida
-      (refresh token caducat o esborrat per migració). Acció: l'usuari
-      executa `manage.py autoritzar_spotify` per la URL d'OAuth, fa
-      login amb el compte Spotify Premium, autoritza, i la callback a
-      `/spotify/callback` desa els tokens. Detectat 2026-05-01 quan el
-      nou watchdog `tq-health` va engegar per primera vegada.
-- [ ] Demucs → Whisper pipeline com a recall booster per les ~3-4
-      false negatives on Whisper sent `es` a tracks catalans
-      (Jonatan Penalba × 2, Adrien Broadway). Cost ~3× més lent;
-      només val la pena si surt un cluster significatiu després
-      del backfill.
-- [ ] Auditar les 39 prediccions `ja` (japonès) de Whisper —
-      sospitós, probablement vocalitzes/instrumentals/scat.
-- [ ] Snapshot baseline pre-Whisper RF abans del proper retrain
-      per A/B sobre el set de 48 clips.
-- [ ] Decidir què fem amb `/root/TopQuaranta/` (1.4 GB Wagtail
-      legacy): tar.gz a backup off-site o `rm -rf`.
-- [ ] Test coverage 52% → 70%. Gaps: `music/services.py`,
-      `music/verificacio.py`, `ranking/senyal.py`. Sprint C ja en
-      va cobrir part.
+- [ ] Snapshot baseline del model RF abans del proper retrain (`cp
+      ml_model.joblib ml_model.baseline-YYYY-MM-DD.joblib`) per A/B
+      sobre el set de 48 clips si el nou retrain regredeix.
+- [ ] Test coverage 52% → 70%. Gaps coneguts: `music/services.py`,
+      `music/verificacio.py`, `ranking/senyal.py`. Sessions curtes a
+      estones lliures.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
 - [ ] **Stalwart polish** (post Sprint I bis):
@@ -143,6 +126,113 @@ Items petits per fer en sessions curtes:
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
+
+### Sprint — APECAT cross-check + ingest robustness + social v3 ✅ (2026-05-03)
+
+Sessió llarga arrencada per un cross-check del Top APECAT (rànquing
+mensual de cançons en català més radiades, BMAT) contra el nostre
+pipeline. Auditats 5 PDFs (anual 2025 + gener-abril 2026) ↔ 71
+cançons úniques i 55 artistes. Va destapar tres classes de bug que
+s'arrossegaven sense que `tq-health` les detectés.
+
+**1. Ingest robustness (3 fixes a `obtenir_novetats` + `obtenir_metadata`)**
+
+* **D5 self-collab**: `_create_track` i `_upsert_track` comparaven
+  un contributor de Deezer contra `artista.deezer_id_principal` (un
+  sol id). Quan un artista té múltiples perfils Deezer (autoedit +
+  label, e.g. Àlex Pérez 121440332 + 1479910), Deezer pot retornar
+  l'alternat com a contributor; el codi l'afegia a `artistes_col` →
+  signal D5 `ValidationError` → cron mort. Comparem ara contra
+  `set(artista.deezer_ids.values_list("deezer_id", flat=True))`.
+  Hourly cron havia estat petant des del 2026-05-02 21:15 amb
+  aquesta traça.
+* **ISRC collision skip**: `obtenir_metadata._upsert_track`
+  arrastrava la transacció sencera quan trobava un track amb un
+  ISRC ja existent (single re-editat dins d'un LP, o un featuring
+  llistat sota dos contributors). Capturem ara `IntegrityError`,
+  log "ISRC collision skipped: …", `return False` per a continuar.
+  Confirmat en Ginestà / Sexenni / Sr. Chen / Nil Moliner — totes
+  són la mateixa gravació apareixent sota deezer_ids diferents,
+  mai duplicats reals.
+* **Multi-Deezer-ID per artista**: `_fetch_for_artist` només
+  iterava `deezer_id_principal`. Catàlegs sencers d'artistes amb
+  perfils múltiples (Àlex Pérez segell Música Global) eren
+  invisibles. Ara loop a tots els `ArtistaDeezer` ordenats
+  `principal-first`.
+
+**2. P2 redesign (`obtenir_novetats`)**
+
+L'antic gate `cancons_obtingudes=False` + el shortcut `album_old`
+marcaven un àlbum OK quan Deezer retornava qualsevol llista de
+tracks (inclosa una llista buida per fluctuació transitòria) si
+l'àlbum tenia >30 dies. **Resultat: 3.679 àlbums "fantasma"**
+marcats com a fets a la BD però amb 0 cançons associades, perquè
+flake o quota_exhausted al moment equivocat es feia passar per
+"no tracks".
+
+Nou disseny: cada àlbum no descartat amb `deezer_id` es re-revisa
+periòdicament. Cooldown segons edat:
+| Edat (data_llançament) | Re-check cada |
+|---|---|
+| <30 dies | 24 h |
+| 30-365 dies | 7 dies |
+| >365 dies o sense data | 30 dies |
+
+`Album.last_album_check` (DateTimeField, indexat). `NULL` = mai
+revisat → màxima prioritat → els 3.679 fantasmes drenen
+automàticament en ~6-7 hores. `descartat=True` és l'única exclusió
+permanent. `cancons_obtingudes` queda com a camp deprecat.
+Idempotència preservada pel dedup intern de `_create_track`
+(`deezer_id` + ISRC). Migració `music 0060`.
+
+**3. Social v3 — paritat multi-canal**
+
+* **Carrusel a Bluesky + Mastodon**: ara publiquen 4 imatges
+  (portada + 3 primers slides de llista via `embed.images` /
+  `media_ids[]`) en lloc de només la portada. Per-slide alt text
+  indicant rang de posicions. Es manté el 1024-char carrusel a
+  Telegram via media-group.
+* **Esborrar remot real per a tots els canals**: nou endpoint
+  `/api/v1/staff/social/eliminar-remot/` que dispatcha per
+  `post.platform`. Implementacions: `mastodon_client.delete_status`
+  (`DELETE /api/v1/statuses/:id`), `bluesky_client.delete_post`
+  (parsa AT URI → `com.atproto.repo.deleteRecord`),
+  `telegram_client.delete_messages` + nou `send_media_group_full`
+  per capturar tots els `message_ids` de la media-group al moment
+  de publicar (Telegram no té delete-de-grup, cal id per id).
+  Endpoint legacy `eliminar-instagram` es manté per back-compat.
+* **Staff `/staff/social`**: columna **Data** primer (per
+  `published_at` nulls-last), Setmana N segona; sort per data; tints
+  per plataforma (IG rosa, Mastodon indigo, Bluesky cel, Telegram
+  cian, newsletter ambre, RSS taronja); botó "Esborrar" amb label
+  per plataforma.
+* **Renderer readability v3** (post feedback iteratiu):
+  * Posts list slide: número posició 38 → 54 pt, títol 28 → 40 pt;
+    pastilla i alt-de-fila *intactes* (76 / 105) perquè el page
+    indicator no es solapi. El guany visual ve del padding superior
+    a 0 dins la cel·la.
+  * Posts portada: logo + Setmana pills mogudes x=30 → x=84
+    (+54 px = 5 % FEED_W); mantenim alineació esquerra. Aplicat
+    a `_feed_portada` i `_feed_novetats_portada`.
+  * Story canço: títol 44 → 80 pt (line-height 90), artista 34 → 44
+    pt; nou peu "topquaranta.cat" a `STORY_H-90` en
+    `COLOR_TEXT_MUTED` (4.5:1 sobre ink → AA).
+
+**4. Comptes**
+
+* **Newsletter opt-in al perfil** (`/compte/perfil`): backend
+  `compte_views.perfil` GET exposa `vol_newsletter`, PATCH l'accepta,
+  i en False→True estampa `consent_newsletter_at` (RGPD).
+  Frontend amb checkbox + helper copy entre username i password.
+* **Fix urgent `/api/v1/staff/usuaris/<pk>/`**: petava amb
+  `NameError: name '_proposta_row' is not defined`. Imports oblidats
+  després de la refactorització Sprint C. Importats des dels seus
+  mòduls extrets.
+* **Fix typografia**: barra esquerra staff "Panel" → "Panell".
+* **Header "Distribució — Instagram" → "Distribució multi-canal"**
+  al panell + targeta del dashboard.
+
+Tests: 211 passing, 8 skipped (eren 207 pre-sprint).
 
 ### Sprint — Last.fm aliases + cron watchdog ✅ (2026-05-01)
 

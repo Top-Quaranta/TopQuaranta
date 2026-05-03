@@ -1,12 +1,21 @@
 # CLAUDE.md — TopQuaranta
 
 > Persistent memory for Claude Code. Read this file first on every session.
-> Last updated: 2026-05-01 — Last.fm aliases (`ArtistaLastfmAlias`)
-> sum playcounts across spelling variants; row-per-similar table
-> (`ArtistaLastfmSimilar`) replaces the integer counter so dedup is
-> by source; `tq-run` exits 75 on lock contention so `tq-health`
-> hourly mail can detect 12-day hangs; cron status table on
-> `/staff/estat` shows frequency + concern threshold.
+> Last updated: 2026-05-03 — `obtenir_novetats` P2 redesigned around
+> `Album.last_album_check` cooldown (24 h / 7 d / 30 d by age); the
+> legacy `cancons_obtingudes` flag is deprecated after it was found
+> masking ~3.7 k phantom albums marked "OK" with zero tracks.
+> `_create_track` + `_upsert_track` now compare contributors against
+> *every* `ArtistaDeezer.deezer_id` for the artista (not just the
+> principal) so artists with multiple Deezer profiles don't trigger
+> signal D5 self-collab crashes; ISRC collisions during ingest skip
+> the duplicate row instead of aborting the artista's transaction.
+> `obtenir_metadata` iterates *all* of an artista's Deezer profiles
+> so label-secondary catalogues (Àlex Pérez 1479910 = Música Global)
+> are no longer invisible. Bluesky + Mastodon publish 4-image
+> carousels (portada + 3 list slides); every channel has a real
+> remote delete via `/staff/social/eliminar-remot/`. Newsletter
+> opt-in lives at `/compte/perfil`.
 
 ## Other docs
 
@@ -207,6 +216,11 @@ list.
 | **Gunicorn `--reload`** | Added to `deploy/topquaranta-web.service` after a silent stale-code bug (renderer changes not picked up). Cost: a few stat() per request, negligible. Edits to `.py` files are now picked up automatically without `systemctl reload`. |
 | **Mail infrastructure (Sprint I bis, 2026-04-27)** | **Stalwart Mail Server** v0.16.1 on the Hetzner box for inbound + IMAP for `topquaranta.cat` and `cercol.team`. **Outbound via smarthost routing** in Stalwart's MTA strategy: `sender_domain == 'cercol.team' ? 'resend-relay' : 'brevo-relay'`. Brevo (free tier 300/day) for TopQuaranta, Resend for Cercol. Hetzner blocks port 25 outbound, hence smarthosts. TLS cert Let's Encrypt: Caddy obtains it for `mail.topquaranta.cat`; a systemd `path` unit (`stalwart-cert-sync.path` + `.service`) syncs the cert into `/etc/stalwart/certs/` on rotation. **BIMI** TXT at `default._bimi.topquaranta.cat` + Tiny PS SVG at `https://www.topquaranta.cat/static/brand/bimi.svg` (no VMC). **Mozilla autoconfig** at `mail.topquaranta.cat/.well-known/autoconfig/...` so clients self-configure. Full architecture at `docs/EMAIL.md`. |
 | **Hetzner Cloud + CDMON DNS APIs (2026-04-27)** | `HETZNER_API_TOKEN` in `.env` + `hcloud` CLI installed; we manage firewall rules via API (e.g. opening 25/465/587/993 was scripted). `CDMON_API_KEY` in `.env`; `dns-backup/cdmon_clean.py` script for batch DNS ops (used to drop 18 legacy CDMON-Micropla records). API endpoint: `https://api-domains.cdmon.services/api-domains/`, header `apikey:`. Caveat: `dnsrecords/create` rejects A apex with bogus error "Destination to redirect not valid"; that one record needs the web panel. |
+| **Ingest robustness pass (2026-05-03)** | Three fixes after the APECAT cross-check turned up holes in the pipeline. (a) **D5 self-collab guard**: `_create_track` and `_upsert_track` now compare a Deezer contributor against `set(artista.deezer_ids.values_list("deezer_id", flat=True))` instead of just `deezer_id_principal`. Without this, an artista with multiple Deezer profiles (autoedit + label) crashed signal D5 every hour for ~12 h. (b) **ISRC collision skip**: `obtenir_metadata` now catches `IntegrityError` on `canco_isrc_unique_when_set` and skips the duplicate row instead of aborting the artista's transaction (single-on-LP and featuring-on-both-profiles cases). (c) **Multi-Deezer-ID iteration**: `_fetch_for_artist` loops every `ArtistaDeezer` row of an artista, principal first, so label-secondary catalogues no longer hide. |
+| **`obtenir_novetats` P2 cooldown (2026-05-03)** | The legacy P2 used `cancons_obtingudes=False` as a gate and marked an album done as soon as Deezer returned *any* track list (or when the album was >30 days old) — leaving ~3.7 k phantom albums "OK" with zero tracks because Deezer flake at the wrong moment masqueraded as "no tracks". New design: every non-discarded album with a `deezer_id` is re-checked on a per-album cooldown via the new `Album.last_album_check` (DateTimeField, indexed). Cadence: <30 d since release → 24 h, 30-365 d → 7 d, >365 d or unknown → 30 d. NULL = never checked → highest priority. `descartat=True` is the only permanent exclusion. Idempotence preserved by `_create_track`'s deezer_id + ISRC dedup. Migration `music 0060`. `cancons_obtingudes` kept as a deprecated read-only field. |
+| **Multi-channel social parity (2026-05-03)** | Bluesky + Mastodon now publish a 4-image carousel (portada + first 3 list slides via `embed.images` / `media_ids[]`, both networks cap at 4) instead of cover-only. Each `_publish_*` returns `(ext_id, extra_meta)`; for Telegram `extra_meta.message_ids` captures every message in the media-group so the new platform-aware delete (`/staff/social/eliminar-remot/`) can remove them all (Telegram has no group-level delete). Real remote delete added for every channel: `mastodon_client.delete_status`, `bluesky_client.delete_post` (parses AT URI → `com.atproto.repo.deleteRecord`), `telegram_client.delete_messages`. Staff list reordered: Data column first, Setmana N second; per-platform row tints; "Esborrar" label is platform-aware. |
+| **Renderer readability v3 (2026-05-03)** | Posts list slide: position number 38 → 54 pt, song title 28 → 40 pt; pill width and row height *unchanged* (76 / 105) so the page indicator (`1/4` etc.) stays clear of the last card. Tighter top padding (y+0) inside each cell does the visual work. Posts portada: logo + Setmana pills shifted from x=30 → x=84 (+54 px = 5 % FEED_W), keeping the left-aligned stack but with more breathing room — applied to both `_feed_portada` and `_feed_novetats_portada`. Story canço: title 44 → 80 pt (line-height 90), artist 34 → 44 pt; new "topquaranta.cat" footer at `STORY_H-90` in `COLOR_TEXT_MUTED` (4.5:1 on ink → AA). |
+| **Newsletter opt-in on profile (2026-05-03)** | `vol_newsletter` now editable from `/compte/perfil` (was previously settable only at registration). Backend: `compte_views.perfil` GET exposes the flag, PATCH accepts it, and on a False→True transition stamps `consent_newsletter_at` for RGPD audit. Frontend: new section between username and password with a checkbox + helper copy. Only PATCHes when the value actually changed. |
 
 ## 7. Shared constants
 

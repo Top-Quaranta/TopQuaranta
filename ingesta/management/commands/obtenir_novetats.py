@@ -125,10 +125,63 @@ class Command(BaseCommand):
                     )
                 continue
 
-            # --- P2: albums with deezer_id but cancons_obtingudes=False ---
-            p2_qs = Album.objects.filter(
-                deezer_id__isnull=False, cancons_obtingudes=False, descartat=False
-            ).select_related("artista")
+            # --- P2: re-scan albums on a per-album cooldown ---
+            #
+            # Sprint May 2026 redesign. The old logic used
+            # `cancons_obtingudes=False` as a gate and marked albums
+            # OK as soon as Deezer returned *any* track list — even
+            # an empty one for old albums. That left ~3.7k phantom
+            # albums in the DB marked "done" but holding zero tracks
+            # (Deezer flake + the `album_old` shortcut).
+            #
+            # New rule: every non-discarded album with a deezer_id
+            # is rechecked periodically. Cooldown depends on age:
+            #   - <30 days since release  → 24h
+            #   - 30-365 days             → 7 days
+            #   - >365 days               → 30 days
+            # `descartat=True` is the only permanent exclusion.
+            # The per-track dedup (`Canco.objects.filter(deezer_id=…)`
+            # then ISRC) inside `_create_track` makes the rescan
+            # idempotent — we don't duplicate anything we already have,
+            # we only catch what was previously missed.
+            now_ts = timezone.now()
+            p2_qs = (
+                Album.objects.filter(
+                    deezer_id__isnull=False,
+                    descartat=False,
+                )
+                .select_related("artista")
+                .filter(
+                    Q(last_album_check__isnull=True)
+                    | Q(
+                        # recent: re-check every 24h
+                        data_llancament__gte=date.today() - timedelta(days=30),
+                        last_album_check__lt=now_ts - timedelta(hours=24),
+                    )
+                    | Q(
+                        # mid-aged: re-check weekly
+                        data_llancament__gte=date.today() - timedelta(days=365),
+                        data_llancament__lt=date.today() - timedelta(days=30),
+                        last_album_check__lt=now_ts - timedelta(days=7),
+                    )
+                    | Q(
+                        # old: re-check monthly. Catches reissues,
+                        # late-arriving tracks, and previous-flake
+                        # ghosts on a slow but guaranteed cadence.
+                        data_llancament__lt=date.today() - timedelta(days=365),
+                        last_album_check__lt=now_ts - timedelta(days=30),
+                    )
+                    | Q(
+                        # legacy: albums without a known release date
+                        # also rechecked monthly so they don't hide.
+                        data_llancament__isnull=True,
+                        last_album_check__lt=now_ts - timedelta(days=30),
+                    )
+                )
+                # Never-checked albums first; among the rest, oldest
+                # check first (LRU) so the queue drains evenly.
+                .order_by(F("last_album_check").asc(nulls_first=True))
+            )
             if seen_p2:
                 p2_qs = p2_qs.exclude(pk__in=seen_p2)
             album = p2_qs.first()
@@ -150,31 +203,22 @@ class Command(BaseCommand):
                         created += 1
                     calls += 1  # each track = 1 API call in get_album_tracks
 
-                # Deezer often returns an empty track list the first hours /
-                # days after an album ships — their index lags behind the
-                # album endpoint. Don't mark `cancons_obtingudes=True` yet if
-                # the album is fresh; retry next run. After 30 days give up
-                # (a truly empty album never appears).
-                # NOTE: never re-import `date` / `timedelta` here. A local
-                # `from datetime import …` inside this method shadows the
-                # module-level import on line 4 and turns the early
-                # `cutoff = date.today() - …` (line 93) into an
-                # UnboundLocalError, leaving the lock-file held by a
-                # zombie process and blocking every subsequent hourly run.
-                album_old = (
-                    album.data_llancament
-                    and album.data_llancament < date.today() - timedelta(days=30)
-                )
-                if tracks or album_old:
+                # Always update the timestamp — even if Deezer
+                # returned an empty list this time. The cooldown
+                # alone decides when we look again. Keep the legacy
+                # `cancons_obtingudes` flag in sync (set True if we
+                # got a non-empty track list) for any code that may
+                # still read it informationally; nothing filters on it.
+                album.last_album_check = now_ts
+                update_fields = ["last_album_check"]
+                if tracks and not album.cancons_obtingudes:
                     album.cancons_obtingudes = True
-                    album.save(update_fields=["cancons_obtingudes"])
+                    update_fields.append("cancons_obtingudes")
+                album.save(update_fields=update_fields)
                 self.stdout.write(
-                    f"  P2 album {album.deezer_id} ({album.nom}) → {created} cançons creades"
-                    + (
-                        ""
-                        if (tracks or album_old)
-                        else "  [retry — Deezer 0 tracks, àlbum fresc]"
-                    )
+                    f"  P2 album {album.deezer_id} ({album.nom}) → "
+                    f"{created} cançons noves"
+                    + ("  [Deezer 0 tracks — retry quan toqui]" if not tracks else "")
                 )
                 continue
 
@@ -320,15 +364,24 @@ class Command(BaseCommand):
                     updated_fields.append("preview_url")
                 if updated_fields:
                     existing.save(update_fields=updated_fields)
-                # Add main artist as collaborator if different
+                # Add main artist as collaborator if different. Compare
+                # against *all* Deezer IDs of the existing main artista
+                # (not just the principal) — when an artista has several
+                # Deezer profiles (autoedit + label), any of them
+                # appearing as a contributor would be a self-collab,
+                # which signal D5 forbids and used to crash the hourly
+                # cron (May 2026).
                 contributors = track_data.get("contributors", [])
                 if contributors:
                     main = contributors[0]
                     main_id = main.get("id")
                     main_name = main.get("name", "")
-                    if main_id and main_id != existing.artista.deezer_id_principal:
+                    main_deezer_ids = set(
+                        existing.artista.deezer_ids.values_list("deezer_id", flat=True)
+                    )
+                    if main_id and main_id not in main_deezer_ids:
                         collab = _get_or_create_artista(main_id, main_name)
-                        if collab:
+                        if collab and collab.pk != existing.artista_id:
                             existing.artistes_col.add(collab)
                 logger.info(
                     "ISRC %s: merged deezer_id=%s into existing canco id=%s",
@@ -338,14 +391,20 @@ class Command(BaseCommand):
                 )
                 return False
 
-        # Resolve main artist
+        # Resolve main artist. Same multi-Deezer-ID guard as above:
+        # if any of the album.artista's Deezer profiles is the main
+        # contributor, keep the album's artista — don't create a
+        # phantom duplicate.
         contributors = track_data.get("contributors", [])
         artista = album.artista
         if contributors:
             main = contributors[0]
             main_id = main.get("id")
             main_name = main.get("name", "")
-            if main_id and main_id != artista.deezer_id_principal:
+            main_deezer_ids = set(
+                artista.deezer_ids.values_list("deezer_id", flat=True)
+            )
+            if main_id and main_id not in main_deezer_ids:
                 resolved = _get_or_create_artista(main_id, main_name)
                 if resolved:
                     artista = resolved

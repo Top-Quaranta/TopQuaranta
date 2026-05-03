@@ -675,7 +675,27 @@ class Album(models.Model):
     cancons_obtingudes = models.BooleanField(
         default=False,
         db_index=True,
-        help_text="True when tracks have been fetched from Deezer.",
+        help_text=(
+            "DEPRECATED (May 2026). The hourly cron used to skip albums "
+            "with this flag set, which produced ~3.7k 'phantom' albums "
+            "marked OK but holding zero tracks (Deezer flake + the "
+            "`album_old` shortcut). Replaced by `last_album_check` + "
+            "an age-based cooldown so every non-discarded album is "
+            "re-scanned periodically and missing tracks recover on the "
+            "next tick. Field kept for backward compat; do not filter on it."
+        ),
+    )
+    last_album_check = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Last time obtenir_novetats P2 fetched this album's tracks "
+            "from Deezer. Cooldown gate: recent albums (<30 days since "
+            "release) re-checked daily, mid-aged (30-365 days) weekly, "
+            "old (>1 year) monthly. NULL means never checked → highest "
+            "priority."
+        ),
     )
     descartat = models.BooleanField(
         default=False,

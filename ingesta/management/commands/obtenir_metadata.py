@@ -146,39 +146,49 @@ class Command(BaseCommand):
         Returns (albums_created, albums_updated, tracks_created, tracks_updated)
         or None if artist not found/validated on Deezer.
         """
-        # Step 1: resolve deezer_id
-        principal_dz = artista.deezer_id_principal
-        if not principal_dz:
-            principal_dz = self._resolve_deezer_id(artista)
-            if not principal_dz:
+        # Step 1: resolve deezer_id(s). An artista may have several
+        # ArtistaDeezer rows when Deezer keeps multiple profiles for
+        # the same person (e.g. a self-edited early catalogue + a
+        # later label profile that Deezer never merged). We process
+        # all of them so the new profile's albums get ingested too.
+        # The principal one comes first; the rest follow.
+        deezer_ids = list(
+            artista.deezer_ids.order_by("-principal", "deezer_id").values_list(
+                "deezer_id", flat=True
+            )
+        )
+        if not deezer_ids:
+            resolved = self._resolve_deezer_id(artista)
+            if not resolved:
                 return None
-        deezer_id = principal_dz
-
-        # Step 2: fetch albums
-        albums_data = deezer.get_artist_albums(deezer_id, min_date=cutoff)
+            deezer_ids = [resolved]
 
         a_created = 0
         a_updated = 0
         t_created = 0
         t_updated = 0
 
-        for album_data in albums_data:
-            album, was_created = self._upsert_album(artista, album_data, force)
-            if was_created:
-                a_created += 1
-            elif force:
-                a_updated += 1
+        for deezer_id in deezer_ids:
+            # Step 2: fetch albums for this Deezer profile.
+            albums_data = deezer.get_artist_albums(deezer_id, min_date=cutoff)
 
-            tracks_data = deezer.get_album_tracks(album_data["id"])
-            if not tracks_data:
-                continue
-
-            for track_data in tracks_data:
-                was_new = self._upsert_track(artista, album, track_data, force)
-                if was_new:
-                    t_created += 1
+            for album_data in albums_data:
+                album, was_created = self._upsert_album(artista, album_data, force)
+                if was_created:
+                    a_created += 1
                 elif force:
-                    t_updated += 1
+                    a_updated += 1
+
+                tracks_data = deezer.get_album_tracks(album_data["id"])
+                if not tracks_data:
+                    continue
+
+                for track_data in tracks_data:
+                    was_new = self._upsert_track(artista, album, track_data, force)
+                    if was_new:
+                        t_created += 1
+                    elif force:
+                        t_updated += 1
 
         return a_created, a_updated, t_created, t_updated
 
@@ -398,27 +408,62 @@ class Command(BaseCommand):
             "verificada": False,
         }
 
-        with transaction.atomic():
-            if force:
-                canco, created = Canco.objects.update_or_create(
-                    deezer_id=data["id"],
-                    defaults=defaults,
-                )
-            else:
-                canco, created = Canco.objects.get_or_create(
-                    deezer_id=data["id"],
-                    defaults=defaults,
-                )
+        # ISRC collisions on Deezer are routine and harmless: a single
+        # is reissued inside a full album, or a featuring track is
+        # listed under both contributors. Both Deezer track_ids point
+        # to the same recording (same ISRC), but our `canco_isrc_unique_when_set`
+        # constraint only allows one row per ISRC. If the row already
+        # exists under another deezer_id (or another artista as a
+        # collab-target), skip without crashing — otherwise the
+        # IntegrityError aborts the transaction and kills the whole
+        # artist's remaining tracks (Sprint K bug, May 2026).
+        try:
+            with transaction.atomic():
+                if force:
+                    canco, created = Canco.objects.update_or_create(
+                        deezer_id=data["id"],
+                        defaults=defaults,
+                    )
+                else:
+                    canco, created = Canco.objects.get_or_create(
+                        deezer_id=data["id"],
+                        defaults=defaults,
+                    )
+        except IntegrityError as exc:
+            isrc = defaults.get("isrc") or ""
+            if isrc and "isrc" in str(exc).lower():
+                existing = Canco.objects.filter(isrc=isrc).first()
+                if existing:
+                    logger.info(
+                        "ISRC collision skipped: deezer_id=%s isrc=%s already "
+                        "stored as «%s» (id=%s) under %s — leaving the "
+                        "canonical row in place.",
+                        data["id"],
+                        isrc,
+                        existing.nom,
+                        existing.pk,
+                        existing.artista.nom,
+                    )
+                    return False
+            raise
 
         # Best-effort guarantee (R10b lesson): classify the Canco even
         # if adding collaborators below raises. See the equivalent
         # pattern in ingesta/management/commands/obtenir_novetats.py.
         try:
             if (created or force) and contributors:
+                # Build the set of *all* Deezer IDs that map to the
+                # main artista (not just the principal). When an
+                # artista has several profiles (e.g. autoedit + label),
+                # any of them appearing as a contributor would be a
+                # self-collab, which signal D5 forbids.
+                main_deezer_ids = set(
+                    real_artista.deezer_ids.values_list("deezer_id", flat=True)
+                )
                 for contributor in contributors:
                     c_id = contributor.get("id")
                     c_name = contributor.get("name", "")
-                    if not c_id or c_id == real_artista.deezer_id_principal:
+                    if not c_id or c_id in main_deezer_ids:
                         continue
                     ad = (
                         ArtistaDeezer.objects.filter(deezer_id=c_id)

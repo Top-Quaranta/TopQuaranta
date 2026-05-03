@@ -702,6 +702,19 @@ class Album(models.Model):
         db_index=True,
         help_text="True if all tracks were rejected. Skipped by obtenir_novetats.",
     )
+    source_deezer_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Which `ArtistaDeezer.deezer_id` of the album's artista this row "
+            "was originally fetched from. Set by `_create_album` (cron) and "
+            "`_upsert_album` (--force). Used by `_try_auto_unlink_homonym_deezer` "
+            "to scope the homonym unlink to one specific Deezer profile when "
+            "the artista has several. NULL on legacy rows (pre-2026-05-03); "
+            "the smart unlink falls back to a defer-to-staff path in that case."
+        ),
+    )
 
     # MusicBrainz cross-reference. `mbrainz_confirmed=True` means MB has a
     # release-group attributed to the Artista's MBID that matches this album.

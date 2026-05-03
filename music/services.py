@@ -21,15 +21,14 @@ def rebutjar_canco(canco: Canco, motiu: str) -> None:
     Reject a single track: record historial, set verificada=False and activa=False.
     The track stays in DB for audit but won't appear in pending lists or rankings.
 
-    Side effect when motiu == "artista_incorrecte": if after this
-    rejection the artist has zero remaining active Cançons AND every
-    rejection recorded for this artist is also "artista_incorrecte",
-    we treat the whole Deezer attachment as wrong and remove every
-    ArtistaDeezer row for the artist. The post_delete signal then
-    desaprova the artist if no MBID remains. See
-    `_try_auto_unlink_homonym_deezer` for the safety thresholds — when
-    in doubt we leave the case for human review (it will surface in
-    the Estat "Casos sospitosos" panel).
+    Side effect when motiu == "artista_incorrecte":
+    `_try_auto_unlink_homonym_deezer` may detach the wrong Deezer
+    profile from the artist. The function is multi-profile aware:
+    when the artista has several `ArtistaDeezer` rows (autoedit +
+    label, etc.), only the *specific* profile that produced this
+    canço is unlinked — the other profiles stay. With a single
+    profile, the whole link is removed (legacy behaviour). See the
+    function for the safety thresholds.
     """
     artista = canco.artista
     crear_historial(canco, "rebutjada", motiu)
@@ -37,19 +36,30 @@ def rebutjar_canco(canco: Canco, motiu: str) -> None:
     canco.activa = False
     canco.save(update_fields=["verificada", "activa"])
     if motiu == "artista_incorrecte" and artista is not None:
-        _try_auto_unlink_homonym_deezer(artista)
+        _try_auto_unlink_homonym_deezer(artista, canco=canco)
 
 
-def _try_auto_unlink_homonym_deezer(artista: Artista) -> bool:
+def _try_auto_unlink_homonym_deezer(
+    artista: Artista, canco: Canco | None = None
+) -> bool:
     """Detach Deezer IDs from an artist when every track has been
     rejected as a homonym. Conservative: if anything still verified
     or active exists, or if any historial rejection used a different
     motiu, we abstain.
 
-    Returns True if the unlink happened.
+    Multi-profile artistes: when the artista has several
+    `ArtistaDeezer` rows AND we know which profile the rejected
+    canço came from (`canco.album.source_deezer_id`), only that
+    profile is unlinked. The other profiles stay. Without source
+    info (legacy Album rows or no canço context), we defer to
+    staff to avoid wiping a legitimate profile by mistake.
+
+    Single-profile artistes keep the legacy behaviour: when all
+    conditions match, the only Deezer link is removed.
+
+    Returns True if at least one ArtistaDeezer row was deleted.
     """
-    # Any track still alive? Defer to human review (e.g. some tracks
-    # could be from a different — correct — Deezer ID on the same artist).
+    # Any track still alive? Defer to human review.
     if Canco.objects.filter(artista=artista, activa=True).exists():
         return False
     # Look at every rejection ever recorded for this artist's name.
@@ -65,13 +75,51 @@ def _try_auto_unlink_homonym_deezer(artista: Artista) -> bool:
     deezer_links = list(artista.deezer_ids.all())
     if not deezer_links:
         return False
-    # Trigger. The post_delete signal does the desaprovació if there's
-    # also no MBID anchor left.
+
+    # Multi-profile path (May-2026): only kill the specific profile
+    # that sourced the rejected canço. Without source info we defer.
+    if len(deezer_links) > 1:
+        source = None
+        if canco is not None and canco.album_id is not None:
+            source = getattr(canco.album, "source_deezer_id", None)
+        if not source:
+            logger.info(
+                "Defer unlink for '%s' (pk=%s): %d Deezer profiles linked, "
+                "source unknown for the rejected canço.",
+                artista.nom,
+                artista.pk,
+                len(deezer_links),
+            )
+            return False
+        target = artista.deezer_ids.filter(deezer_id=source).first()
+        if not target:
+            logger.warning(
+                "Cannot unlink: source deezer_id=%s for canço pk=%s is not "
+                "in artista '%s' (pk=%s) Deezer set.",
+                source,
+                canco.pk if canco else "?",
+                artista.nom,
+                artista.pk,
+            )
+            return False
+        target.delete()
+        logger.info(
+            "Auto-unlinked specific Deezer profile %s from artist '%s' "
+            "(pk=%s) — other %d profile(s) kept.",
+            source,
+            artista.nom,
+            artista.pk,
+            len(deezer_links) - 1,
+        )
+        return True
+
+    # Single-profile path (legacy): wipe the only link. The
+    # post_delete signal handles desaprovació if there's also no
+    # MBID anchor left.
     artista.deezer_ids.all().delete()
     logger.info(
-        "Auto-unlinked %d Deezer ID(s) from artist '%s' (pk=%s) — "
+        "Auto-unlinked the only Deezer ID from artist '%s' (pk=%s) — "
         "every Cançó rejected as artista_incorrecte.",
-        len(deezer_links),
         artista.nom,
         artista.pk,
     )

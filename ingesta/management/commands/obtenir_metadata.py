@@ -187,11 +187,15 @@ class Command(BaseCommand):
         t_updated = 0
 
         for deezer_id in deezer_ids:
-            # Step 2: fetch albums for this Deezer profile.
+            # Step 2: fetch albums for this Deezer profile. The
+            # `source_deezer_id` is recorded on the Album so the
+            # smart homonym-unlink can later scope to this profile.
             albums_data = deezer.get_artist_albums(deezer_id, min_date=cutoff)
 
             for album_data in albums_data:
-                album, was_created = self._upsert_album(artista, album_data, force)
+                album, was_created = self._upsert_album(
+                    artista, album_data, force, source_deezer_id=deezer_id
+                )
                 if was_created:
                     a_created += 1
                 elif force:
@@ -321,9 +325,19 @@ class Command(BaseCommand):
         ).ratio()
 
     def _upsert_album(
-        self, artista: Artista, data: dict, force: bool
+        self,
+        artista: Artista,
+        data: dict,
+        force: bool,
+        source_deezer_id: int | None = None,
     ) -> tuple[Album, bool]:
-        """Create or update an Album from Deezer data."""
+        """Create or update an Album from Deezer data.
+
+        `source_deezer_id` records which Deezer profile of the
+        artista produced this row (when the artista has several
+        profiles, e.g. autoedit + label). Lets the smart homonym-
+        unlink in `services.py` scope to one specific profile.
+        """
         tipus = RECORD_TYPE_MAP.get(data.get("record_type", "album"), "album")
 
         defaults = {
@@ -333,6 +347,8 @@ class Command(BaseCommand):
             "tipus": tipus,
             "imatge_url": data.get("cover_xl", ""),
         }
+        if source_deezer_id is not None:
+            defaults["source_deezer_id"] = source_deezer_id
 
         with transaction.atomic():
             if force:

@@ -302,7 +302,14 @@ class Command(BaseCommand):
                 break
             new_albums = 0
             for album_data in albums_data:
-                was_new = self._create_album(artista, album_data)
+                # `source_deezer_id` records which Deezer profile of
+                # the artista this row was sourced from. Lets the
+                # smart homonym-unlink in `services.py` scope its
+                # action to one specific profile when the artista
+                # has several (e.g. autoedit + label).
+                was_new = self._create_album(
+                    artista, album_data, source_deezer_id=dz_principal
+                )
                 if was_new:
                     new_albums += 1
             artista.last_checked_deezer = timezone.now()
@@ -505,8 +512,18 @@ class Command(BaseCommand):
             classificar_i_guardar(canco)
         return True
 
-    def _create_album(self, artista: Artista, album_data: dict) -> bool:
-        """Create an Album if it doesn't exist. Returns True if new."""
+    def _create_album(
+        self,
+        artista: Artista,
+        album_data: dict,
+        source_deezer_id: int | None = None,
+    ) -> bool:
+        """Create an Album if it doesn't exist. Returns True if new.
+
+        `source_deezer_id` records which Deezer profile of the artista
+        produced this row, so the smart homonym-unlink can target one
+        specific profile.
+        """
         dz_id = album_data["id"]
         if Album.objects.filter(deezer_id=dz_id).exists():
             return False
@@ -521,6 +538,7 @@ class Command(BaseCommand):
                 tipus=tipus,
                 imatge_url=album_data.get("cover_xl", ""),
                 cancons_obtingudes=False,
+                source_deezer_id=source_deezer_id,
             )
         except IntegrityError:
             return False

@@ -34,7 +34,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # short-circuit make idle runs cheap. Rate-limited to 1 req/s.
 # (Was every 15 min during the backfill phase — slimmed to hourly on
 # 2026-04-25 once the backlog was drained.)
-30 * * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_musicbrainz >> /var/log/topquaranta/mb.log 2>&1
+#
+# `--limit 200` (added 2026-05-03) caps each tick at ~10 min of work
+# so a sudden queue surge — e.g. a `obtenir_metadata --force` run that
+# spawns dozens of pendent collaborators — drains over several ticks
+# instead of one long lock-monopolising run that blocks the next 1-2
+# scheduled invocations. ~3 s/artist HTTP, so 200 ≈ 10 min worst case.
+30 * * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_musicbrainz --limit 200 >> /var/log/topquaranta/mb.log 2>&1
 
 # ─────────────────────────────────────────────────────────────────────
 # Nightly pipeline (UTC) — each step feeds the next

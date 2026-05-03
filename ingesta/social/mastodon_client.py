@@ -83,6 +83,28 @@ def post_status(text: str, media_ids: list[str] | None = None) -> str:
     return r.json().get("url") or r.json().get("uri") or ""
 
 
+def delete_status(status_id_or_url: str) -> tuple[bool, str]:
+    """Delete a previously-toot'd status.
+
+    Accepts either a bare numeric id or the full status URL — the
+    latter has the id as its trailing path component on every major
+    Mastodon flavour. Returns `(ok, message)`.
+    """
+    if is_dry_run():
+        return True, "DRY-RUN: no es crida l'API de Mastodon"
+    sid = status_id_or_url.rstrip("/").rsplit("/", 1)[-1]
+    if not sid.isdigit():
+        return False, f"id de status no parsejable: {status_id_or_url}"
+    r = requests.delete(
+        f"{_base()}/api/v1/statuses/{sid}",
+        headers=_headers(),
+        timeout=TIMEOUT_S,
+    )
+    if not r.ok:
+        return False, f"Mastodon DELETE /statuses/{sid} {r.status_code}: {r.text[:300]}"
+    return True, f"DELETE /statuses/{sid} → 200 OK"
+
+
 def whoami() -> dict:
     """Lightweight credential check. Returns the verify_credentials
     payload (id, username, acct, display_name)."""

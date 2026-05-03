@@ -241,6 +241,11 @@ urlpatterns = [
         staff_views.social_eliminar_instagram,
         name="staff_social_eliminar_instagram",
     ),
+    path(
+        "staff/social/eliminar-remot/",
+        staff_views.social_eliminar_remot,
+        name="staff_social_eliminar_remot",
+    ),
     path("staff/social/toggle/", staff_views.social_toggle, name="staff_social_toggle"),
     path("staff/social/fase/", staff_views.social_fase, name="staff_social_fase"),
     path(

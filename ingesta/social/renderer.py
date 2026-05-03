@@ -363,7 +363,10 @@ def _feed_portada(territori: str, setmana, hero_cover_url: str | None) -> Image.
     # render the original tri-colour logo directly — the brand
     # marks (yellow/red/blue) pop on green.
     pill_w = int(FEED_W * 0.70)  # 756
-    pill_x = 30
+    # Left margin bumped from 30 → 84 (+54 px = 5% of FEED_W) per the
+    # May-2026 readability pass: same left-aligned stack, more
+    # breathing room from the canvas edge.
+    pill_x = 84
     pill_y = 944  # 1012 − 5% × 1350 ≈ 68
     logo_h = 106  # 88 × 1.20
     logo_w = int(round(logo_h * svg_assets.LOGO_ASPECT))
@@ -393,7 +396,7 @@ def _feed_portada(territori: str, setmana, hero_cover_url: str | None) -> Image.
     # ── Setmana pill, 15px below the logo pill ───────────────────
     # Same width (756) so the two stack with a consistent column.
     # 20% taller (70 → 84) and the text scales the same.
-    sm_x = 30
+    sm_x = 84  # mirrors pill_x — keeps the two-pill stack aligned
     sm_y = pill_y + pill_h + 15
     sm_w, sm_h = pill_w, 84  # 756×84
     d.rounded_rectangle(
@@ -460,11 +463,16 @@ def _feed_list_slide(
     # Accent rule under the header.
     d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill=accent)
 
-    # Layout
+    # Layout — May-2026 readability pass v2. The pills + cards stay
+    # the SAME size as the legacy spec (pos_w=76, row_h=105, list_top=170);
+    # the gain in apparent text size comes from larger fonts + tighter
+    # vertical padding inside the cell. v1 had bumped pos_w/row_h too,
+    # which pushed the last card past the page indicator (1/4 etc.)
+    # and clipped it.
     row_h = 105
     list_top = 170
-    f_pos = fonts.display_bold(38)
-    f_song = fonts.display_bold(28)
+    f_pos = fonts.display_bold(54)  # was 38 → 48 → 54
+    f_song = fonts.display_bold(40)  # was 28 → 34 → 40
     f_artist = fonts.sans_regular(22)
     pos_w = 76
 
@@ -485,8 +493,10 @@ def _feed_list_slide(
         d.rounded_rectangle((60, y, 60 + pos_w, y + pos_w), radius=14, fill=accent)
         pos_text = str(pos)
         ptw = d.textlength(pos_text, font=f_pos)
+        # Very tight top padding (y+0) so the 54-pt glyph fills the
+        # 76-pt square almost edge-to-edge.
         d.text(
-            (60 + (pos_w - ptw) // 2, y + 14),
+            (60 + (pos_w - ptw) // 2, y),
             pos_text,
             font=f_pos,
             fill=colors.COLOR_WHITE,
@@ -503,15 +513,19 @@ def _feed_list_slide(
         img.paste(cover_r, (FEED_W - 60 - 80, y), cover_r)
 
         # Song + artist text block — leave room for the NOU pill that
-        # `_trend_glyph` may render up to ~60px wide.
+        # `_trend_glyph` may render up to ~60px wide. text_x back to
+        # the legacy 240 since pos_w is back to 76.
         text_x = 240
         text_w = (FEED_W - 60 - 80 - 20) - text_x
         song = _truncate(d, e["canco_nom"], f_song, text_w)
         artist = _truncate(d, e["artista_nom"], f_artist, text_w)
-        d.text((text_x, y + 12), song, font=f_song, fill=colors.COLOR_WHITE)
+        # Tight top padding (y+0) for the 40-pt song title; artist
+        # drops to y+54 so it doesn't kiss the title's descenders.
+        d.text((text_x, y), song, font=f_song, fill=colors.COLOR_WHITE)
         d.text((text_x, y + 54), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
 
-    # Page indicator
+    # Page indicator — back to the legacy y so it doesn't get
+    # squashed into the last row card.
     if total_pages > 1:
         f_p = fonts.sans_bold(22)
         text = f"{page}/{total_pages}"
@@ -606,7 +620,10 @@ def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
 
     # ── Logo pill, lower band (geometry shared with territorial) ─
     pill_w = int(FEED_W * 0.70)  # 756
-    pill_x = 30
+    # Left margin bumped from 30 → 84 (+54 px = 5% of FEED_W) per the
+    # May-2026 readability pass: same left-aligned stack, more
+    # breathing room from the canvas edge.
+    pill_x = 84
     pill_y = 944  # 1012 − 5% × 1350 ≈ 68
     logo_h = 106  # 88 × 1.20
     logo_w = int(round(logo_h * svg_assets.LOGO_ASPECT))
@@ -628,7 +645,7 @@ def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
         )
 
     # ── Setmana pill (identical to territorial) ──────────────────
-    sm_x = 30
+    sm_x = 84  # mirrors pill_x — keeps the two-pill stack aligned
     sm_y = pill_y + pill_h + 15
     sm_w, sm_h = pill_w, 84
     d.rounded_rectangle(
@@ -989,26 +1006,44 @@ def _story_canco(territori: str, e: dict) -> Image.Image:
     )
 
     # Song title — white on the colour card, bold and large.
-    f_song = fonts.display_bold(44)
+    # Bumped 44 → 58 → 68 → 80 in the May-2026 readability pass;
+    # line-spacing 90 keeps the two-line layout from kissing.
+    # TOP N number above stays at 48 (titles + artists only on stories).
+    f_song = fonts.display_bold(80)
     lines = _wrap_two_lines(d, e["canco_nom"], f_song, card_w - 80)
     for i, line in enumerate(lines[:2]):
         line_tw = d.textlength(line, font=f_song)
         d.text(
-            (cx + (card_w - line_tw) // 2, cy + 940 + i * 60),
+            (cx + (card_w - line_tw) // 2, cy + 920 + i * 90),
             line,
             font=f_song,
             fill=colors.COLOR_WHITE,
         )
 
-    # Artist — also white but lower weight so the title reads first.
-    f_a = fonts.sans_regular(34)
+    # Artist — bumped 34 → 44; pushed down a bit so the wider
+    # title block doesn't crash into it.
+    f_a = fonts.sans_regular(44)
     artist = _truncate(d, e["artista_nom"], f_a, card_w - 80)
     a_tw = d.textlength(artist, font=f_a)
     d.text(
-        (cx + (card_w - a_tw) // 2, cy + 1180),
+        (cx + (card_w - a_tw) // 2, cy + 1210),
         artist,
         font=f_a,
         fill=colors.COLOR_WHITE,
+    )
+
+    # Footer "topquaranta.cat" on every cançó slide. Sits on the
+    # ink background outside the card, so we use COLOR_TEXT_MUTED
+    # (gray-400, 4.5:1 on COLOR_BG → AA-passing) — bright enough to
+    # read, dim enough not to compete with the TOP N + title.
+    f_footer = fonts.sans_bold(28)
+    footer = "topquaranta.cat"
+    fw = d.textlength(footer, font=f_footer)
+    d.text(
+        ((STORY_W - fw) // 2, STORY_H - 90),
+        footer,
+        font=f_footer,
+        fill=colors.COLOR_TEXT_MUTED,
     )
 
     return img

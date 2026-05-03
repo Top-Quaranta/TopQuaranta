@@ -328,20 +328,22 @@ export default function StaffSocialPage() {
     } finally { setBusy(false) }
   }
 
-  async function eliminarIG(post) {
+  async function eliminarRemot(post) {
     if (!post.instagram_media_id) {
-      alert('Aquest post no té media_id (mai no s\'ha publicat a IG, o ja s\'ha resetejat).')
+      alert('Aquest post no té id remota (mai s\'ha publicat o ja s\'ha resetejat).')
       return
     }
+    const platLabel = post.platform.replace('instagram_', 'IG ')
     if (!confirm(
-      `ESBORRAR DE INSTAGRAM: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'}\n` +
-      `media_id: ${post.instagram_media_id}\n\n` +
-      `Això elimina la publicació del feed de @topquaranta i deixa la fila lista per re-publicar. ` +
+      `ESBORRAR DE ${platLabel.toUpperCase()}: ${post.tipus} · ${post.territori_label || '—'}\n` +
+      `id remota: ${post.instagram_media_id}\n\n` +
+      `Això elimina la publicació remota i deixa la fila llesta per re-publicar. ` +
       `És DESTRUCTIU. Confirmes?`
     )) return
-    setBusy(true); setOutput('▶ Esborrant publicació de IG…')
+    setBusy(true); setOutput(`▶ Esborrant publicació de ${platLabel}…`)
     try {
-      const res = await api.post('/staff/social/eliminar-instagram/', { pk: post.pk })
+      // Single backend endpoint that dispatches by platform.
+      const res = await api.post('/staff/social/eliminar-remot/', { pk: post.pk })
       setOutput(`${res.ok ? '✓' : '✖'} ${res.msg || ''}`)
       await reload()
     } catch (e) {
@@ -378,7 +380,7 @@ export default function StaffSocialPage() {
     // staff pages get implicitly via their tables.
     <section className="bg-white text-tq-ink rounded-lg shadow-md p-4 md:p-6 space-y-6">
       <header>
-        <h1 className="text-2xl font-bold font-display">Distribució — Instagram</h1>
+        <h1 className="text-2xl font-bold font-display">Distribució multi-canal</h1>
         <p className="text-sm text-tq-ink/75 mt-1">
           Control del calendari setmanal. Cada slot publica via Graph
           API. Mode <strong>{config.dry_run ? 'DRY-RUN' : 'PRODUCCIÓ'}</strong>
@@ -842,27 +844,47 @@ export default function StaffSocialPage() {
       <Table>
         <thead>
           <tr>
+            <th className="text-left">Data</th>
             <th className="text-left">Setmana</th>
             <th className="text-left">Plataforma</th>
             <th className="text-left">Tipus</th>
             <th className="text-left">Territori</th>
             <th className="text-left">Estat</th>
-            <th className="text-left">Publicat</th>
             <th className="text-left">Accions</th>
           </tr>
         </thead>
         <tbody>
           {results.flatMap((p, idx) => {
-            // Alternate row banding by *project week* so the
-            // estat column never visually merges with a neighbour
-            // row from a different week. Pairs of (post-row,
-            // slides-row) share the same band.
-            const rowBg = (p.project_week % 2 === 0)
-              ? 'bg-white'
-              : 'bg-tq-yellow/5'
+            // Per-platform row tint so the operator scans the table
+            // by channel at a glance. Tints are deliberately faint
+            // (~5-8 % opacity) to keep text contrast high; brand
+            // colours follow each platform's identity:
+            //  · IG → soft pink (Instagram gradient endpoint)
+            //  · Mastodon → soft indigo/violet
+            //  · Bluesky → soft sky-blue
+            //  · Telegram → soft cyan
+            //  · Newsletter → soft amber
+            //  · RSS → soft orange
+            const platformTints = {
+              instagram_feed: 'bg-pink-50',
+              instagram_story: 'bg-pink-50/60',
+              mastodon: 'bg-indigo-50',
+              bluesky: 'bg-sky-50',
+              telegram: 'bg-cyan-50',
+              newsletter: 'bg-amber-50',
+              rss: 'bg-orange-50',
+            }
+            const rowBg = platformTints[p.platform] || 'bg-white'
             return [
             <tr key={p.pk} className={`${rowBg} align-top border-t border-tq-ink/10`}>
-              <td className="font-semibold whitespace-nowrap" title={`Publicació: ${p.publication_date}`}>
+              <td className="text-xs whitespace-nowrap font-mono">
+                {p.published_at
+                  ? p.published_at.slice(0, 16).replace('T', ' ')
+                  : <span className="text-tq-ink/50 italic" title={`Creat: ${p.created_at?.slice(0, 16).replace('T', ' ')}`}>
+                      {p.created_at?.slice(0, 10) || '—'}
+                    </span>}
+              </td>
+              <td className="font-semibold whitespace-nowrap" title={`Publicació prevista: ${p.publication_date}`}>
                 Setmana {p.project_week}
                 <div className="text-[10px] text-tq-ink/70 font-normal">
                   {p.publication_date}
@@ -882,7 +904,6 @@ export default function StaffSocialPage() {
                   </p>
                 )}
               </td>
-              <td className="text-xs">{p.published_at ? p.published_at.slice(0, 16).replace('T', ' ') : '—'}</td>
               <td>
                 <div className="flex flex-wrap gap-1">
                   <button
@@ -918,17 +939,31 @@ export default function StaffSocialPage() {
                   >
                     Reset
                   </button>
-                  {p.instagram_media_id && (
-                    <button
-                      type="button"
-                      onClick={() => eliminarIG(p)}
-                      disabled={busy}
-                      title="Esborra la publicació del feed d'Instagram + reset local"
-                      className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 hover:bg-red-200"
-                    >
-                      Esborrar IG
-                    </button>
-                  )}
+                  {p.instagram_media_id && (() => {
+                    // Platform-aware delete label. The DB field is
+                    // historically named `instagram_media_id` but we
+                    // reuse it for every channel's external id; the
+                    // backend dispatches by `platform`.
+                    const labels = {
+                      'instagram_feed': 'Esborrar IG',
+                      'instagram_story': 'Esborrar story IG',
+                      'mastodon': 'Esborrar Mastodon',
+                      'bluesky': 'Esborrar Bluesky',
+                      'telegram': 'Esborrar Telegram',
+                    }
+                    const label = labels[p.platform] || `Esborrar ${p.platform}`
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => eliminarRemot(p)}
+                        disabled={busy}
+                        title={`Esborra la publicació remota a ${p.platform} + reset local`}
+                        className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 hover:bg-red-200"
+                      >
+                        {label}
+                      </button>
+                    )
+                  })()}
                 </div>
               </td>
             </tr>,

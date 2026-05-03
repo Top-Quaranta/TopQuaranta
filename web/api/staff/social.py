@@ -233,7 +233,17 @@ def _bluesky_payload() -> dict:
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def social_list(request: Request) -> Response:
-    qs = SocialPost.objects.all().order_by("-setmana", "-created_at")[:200]
+    # Sort by activity date (when it was published, falling back to
+    # when it was created) so the staff list matches what a human
+    # would expect when scanning "what's new". `F('published_at')`
+    # with `nulls_last` sends pending rows to the bottom; among
+    # them the secondary `-created_at` keeps the freshest scheduled
+    # ones on top.
+    from django.db.models import F
+
+    qs = SocialPost.objects.all().order_by(
+        F("published_at").desc(nulls_last=True), "-created_at"
+    )[:200]
     cfg = ConfiguracioGlobal.load()
     return Response(
         {
@@ -946,6 +956,101 @@ def social_eliminar_instagram(request: Request) -> Response:
     return Response(
         {"ok": True, "deleted": deleted, "msg": msg, "post": _serialize(post)}
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_eliminar_remot(request: Request) -> Response:
+    """Platform-aware delete: dispatch on `post.platform` and call
+    the matching client's delete function. Mirrors the local-reset
+    side-effects of `social_eliminar_instagram` once the remote call
+    succeeds (or in dry-run).
+
+    Supported platforms: instagram_feed, instagram_story (via Meta
+    Graph), mastodon, bluesky, telegram. The external id lives in
+    `post.instagram_media_id` (legacy field name, reused for every
+    channel); Telegram additionally needs `post.metadata.message_ids`
+    because a media-group expands into multiple Message rows on
+    Telegram's side and each has to be deleted individually.
+    """
+    pk = request.data.get("pk")
+    if not pk:
+        return Response({"error": "pk required"}, status=400)
+    try:
+        post = SocialPost.objects.get(pk=int(pk))
+    except (SocialPost.DoesNotExist, ValueError):
+        return Response({"error": "post not found"}, status=404)
+
+    ext_id = (post.instagram_media_id or "").strip()
+    if not ext_id:
+        return Response(
+            {"error": "el post no té id remota; no hi ha res a esborrar"},
+            status=400,
+        )
+
+    plat = post.platform
+    ok = False
+    msg = ""
+    try:
+        if plat in ("instagram_feed", "instagram_story"):
+            if is_dry_run():
+                ok, msg = True, "DRY-RUN: no es crida l'API de Meta"
+            else:
+                import requests as _req
+
+                from ingesta.social.instagram_client import GRAPH_BASE, _token
+
+                r = _req.delete(
+                    f"{GRAPH_BASE}/{ext_id}",
+                    params={"access_token": _token()},
+                    timeout=30,
+                )
+                ok = r.ok
+                msg = (
+                    f"DELETE /{ext_id} → {r.status_code}: {r.text[:300]}"
+                    if not r.ok
+                    else f"DELETE /{ext_id} → 200 OK"
+                )
+        elif plat == "mastodon":
+            from ingesta.social import mastodon_client
+
+            ok, msg = mastodon_client.delete_status(ext_id)
+        elif plat == "bluesky":
+            from ingesta.social import bluesky_client
+
+            ok, msg = bluesky_client.delete_post(ext_id)
+        elif plat == "telegram":
+            from ingesta.social import telegram_client
+
+            mids = (post.metadata or {}).get("message_ids") or []
+            if not mids:
+                # Legacy posts (pre-message_ids capture) only have the
+                # first message URL — try to extract a single id.
+                tail = ext_id.rstrip("/").rsplit("/", 1)[-1]
+                if tail.isdigit():
+                    mids = [int(tail)]
+            ok, msg = telegram_client.delete_messages(mids)
+        else:
+            return Response(
+                {"error": f"plataforma no suportada per esborrat remot: {plat}"},
+                status=400,
+            )
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {"ok": False, "msg": f"{type(exc).__name__}: {exc}"}, status=502
+        )
+
+    if not ok:
+        return Response({"ok": False, "msg": msg}, status=502)
+
+    # Remote delete succeeded → mirror the reset.
+    post.status = SocialPost.STATUS_PENDENT
+    post.instagram_media_id = ""
+    post.error_msg = ""
+    post.metadata = {}
+    post.published_at = None
+    post.save()
+    return Response({"ok": True, "msg": msg, "post": _serialize(post)})
 
 
 @api_view(["POST"])

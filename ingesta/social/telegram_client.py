@@ -102,6 +102,67 @@ def send_media_group(image_urls: list[str], caption: str = "") -> str:
     return ""
 
 
+def send_media_group_full(image_urls: list[str], caption: str = "") -> dict:
+    """Same as `send_media_group` but returns full `{url, message_ids}`.
+
+    Needed by the staff "esborrar" button so we can later delete
+    *every* message in the group (Telegram has no group-level delete;
+    the bot must DELETE each message_id individually via
+    `deleteMessages`).
+    """
+    if not image_urls:
+        return {"url": "", "message_ids": []}
+    if len(image_urls) == 1:
+        url = send_photo(image_urls[0], caption)
+        # send_photo returns a URL but not the id; parse trailing int.
+        msg_id = url.rsplit("/", 1)[-1]
+        return {"url": url, "message_ids": [int(msg_id)] if msg_id.isdigit() else []}
+    if is_dry_run():
+        logger.info("[DRY] telegram send_media_group n=%d", len(image_urls))
+        return {
+            "url": f"https://t.me/dry/{abs(hash(image_urls[0])) & 0xffff:04x}",
+            "message_ids": [],
+        }
+    media = []
+    for i, url in enumerate(image_urls[:MEDIA_GROUP_MAX]):
+        item = {"type": "photo", "media": url}
+        if i == 0 and caption:
+            item["caption"] = caption[:CAPTION_MAX]
+            item["parse_mode"] = "HTML"
+        media.append(item)
+    body = {"chat_id": _row().chat_id, "media": json.dumps(media)}
+    res = _post("sendMediaGroup", body)
+    if isinstance(res, list) and res:
+        return {
+            "url": _message_url(res[0]),
+            "message_ids": [m.get("message_id") for m in res if m.get("message_id")],
+        }
+    return {"url": "", "message_ids": []}
+
+
+def delete_messages(message_ids: list[int]) -> tuple[bool, str]:
+    """Delete one or more messages by id from the configured chat.
+
+    Uses `deleteMessages` (Bot API ≥ 7.4, accepts up to 100 ids in
+    one call). Bots can only delete messages they themselves sent
+    within the last 48h on most chat types; on channels where the
+    bot is admin there's no time limit.
+    """
+    if is_dry_run():
+        return True, "DRY-RUN: no es crida l'API de Telegram"
+    if not message_ids:
+        return False, "cap message_id per esborrar"
+    body = {
+        "chat_id": _row().chat_id,
+        "message_ids": [int(m) for m in message_ids[:100]],
+    }
+    try:
+        _post("deleteMessages", body)
+    except RuntimeError as exc:
+        return False, str(exc)
+    return True, f"deleteMessages n={len(message_ids)} → OK"
+
+
 def whoami() -> dict:
     """Return the bot's own info via /getMe.
 

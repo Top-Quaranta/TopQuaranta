@@ -78,6 +78,7 @@ from web.api.staff.social import (  # noqa: F401
     social_credentials_save,
     social_credentials_test,
     social_eliminar_instagram,
+    social_eliminar_remot,
     social_fase,
     social_list,
     social_mastodon_clear,

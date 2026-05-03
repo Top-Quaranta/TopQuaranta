@@ -136,6 +136,32 @@ def create_post(
     return r.json().get("uri", "")
 
 
+def delete_post(at_uri: str) -> tuple[bool, str]:
+    """Delete a previously-created feed post.
+
+    `at_uri` is the AT URI returned by `create_post`, formatted as
+    `at://{did}/{collection}/{rkey}`. We parse the rkey and call
+    `com.atproto.repo.deleteRecord`. Returns `(ok, message)`.
+    """
+    if is_dry_run():
+        return True, "DRY-RUN: no es crida l'API de Bluesky"
+    if not at_uri.startswith("at://"):
+        return False, f"AT URI invàlid: {at_uri}"
+    parts = at_uri[len("at://") :].split("/")
+    if len(parts) != 3:
+        return False, f"AT URI no parsejable: {at_uri}"
+    repo, collection, rkey = parts
+    r = requests.post(
+        f"{PDS_BASE}/xrpc/com.atproto.repo.deleteRecord",
+        json={"repo": repo, "collection": collection, "rkey": rkey},
+        headers=_auth_headers(),
+        timeout=TIMEOUT_S,
+    )
+    if not r.ok:
+        return False, f"Bluesky deleteRecord {r.status_code}: {r.text[:300]}"
+    return True, f"deleteRecord {rkey} → 200 OK"
+
+
 def whoami() -> dict:
     """Lightweight credential check. Returns the resolved DID."""
     if is_dry_run():

@@ -163,8 +163,8 @@ export default function StaffDashboardPage() {
         />
         <Tile
           to="/staff/social"
-          title="Distribució — Instagram"
-          desc="Calendari setmanal del feed + stories. Token, fases, kill switch."
+          title="Distribució multi-canal"
+          desc="Calendari setmanal a Instagram, Mastodon, Bluesky, Telegram, newsletter i RSS."
         />
       </div>
     </section>

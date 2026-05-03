@@ -161,12 +161,19 @@ class Command(BaseCommand):
             return
 
         try:
+            extra_meta: dict = {}
             if channel == "mastodon":
-                ext_id = self._publish_mastodon(cover, text, slot, territori, entries)
+                ext_id, extra_meta = self._publish_mastodon(
+                    paths, text, slot, territori, entries
+                )
             elif channel == "bluesky":
-                ext_id = self._publish_bluesky(cover, text, slot, territori, entries)
+                ext_id, extra_meta = self._publish_bluesky(
+                    paths, text, slot, territori, entries
+                )
             elif channel == "telegram":
-                ext_id = self._publish_telegram(paths, text, slot, territori, entries)
+                ext_id, extra_meta = self._publish_telegram(
+                    paths, text, slot, territori, entries
+                )
             else:  # newsletter
                 ext_id = self._publish_newsletter(
                     slot, territori, setmana, target, entries, data
@@ -181,7 +188,12 @@ class Command(BaseCommand):
             post,
             SocialPost.STATUS_PUBLICAT,
             instagram_media_id=ext_id[:80],
-            metadata={"channel": channel, "external_id": ext_id, "cover": cover.name},
+            metadata={
+                "channel": channel,
+                "external_id": ext_id,
+                "cover": cover.name,
+                **extra_meta,
+            },
             published_at=timezone.now(),
         )
         log_staff_action(None, f"{channel}_publicat", target=post, tipus=slot.tipus)
@@ -189,28 +201,67 @@ class Command(BaseCommand):
 
     # ── per-channel publish ──────────────────────────────────────
 
-    def _publish_mastodon(self, cover: Path, text, slot, territori, entries) -> str:
-        media_id = mastodon_client.upload_media(
-            cover, alt_text=f"Top — {territori or 'Global'}"
-        )
-        return mastodon_client.post_status(text, media_ids=[media_id])
+    def _carousel_paths(self, paths: list[Path]) -> list[Path]:
+        """Pick up to 4 representative slides for a Mastodon/Bluesky
+        carousel. We send the portada (slide 0) plus the first list
+        slides, so a follower scrolls through the actual top entries
+        instead of a single decorative cover. Both networks cap
+        embeds at 4 images.
+        """
+        return paths[:4]
 
-    def _publish_telegram(self, paths, text, slot, territori, entries) -> str:
+    def _carousel_alts(self, picked: list[Path], territori, entries) -> list[str]:
+        """Alt text per slide: portada labelled with the territory;
+        list slides labelled "Posicions N-M de Top — <territory>" so
+        screen-reader users get a sense of which chunk of the top
+        each image covers."""
+        terr_label = territori or "Global"
+        alts = [f"Portada Top — {terr_label}"]
+        # List slides hold up to 10 entries each starting at pos 1.
+        for i in range(1, len(picked)):
+            start = (i - 1) * 10 + 1
+            end = min(start + 9, len(entries) if entries else start + 9)
+            alts.append(f"Top {terr_label}, posicions {start}-{end}")
+        return alts
+
+    def _publish_mastodon(
+        self, paths: list[Path], text, slot, territori, entries
+    ) -> tuple[str, dict]:
+        # 4-image carousel: portada + first 3 list slides. Each image
+        # uploads independently to /media; the media_ids attach to
+        # one /statuses call.
+        picked = self._carousel_paths(paths)
+        alts = self._carousel_alts(picked, territori, entries)
+        media_ids = [
+            mastodon_client.upload_media(p, alt_text=alt)
+            for p, alt in zip(picked, alts)
+        ]
+        url = mastodon_client.post_status(text, media_ids=media_ids)
+        return url, {"slides": [p.name for p in picked]}
+
+    def _publish_telegram(
+        self, paths, text, slot, territori, entries
+    ) -> tuple[str, dict]:
         # Telegram fits up to 10 photos in one media-group message,
-        # so we send the whole carousel — richer than the cover-only
-        # treatment Mastodon/Bluesky get.
+        # so we send the whole carousel. We use `send_media_group_full`
+        # so we can later DELETE every individual message id (Telegram
+        # has no group-level delete).
         from social.management.commands.publicar_social import _public_url_for
 
         urls = [_public_url_for(p) for p in paths[: telegram_client.MEDIA_GROUP_MAX]]
-        return telegram_client.send_media_group(urls, caption=text)
+        res = telegram_client.send_media_group_full(urls, caption=text)
+        return res["url"], {"message_ids": res["message_ids"]}
 
-    def _publish_bluesky(self, cover: Path, text, slot, territori, entries) -> str:
-        blob = bluesky_client.upload_blob(cover)
-        return bluesky_client.create_post(
-            text,
-            image_blobs=[blob],
-            alt_texts=[f"Top — {territori or 'Global'}"],
-        )
+    def _publish_bluesky(
+        self, paths: list[Path], text, slot, territori, entries
+    ) -> tuple[str, dict]:
+        # 4-image carousel: portada + first 3 list slides. Bluesky
+        # `embed.images` accepts up to 4 blobs in a single record.
+        picked = self._carousel_paths(paths)
+        alts = self._carousel_alts(picked, territori, entries)
+        blobs = [bluesky_client.upload_blob(p) for p in picked]
+        at_uri = bluesky_client.create_post(text, image_blobs=blobs, alt_texts=alts)
+        return at_uri, {"slides": [p.name for p in picked]}
 
     def _publish_newsletter(
         self, slot, territori, setmana, target, entries, data

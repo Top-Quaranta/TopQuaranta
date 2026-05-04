@@ -69,6 +69,14 @@ export default function ComptePerfilPage() {
     try {
       await api.patch('/compte/perfil/', payload)
       await refresh()
+      // K1 analytics: aggregate counter when a user opts INTO the
+      // newsletter from the profile page (not at registration —
+      // that's already counted via `registre_complet` dim1=newsletter).
+      // Fire on the False→True transition only.
+      if (payload.vol_newsletter === true && !initial.vol_newsletter) {
+        const { trackEvent } = await import('../lib/analytics')
+        trackEvent('newsletter_signup')
+      }
       setSuccess(true)
       setCurrentPassword('')
       setNewPassword('')

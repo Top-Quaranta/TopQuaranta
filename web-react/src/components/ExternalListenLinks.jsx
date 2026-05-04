@@ -16,8 +16,20 @@
  * populate their IDs.
  */
 
+import { trackEvent } from '../lib/analytics'
+
 function encode(q) {
   return encodeURIComponent((q || '').trim())
+}
+
+// Map the link's display name to the analytics dim1 — short, stable
+// slugs the dashboard charts on. We don't bake them into the link
+// builder above so the buttons keep the human label.
+const DSP_SLUG = {
+  Spotify: 'spotify',
+  Deezer: 'deezer',
+  YouTube: 'youtube',
+  'Apple Music': 'apple',
 }
 
 function buildLinks({ kind, title, artist, deezerId, isrc }) {
@@ -110,6 +122,11 @@ export default function ExternalListenLinks({
           href={l.href}
           target="_blank"
           rel="noopener"
+          // Beacon fires before the browser hands the navigation
+          // off — `sendBeacon` survives the unload, so we don't
+          // delay the user's click while waiting for the POST.
+          // dim1 = DSP slug, dim2 = surface (canco/album/artista).
+          onClick={() => trackEvent('escolta_click', DSP_SLUG[l.name] || l.name.toLowerCase(), kind || '')}
           className="inline-flex items-center gap-1 px-2.5 py-1 bg-tq-ink text-tq-yellow text-xs font-semibold rounded-full hover:bg-tq-ink/90 transition-colors"
         >
           {PLAY_ICON}

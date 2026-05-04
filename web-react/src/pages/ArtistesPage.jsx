@@ -137,6 +137,16 @@ export default function ArtistesPage() {
       if (v) out.set(k, v)
     }
     setParams(out)
+    // K1 analytics: which filter dimensions does the audience use
+    // most? `directori_filter` dim1 is the first non-empty filter
+    // key (territori/comarca/municipi/amb_dones/nou/al_top). One
+    // event per apply call, not per dimension.
+    const firstKey = Object.entries(next).find(([, v]) => v)?.[0]
+    if (firstKey) {
+      import('../lib/analytics').then(({ trackEvent }) =>
+        trackEvent('directori_filter', firstKey)
+      )
+    }
   }
 
   const submitSearch = () => {
@@ -148,6 +158,13 @@ export default function ArtistesPage() {
     out.delete('comarca')
     out.delete('municipi')
     setParams(out)
+    // K1 analytics: count non-empty searches. dim1 is the scope so the
+    // dashboard can compare which list-page surface gets searched most.
+    if (qDraft.trim()) {
+      import('../lib/analytics').then(({ trackEvent }) =>
+        trackEvent('search_query', 'artistes')
+      )
+    }
   }
 
   return (

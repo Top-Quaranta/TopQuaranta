@@ -216,6 +216,13 @@ export default function MapaPage() {
     api.get(`/mapa/stats/?${p}`)
       .then(setStats)
       .catch(() => setStats([]))
+    // K1 analytics: count drill-downs per level so we can see if the
+    // audience uses the comarca / municipi tiers or stays at the
+    // territori overview. dim1 is the resulting level after the
+    // selection change.
+    import('../lib/analytics').then(({ trackEvent }) =>
+      trackEvent('mapa_zoom', level)
+    )
   }, [level, selTerritori, selComarca])
 
   function keyForFeature(ft) {

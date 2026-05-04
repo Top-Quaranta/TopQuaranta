@@ -1,7 +1,8 @@
-import { Component, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Component, lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Layout from './components/Layout'
+import { trackPageview } from './lib/analytics'
 
 // Public pages — eagerly imported because they're on the
 // critical path for the anonymous bundle.
@@ -105,9 +106,28 @@ class ErrorBoundary extends Component {
   }
 }
 
+/**
+ * RouteAnalytics — fires `trackPageview(pathname)` on every route
+ * change. Mounted once inside the Router (so `useLocation` works) and
+ * outside the route tree itself (so it doesn't re-mount per page).
+ *
+ * UTM landings ride along inside the same beacon — `analytics.js`
+ * reads `window.location.search` per call, so the first navigation
+ * carrying `?utm_source=…` records both pageview + utm_landing in
+ * the same POST.
+ */
+function RouteAnalytics() {
+  const location = useLocation()
+  useEffect(() => {
+    trackPageview(location.pathname)
+  }, [location.pathname])
+  return null
+}
+
 function AppContent() {
   return (
     <Layout>
+      <RouteAnalytics />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/top" element={<TopPage />} />

@@ -247,6 +247,32 @@ def analytics_summary(request: Request) -> Response:
     )
 
 
+# Per-response CSP override for the GoAccess HTML. The default
+# project-wide CSP set by Caddy is too tight for GoAccess's
+# self-contained report:
+#   - GoAccess inlines its icon font as `data:application/font-woff…`
+#     URIs — needs `font-src data:`.
+#   - GoAccess's D3 chart code uses `new Function(...)` internally —
+#     needs `'unsafe-eval'` on `script-src`.
+#   - The whole bundle is self-contained (no CDN calls), so we don't
+#     need to allow any external origin.
+# We DON'T relax the project CSP globally; we override on this single
+# response, which Caddy's directive replaces (Django emits the header,
+# Caddy passes it through). This keeps the rest of the site at the
+# strict baseline.
+GOACCESS_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "object-src 'none'; "
+    "base-uri 'self'"
+)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsStaff])
 def goaccess_report(request: Request) -> HttpResponse:
@@ -260,7 +286,8 @@ def goaccess_report(request: Request) -> HttpResponse:
     Returns 503 with a friendly hint if the report hasn't been
     generated yet (first-boot, or the cron has been silenced for
     a while). Otherwise streams the file with the right MIME so the
-    browser renders it inline.
+    browser renders it inline, with a relaxed CSP scoped to this
+    response only (see `GOACCESS_CSP`).
     """
     if not GOACCESS_REPORT.exists():
         return HttpResponse(
@@ -271,9 +298,15 @@ def goaccess_report(request: Request) -> HttpResponse:
             status=503,
         )
     try:
-        return FileResponse(
+        resp = FileResponse(
             open(GOACCESS_REPORT, "rb"),
             content_type="text/html; charset=utf-8",
         )
     except FileNotFoundError as exc:  # race against a fresh regen
         raise Http404("report missing") from exc
+    resp["Content-Security-Policy"] = GOACCESS_CSP
+    # Belt-and-braces: prevent the report being framed elsewhere
+    # (we already set frame-ancestors above; X-Frame-Options is the
+    # legacy fallback).
+    resp["X-Frame-Options"] = "DENY"
+    return resp

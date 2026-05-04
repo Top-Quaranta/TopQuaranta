@@ -750,6 +750,21 @@ class Album(models.Model):
         super().save(*args, **kwargs)
 
 
+class CancoQuerySet(models.QuerySet):
+    """Custom manager methods for Canco. May-2026 audit: the
+    `verificada=True, activa=True` filter pair was repeated in 33
+    locations across the codebase; centralising it here prevents
+    drift when a third "publishable" flag ever needs to be added."""
+
+    def public(self):
+        """Tracks visible to the public site / counted by the ranking."""
+        return self.filter(verificada=True, activa=True)
+
+    def pendents(self):
+        """Live but undecided — the staff review queue."""
+        return self.filter(verificada=False, activa=True)
+
+
 class Canco(models.Model):
     """
     A single track. Only tracks released within the last 12 months are ingested.
@@ -759,7 +774,12 @@ class Canco(models.Model):
       - artista: main artist (FK, for display and default lookups)
       - artistes_col: collaborating artists (M2M)
     A track appears in territory T if ANY artist (main or collaborator) belongs to T.
+
+    Custom manager: use `Canco.objects.public()` or `.pendents()` to
+    avoid hand-rolling the verificada/activa filter pair.
     """
+
+    objects = CancoQuerySet.as_manager()
 
     spotify_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     deezer_id = models.BigIntegerField(unique=True, null=True, blank=True)

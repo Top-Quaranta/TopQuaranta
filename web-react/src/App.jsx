@@ -1,7 +1,10 @@
-import { Component } from 'react'
+import { Component, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Layout from './components/Layout'
+
+// Public pages — eagerly imported because they're on the
+// critical path for the anonymous bundle.
 import HomePage from './pages/HomePage'
 import TopPage from './pages/TopPage'
 import ArtistesPage from './pages/ArtistesPage'
@@ -37,29 +40,35 @@ import ComunitatPublicarPage from './pages/ComunitatPublicarPage'
 import ComunitatDetailPage from './pages/ComunitatDetailPage'
 import AdminRoute from './components/AdminRoute'
 import StaffLayout from './components/StaffLayout'
-import StaffDashboardPage from './pages/staff/StaffDashboardPage'
-import PendentsPage from './pages/staff/PendentsPage'
-import StaffArtistesPage from './pages/staff/StaffArtistesPage'
-import ArtistaCrearPage from './pages/staff/ArtistaCrearPage'
-import ArtistaEditPage from './pages/staff/ArtistaEditPage'
-import StaffCanconsPage from './pages/staff/StaffCanconsPage'
-import CancoEditPage from './pages/staff/CancoEditPage'
-import StaffAlbumsPage from './pages/staff/StaffAlbumsPage'
-import AlbumEditPage from './pages/staff/AlbumEditPage'
-import StaffRankingPage from './pages/staff/StaffRankingPage'
-import PropostesPage from './pages/staff/PropostesPage'
-import PropostaDetailPage from './pages/staff/PropostaDetailPage'
-import SolicitudsPage from './pages/staff/SolicitudsPage'
-import SenyalPage from './pages/staff/SenyalPage'
-import HistorialPage from './pages/staff/HistorialPage'
-import ConfiguracioPage from './pages/staff/ConfiguracioPage'
-import AuditlogPage from './pages/staff/AuditlogPage'
-import UsuarisPage from './pages/staff/UsuarisPage'
-import UsuariDetailPage from './pages/staff/UsuariDetailPage'
-import FeedbackPage from './pages/staff/FeedbackPage'
-import StaffSocialPage from './pages/staff/StaffSocialPage'
-import EstatPage from './pages/staff/EstatPage'
-import StaffPublicacionsPage from './pages/staff/StaffPublicacionsPage'
+
+// Staff pages — lazy-loaded so they don't bloat the anon bundle.
+// Only ~5 staff users hit these endpoints; everyone else pays the
+// cost of recharts (≈150 KB gz) and the rest of the staff surface.
+// May-2026 audit: SPA was a single 1.2 MB chunk; this brings the
+// initial public-facing chunk down meaningfully.
+const StaffDashboardPage = lazy(() => import('./pages/staff/StaffDashboardPage'))
+const PendentsPage = lazy(() => import('./pages/staff/PendentsPage'))
+const StaffArtistesPage = lazy(() => import('./pages/staff/StaffArtistesPage'))
+const ArtistaCrearPage = lazy(() => import('./pages/staff/ArtistaCrearPage'))
+const ArtistaEditPage = lazy(() => import('./pages/staff/ArtistaEditPage'))
+const StaffCanconsPage = lazy(() => import('./pages/staff/StaffCanconsPage'))
+const CancoEditPage = lazy(() => import('./pages/staff/CancoEditPage'))
+const StaffAlbumsPage = lazy(() => import('./pages/staff/StaffAlbumsPage'))
+const AlbumEditPage = lazy(() => import('./pages/staff/AlbumEditPage'))
+const StaffRankingPage = lazy(() => import('./pages/staff/StaffRankingPage'))
+const PropostesPage = lazy(() => import('./pages/staff/PropostesPage'))
+const PropostaDetailPage = lazy(() => import('./pages/staff/PropostaDetailPage'))
+const SolicitudsPage = lazy(() => import('./pages/staff/SolicitudsPage'))
+const SenyalPage = lazy(() => import('./pages/staff/SenyalPage'))
+const HistorialPage = lazy(() => import('./pages/staff/HistorialPage'))
+const ConfiguracioPage = lazy(() => import('./pages/staff/ConfiguracioPage'))
+const AuditlogPage = lazy(() => import('./pages/staff/AuditlogPage'))
+const UsuarisPage = lazy(() => import('./pages/staff/UsuarisPage'))
+const UsuariDetailPage = lazy(() => import('./pages/staff/UsuariDetailPage'))
+const FeedbackPage = lazy(() => import('./pages/staff/FeedbackPage'))
+const StaffSocialPage = lazy(() => import('./pages/staff/StaffSocialPage'))
+const EstatPage = lazy(() => import('./pages/staff/EstatPage'))
+const StaffPublicacionsPage = lazy(() => import('./pages/staff/StaffPublicacionsPage'))
 
 /** Top-level error boundary — catches unexpected render errors and
  *  shows a minimal fallback with a reload button. */
@@ -166,6 +175,7 @@ function AppContent() {
           element={
             <AdminRoute>
               <StaffLayout>
+                <Suspense fallback={<div className="p-8 text-tq-yellow">Carregant…</div>}>
                 <Routes>
                   <Route path="/" element={<StaffDashboardPage />} />
                   <Route path="/pendents" element={<PendentsPage />} />
@@ -193,6 +203,7 @@ function AppContent() {
                   <Route path="/estat" element={<EstatPage />} />
                   <Route path="/publicacions" element={<StaffPublicacionsPage />} />
                 </Routes>
+                </Suspense>
               </StaffLayout>
             </AdminRoute>
           }

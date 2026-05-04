@@ -178,6 +178,11 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 26,
         "skip_concern": 1,
     },
+    "recollir_metrics_social": {
+        "frequency_label": "Cada nit 22:30",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
 }
 
 

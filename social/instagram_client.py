@@ -213,6 +213,114 @@ def publish_container(container_id: str) -> str:
     return _post(f"{_user_id()}/media_publish", {"creation_id": container_id})["id"]
 
 
+def get_post_metrics(media_id: str, *, is_story: bool = False) -> dict:
+    """Fetch insights for a published media (feed or story).
+
+    Uses the Graph API `{media-id}/insights?metric=...` endpoint.
+    Required permission: `instagram_manage_insights` — already granted
+    on the long-lived token we use for publishing. Story insights
+    expire ~24 h after the story ends; we still try and degrade
+    gracefully on the inevitable 400 once the window is over.
+
+    Returns the lowest-common-denominator dict
+    `{likes, replies, shares, reach, impressions, raw}`.
+    """
+    if is_dry_run():
+        return {
+            "likes": 0,
+            "replies": 0,
+            "shares": 0,
+            "reach": 0,
+            "impressions": 0,
+            "raw": {"dry_run": True},
+        }
+    if not media_id:
+        return {
+            "likes": 0,
+            "replies": 0,
+            "shares": 0,
+            "reach": 0,
+            "impressions": 0,
+            "raw": {"error": "missing_media_id"},
+        }
+    # Story insights expose a smaller set; feed posts get the full
+    # bundle. Total interactions is a Meta-side rollup (likes +
+    # comments + shares + saves) — we keep `likes` separate but
+    # still log it raw for the UI.
+    # Meta deprecated `impressions` for some media product types
+    # in 2024 — IG returns 400 for the *whole* call if any single
+    # metric isn't supported. Try the rich set first; on failure
+    # retry with the safe core that's supported on every type.
+    if is_story:
+        attempts = [
+            "reach,replies,impressions",
+            "reach,replies",
+        ]
+    else:
+        attempts = [
+            "likes,comments,shares,saved,reach,impressions,total_interactions",
+            "likes,comments,shares,saved,reach,total_interactions",
+            "likes,comments,shares,reach",
+        ]
+    body: dict = {}
+    last_err: str | None = None
+    for metric_set in attempts:
+        try:
+            body = _get(f"{media_id}/insights", {"metric": metric_set})
+            break
+        except RuntimeError as exc:
+            last_err = str(exc)[:300]
+            continue
+    else:
+        return {
+            "likes": 0,
+            "replies": 0,
+            "shares": 0,
+            "reach": 0,
+            "impressions": 0,
+            "raw": {"error": last_err},
+        }
+    flat: dict[str, int] = {}
+    for entry in body.get("data") or []:
+        name = entry.get("name")
+        values = entry.get("values") or [{}]
+        flat[name] = int(values[0].get("value") or 0)
+    return {
+        "likes": flat.get("likes", 0),
+        # Stories have `replies`; feed posts get `comments`. Map
+        # both into the same column so the dashboard doesn't have
+        # to special-case stories.
+        "replies": flat.get("replies", flat.get("comments", 0)),
+        "shares": flat.get("shares", 0),
+        "reach": flat.get("reach", 0),
+        "impressions": flat.get("impressions", 0),
+        "raw": body,
+    }
+
+
+def get_account_stats() -> dict:
+    """Snapshot of follower + media counts for the IG business account."""
+    if is_dry_run():
+        return {
+            "followers": 0,
+            "posts_total": 0,
+            "raw": {"dry_run": True},
+        }
+    try:
+        body = _get(_user_id(), {"fields": "followers_count,media_count"})
+    except RuntimeError as exc:
+        return {
+            "followers": 0,
+            "posts_total": 0,
+            "raw": {"error": str(exc)[:300]},
+        }
+    return {
+        "followers": int(body.get("followers_count") or 0),
+        "posts_total": int(body.get("media_count") or 0),
+        "raw": body,
+    }
+
+
 def refresh_token() -> tuple[str, datetime]:
     """Refresh the long-lived token. Returns (new_token, new_expiry).
 

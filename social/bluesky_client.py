@@ -162,6 +162,79 @@ def delete_post(at_uri: str) -> tuple[bool, str]:
     return True, f"deleteRecord {rkey} → 200 OK"
 
 
+def get_post_metrics(at_uri: str) -> dict:
+    """Fetch engagement counters for a single feed post.
+
+    Uses `app.bsky.feed.getPosts?uris=...` (a single API call returns
+    full counts for up to 25 URIs). For our case we ask one at a
+    time so the cron stays trivially restartable per row. Returns
+    `{likes, shares, replies, raw}` with quote/repost merged into
+    `shares` to keep the cross-platform schema flat.
+    """
+    if is_dry_run():
+        return {"likes": 0, "shares": 0, "replies": 0, "raw": {"dry_run": True}}
+    if not at_uri or not at_uri.startswith("at://"):
+        return {"likes": 0, "shares": 0, "replies": 0, "raw": {"error": "bad_uri"}}
+    r = requests.get(
+        f"{PDS_BASE}/xrpc/app.bsky.feed.getPosts",
+        params={"uris": at_uri},
+        headers=_auth_headers(),
+        timeout=TIMEOUT_S,
+    )
+    if not r.ok:
+        return {
+            "likes": 0,
+            "shares": 0,
+            "replies": 0,
+            "raw": {"http_status": r.status_code, "body": r.text[:300]},
+        }
+    posts = (r.json() or {}).get("posts") or []
+    if not posts:
+        return {"likes": 0, "shares": 0, "replies": 0, "raw": {"empty": True}}
+    p = posts[0]
+    # Quotes and reposts both signal "amplification" — merge so the
+    # `shares` column has the same meaning as a Mastodon reblog.
+    shares = int(p.get("repostCount") or 0) + int(p.get("quoteCount") or 0)
+    return {
+        "likes": int(p.get("likeCount") or 0),
+        "shares": shares,
+        "replies": int(p.get("replyCount") or 0),
+        "raw": p,
+    }
+
+
+def get_account_stats() -> dict:
+    """Snapshot of the account's followers / follows / posts."""
+    if is_dry_run():
+        return {
+            "followers": 0,
+            "following": 0,
+            "posts_total": 0,
+            "raw": {"dry_run": True},
+        }
+    handle = _row().handle
+    r = requests.get(
+        f"{PDS_BASE}/xrpc/app.bsky.actor.getProfile",
+        params={"actor": handle},
+        headers=_auth_headers(),
+        timeout=TIMEOUT_S,
+    )
+    if not r.ok:
+        return {
+            "followers": 0,
+            "following": 0,
+            "posts_total": 0,
+            "raw": {"http_status": r.status_code, "body": r.text[:300]},
+        }
+    body = r.json()
+    return {
+        "followers": int(body.get("followersCount") or 0),
+        "following": int(body.get("followsCount") or 0),
+        "posts_total": int(body.get("postsCount") or 0),
+        "raw": body,
+    }
+
+
 def whoami() -> dict:
     """Lightweight credential check. Returns the resolved DID."""
     if is_dry_run():

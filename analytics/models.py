@@ -123,3 +123,101 @@ class MetricaPipeline(models.Model):
     def __str__(self) -> str:
         v = self.valor_int if self.valor_int is not None else self.valor_float
         return f"{self.data} {self.clau}/{self.dimensio_1}={v}"
+
+
+class MetricaSocialPost(models.Model):
+    """Engagement snapshot for a single published `SocialPost`.
+
+    One row per (socialpost, data). The `recollir_metrics_social`
+    cron polls the source platform once a day and upserts the
+    counters here — keeping the time series lets us chart the
+    engagement curve (most reach happens within 24-48 h of publish,
+    so the daily delta = "fresh action" while the absolute number
+    is the long-term total).
+
+    Fields are deliberately the lowest-common-denominator across
+    platforms (likes / replies / shares / reach / impressions /
+    clicks). When a platform doesn't expose a metric we leave it
+    at 0 — the `raw` JSONB stores the full API response so the
+    UI can still surface platform-specific numbers (e.g. Bluesky
+    quoteCount, IG saved/total_interactions) without a schema
+    change every time Meta renames a field.
+    """
+
+    socialpost = models.ForeignKey(
+        "social.SocialPost",
+        on_delete=models.CASCADE,
+        related_name="metriques",
+    )
+    data = models.DateField(db_index=True)
+    likes = models.PositiveIntegerField(default=0)
+    replies = models.PositiveIntegerField(default=0)
+    shares = models.PositiveIntegerField(default=0)  # reblogs / reposts / RTs
+    reach = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)  # link-clicks (newsletter)
+    raw = models.JSONField(blank=True, default=dict)
+    fetched_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Mètrica de publicació social"
+        verbose_name_plural = "Mètriques de publicacions socials"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["socialpost", "data"],
+                name="metricasocialpost_uniq",
+            ),
+        ]
+        indexes = [
+            # Most queries are "show me the latest snapshot per post" —
+            # this keeps the planner happy on the dashboard rollups.
+            models.Index(fields=["data", "socialpost"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.data} {self.socialpost_id} "
+            f"L={self.likes} R={self.replies} S={self.shares}"
+        )
+
+    @property
+    def total_engagement(self) -> int:
+        """Sum used for ranking the top-performing posts."""
+        return self.likes + self.replies + self.shares
+
+
+class MetricaSocialPlatform(models.Model):
+    """Daily account-level gauge per platform.
+
+    Examples (`metric` value):
+      - `followers`     — follower count (Mastodon, Bluesky, IG, Telegram)
+      - `following`     — accounts followed (Mastodon, Bluesky)
+      - `posts_total`   — lifetime status count
+      - `members`       — Telegram channel member count
+
+    One row per (data, platform, metric). Letting `metric` be a
+    free CharField (instead of one column per metric) means new
+    KPIs ship without a migration — the UI just adds another card.
+    """
+
+    data = models.DateField(db_index=True)
+    platform = models.CharField(max_length=32, db_index=True)
+    metric = models.CharField(max_length=40)
+    valor = models.BigIntegerField()
+    raw = models.JSONField(blank=True, default=dict)
+
+    class Meta:
+        verbose_name = "Mètrica de plataforma social"
+        verbose_name_plural = "Mètriques de plataformes socials"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["data", "platform", "metric"],
+                name="metricasocialplatform_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["platform", "metric", "-data"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.data} {self.platform}/{self.metric}={self.valor}"

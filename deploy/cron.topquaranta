@@ -78,6 +78,12 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # ISRC; mismatches counted in SpotifyPlaylist.last_n_*.
 15 7 * * *  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify >> /var/log/topquaranta/playlists.log 2>&1
 
+# 22:30 → Pull engagement metrics from each social platform
+# (Mastodon, Bluesky, Instagram, Telegram). Per-post counters for the
+# last 30 days + per-account followers/posts. Fail-open on every
+# external call so a Mastodon hiccup doesn't break the dashboard.
+30 22 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_social >> /var/log/topquaranta/analytics.log 2>&1
+
 # 23:00 → Daily snapshot of pipeline-state gauges into MetricaPipeline
 # (cançons verificades / pendents / rebutjades, cobertura whisper+MB,
 # usuaris actius, distribució per territori). Idempotent — re-runs on

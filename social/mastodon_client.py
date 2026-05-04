@@ -105,6 +105,59 @@ def delete_status(status_id_or_url: str) -> tuple[bool, str]:
     return True, f"DELETE /statuses/{sid} → 200 OK"
 
 
+def get_status_metrics(status_id_or_url: str) -> dict:
+    """Fetch engagement counters for a previously-toot'd status.
+
+    Mastodon's `/api/v1/statuses/:id` returns `favourites_count`,
+    `reblogs_count` and `replies_count` on every status, no scope
+    needed beyond the basic read access the app token already has.
+    Returns the lowest-common-denominator dict the analytics
+    pipeline expects: `{likes, shares, replies, raw}`.
+    """
+    if is_dry_run():
+        return {"likes": 0, "shares": 0, "replies": 0, "raw": {"dry_run": True}}
+    sid = (status_id_or_url or "").rstrip("/").rsplit("/", 1)[-1]
+    if not sid.isdigit():
+        return {"likes": 0, "shares": 0, "replies": 0, "raw": {"error": "bad_id"}}
+    r = requests.get(
+        f"{_base()}/api/v1/statuses/{sid}",
+        headers=_headers(),
+        timeout=TIMEOUT_S,
+    )
+    if not r.ok:
+        return {
+            "likes": 0,
+            "shares": 0,
+            "replies": 0,
+            "raw": {"http_status": r.status_code, "body": r.text[:300]},
+        }
+    body = r.json()
+    return {
+        "likes": int(body.get("favourites_count") or 0),
+        "shares": int(body.get("reblogs_count") or 0),
+        "replies": int(body.get("replies_count") or 0),
+        "raw": body,
+    }
+
+
+def get_account_stats() -> dict:
+    """Snapshot of account-level counters (followers, posts, etc.)."""
+    if is_dry_run():
+        return {
+            "followers": 0,
+            "following": 0,
+            "posts_total": 0,
+            "raw": {"dry_run": True},
+        }
+    body = whoami()
+    return {
+        "followers": int(body.get("followers_count") or 0),
+        "following": int(body.get("following_count") or 0),
+        "posts_total": int(body.get("statuses_count") or 0),
+        "raw": body,
+    }
+
+
 def whoami() -> dict:
     """Lightweight credential check. Returns the verify_credentials
     payload (id, username, acct, display_name)."""

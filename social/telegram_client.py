@@ -183,6 +183,47 @@ def chat_info() -> dict:
     return _post("getChat", {"chat_id": _row().chat_id})
 
 
+def get_post_metrics(message_id) -> dict:
+    """Engagement metrics for a Telegram channel post.
+
+    The Bot API does **not** expose per-message view counters or
+    reaction counts — those are only readable via the user-facing
+    MTProto API (Telethon / Pyrogram). Rather than add a heavy
+    extra dependency for a single counter, we return zeros and
+    flag `not_supported` in `raw` so the dashboard can hide
+    Telegram engagement instead of charting fake silence.
+
+    `chat_info()` does expose `members_count` for channels — that
+    feeds `MetricaSocialPlatform(platform=telegram, metric=members)`
+    via `get_account_stats()` below.
+    """
+    return {
+        "likes": 0,
+        "replies": 0,
+        "shares": 0,
+        "raw": {"not_supported": "telegram_bot_api_lacks_post_views"},
+    }
+
+
+def get_account_stats() -> dict:
+    """Channel member count + posts-total (when retrievable)."""
+    if is_dry_run():
+        return {"members": 0, "raw": {"dry_run": True}}
+    try:
+        chat = chat_info()
+    except RuntimeError as exc:
+        return {"members": 0, "raw": {"error": str(exc)[:300]}}
+    members = 0
+    try:
+        # `_post` already unwraps `{"ok": true, "result": …}`, so for
+        # `getChatMemberCount` we get the plain integer back.
+        body = _post("getChatMemberCount", {"chat_id": _row().chat_id})
+        members = int(body or 0)
+    except (RuntimeError, TypeError, ValueError) as exc:
+        return {"members": 0, "raw": {"error": str(exc)[:300], "chat": chat}}
+    return {"members": members, "raw": {"chat": chat}}
+
+
 def _message_url(msg: dict) -> str:
     """Best-effort permalink. Public channels expose
     `https://t.me/<username>/<message_id>`; private chats don't."""

@@ -34,7 +34,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from analytics.models import MetricaEsdeveniment, MetricaPipeline
+from analytics.models import (
+    MetricaEsdeveniment,
+    MetricaPipeline,
+    MetricaSocialPlatform,
+    MetricaSocialPost,
+)
 from web.api.staff._common import IsStaff
 
 
@@ -148,6 +153,66 @@ def analytics_summary(request: Request) -> Response:
         for r in territoris_rows
     ]
 
+    # ── social engagement ── (K2) ─────────────────────────────────
+    # Per-platform follower history (daily series so the UI can chart
+    # growth) and the latest engagement totals across recent posts.
+    followers_qs = (
+        MetricaSocialPlatform.objects.filter(data__gte=since, metric="followers")
+        .order_by("platform", "data")
+        .values("platform", "data", "valor")
+    )
+    followers_series: dict[str, list[dict]] = defaultdict(list)
+    for row in followers_qs:
+        followers_series[row["platform"]].append(
+            {"data": row["data"].isoformat(), "valor": row["valor"]}
+        )
+
+    # Latest snapshot per (platform, metric). `distinct` on Postgres
+    # gives us one row per (platform, metric) ordered by -data.
+    latest_platform_rows = (
+        MetricaSocialPlatform.objects.order_by("platform", "metric", "-data")
+        .distinct("platform", "metric")
+        .values("platform", "metric", "valor", "data")
+    )
+    latest_platform = [
+        {
+            "platform": r["platform"],
+            "metric": r["metric"],
+            "valor": r["valor"],
+            "data": r["data"].isoformat(),
+        }
+        for r in latest_platform_rows
+    ]
+
+    # Top 10 best-performing posts in the window (by total
+    # engagement = likes + replies + shares of the most recent
+    # snapshot per post).
+    top_posts_rows = (
+        MetricaSocialPost.objects.filter(data__gte=since)
+        .order_by("socialpost_id", "-data")
+        .distinct("socialpost_id")
+        .select_related("socialpost")
+    )
+    top_posts = sorted(
+        top_posts_rows,
+        key=lambda m: m.likes + m.replies + m.shares,
+        reverse=True,
+    )[:10]
+    top_posts = [
+        {
+            "platform": m.socialpost.platform,
+            "tipus": m.socialpost.tipus,
+            "territori": m.socialpost.territori,
+            "setmana": m.socialpost.setmana.isoformat(),
+            "likes": m.likes,
+            "replies": m.replies,
+            "shares": m.shares,
+            "reach": m.reach,
+            "data": m.data.isoformat(),
+        }
+        for m in top_posts
+    ]
+
     return Response(
         {
             "window": {
@@ -162,5 +227,10 @@ def analytics_summary(request: Request) -> Response:
             "social": social,
             "feedback": feedback,
             "territoris": territoris,
+            "social_metrics": {
+                "followers_series": dict(followers_series),
+                "latest_platform": latest_platform,
+                "top_posts": top_posts,
+            },
         }
     )

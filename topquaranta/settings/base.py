@@ -180,7 +180,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-ADMINS = [("TopQuaranta", "admin@topquaranta.cat")]
+# Django 6 accepts both `[(name, addr)]` and `[addr]`; Django 7
+# drops the tuple form (RemovedInDjango70Warning). Use plain
+# strings now so the future bump is a no-op.
+ADMINS = ["admin@topquaranta.cat"]
 DEFAULT_FROM_EMAIL = "noreply@topquaranta.cat"
 SERVER_EMAIL = "noreply@topquaranta.cat"
 

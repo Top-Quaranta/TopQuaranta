@@ -79,15 +79,43 @@ from web.api.staff._common import IsStaff, _paginate
 # ═════════════════════════════════════════════════════════════════════════
 
 
+# Field-name patterns we treat as secret. Anything matching is masked
+# in the read response and recorded as `***` in the audit diff so a
+# future config field added with a sensitive name doesn't leak by
+# accident (the model is reflection-iterated). May-2026 audit fix.
+_SECRET_PATTERNS = ("_token", "_secret", "_password", "_key", "_apikey")
+
+
+def _is_secret_field(name: str) -> bool:
+    n = name.lower()
+    return any(p in n for p in _SECRET_PATTERNS)
+
+
+def _mask_secret(value):
+    s = str(value or "")
+    if not s:
+        return ""
+    if len(s) <= 8:
+        return "•" * len(s)
+    return f"{s[:4]}…{s[-4:]}"
+
+
 def _config_fields(config):
     out = []
     for field in ConfiguracioGlobal._meta.get_fields():
         if hasattr(field, "attname") and field.attname != "id":
+            raw_value = getattr(config, field.attname)
+            display_value = (
+                _mask_secret(raw_value)
+                if _is_secret_field(field.attname)
+                else raw_value
+            )
             out.append(
                 {
                     "name": field.attname,
                     "label": field.attname.replace("_", " ").title(),
-                    "value": getattr(config, field.attname),
+                    "value": display_value,
+                    "is_secret": _is_secret_field(field.attname),
                     "help": getattr(field, "help_text", "") or "",
                     "type": field.get_internal_type(),
                 }
@@ -127,8 +155,15 @@ def configuracio(request: Request) -> Response:
                 status=400,
             )
         after = {f.attname: getattr(config, f.attname) for f in fields}
+        # Mask secret fields in the audit log diff so the value never
+        # lands in StaffAuditLog plaintext (would survive log
+        # retention + backups). The fact that the field changed is
+        # still recorded — only the values are obscured.
         diff = {
-            n: {"before": str(before[n]), "after": str(after[n])}
+            n: {
+                "before": ("***" if _is_secret_field(n) else str(before[n])),
+                "after": ("***" if _is_secret_field(n) else str(after[n])),
+            }
             for n in before
             if str(before[n]) != str(after[n])
         }

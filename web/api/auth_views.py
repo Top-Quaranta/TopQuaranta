@@ -166,7 +166,7 @@ def _send_verification_email(request, user) -> None:
     try:
         send_mail(subject, body, None, [user.email])
     except Exception:
-        logger.exception("Failed to send verification email to %s", user.email)
+        logger.exception("Failed to send verification email to user pk=%s", user.pk)
 
 
 @api_view(["POST"])
@@ -255,7 +255,7 @@ def register_view(request: Request) -> Response:
             )
         _send_verification_email(request, user)
     else:
-        logger.info("Registration for existing email ignored: %s", email)
+        logger.debug("Registration attempt with existing email (no enumeration leak)")
 
     return Response(
         {

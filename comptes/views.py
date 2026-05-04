@@ -76,7 +76,9 @@ def registre(request: HttpRequest) -> HttpResponse:
                 user = form.save()
                 _send_verification_email(request, user)
             else:
-                logger.info("Registration for existing email ignored: %s", email)
+                logger.debug(
+                    "Registration attempt with existing email (no enumeration leak)"
+                )
             return render(request, "comptes/registre_ok.html")
     else:
         form = RegistreForm()
@@ -102,7 +104,7 @@ def _send_verification_email(request: HttpRequest, user) -> None:
     try:
         send_mail(subject, text_body, None, [user.email], html_message=html_body)
     except Exception:
-        logger.exception("Failed to send verification email to %s", user.email)
+        logger.exception("Failed to send verification email to user pk=%s", user.pk)
 
 
 def activar(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
@@ -289,7 +291,7 @@ def dos_fa_configurar(request: HttpRequest) -> HttpResponse:
             device.save()
             backup_codes = _generate_backup_codes(user)
             otp_login(request, device)
-            logger.info("2FA enrolled for %s", user.email)
+            logger.info("2FA enrolled for user pk=%s", user.pk)
         else:
             error = "Codi incorrecte. Torna-ho a provar."
 
@@ -341,10 +343,12 @@ def dos_fa_verificar(request: HttpRequest) -> HttpResponse:
                     break
         if verified_device is not None:
             otp_login(request, verified_device)
-            logger.info("2FA verified for %s (%s)", user.email, verified_device.name)
+            logger.info(
+                "2FA verified for user pk=%s (%s)", user.pk, verified_device.name
+            )
             return redirect(next_url)
         error = "Codi incorrecte."
-        logger.warning("2FA failed for %s", user.email)
+        logger.warning("2FA failed for user pk=%s", user.pk)
 
     return render(
         request,

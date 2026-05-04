@@ -69,6 +69,7 @@ const FeedbackPage = lazy(() => import('./pages/staff/FeedbackPage'))
 const StaffSocialPage = lazy(() => import('./pages/staff/StaffSocialPage'))
 const EstatPage = lazy(() => import('./pages/staff/EstatPage'))
 const StaffPublicacionsPage = lazy(() => import('./pages/staff/StaffPublicacionsPage'))
+const StaffAnalyticsPage = lazy(() => import('./pages/staff/StaffAnalyticsPage'))
 
 /** Top-level error boundary — catches unexpected render errors and
  *  shows a minimal fallback with a reload button. */
@@ -202,6 +203,7 @@ function AppContent() {
                   <Route path="/social" element={<StaffSocialPage />} />
                   <Route path="/estat" element={<EstatPage />} />
                   <Route path="/publicacions" element={<StaffPublicacionsPage />} />
+                  <Route path="/analytics" element={<StaffAnalyticsPage />} />
                 </Routes>
                 </Suspense>
               </StaffLayout>

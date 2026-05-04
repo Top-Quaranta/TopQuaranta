@@ -1,15 +1,15 @@
 /**
  * StaffDashboardPage — landing for /staff.
  *
- * Grid of tool cards. Each card shows the tool name + a short
- * description + a live counter (open pending items) pulled from
- * `/api/v1/staff/dashboard/`. Cards are React Router <Link>s so
- * navigation stays SPA-internal.
+ * Tools grouped by the same taxonomy as the left sidebar
+ * (`StaffLayout::GROUPS`) so the visual hierarchy stays consistent
+ * and the operator's mental model is reused: whatever they're used to
+ * scanning down on the side, they now also scan down here. Each group
+ * gets its own banner; tools render as cards with a description and an
+ * optional live counter pulled from `/api/v1/staff/dashboard/`.
  *
- * When the counters API is loading we render the cards without the
- * badge so the layout doesn't jump; when an area has 0 open items we
- * still render the card (the tool itself remains useful) but hide
- * the badge.
+ * Adding a new staff tool: drop it in the right `GROUPS` entry and
+ * (if it has a queue) wire its counter through `count`.
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -38,6 +38,69 @@ function Tile({ to, title, desc, count }) {
     </Link>
   )
 }
+
+// Each group renders as a banner + grid of tiles. `countKey` indexes
+// into the dashboard counters payload — leave it `null` for evergreen
+// tools that have no queue. Mirrors `StaffLayout::GROUPS` 1-to-1.
+const GROUPS = [
+  {
+    label: 'Visió general',
+    items: [
+      { to: '/staff/estat',     title: 'Estat del sistema', desc: 'Inventari, pipelines, ML i cues — dashboard visual.' },
+      { to: '/staff/analytics', title: 'Analytics',         desc: 'Mètriques agregades del web, comunitat i xarxes socials.' },
+    ],
+  },
+  {
+    label: 'Cua del dia',
+    items: [
+      { to: '/staff/pendents',     title: 'Artistes pendents',     desc: 'Aprovar o descartar artistes auto-descoberts per la ingesta.', countKey: 'artistes_pendents'        },
+      { to: '/staff/propostes',    title: "Propostes d'artistes",  desc: "Propostes d'usuaris per afegir artistes nous al sistema.",     countKey: 'propostes_obertes'        },
+      { to: '/staff/solicituds',   title: 'Sol·licituds de gestió', desc: 'Usuaris demanant poder gestionar un artista existent.',        countKey: 'solicituds_gestio_obertes' },
+      { to: '/staff/feedback',     title: "Feedback d'usuaris",    desc: 'Correccions i errors reportats des de les pàgines públiques.', countKey: 'feedback_obert'           },
+    ],
+  },
+  {
+    label: 'Catàleg',
+    items: [
+      { to: '/staff/artistes', title: 'Artistes', desc: "Llista, edició i creació manual d'artistes aprovats." },
+      { to: '/staff/cancons',  title: 'Cançons',  desc: 'Cançons no verificades a revisar.', countKey: 'cancons_no_verificades' },
+      { to: '/staff/albums',   title: 'Àlbums',   desc: "Edició d'àlbums i correcció de portades." },
+    ],
+  },
+  {
+    label: 'Top',
+    items: [
+      { to: '/staff/top', title: 'Top provisional', desc: 'Revisar el ranking diari i rebutjar entrades.' },
+    ],
+  },
+  {
+    label: 'Comunitat',
+    items: [
+      { to: '/staff/publicacions', title: 'Publicacions pendents', desc: 'Publicacions públiques esperant aprovació.', countKey: 'publicacions_pendents' },
+      { to: '/staff/usuaris',      title: 'Usuaris',               desc: "Llista d'usuaris, moderació d'spam, reset 2FA." },
+    ],
+  },
+  {
+    label: 'Distribució',
+    items: [
+      { to: '/staff/social', title: 'Distribució multi-canal', desc: 'Calendari setmanal a Instagram, Mastodon, Bluesky, Telegram, newsletter i RSS.' },
+    ],
+  },
+  {
+    label: 'Diagnòstic',
+    items: [
+      { to: '/staff/senyal',    title: 'Senyal diari',          desc: 'Dades brutes Last.fm (playcount + listeners) per dia.' },
+      { to: '/staff/historial', title: 'Historial de decisions', desc: "Log d'aprovacions i rebuigs previs." },
+      { to: '/staff/auditlog',  title: 'Auditoria staff',       desc: "Registre immutable d'accions destructives." },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { to: '/staff/configuracio', title: 'Configuració global', desc: "Coeficients de l'algorisme de ranking i kill-switches." },
+    ],
+  },
+]
 
 export default function StaffDashboardPage() {
   const [counts, setCounts] = useState(null)
@@ -79,93 +142,25 @@ export default function StaffDashboardPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <Tile
-          to="/staff/estat"
-          title="Estat del sistema"
-          desc="Inventari, pipelines, ML i cues — dashboard visual."
-        />
-        <Tile
-          to="/staff/pendents"
-          title="Artistes pendents"
-          desc="Aprovar o descartar artistes auto-descoberts per la ingesta."
-          count={c.artistes_pendents}
-        />
-        <Tile
-          to="/staff/propostes"
-          title="Propostes d'artistes"
-          desc="Propostes d'usuaris per afegir artistes nous al sistema."
-          count={c.propostes_obertes}
-        />
-        <Tile
-          to="/staff/solicituds"
-          title="Sol·licituds de gestió"
-          desc="Usuaris demanant poder gestionar un artista existent."
-          count={c.solicituds_gestio_obertes}
-        />
-        <Tile
-          to="/staff/feedback"
-          title="Feedback d'usuaris"
-          desc="Correccions i errors reportats des de les pàgines públiques."
-          count={c.feedback_obert}
-        />
-        <Tile
-          to="/staff/publicacions"
-          title="Publicacions pendents"
-          desc="Publicacions públiques esperant aprovació."
-          count={c.publicacions_pendents}
-        />
-        <Tile
-          to="/staff/cancons"
-          title="Cançons"
-          desc="Cançons no verificades a revisar."
-          count={c.cancons_no_verificades}
-        />
-        <Tile
-          to="/staff/artistes"
-          title="Artistes"
-          desc="Llista, edició i creació manual d'artistes aprovats."
-        />
-        <Tile
-          to="/staff/albums"
-          title="Albums"
-          desc="Edició d'àlbums i correcció de portades."
-        />
-        <Tile
-          to="/staff/top"
-          title="Top provisional"
-          desc="Revisar el ranking diari i rebutjar entrades."
-        />
-        <Tile
-          to="/staff/senyal"
-          title="Senyal diari"
-          desc="Dades brutes Last.fm (playcount + listeners) per dia."
-        />
-        <Tile
-          to="/staff/historial"
-          title="Historial de decisions"
-          desc="Log d'aprovacions i rebuigs previs."
-        />
-        <Tile
-          to="/staff/configuracio"
-          title="Configuració global"
-          desc="Coeficients de l'algorisme de ranking."
-        />
-        <Tile
-          to="/staff/auditlog"
-          title="Auditoria staff"
-          desc="Registre immutable d'accions destructives."
-        />
-        <Tile
-          to="/staff/usuaris"
-          title="Usuaris"
-          desc="Llista d'usuaris, moderació d'spam, reset 2FA."
-        />
-        <Tile
-          to="/staff/social"
-          title="Distribució multi-canal"
-          desc="Calendari setmanal a Instagram, Mastodon, Bluesky, Telegram, newsletter i RSS."
-        />
+      <div className="space-y-7">
+        {GROUPS.map(group => (
+          <div key={group.label}>
+            <h2 className="text-[11px] uppercase tracking-widest text-white/60 mb-2">
+              {group.label}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {group.items.map(item => (
+                <Tile
+                  key={item.to}
+                  to={item.to}
+                  title={item.title}
+                  desc={item.desc}
+                  count={item.countKey ? c[item.countKey] : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   )

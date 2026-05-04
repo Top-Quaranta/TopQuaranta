@@ -23,10 +23,11 @@ from django.core.validators import validate_email
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +104,20 @@ def me(request: Request) -> Response:
     return Response(_profile(request))
 
 
+class _AuthLoginThrottle(ScopedRateThrottle):
+    scope = "auth_login"
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([_AuthLoginThrottle])
 def login_view(request: Request) -> Response:
     """Authenticate via email + password and open a session.
 
     `django-axes` rate-limits failed attempts automatically via its
-    authentication backend; no extra logic here.
+    authentication backend; this throttle adds a per-IP cap (5/min)
+    so even a fresh IP rotation can't burst-test credentials past
+    the axes failure-limit window.
     """
     email = (request.data.get("email") or "").strip().lower()
     password = request.data.get("password") or ""

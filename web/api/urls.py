@@ -9,10 +9,10 @@ from . import (
     compte_views,
     comunitat_views,
     home_views,
+    mapa_views,
     social_public,
     staff_views,
     top_views,
-    views,
 )
 
 app_name = "api"
@@ -414,25 +414,25 @@ urlpatterns = [
         name="canco_top_breakdown_public",
     ),
     # Mapa (existing + drill-down)
-    path("mapa/artistes/", views.mapa_artistes, name="mapa_artistes"),
-    path("mapa/stats/", views.mapa_stats, name="mapa_stats"),
+    path("mapa/artistes/", mapa_views.mapa_artistes, name="mapa_artistes"),
+    path("mapa/stats/", mapa_views.mapa_stats, name="mapa_stats"),
     path(
         "mapa/municipi-artistes/",
-        views.mapa_municipi_artistes,
+        mapa_views.mapa_municipi_artistes,
         name="mapa_municipi_artistes",
     ),
     path(
         "mapa/artistes-top/",
-        views.mapa_artistes_top,
+        mapa_views.mapa_artistes_top,
         name="mapa_artistes_top",
     ),
     # Location API — reference data, no auth required
-    path("localitzacio/territoris/", views.api_territoris, name="api_territoris"),
-    path("localitzacio/comarques/", views.api_comarques, name="api_comarques"),
-    path("localitzacio/municipis/", views.api_municipis, name="api_municipis"),
+    path("localitzacio/territoris/", mapa_views.api_territoris, name="api_territoris"),
+    path("localitzacio/comarques/", mapa_views.api_comarques, name="api_comarques"),
+    path("localitzacio/municipis/", mapa_views.api_municipis, name="api_municipis"),
     path(
         "localitzacio/municipi-lookup/",
-        views.api_municipi_lookup,
+        mapa_views.api_municipi_lookup,
         name="api_municipi_lookup",
     ),
     # Image upload (publication editor + profile photo)

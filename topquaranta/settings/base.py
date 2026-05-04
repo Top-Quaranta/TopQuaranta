@@ -95,6 +95,16 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
         "user": "300/min",
+        # ScopedRateThrottle scopes (May-2026 audit). Apply per
+        # endpoint with `throttle_scope = "<scope>"` on the view.
+        # Defends sensitive primitives from online guessing within
+        # the axes brute-force window — axes only catches login
+        # itself; 2FA-verify, unsubscribe and data-export weren't
+        # protected against repeated requests from the same IP.
+        "auth_login": "5/min",
+        "auth_2fa": "10/min",
+        "newsletter_unsubscribe": "10/min",
+        "data_export": "3/hour",  # heavy email-generating endpoint
     },
 }
 

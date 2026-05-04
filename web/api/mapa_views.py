@@ -434,7 +434,7 @@ def mapa_municipi_artistes(request: Request) -> Response:
 
 @condition(etag_func=_mapa_etag, last_modified_func=_mapa_last_modified)
 @api_view(["GET"])
-@cache_for_anon(60, key_prefix="mapa")
+@cache_for_anon(300, key_prefix="mapa")
 def mapa_artistes_top(request: Request) -> Response:
     """Artistes for the /mapa side panel, sorted by listens, any level.
 

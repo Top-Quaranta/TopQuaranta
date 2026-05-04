@@ -35,7 +35,7 @@ from web.api.utils import cache_for_anon
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@cache_for_anon(60, key_prefix="home-stats")
+@cache_for_anon(300, key_prefix="home-stats")
 def stats(request: Request) -> Response:
     """Counters for the HomePage stats strip + countdown indicator.
 

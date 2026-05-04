@@ -20,7 +20,7 @@ from web.api.utils import cache_for_anon
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@cache_for_anon(60, key_prefix="albums-list")
+@cache_for_anon(300, key_prefix="albums-list")
 def album_list(request: Request) -> Response:
     """List albums for the public catalogue / HomePage strip.
 

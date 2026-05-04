@@ -669,6 +669,10 @@ def upload_imatge(request: Request) -> Response:
             {"error": f"Màxim {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB per imatge."},
             status=400,
         )
+    # NB: `f.content_type` is the browser-supplied header; trivially
+    # spoofable. We use it as a fast rejection but the authoritative
+    # check is Pillow's `img.format` after load (below). May-2026
+    # audit fix.
     if f.content_type not in _ALLOWED_CONTENT_TYPES:
         return Response(
             {"error": "Tipus no permès. Només JPEG, PNG o WebP."}, status=400
@@ -704,6 +708,15 @@ def upload_imatge(request: Request) -> Response:
         img.load()  # force read so exceptions surface here, not later
     except (UnidentifiedImageError, OSError):
         return Response({"error": "El fitxer no és una imatge vàlida."}, status=400)
+
+    # Authoritative format check via Pillow's auto-detection.
+    # Defends against polyglot uploads where the client lies in
+    # `content_type` but the actual binary is e.g. an SVG with
+    # JS or a weaponised file disguised as an image.
+    if img.format not in {"JPEG", "PNG", "WEBP"}:
+        return Response(
+            {"error": f"Format detectat invàlid: {img.format}."}, status=400
+        )
 
     # Normalize: convert to RGB for JPEG, strip EXIF, resize if wider
     # than the target. Square-crop profile photos to a tidy 1:1.

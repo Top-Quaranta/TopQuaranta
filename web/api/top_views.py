@@ -174,7 +174,7 @@ def _top_etag(request, *args, **kwargs):
 @condition(etag_func=_top_etag, last_modified_func=_top_last_modified)
 @api_view(["GET"])
 @permission_classes([AllowAny])
-@cache_for_anon(60, key_prefix="ranking")
+@cache_for_anon(300, key_prefix="ranking")
 def ranking(request: Request) -> Response:
     """Top 40 for a territory + week. Defaults to latest week.
 

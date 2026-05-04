@@ -14,10 +14,20 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+
+
+class _DataExportThrottle(ScopedRateThrottle):
+    scope = "data_export"
+
+
+class _NewsletterUnsubThrottle(ScopedRateThrottle):
+    scope = "newsletter_unsubscribe"
+
 
 from comptes.models import HTTP_ONLY_URL, Feedback, PropostaArtista, UserArtista, Usuari
 from music.models import Artista, Municipi
@@ -701,6 +711,7 @@ def compte_esborrar_sollicitar(request: Request) -> Response:
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([_DataExportThrottle])
 def exportar_dades(request: Request) -> Response:
     """Right to data portability (RGPD art. 20).
 
@@ -909,6 +920,7 @@ def exportar_dades(request: Request) -> Response:
 
 @api_view(["GET"])
 @permission_classes([])
+@throttle_classes([_NewsletterUnsubThrottle])
 def baixa_newsletter(request: Request) -> Response:
     """Token-based newsletter unsubscribe (RGPD art. 7.3 — withdrawal
     must be as easy as giving consent). Intended to be linked from

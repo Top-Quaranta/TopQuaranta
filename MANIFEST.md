@@ -127,7 +127,7 @@ it and made a decision that's logged in `HistorialRevisio`.
 
 ### Open source, open data, open governance
 
-- Code: [github.com/miquelmatoses/TopQuaranta](https://github.com/miquelmatoses/TopQuaranta).
+- Code: [github.com/Top-Quaranta/TopQuaranta](https://github.com/Top-Quaranta/TopQuaranta).
 - Data: CC BY 4.0 (`LICENSE-DATA.md`).
 - Governance: every destructive or consequential staff action is
   logged in `StaffAuditLog`. Every coefficient change is public.

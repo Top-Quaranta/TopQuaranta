@@ -14,7 +14,7 @@
 ![Django](https://img.shields.io/badge/Django_5.2-0047ba?style=for-the-badge&logo=django&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-0047ba?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Last.fm](https://img.shields.io/badge/Last.fm-cf3339?style=for-the-badge&logo=lastdotfm&logoColor=white)
-![CI](https://img.shields.io/github/actions/workflow/status/miquelmatoses/TopQuaranta/ci.yml?branch=main&style=for-the-badge&label=CI)
+![CI](https://img.shields.io/github/actions/workflow/status/Top-Quaranta/TopQuaranta/ci.yml?branch=main&style=for-the-badge&label=CI)
 
 </div>
 
@@ -103,7 +103,7 @@ Requisits: Python 3.10, PostgreSQL 14+ (o SQLite per a tests).
 
 ```bash
 # 1. Clone
-git clone git@github.com:miquelmatoses/TopQuaranta.git
+git clone git@github.com:Top-Quaranta/TopQuaranta.git
 cd TopQuaranta
 
 # 2. Entorn virtual + dependencies

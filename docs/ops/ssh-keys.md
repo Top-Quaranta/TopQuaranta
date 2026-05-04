@@ -2,7 +2,7 @@
 
 ## Current state (2026-04-17, verified)
 
-- `git@github.com:miquelmatoses/TopQuaranta.git` — remote origin uses SSH.
+- `git@github.com:Top-Quaranta/TopQuaranta.git` — remote origin uses SSH.
 - `~/.ssh/id_ed25519_github` — ed25519 deploy key registered as **read-only** on GitHub. Used by `~/.ssh/config` → `Host github.com`.
 - No Personal Access Token anywhere in `.git/config`, `~/.netrc`, environment variables, or the repo itself.
 
@@ -42,7 +42,7 @@ cat ~/.ssh/id_ed25519_github_new.pub
 # 3. Point ~/.ssh/config at the new key (edit IdentityFile line).
 
 # 4. Test:
-ssh -T git@github.com  # should say "Hi miquelmatoses/TopQuaranta!"
+ssh -T git@github.com  # should say "Hi Top-Quaranta/TopQuaranta!"
 cd ~/app && git fetch
 
 # 5. Once confirmed, delete the old deploy key on GitHub and remove

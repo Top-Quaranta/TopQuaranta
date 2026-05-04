@@ -194,7 +194,7 @@ export default function ComFuncionaPage() {
           <li>
             <strong>Reporta un bug o proposa una millora</strong> al{' '}
             <a
-              href="https://github.com/miquelmatoses/TopQuaranta"
+              href="https://github.com/Top-Quaranta/TopQuaranta"
               target="_blank"
               rel="noopener"
               className="text-tq-ink underline hover:text-tq-yellow-deep"

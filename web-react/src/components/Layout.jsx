@@ -48,7 +48,7 @@ function FooterLine() {
       </Link>
       <span>·</span>
       <a
-        href="https://github.com/miquelmatoses/TopQuaranta"
+        href="https://github.com/Top-Quaranta/TopQuaranta"
         target="_blank"
         rel="noopener"
         className="underline hover:opacity-100"

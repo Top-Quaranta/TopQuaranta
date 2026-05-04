@@ -12,8 +12,8 @@ export default function LlicenciesPage() {
         <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">
           GNU Affero General Public License v3.0 (AGPL-3.0)
         </a>. Repositori:{' '}
-        <a href="https://github.com/miquelmatoses/TopQuaranta" target="_blank" rel="noopener">
-          github.com/miquelmatoses/TopQuaranta
+        <a href="https://github.com/Top-Quaranta/TopQuaranta" target="_blank" rel="noopener">
+          github.com/Top-Quaranta/TopQuaranta
         </a>.
       </p>
 

@@ -108,7 +108,7 @@ the SPA palette but has no dependency on mm-design.
 - **DB:** `topquaranta` on localhost. 37 tables (18 domain + Django/axes/
   otp/session internals).
 - **Working dir:** `/home/topquaranta/app/`. Virtualenv: `.venv/`.
-- **Repo:** `github.com/miquelmatoses/TopQuaranta` (private).
+- **Repo:** `github.com/Top-Quaranta/TopQuaranta` (private).
 
 ## 4. Project structure
 

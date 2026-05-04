@@ -1,0 +1,262 @@
+# Analytics suite
+
+> Ethical, aggregate-only product analytics. No PII. No third-party JS.
+> No fingerprinting. Built in May-2026 (sprints **K1–K4**).
+
+This document describes how the analytics pipeline works end-to-end,
+what each table holds, what gets shown where, and what we deliberately
+don't measure.
+
+## Design constraints
+
+The hard rules every component below respects:
+
+1. **No personal identifiers** — never `request.user.pk`, never IP,
+   never User-Agent, never Referer, never session keys.
+2. **Aggregates only** — every row is a counter or a daily snapshot
+   keyed by `(data, clau, dim*)`. Resolution is one row per day per
+   bucket; we don't keep timestamps below day-granularity.
+3. **Closed allowlists** — public ingest endpoints accept only known
+   `clau` values (`web/api/analytics_ingest.py::_PUBLIC_EVENT_KEYS`).
+   New events require backend code first; that's intentional schema
+   discipline since these rows live forever.
+4. **Fail-open** — analytics MUST NOT break a user-facing flow. Every
+   bump is wrapped in `try/except` and silently logged on failure.
+5. **No third-party JS** — no Google Analytics, no Meta pixel, no
+   Plausible. Everything runs on our own backend.
+
+## Tables
+
+Both tables live in `analytics/models.py`. `dim*` slots are short
+free-form strings (max 80 chars) that hold low-cardinality
+discriminators only — never user identifiers.
+
+### `MetricaEsdeveniment`
+
+Atomic event counter.
+
+| Field        | Notes |
+|---           |---|
+| `data`       | DateField; one row per day per bucket. |
+| `clau`       | Event name, e.g. `pageview`, `registre_complet`. |
+| `dimensio_1` | Optional bucket. For `pageview` it's the URL path; for `utm_landing` the UTM source; for `social_publicat` the channel. |
+| `dimensio_2` | Optional second bucket (e.g. UTM campaign, slot tipus). |
+| `comptador`  | `PositiveIntegerField`, atomically incremented via `F("comptador") + 1`. |
+
+Increments happen via `analytics.events.register(clau, dim1, dim2, n)`.
+The helper:
+
+* Uses `update_or_create` to insert on first occurrence.
+* Uses `F()` expression on subsequent increments — concurrent gunicorn
+  workers can't lose counts.
+* Catches `IntegrityError` and retries with a pure `UPDATE` to
+  recover from the race where two workers both try to insert the
+  same row simultaneously.
+* Is wrapped in a fail-open `try/except`.
+
+### `MetricaPipeline`
+
+Daily gauge snapshot of a pipeline-state metric.
+
+| Field         | Notes |
+|---            |---|
+| `data`        | DateField. |
+| `clau`        | Gauge name, e.g. `cancons_verificades`. |
+| `dimensio_1`  | Optional discriminator (e.g. territori_codi for `cancons_per_territori`). |
+| `valor_int`   | `BigIntegerField`, NULL when the metric is a float. |
+| `valor_float` | `FloatField`, NULL when the metric is an integer. |
+
+Both `valor_*` columns exist so a single table serves int + float
+gauges without JSON. Snapshots are written by the
+`snapshot_pipeline` cron at 23:00 daily; idempotent via the unique
+constraint on `(data, clau, dimensio_1)`.
+
+### `MetricaSocialPost` *(K2)*
+
+Per-post engagement snapshot. One row per (SocialPost, day) so we keep
+the engagement curve.
+
+| Field              | Notes |
+|---                 |---|
+| `socialpost`       | FK → `social.SocialPost`. |
+| `data`             | DateField. |
+| `likes`/`replies`/`shares`/`reach`/`impressions`/`clicks` | Lowest common denominator across platforms. |
+| `raw`              | JSONB with the full API response so the UI can surface platform-specific numbers (saves, total_interactions, quoteCount…) without a schema change. |
+
+### `MetricaSocialPlatform` *(K2)*
+
+Daily account-level gauge per platform. Free-form `metric` field so
+new KPIs ship without a migration.
+
+| Field      | Notes |
+|---         |---|
+| `data`     | DateField. |
+| `platform` | `instagram`, `mastodon`, `bluesky`, `telegram`. |
+| `metric`   | `followers`, `following`, `posts_total`, `members`. |
+| `valor`    | `BigIntegerField`. |
+| `raw`      | JSONB. |
+
+## Ingest paths
+
+### 1. Django middleware → pageviews + UTM
+
+`analytics.middleware.AnalyticsMiddleware` records:
+
+* `pageview` for every 2xx/3xx GET on a public Django path.
+* `utm_landing` whenever the request URL carries `?utm_source=…`.
+
+Skips `/api/`, `/static/`, `/media/`, `/favicon`, `/robots.txt`,
+`/sitemap.xml`, `/staff/`, `/compte/2fa/`, `/health` — these would
+either spam the table or duplicate work GoAccess does on Caddy logs.
+
+### 2. SPA beacon → pageviews + curated events
+
+The React SPA is served as static `dist/` files by Caddy and never
+hits Django for navigation, so the middleware can't see SPA route
+changes. Two POST endpoints fill that gap:
+
+* `POST /api/v1/analytics/pageview/` — `{path, utm_source?, utm_campaign?}`
+* `POST /api/v1/analytics/event/` — `{clau, dim1?, dim2?}` where
+  `clau` ∈ `_PUBLIC_EVENT_KEYS` (closed allowlist).
+
+Both return 204. Throttled per-IP at 60/min via the project default.
+*(SPA wiring of these beacons happens in K3+ as the React pages add
+share-click / escolta-click hooks.)*
+
+### 3. Backend `register()` calls
+
+The flows that already write to the DB also bump a counter:
+
+| Where | Event |
+|---|---|
+| `web/api/auth_views.register_view` | `registre_complet` (dim1: `newsletter` or `no_newsletter`) |
+| `web/api/compte_views/propostes.proposta_crear` | `proposta_crear` |
+| `web/api/compte_views/propostes.solicitud_crear` | `solicitud_gestor_crear` |
+| `web/api/compte_views/feedback.feedback_crear` | `feedback_crear` (dim1: target_type) |
+| `social/management/commands/publicar_canal._handle` | `social_publicat` (dim1: channel, dim2: tipus) |
+| `social/management/commands/publicar_social._publish_*` | `social_publicat` (dim1: platform, dim2: tipus) |
+
+### 4. Daily snapshot cron
+
+`analytics/management/commands/snapshot_pipeline.py` runs at 23:00 UTC.
+Writes ~15 gauges in one short transaction:
+
+* Catalog totals (verificades, pendents, rebutjades_acumulades).
+* Coverage percentages (Whisper LID, MusicBrainz).
+* Community gauges (usuaris actius, newsletter, directori).
+* Per-territori catalog distribution (one row per territori).
+
+### 5. Social metrics cron *(K2)*
+
+`analytics/management/commands/recollir_metrics_social.py` runs at
+22:30 UTC. Two passes:
+
+1. Per-post engagement: every `SocialPost` published in the last
+   30 days, fetched via `get_post_metrics()` on each platform's
+   client. Upserted into `MetricaSocialPost(socialpost, data=today)`.
+2. Per-platform account stats: one call per platform via
+   `get_account_stats()`. Upserted into `MetricaSocialPlatform`.
+
+Wrapped in `SingletonLock("analytics_metrics_social")` so two cron
+instances can't double-spend rate-limit budgets. Fail-open per
+platform: a Mastodon hiccup doesn't stop Bluesky/IG.
+
+Telegram per-post engagement is **not supported** — the Bot API
+doesn't expose channel-post views (would need MTProto via Telethon
+or Pyrogram, not worth the dependency for one number). We mark
+`raw.not_supported = "telegram_bot_api_lacks_post_views"` so the
+dashboard can hide Telegram engagement instead of charting fake
+silence.
+
+## Dashboards
+
+### Staff `/staff/analytics` *(K3)*
+
+Single fetch to `GET /api/v1/staff/analytics/summary/?days=N` returns
+the entire payload; five tabs derive client-side from that one call.
+
+* **Resum** — KPI tiles with half-period-over-half-period deltas;
+  auto-generated insights (pageview swings ≥10 %, top feedback
+  surface, verification growth, best-performing post); joint
+  pageviews + registres line.
+* **Pipeline** — verificades / pendents / rebutjades line, cobertura
+  whisper + MB, per-territori bar (using `TERR_COLORS`), comunitat
+  line.
+* **Social** — followers KPI strip, followers daily series per
+  platform (using `PLATFORM_COLORS`), publicacions per canal bar,
+  top 10 posts table with CSV export.
+* **Web** — daily pageviews bar, top 20 paths + UTM source/campaign
+  tables, both with CSV export.
+* **Cohorts** — five-line activity chart (registres, propostes,
+  sol·licituds, feedback, publicacions); feedback distribution pie;
+  raw counter audit table.
+
+Window selector: 7d / 30d / 90d / 1a — re-fetches on change. CSV
+export uses semicolons (Excel ca-ES default), quotes only when
+needed, downloads in the browser without a server round-trip.
+
+### Weekly admin digest *(K4)*
+
+Every Monday morning at 08:00 UTC, `enviar_digest_setmanal` emails
+`admin@topquaranta.cat` a one-page text summary of the prior week:
+top KPIs with W-o-W deltas, top 5 pages, top 5 UTM sources, top 3
+social posts. Same data the dashboard shows; pushed via Brevo SMTP
+so it's actionable even when nobody opens the dashboard.
+
+## What we deliberately don't measure
+
+* **No `request.user.pk` on any analytics row.** Login state matters
+  for the action (e.g. `proposta_crear` requires auth) but the
+  counter row stores no user reference.
+* **No IP address.** Neither stored nor hashed. GoAccess on Caddy
+  logs handles the rare cases where IP-level analysis is needed
+  for ops/security; that data lives in `/var/log/caddy/` (perms
+  0600) and never enters the Django DB.
+* **No User-Agent.** Could fingerprint.
+* **No Referer.** Could leak inbound URLs containing tokens.
+* **No session-keyed deduplication.** "How many unique users"
+  is a question we deliberately can't answer with this stack;
+  use GoAccess (IP-based, separate, not in Django) for that.
+* **No third-party JS.** No Google Analytics, no Meta pixel, no
+  Plausible script, no Cloudflare Web Analytics. The only network
+  calls the SPA makes for telemetry are POSTs to our own
+  `/api/v1/analytics/*` endpoints.
+
+## Operational details
+
+### Cron lines
+
+```
+30 22 * * * topquaranta /home/topquaranta/bin/tq-run recollir_metrics_social >> /var/log/topquaranta/analytics.log 2>&1
+0  23 * * * topquaranta /home/topquaranta/bin/tq-run snapshot_pipeline       >> /var/log/topquaranta/analytics.log 2>&1
+0  8  * * 1 topquaranta /home/topquaranta/bin/tq-run enviar_digest_setmanal  >> /var/log/topquaranta/analytics.log 2>&1
+```
+
+### Failure surfacing
+
+Both crons appear in `/staff/estat` via `CRON_META` entries. A miss
+shows `STUCK(Nh, Nskips)` in red and triggers the `tq-health`
+watchdog email at the next hourly tick.
+
+### Pruning
+
+We never delete from these tables. At current scale (~thousands of
+rows/day worst case across all four tables) we have years of
+headroom. When (and if) we ever need a retention cron, key it on
+`data < today - INTERVAL '2 years'` and run it monthly.
+
+### GoAccess (Caddy log analysis)
+
+GoAccess parses `/var/log/caddy/access.log` and produces an HTML
+report at `/var/www/goaccess/index.html`, served at
+`https://www.topquaranta.cat/staff/goaccess/` with HTTP basic auth.
+Complements the Django dashboard:
+
+* The Django side measures **what people do** (events, conversions,
+  funnel deltas).
+* GoAccess measures **how the server responds** (404 leaderboard,
+  bot traffic, hot files, geo distribution).
+
+GoAccess never writes to the Django DB; it's pure log analytics.
+
+Setup is in `deploy/goaccess.md`.

@@ -13,6 +13,14 @@ export default function PrivacitatPage() {
         Si visites el lloc sense crear compte, no sabem qui ets.
       </p>
       <p>
+        Sí que tenim mètriques agregades pròpies per a entendre què
+        funciona i què no (quantes visites rep cada pàgina, quants
+        registres es completen, quins enllaços a xarxes socials
+        funcionen…), però són <strong>només números, mai dades
+        individuals</strong>. Vegeu la secció «Mètriques agregades»
+        més avall per al detall complet.
+      </p>
+      <p>
         Si crees un compte, guardem just el necessari perquè el servei
         funcioni: el teu correu, una contrasenya xifrada, el teu
         perfil públic (si l'omples), les propostes i correccions que
@@ -68,6 +76,53 @@ export default function PrivacitatPage() {
           de login (django-axes), conservats 6 mesos.
         </li>
       </ul>
+
+      <h2>Mètriques agregades</h2>
+      <p>
+        Per a poder millorar el servei sense espiar ningú, comptem
+        esdeveniments anònims agregats per dia. Concretament:
+      </p>
+      <ul>
+        <li>
+          <strong>Pageviews per ruta</strong> — quantes vegades s'ha
+          visitat cada pàgina pública (p. ex. <code>/top</code>,
+          <code>/artistes</code>). No registrem qui l'ha visitada,
+          ni la IP, ni el navegador, ni la pàgina d'origen.
+        </li>
+        <li>
+          <strong>UTM landings</strong> — si arribes amb un enllaç
+          marcat (per exemple des d'un post nostre a Mastodon),
+          comptem la combinació (font, campanya). Així sabem si la
+          newsletter porta més gent que Telegram. No es vincula a
+          cap visitant concret.
+        </li>
+        <li>
+          <strong>Esdeveniments del producte</strong> — comptadors
+          tipus «registre completat», «proposta enviada»,
+          «feedback enviat», «clic a Spotify/Deezer/YouTube». Tot
+          en agregat, sense identificadors d'usuari.
+        </li>
+        <li>
+          <strong>Estat del catàleg</strong> — instantànies diàries
+          dels totals (cançons verificades, artistes aprovats,
+          cobertura de metadades…). Són dades del sistema, no
+          relacionades amb cap visitant.
+        </li>
+        <li>
+          <strong>Mètriques de les nostres xarxes socials</strong> —
+          els nostres comptes a Instagram, Mastodon, Bluesky i
+          Telegram exposen comptadors públics (followers, likes,
+          reaccions a cada post). Els recollim diàriament per a
+          gràfiques internes; són dades dels nostres comptes, no
+          dels nostres seguidors.
+        </li>
+      </ul>
+      <p>
+        Cap d'aquestes mètriques s'envia a tercers, ni s'utilitza
+        per identificar-te ni per oferir-te publicitat. Cap script
+        de tracking corre al teu navegador. Tot el codi és obert i
+        es pot auditar al nostre repositori públic.
+      </p>
 
       <h2>Per a què les fem servir</h2>
       <ul>

@@ -91,6 +91,12 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # reflect the day's full activity (rebutjos, revisions, ingest).
 0 23 * * *  topquaranta   /home/topquaranta/bin/tq-run snapshot_pipeline >> /var/log/topquaranta/analytics.log 2>&1
 
+# 08:00 cada dilluns → email digest setmanal a admin@topquaranta.cat
+# amb els KPIs de la setmana anterior. Usa mail_admins → Brevo SMTP.
+# (silenciat si una setmana qualsevol falla per Brevo down — el
+# dashboard /staff/analytics no depèn d'aquest cron.)
+0 8 * * 1   topquaranta   /home/topquaranta/bin/tq-run enviar_digest_setmanal >> /var/log/topquaranta/analytics.log 2>&1
+
 # ─────────────────────────────────────────────────────────────────────
 # Weekly
 # ─────────────────────────────────────────────────────────────────────

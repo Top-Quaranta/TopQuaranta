@@ -167,13 +167,16 @@ def analytics_summary(request: Request) -> Response:
             {"data": row["data"].isoformat(), "valor": row["valor"]}
         )
 
-    # Latest snapshot per (platform, metric). `distinct` on Postgres
-    # gives us one row per (platform, metric) ordered by -data.
-    latest_platform_rows = (
-        MetricaSocialPlatform.objects.order_by("platform", "metric", "-data")
-        .distinct("platform", "metric")
-        .values("platform", "metric", "valor", "data")
-    )
+    # Latest snapshot per (platform, metric). Python-side dedup so
+    # the query works on both Postgres (production) and SQLite (the
+    # test backend lacks `DISTINCT ON`). N is small (≤ 4 platforms ×
+    # ≤ 4 metrics = 16 rows) so a full scan + dict.setdefault is
+    # fine.
+    latest_per_pm: dict[tuple, dict] = {}
+    for r in MetricaSocialPlatform.objects.order_by("-data").values(
+        "platform", "metric", "valor", "data"
+    ):
+        latest_per_pm.setdefault((r["platform"], r["metric"]), r)
     latest_platform = [
         {
             "platform": r["platform"],
@@ -181,20 +184,21 @@ def analytics_summary(request: Request) -> Response:
             "valor": r["valor"],
             "data": r["data"].isoformat(),
         }
-        for r in latest_platform_rows
+        for r in latest_per_pm.values()
     ]
 
     # Top 10 best-performing posts in the window (by total
     # engagement = likes + replies + shares of the most recent
-    # snapshot per post).
-    top_posts_rows = (
+    # snapshot per post). Same Python-side dedup rationale.
+    per_post: dict[int, MetricaSocialPost] = {}
+    for m in (
         MetricaSocialPost.objects.filter(data__gte=since)
-        .order_by("socialpost_id", "-data")
-        .distinct("socialpost_id")
         .select_related("socialpost")
-    )
+        .order_by("-data")
+    ):
+        per_post.setdefault(m.socialpost_id, m)
     top_posts = sorted(
-        top_posts_rows,
+        per_post.values(),
         key=lambda m: m.likes + m.replies + m.shares,
         reverse=True,
     )[:10]

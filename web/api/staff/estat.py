@@ -183,6 +183,11 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 26,
         "skip_concern": 1,
     },
+    "enviar_digest_setmanal": {
+        "frequency_label": "Cada dilluns 08:00",
+        "max_age_hours": 170,
+        "skip_concern": 1,
+    },
 }
 
 

@@ -162,15 +162,6 @@ Items petits per fer en sessions curtes:
       `tags=newsletter-YYYY-wWW` si etiquetem cada enviament. Un cop
       fet, el dashboard `/staff/analytics` afegeix open-rate per
       setmana.
-- [ ] **Convenció UTM al renderer social** — actualment els captions
-      de `publicar_canal` apunten a `https://topquaranta.cat` pel
-      peu, sense `?utm_source=…&utm_campaign=…`. Si afegim
-      automàticament `?utm_source=<canal>&utm_campaign=top-YYYY-wWW`
-      al link del peu, el dashboard analytics passa de "1 click
-      mastodon" residual a una sèrie real per canal × campanya.
-      Cal tocar `social/captions.py` (helper `caption_short`) i
-      verificar que els tres canals on es renderitza el link al peu
-      (Mastodon, Bluesky, Telegram) reben l'URL UTM-itzada.
 - [ ] **Botons de compartir** a `CancoPage`/`AlbumPage`/`ArtistaPage`
       (Web Share API + fallbacks copy-to-clipboard / Mastodon /
       Bluesky / Telegram). Amb l'allowlist `share_click` ja
@@ -216,7 +207,7 @@ Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
 
-### Sprint K — Suite analytics ètica completa + SPA wiring ✅ (2026-05-04)
+### Sprint K — Suite analytics ètica completa + SPA wiring + UTM ✅ (2026-05-04)
 
 Quatre commits seqüencials (K1-K4) + GoAccess + un fix de
 soroll, una sola sessió de ~3 h. Suite construïda des de zero
@@ -270,6 +261,16 @@ de tercers, cap fingerprint.
   `logger.exception` (ERROR) a `logger.warning` per a hiccups
   d'API tercers. Resol l'email watchdog de tq-health que mostrava
   un fals "Django errors today: 1" persistent fins a mitjanit.
+* **UTM al renderer social** (commit `296411e`): nou
+  `social.captions.utm_url(channel, tipus, setmana, *, base,
+  territori)` com a font única de la convenció. Cada `caption_short`
+  rep `channel=` i el footer del post a Mastodon, Bluesky, Telegram
+  i el CTA HTML del newsletter passen de `https://topquaranta.cat`
+  nu a `https://topquaranta.cat/?utm_source=<canal>&utm_medium=
+  social&utm_campaign=<tipus>-<YYYY>-w<WW>[-<territ>]`. El
+  newsletter usa `utm_medium=email`. La pestanya Web del dashboard
+  ara s'omplirà gradualment amb una taula real per (font,
+  campanya) en compte d'una sola fila residual.
 * **SPA beacon wiring** (commit `bd71d38`): `lib/analytics.js`
   amb `trackPageview` + `trackEvent` via `navigator.sendBeacon`
   (sobreviu a unloads, no bloca clics). Cablejat:

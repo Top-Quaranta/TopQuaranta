@@ -62,4 +62,9 @@ def feedback_crear(request: Request) -> Response:
         target_label=(data.get("target_label") or "").strip()[:500],
         missatge=missatge,
     )
+    # K1 analytics: counter dim1=target_type so we can chart which
+    # surfaces (artista/album/canco) attract most corrections.
+    from analytics.events import register as _register_event
+
+    _register_event("feedback_crear", dim1=target_type)
     return Response({"ok": True, "pk": fb.pk}, status=201)

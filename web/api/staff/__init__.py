@@ -15,6 +15,7 @@ this file too so `staff_views.py` doesn't need touching.
 
 from web.api.staff._common import IsStaff, _paginate  # noqa: F401
 from web.api.staff.albums import album_detail, albums_list  # noqa: F401
+from web.api.staff.analytics import analytics_summary  # noqa: F401
 from web.api.staff.artistes import (  # noqa: F401
     artista_crear,
     artista_detail,

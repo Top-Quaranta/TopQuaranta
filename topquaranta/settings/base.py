@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "web",
     "comptes",
     "social",
+    "analytics",
 ]
 
 # Sprint I — Instagram + cache directory for generated social
@@ -70,6 +71,9 @@ MIDDLEWARE = [
     "axes.middleware.AxesMiddleware",
     # A8: stamp /api/vN/* responses with X-API-Version.
     "web.api.middleware.ApiVersionHeaderMiddleware",
+    # K1: ethical aggregate analytics — pageviews + UTM landings.
+    # No PII, no IP, no fingerprinting. Fail-open if anything raises.
+    "analytics.middleware.AnalyticsMiddleware",
 ]
 
 # S11: TOTP issuer shown in the user's authenticator app.

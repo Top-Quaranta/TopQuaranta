@@ -150,6 +150,10 @@ def proposta_crear(request: Request) -> Response:
         localitzacions=localitzacions,
         **socials,
     )
+    # K1 analytics: aggregate counter; no usuari, no proposta pk.
+    from analytics.events import register as _register_event
+
+    _register_event("proposta_crear")
     return Response({"ok": True, "pk": p.pk, "estat": p.estat}, status=201)
 
 
@@ -207,6 +211,10 @@ def solicitud_crear(request: Request) -> Response:
         sollicitud_text=text,
         estat=UserArtista.ESTAT_PENDENT,
     )
+    # K1 analytics: aggregate counter for "manage this artist" requests.
+    from analytics.events import register as _register_event
+
+    _register_event("solicitud_gestor_crear")
     return Response({"ok": True, "pk": ua.pk, "estat": ua.estat}, status=201)
 
 

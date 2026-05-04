@@ -288,6 +288,10 @@ class Command(BaseCommand):
             platform=slot.platform,
             tipus=slot.tipus,
         )
+        # K1 analytics: aggregate counter for IG feed publications.
+        from analytics.events import register as _register_event
+
+        _register_event("social_publicat", dim1=slot.platform, dim2=slot.tipus)
         self.stdout.write(f"  · publicat → media_id={media_id}")
 
     # ── story flow ───────────────────────────────────────────────
@@ -343,6 +347,13 @@ class Command(BaseCommand):
             platform=slot.platform,
             tipus=slot.tipus,
             n_stories=len(story_ids),
+        )
+        # K1 analytics: counter for IG stories. dim1 is the platform
+        # (instagram_story) and dim2 is the slot tipus (top_ppcc, …).
+        from analytics.events import register as _register_event
+
+        _register_event(
+            "social_publicat", dim1=slot.platform, dim2=slot.tipus, n=len(story_ids)
         )
         self.stdout.write(f"  · {len(story_ids)} stories publicades.")
 

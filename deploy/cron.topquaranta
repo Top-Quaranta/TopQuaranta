@@ -78,6 +78,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # ISRC; mismatches counted in SpotifyPlaylist.last_n_*.
 15 7 * * *  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify >> /var/log/topquaranta/playlists.log 2>&1
 
+# 23:00 → Daily snapshot of pipeline-state gauges into MetricaPipeline
+# (cançons verificades / pendents / rebutjades, cobertura whisper+MB,
+# usuaris actius, distribució per territori). Idempotent — re-runs on
+# the same day overwrite that day's row. Runs late so the values
+# reflect the day's full activity (rebutjos, revisions, ingest).
+0 23 * * *  topquaranta   /home/topquaranta/bin/tq-run snapshot_pipeline >> /var/log/topquaranta/analytics.log 2>&1
+
 # ─────────────────────────────────────────────────────────────────────
 # Weekly
 # ─────────────────────────────────────────────────────────────────────

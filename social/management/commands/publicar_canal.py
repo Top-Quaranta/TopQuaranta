@@ -197,6 +197,11 @@ class Command(BaseCommand):
             published_at=timezone.now(),
         )
         log_staff_action(None, f"{channel}_publicat", target=post, tipus=slot.tipus)
+        # K1 analytics: count successful publications per channel +
+        # tipus so we can chart channel reach + content-mix over time.
+        from analytics.events import register as _register_event
+
+        _register_event("social_publicat", dim1=channel, dim2=slot.tipus)
         self.stdout.write(f"  · publicat → {ext_id}")
 
     # ── per-channel publish ──────────────────────────────────────

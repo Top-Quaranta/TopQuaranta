@@ -262,6 +262,15 @@ def register_view(request: Request) -> Response:
                 ]
             )
         _send_verification_email(request, user)
+        # K1 analytics: aggregate-only counter, no PII, no user pk.
+        # `dim1` flags whether the user opted into the newsletter so
+        # we can chart consent-rate over time without per-user tracking.
+        from analytics.events import register as _register_event
+
+        _register_event(
+            "registre_complet",
+            dim1="newsletter" if vol_newsletter else "no_newsletter",
+        )
     else:
         logger.debug("Registration attempt with existing email (no enumeration leak)")
 

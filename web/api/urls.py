@@ -3,6 +3,7 @@ from django.views.generic import RedirectView
 
 from . import (
     album_views,
+    analytics_ingest,
     artistes_views,
     auth_views,
     canco_views,
@@ -23,6 +24,13 @@ urlpatterns = [
     path("auth/login/", auth_views.login_view, name="auth_login"),
     path("auth/logout/", auth_views.logout_view, name="auth_logout"),
     path("auth/register/", auth_views.register_view, name="auth_register"),
+    # K1: aggregate-only analytics ingest from the SPA. No PII fields.
+    path(
+        "analytics/pageview/",
+        analytics_ingest.pageview,
+        name="analytics_pageview",
+    ),
+    path("analytics/event/", analytics_ingest.event, name="analytics_event"),
     # Authenticated user area
     path("compte/dashboard/", compte_views.dashboard, name="compte_dashboard"),
     path("compte/perfil/", compte_views.perfil, name="compte_perfil"),
@@ -65,6 +73,12 @@ urlpatterns = [
     # ── Staff (is_staff required) ──
     path("staff/dashboard/", staff_views.dashboard, name="staff_dashboard"),
     path("staff/estat/", staff_views.estat, name="staff_estat"),
+    # K1: ethical aggregate analytics dashboard.
+    path(
+        "staff/analytics/summary/",
+        staff_views.analytics_summary,
+        name="staff_analytics_summary",
+    ),
     # Pendents
     path("staff/pendents/", staff_views.pendents_list, name="staff_pendents_list"),
     path(

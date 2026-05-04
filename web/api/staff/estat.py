@@ -173,6 +173,11 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 720 + 24,
         "skip_concern": 1,
     },
+    "snapshot_pipeline": {
+        "frequency_label": "Cada nit 23:00",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
 }
 
 

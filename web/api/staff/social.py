@@ -30,10 +30,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from ingesta.social.calendari import publication_date_for, upcoming_week
-from ingesta.social.instagram_client import days_until_expiry, is_dry_run
 from music.dates import project_week_number
 from ranking.models import ConfiguracioGlobal
+from social.calendari import publication_date_for, upcoming_week
+from social.instagram_client import days_until_expiry, is_dry_run
 from social.models import (
     BlueskyAuth,
     InstagramAuth,
@@ -429,7 +429,7 @@ def social_mastodon_save(request: Request) -> Response:
     # without the auto-filled label.
     if not handle:
         try:
-            from ingesta.social import mastodon_client
+            from social import mastodon_client
 
             who = mastodon_client.whoami()
             if isinstance(who, dict) and who.get("username"):
@@ -446,7 +446,7 @@ def social_mastodon_test(request: Request) -> Response:
     """Hit `/api/v1/accounts/verify_credentials` and return the
     verified handle so the operator can confirm the right account."""
     try:
-        from ingesta.social import mastodon_client
+        from social import mastodon_client
 
         who = mastodon_client.whoami()
     except Exception as exc:  # noqa: BLE001
@@ -489,7 +489,7 @@ def social_bluesky_save(request: Request) -> Response:
     )
     # Reset cached session so the next call re-authenticates.
     try:
-        from ingesta.social import bluesky_client
+        from social import bluesky_client
 
         bluesky_client._SESSIONS.clear()
     except Exception:  # noqa: BLE001
@@ -503,7 +503,7 @@ def social_bluesky_test(request: Request) -> Response:
     """Run createSession against bsky.social and return the resolved
     DID. Confirms the app-password is valid."""
     try:
-        from ingesta.social import bluesky_client
+        from social import bluesky_client
 
         # Force re-auth so a stale cached session can't mask a
         # broken password.
@@ -519,7 +519,7 @@ def social_bluesky_test(request: Request) -> Response:
 def social_bluesky_clear(request: Request) -> Response:
     BlueskyAuth.objects.filter(pk=1).delete()
     try:
-        from ingesta.social import bluesky_client
+        from social import bluesky_client
 
         bluesky_client._SESSIONS.clear()
     except Exception:  # noqa: BLE001
@@ -562,7 +562,7 @@ def social_telegram_save(request: Request) -> Response:
     )
     # Best-effort: resolve the bot's own username for display.
     try:
-        from ingesta.social import telegram_client
+        from social import telegram_client
 
         info = telegram_client.whoami()
         if isinstance(info, dict) and info.get("username"):
@@ -579,7 +579,7 @@ def social_telegram_test(request: Request) -> Response:
     """Run /getMe + /getChat to confirm the bot token is valid AND
     has access to the destination channel. Returns both payloads."""
     try:
-        from ingesta.social import telegram_client
+        from social import telegram_client
 
         bot = telegram_client.whoami()
         chat = telegram_client.chat_info()
@@ -931,7 +931,7 @@ def social_eliminar_instagram(request: Request) -> Response:
         # operator sees the cause in the captured stdout.
         import requests
 
-        from ingesta.social.instagram_client import GRAPH_BASE, _token
+        from social.instagram_client import GRAPH_BASE, _token
 
         r = requests.delete(
             f"{GRAPH_BASE}/{media_id}",
@@ -998,7 +998,7 @@ def social_eliminar_remot(request: Request) -> Response:
             else:
                 import requests as _req
 
-                from ingesta.social.instagram_client import GRAPH_BASE, _token
+                from social.instagram_client import GRAPH_BASE, _token
 
                 r = _req.delete(
                     f"{GRAPH_BASE}/{ext_id}",
@@ -1012,15 +1012,15 @@ def social_eliminar_remot(request: Request) -> Response:
                     else f"DELETE /{ext_id} → 200 OK"
                 )
         elif plat == "mastodon":
-            from ingesta.social import mastodon_client
+            from social import mastodon_client
 
             ok, msg = mastodon_client.delete_status(ext_id)
         elif plat == "bluesky":
-            from ingesta.social import bluesky_client
+            from social import bluesky_client
 
             ok, msg = bluesky_client.delete_post(ext_id)
         elif plat == "telegram":
-            from ingesta.social import telegram_client
+            from social import telegram_client
 
             mids = (post.metadata or {}).get("message_ids") or []
             if not mids:

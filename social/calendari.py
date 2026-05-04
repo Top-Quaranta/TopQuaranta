@@ -146,7 +146,7 @@ def slots_for(today: datetime.date) -> list[tuple[CalendarSlot, str]]:
 
 
 # Canonical helper lives in `music.dates` so non-social code can use
-# it. Keep this re-export so existing `from ingesta.social.calendari
+# it. Keep this re-export so existing `from social.calendari
 # import tq_week_start` callers don't break.
 from music.dates import tq_week_start  # noqa: E402,F401
 

@@ -1,6 +1,6 @@
 """Font loader for the social renderer.
 
-Tries vendored TTFs at `ingesta/social/fonts/` first; falls back to
+Tries vendored TTFs at `social/fonts/` first; falls back to
 DejaVu (always present on Debian/Ubuntu) so renders never crash even
 on a fresh dev machine. Each helper takes a size in pixels and
 caches the resulting `ImageFont.FreeTypeFont` keyed by (path, size).

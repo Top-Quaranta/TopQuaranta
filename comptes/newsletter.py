@@ -26,8 +26,8 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 from comptes.models import Usuari
-from ingesta.social.captions import TERRITORI_NOM
 from music.dates import project_week_number
+from social.captions import TERRITORI_NOM
 
 logger = logging.getLogger(__name__)
 

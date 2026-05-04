@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand, CommandError
 
-from ingesta.social.instagram_client import is_dry_run, refresh_token
+from social.instagram_client import is_dry_run, refresh_token
 
 
 class Command(BaseCommand):

@@ -14,7 +14,7 @@ Two concepts the rest of the codebase needs to share:
 
 These functions are imported from many surfaces (renderer, captions,
 staff API, React via the social_list payload). Keep them here, not
-inside `ingesta.social.calendari`, so non-social consumers can use
+inside `social.calendari`, so non-social consumers can use
 them without dragging in the calendar dataclasses.
 """
 

@@ -17,9 +17,9 @@ from contextlib import redirect_stdout
 import pytest
 from django.core.management import call_command
 
-from ingesta.social import calendari, captions
 from music.models import Album, Artista, Canco
 from ranking.models import ConfiguracioGlobal, TopSetmanal
+from social import calendari, captions
 from social.models import SocialPost
 
 # ── Calendari ─────────────────────────────────────────────────────────

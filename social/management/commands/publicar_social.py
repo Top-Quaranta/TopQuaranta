@@ -27,11 +27,11 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from ingesta.social import calendari, captions, instagram_client, payload, renderer
-from ingesta.social.calendari import tq_week_start
-from ingesta.social.captions import instagram_username
 from music.audit import log_staff_action
 from ranking.models import ConfiguracioGlobal
+from social import calendari, captions, instagram_client, payload, renderer
+from social.calendari import tq_week_start
+from social.captions import instagram_username
 from social.models import SocialPost
 
 logger = logging.getLogger(__name__)

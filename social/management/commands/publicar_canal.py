@@ -26,7 +26,9 @@ from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from ingesta.social import (
+from music.audit import log_staff_action
+from ranking.models import ConfiguracioGlobal
+from social import (
     bluesky_client,
     captions,
     mastodon_client,
@@ -34,9 +36,7 @@ from ingesta.social import (
     renderer,
     telegram_client,
 )
-from ingesta.social.calendari import slots_for, tq_week_start
-from music.audit import log_staff_action
-from ranking.models import ConfiguracioGlobal
+from social.calendari import slots_for, tq_week_start
 from social.models import SocialPost
 
 logger = logging.getLogger(__name__)

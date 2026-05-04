@@ -14,8 +14,8 @@ from unittest.mock import patch
 import pytest
 from django.core.management import call_command
 
-from ingesta.social import captions
 from ranking.models import ConfiguracioGlobal
+from social import captions
 from social.models import SocialPost
 
 # ── caption_short ─────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ def test_publicar_canal_dry_run_creates_pendent_row():
     cfg.mastodon_actiu = True
     cfg.save()
 
-    with patch("ingesta.social.payload.build_top") as fake_top:
+    with patch("social.payload.build_top") as fake_top:
         fake_top.return_value = {
             "entries": [
                 {
@@ -142,7 +142,7 @@ def test_publicar_canal_telegram_dry_run():
     cfg = ConfiguracioGlobal.load()
     cfg.telegram_actiu = True
     cfg.save()
-    with patch("ingesta.social.payload.build_top") as fake_top:
+    with patch("social.payload.build_top") as fake_top:
         fake_top.return_value = {
             "entries": [
                 {

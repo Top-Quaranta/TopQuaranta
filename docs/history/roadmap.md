@@ -3,7 +3,7 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-05-03.
+> Last updated: 2026-05-04.
 
 ---
 
@@ -28,6 +28,13 @@
   Mastodon, Bluesky (carrusel 4 imatges), Telegram (media-group),
   newsletter, RSS. Esborrat remot real per a tots des de
   `/staff/social`.
+- **Analytics**: suite ètica completa (K1-K4 + GoAccess) a
+  `/staff/analytics`. Pageviews, UTM, KPIs de pipeline, mètriques
+  socials per post i per compte, GoAccess sobre logs Caddy darrere
+  auth staff. Email digest setmanal als admins. Cap PII; cap
+  third-party JS. Detall a `docs/architecture/analytics.md`.
+- **Stack**: Python 3.12 + Django 6.0 + scikit-learn 1.8 (bumped
+  2026-05-04 amb venv-swap calent, sense downtime).
 
 Si vols més detall del que es va lliurar a cada sprint, vés a la
 secció [Sprints — completats](#sprints--completats) més avall.
@@ -65,33 +72,7 @@ l'activitat des d'abril 2026 viu en sprints.
 Per ordre de prioritat (no alfabètic). Quan se'n fa un, es mou a la
 secció _completats_ amb la data i el detall.
 
-### 1. Sprint — Python 3.10 → 3.12 upgrade
-
-> Bloca múltiples updates Dependabot que requereixen Python ≥3.11 o
-> ≥3.12 (Django 6, scikit-learn 1.8, futurs majors).
-
-- [ ] Comprovar compatibility de tot el codi amb Python 3.12
-      (pytest amb `--use-deprecated=legacy-resolver` no, però sí
-      mirar deprecated APIs com `datetime.utcnow` que 3.12 dispara
-      DeprecationWarning).
-- [ ] Crear nou `.venv` amb Python 3.12 a `/home/topquaranta/app/.venv-py312/`
-      en paral·lel amb el .venv actual.
-- [ ] Reinstal·lar requirements; verificar que tot instal·la sense
-      conflictes.
-- [ ] Run pytest sencer + smoke a un dry-run dels crons principals.
-- [ ] Actualitzar `topquaranta-web.service` per apuntar al nou venv,
-      reload, verificar.
-- [ ] Actualitzar `tq-run` (script bash a `/home/topquaranta/bin/`)
-      per apuntar al nou venv.
-- [ ] Actualitzar `python` references al `Caddyfile` si n'hi ha.
-- [ ] Pujar Django 5.2 → 6.0.x i scikit-learn ≥1.8 (Dependabot
-      reobrirà PRs automàticament després del bump).
-- [ ] Eliminar `.venv` antic.
-
-Window estimat: 1-2 sessions de 4h cadascuna (testing exhaustiu
-per minimitzar regressions).
-
-### 2. Sprint — Distribució v2 (refinaments + estadístiques)
+### 1. Sprint — Distribució v2 (refinaments + estadístiques)
 
 > Iteració sobre la infraestructura multi-canal del Sprint I bis.
 > El renderer i els clients ja són sòlids; ara toca **mesurar què
@@ -99,27 +80,12 @@ per minimitzar regressions).
 > el `_upsert_track` crea de manera massa generosa, i pulir
 > detalls de format que han anat sortint en l'ús real.
 
-**Estadístiques per canal** (sense vulnerar el manifest):
-- [ ] Camp nou `SocialPost.metrics_snapshot` (JSON) + cron diari
-      `recollir_metrics` que demana a cada API el rendiment del
-      post de la setmana anterior:
-      - **Instagram**: `/{media-id}/insights?metric=reach,impressions,
-        likes,comments,shares,saved` (Graph API).
-      - **Mastodon**: `/api/v1/statuses/:id` retorna
-        `reblogs_count`, `favourites_count`, `replies_count`.
-      - **Bluesky**: `app.bsky.feed.getPostThread` per al `repost_count`,
-        `like_count`, `reply_count`.
-      - **Telegram**: `getMessage` per al view count (només si el bot
-        és admin del canal).
-      - **Newsletter**: open-rate/click-rate via Brevo `/v3/smtp/
-        statistics/aggregatedReport` filtrat per tag setmanal.
-      - **RSS**: comptador de hits a `/rss/{top,novetats}.xml` via
-        GoAccess (Sprint K — analytics ètica).
-- [ ] Pàgina staff `/staff/social/metrics` amb gràfica per canal
-      (4 setmanes) + comparativa setmana actual vs mitjana.
-- [ ] Email digest setmanal (dilluns) als admins amb el resum de
-      la setmana publicada (top 3 posts + canal amb millor
-      engagement, sense PII).
+> **Estadístiques per canal**: tot mogut a la suite analytics
+> (Sprint K, completat 2026-05-04). `MetricaSocialPost` per
+> publicació + dia, `MetricaSocialPlatform` per gauge de compte.
+> Telegram per-post no és viable via Bot API (limitació del
+> protocol, documentada). Newsletter/Brevo open-rate queda com a
+> backlog menor. Vegeu `docs/architecture/analytics.md`.
 
 **Neteja de pendents col·labs brossa** (caçat 2026-05-03):
 - [ ] Comand `netejar_pendents_no_ppcc` que rebutgi automàticament
@@ -180,22 +146,31 @@ per minimitzar regressions).
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
 
-### 3. Sprint K — Analytics ètica (interna)
+### 2. Wiring de la SPA al beacon analytics
 
-> Mètriques agregades sense vulnerar el manifest. GoAccess sobre
-> logs Caddy + comptadors interns + UTM convention.
+> K1-K4 ha deixat l'endpoint públic `POST /api/v1/analytics/event/`
+> amb un allowlist de 8 esdeveniments preparat (`spa_route_view`,
+> `search_query`, `share_click`, `escolta_click`, `play_preview`,
+> `newsletter_signup`, `directori_filter`, `mapa_zoom`). Falta
+> connectar-los des de la SPA on toca:
 
-- [ ] GoAccess cron diari → `/var/www/analytics/index.html` (privat).
-- [ ] Model `MetricaEsdeveniment(data, clau, comptador)` + middleware
-      que incrementa pageviews per pàgina pública.
-- [ ] `register_event(clau)` cridat des dels endpoints clau
-      (registre completat, proposta enviada, feedback enviat).
-- [ ] Pàgina staff `/staff/analytics` amb gràfics setmanals.
-- [ ] Convenció UTM documentada (`?utm_source=instagram&utm_campaign=top-YYYY-wWW`).
-- [ ] Documentació al `docs/product/definition.md` i `/legal/privacitat`
-      sobre què mesurem internament.
+- [ ] `spa_route_view` a un router-listener global (un sol fetch
+      per navegació, batchejat amb `navigator.sendBeacon` quan
+      sigui possible per no bloquejar la navegació).
+- [ ] `escolta_click` als botons d'`ExternalListenLinks` (dim1 =
+      dsp). Deixa veure quina plataforma es clica més.
+- [ ] `share_click` als botons de share que afegim a CancoPage,
+      AlbumPage, ArtistaPage (dim1 = surface, dim2 = network).
+- [ ] `search_query` quan l'usuari fa una cerca a /artistes amb el
+      FilterPanel (dim1 = scope).
+- [ ] `mapa_zoom` quan l'usuari canvia de nivell a `/mapa` (dim1 =
+      level).
+- [ ] Documentar la convenció UTM
+      (`?utm_source=instagram&utm_campaign=top-YYYY-wWW`) als
+      captions del renderer perquè el cron `publicar_canal` posi
+      el `utm_*` automàticament a l'URL del peu de publicació.
 
-### 4. Backlog menor
+### 3. Backlog menor
 
 Items petits per fer en sessions curtes:
 
@@ -205,6 +180,12 @@ Items petits per fer en sessions curtes:
 - [ ] Test coverage 52% → 70%. Gaps coneguts: `music/services.py`,
       `music/verificacio.py`, `ranking/senyal.py`. Sessions curtes a
       estones lliures.
+- [ ] **Brevo open/click rate** per als emails de newsletter.
+      Sprint K (analytics) va deixar les bases per a `MetricaSocial*`;
+      Brevo exposa `/v3/smtp/statistics/aggregatedReport` amb
+      `tags=newsletter-YYYY-wWW` si etiquetem cada enviament. Un cop
+      fet, el dashboard `/staff/analytics` afegeix open-rate per
+      setmana.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
 - [ ] **Stalwart polish** (post Sprint I bis):
@@ -241,6 +222,98 @@ Items petits per fer en sessions curtes:
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
+
+### Sprint K — Suite analytics ètica completa ✅ (2026-05-04)
+
+Quatre commits seqüencials (K1-K4) + GoAccess + un fix de
+soroll, una sola sessió de ~3 h. Suite construïda des de zero
+respectant els constraints del manifest: cap PII, cap tracker
+de tercers, cap fingerprint.
+
+* **K1 fonament**: app `analytics/` amb dos models
+  (`MetricaEsdeveniment` per a counters, `MetricaPipeline` per a
+  gauges diaris), helper `events.register()` atòmic via `F()` +
+  retry sobre `IntegrityError`, middleware Django per a pageviews
+  + UTM landings, endpoints públics
+  `POST /api/v1/analytics/{pageview,event}/` per a la SPA (que
+  no passa per Django) amb allowlist tancada de claus, `register()`
+  cablejat a registre/proposta/sol·licitud/feedback/social_publicat,
+  cron `snapshot_pipeline` 23:00 amb 15 gauges, endpoint
+  `/api/v1/staff/analytics/summary/` que torna tot el payload.
+* **K2 ingesta social**: `MetricaSocialPost` i
+  `MetricaSocialPlatform`. Cada client (`mastodon`, `bluesky`,
+  `instagram`, `telegram`) guanya `get_post_metrics()` +
+  `get_account_stats()`. Cron `recollir_metrics_social` 22:30
+  amb `SingletonLock` i fail-open per plataforma. Smoke real al
+  primer dia: IG 745 followers, top post 12 likes / 1 share /
+  157 reach. Telegram per-post documentat com a "Bot API doesn't
+  expose channel views" (limitació de Telegram, no nostra).
+* **K3 UI**: `/staff/analytics` amb 5 pestanyes (Resum, Pipeline,
+  Social, Web, Cohorts) — totes derivades d'una sola crida + chunk
+  lazy de 14.7 KB gz. Window selector 7d/30d/90d/1a, deltes
+  half-vs-half, insights automàtics, CSV export client-side al top
+  posts/pageviews/UTM. **Bonus**: `/staff` (panell) reorganitzat
+  amb les mateixes 8 seccions que la barra lateral
+  (Visió general · Cua del dia · Catàleg · Top · Comunitat ·
+  Distribució · Diagnòstic · Sistema).
+* **K4 ops**: digest setmanal als admins (cada dilluns 08:00)
+  amb KPIs vs setmana anterior, top 5 pàgines, top 5 fonts UTM,
+  top 3 posts, snapshot del catàleg.
+  `docs/architecture/analytics.md` amb la referència completa.
+  `/legal/privacitat` amb una nova secció «Mètriques agregades»
+  que detalla què comptem i què no. **Fix portabilitat**:
+  substituït `.distinct("col")` (Postgres-only) per dedup
+  Python `dict.setdefault` perquè els tests SQLite passin.
+* **GoAccess (opció B)**: `apt install goaccess` + ACL Caddy
+  logs perquè `topquaranta` user els puga llegir; comand
+  `generar_goaccess` que converteix Caddy JSON → CLF amb un
+  preprocessor Python (més portable que llegir JSON natiu) i
+  produeix `/var/cache/topquaranta/goaccess/report.html`. Endpoint
+  `GET /api/v1/staff/analytics/goaccess/` proxia l'HTML darrere
+  `IsStaff` (sessió + 2FA) — el fitxer no és accessible
+  públicament. Cron 23:30 cada nit. SPA: targeta nova al top de
+  la pestanya **Web** amb botó «Obrir informe →».
+* **Soroll fix**: `recollir_metrics_social` baixa de
+  `logger.exception` (ERROR) a `logger.warning` per a hiccups
+  d'API tercers. Resol l'email watchdog de tq-health que mostrava
+  un fals "Django errors today: 1" persistent fins a mitjanit.
+
+Tests: +27 a la suite (events helper, middleware, snapshot,
+ingest, recollir social, digest). Total **243 passed**.
+
+Tot el codi al `git log` 2026-05-04: commits `e8b5086` (K1),
+`504c226` (K2), `c2d267f` (K3), `137d8dc` (K4), `4abf2ef`
+(GoAccess + soroll).
+
+### Sprint — Python 3.10 → 3.12 + Django 5.2 → 6.0 + scikit-learn 1.8 ✅ (2026-05-04)
+
+Bumpat tot l'stack en una passada. Treball preparatori després de
+descobrir que múltiples PRs Dependabot estaven blocats per la
+versió antiga de Python.
+
+* `.venv-py312-new` creat en paral·lel, `pip install -r requirements.txt`
+  amb Django 6.0.4, scikit-learn 1.8, totes les altres deps al
+  major actual. `pytest` sencer verd.
+* Swap calent: `mv .venv .venv-py310-old && mv .venv-py312-new .venv`,
+  `systemctl reload topquaranta-web` (gracefulwww), 0 segons de
+  downtime. Reload de cron (`tq-run` apunta al venv via shebang).
+* Fix collateral: 45 shebangs trencats al binari de `pip` interns
+  després del rename → `sed` per actualitzar-los tots a `.venv/bin/`.
+  Causa: el `mv` no actualitza els shebangs absoluts dels scripts
+  generats per `pip install`.
+* Regressions caçades i fixades: `ADMINS = [("name", "addr")]` ja
+  no és vàlid a Django 7; canviat a `ADMINS = ["addr"]` (avisos
+  RemovedInDjango70Warning silenciats). `datetime.utcnow()` deprecat
+  a 3.12 — auditat, només dues ocurrències al codi de tests.
+* CI workflow al `.github/workflows/ci.yml` també passat a 3.12.
+
+Va anar acompanyat de drenar el backlog acumulat: refactors de
+`compte_views`, `comunitat_views`, `staff/social` (tots 3 dividits
+en subpaquets), index nou a `UserArtista`, ML retrain post-3.12,
+i la disk-cleanup que va passar el sistema de 99% a 77% (purge de
+`pip cache`).
+
+Commits: `791e83b`, `ee3eade`, `1edb12a`, `e4e2825`, `c586209`.
 
 ### Sprint — APECAT cross-check + ingest robustness + social v3 ✅ (2026-05-03)
 

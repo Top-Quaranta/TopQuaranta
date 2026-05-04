@@ -8,6 +8,7 @@ title + the listing + hashtags + handle.
 from __future__ import annotations
 
 import datetime
+from urllib.parse import urlparse
 
 from music.dates import project_week_number
 
@@ -95,6 +96,48 @@ def _hashtags(territori: str) -> str:
     return " ".join(f"#{t}" for t in tags)
 
 
+def utm_url(
+    channel: str,
+    tipus: str,
+    setmana: datetime.date,
+    *,
+    base: str = "https://topquaranta.cat",
+    territori: str = "",
+) -> str:
+    """Build the public URL for a social-post footer with UTM tags.
+
+    Same convention across every channel so the analytics dashboard
+    can pivot cleanly:
+
+        utm_source   = channel slug (mastodon, bluesky, telegram,
+                       newsletter, instagram)
+        utm_medium   = "social" everywhere except newsletter ("email")
+        utm_campaign = "<tipus>-<YYYY>-w<WW>" using the project-week
+                       numbering so the campaign name is the same one
+                       the post body shows ("Setmana N").
+
+    `territori` is appended to the campaign when present so a Top
+    Catalunya post and a Top País Valencià post the same week land in
+    different campaign buckets ("top_territorial-2026-w19-cat" vs
+    "top_territorial-2026-w19-val"). Top global + novetats stay
+    plain. Lowercased + ASCII-only because the analytics dim columns
+    are stored lowercase by the ingest.
+    """
+    medium = "email" if channel == "newsletter" else "social"
+    dissabte = setmana + datetime.timedelta(days=5)
+    week_n = project_week_number(dissabte)
+    campaign = f"{tipus}-{dissabte.year}-w{week_n:02d}"
+    if territori and territori not in ("", "PPCC"):
+        campaign = f"{campaign}-{territori.lower()}"
+    qs = f"utm_source={channel}&utm_medium={medium}&utm_campaign={campaign}"
+    # Append `?qs` when the base already has a path segment (e.g.
+    # `…/top`) and `/?qs` when it's the bare host (so the URL still
+    # has a clean trailing slash on the home route).
+    parsed = urlparse(base)
+    sep = "?" if parsed.path and parsed.path != "/" else "/?"
+    return f"{base.rstrip('/')}{sep}{qs}"
+
+
 def caption_short(
     tipus: str,
     territori: str,
@@ -103,12 +146,20 @@ def caption_short(
     *,
     max_chars: int = 480,
     n: int = 5,
+    channel: str = "",
 ) -> str:
     """Compact caption for Mastodon (500 char default) and Bluesky
     (300 char) — list the top-N + a link to the public site.
 
     `entries` may be either top entries (with `posicio`/`canco_nom`)
     or novetats items (with `nom`). We sniff the keys.
+
+    `channel`, when given, switches the footer link to a UTM-tagged
+    URL via `utm_url()` so the analytics dashboard can attribute
+    landings per channel × campaign. Falls back to the plain
+    `https://topquaranta.cat` when omitted (safe default, doesn't
+    break callers that don't know about channels — e.g. the IG
+    flow, where captions are non-clickable anyway).
     """
     nom = TERRITORI_NOM.get(territori, territori or "")
     label = _setmana_label(setmana)
@@ -130,7 +181,11 @@ def caption_short(
                 f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {artist_label}"
             )
     body = "\n".join(rows)
-    footer = "\n\nTot el top a https://topquaranta.cat"
+    if channel:
+        link = utm_url(channel, tipus, setmana, territori=territori)
+    else:
+        link = "https://topquaranta.cat"
+    footer = f"\n\nTot el top a {link}"
     text = header + body + footer
     while len(text) > max_chars and rows:
         rows.pop()

@@ -27,7 +27,7 @@ from django.utils.html import strip_tags
 
 from comptes.models import Usuari
 from music.dates import project_week_number
-from social.captions import TERRITORI_NOM
+from social.captions import TERRITORI_NOM, utm_url
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,17 @@ def send_top_newsletter(
         heading = f"Top {territori_nom} · setmana {project_week}"
         subject = f"TopQuaranta · Top {territori_nom} · setmana {project_week}"
 
+    # K1+ analytics: UTM-tag the "Veure el top complet" CTA so the
+    # staff dashboard attributes the resulting landings to the
+    # newsletter campaign instead of the bare-URL bucket. Same
+    # convention as the other channels (`utm_url` in social.captions).
+    top_url = utm_url(
+        "newsletter",
+        tipus,
+        setmana,
+        base="https://www.topquaranta.cat/top",
+        territori=territori,
+    )
     qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")
     sent = 0
     failed = 0
@@ -78,6 +89,7 @@ def send_top_newsletter(
                     "project_week": project_week,
                     "entries": entries[:10],
                     "unsub_url": _unsub_url(user),
+                    "top_url": top_url,
                 },
             )
             text_body = strip_tags(html)

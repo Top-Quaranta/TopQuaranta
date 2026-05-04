@@ -143,7 +143,15 @@ class Command(BaseCommand):
             "newsletter": 9999,
         }[channel]
         text = captions.caption_short(
-            slot.tipus, territori, setmana, entries, max_chars=max_chars
+            slot.tipus,
+            territori,
+            setmana,
+            entries,
+            max_chars=max_chars,
+            # K1+ analytics: UTM-tag the footer link so the staff
+            # dashboard can attribute landings per channel × campaign
+            # instead of dumping everything into the bare-URL bucket.
+            channel=channel,
         )
 
         if opts["dry_run"]:

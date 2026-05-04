@@ -232,16 +232,9 @@ class Command(BaseCommand):
 
                 # Always update the timestamp — even if Deezer
                 # returned an empty list this time. The cooldown
-                # alone decides when we look again. Keep the legacy
-                # `cancons_obtingudes` flag in sync (set True if we
-                # got a non-empty track list) for any code that may
-                # still read it informationally; nothing filters on it.
+                # alone decides when we look again.
                 album.last_album_check = now_ts
-                update_fields = ["last_album_check"]
-                if tracks and not album.cancons_obtingudes:
-                    album.cancons_obtingudes = True
-                    update_fields.append("cancons_obtingudes")
-                album.save(update_fields=update_fields)
+                album.save(update_fields=["last_album_check"])
                 self.stdout.write(
                     f"  P2 album {album.deezer_id} ({album.nom}) → "
                     f"{created} cançons noves"
@@ -537,7 +530,6 @@ class Command(BaseCommand):
                 data_llancament=album_data.get("release_date"),
                 tipus=tipus,
                 imatge_url=album_data.get("cover_xl", ""),
-                cancons_obtingudes=False,
                 source_deezer_id=source_deezer_id,
             )
         except IntegrityError:

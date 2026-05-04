@@ -56,6 +56,17 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Shared `"ram_heavy"` lock with `obtenir_metadata_musicbrainz`:
+        # both commands together exceed the 4 GB CX22 budget (Whisper
+        # large-v3 int8 ≈ 3 GB on its own). Without this mutex the
+        # OOM-killer takes one of them, exit code 137. See
+        # `music.locks.SingletonLock` for the exit-75 contract.
+        from music.locks import SingletonLock
+
+        with SingletonLock("ram_heavy"):
+            self._run(**options)
+
+    def _run(self, **options):
         limit = options["limit"]
         dry_run: bool = options["dry_run"]
         canco_id = options["canco_id"]

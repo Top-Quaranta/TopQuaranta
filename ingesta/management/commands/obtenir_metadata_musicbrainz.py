@@ -62,9 +62,14 @@ class Command(BaseCommand):
         # See `music.locks.SingletonLock` for why we exit 75 on lock
         # contention rather than 0 (preserves `last_run` so health
         # checks fire when an instance hangs).
+        # Shared `"ram_heavy"` lock with `analitzar_whisper`: both
+        # commands load multi-GB resources (MB doesn't, but its long
+        # tail of HTTP waits would have prevented Whisper from
+        # acquiring memory in time). On a 4 GB Hetzner CX22 this
+        # mutual exclusion prevents the OOM-kill we hit 2026-05-04.
         from music.locks import SingletonLock
 
-        with SingletonLock("mb_sync"):
+        with SingletonLock("ram_heavy"):
             self._run(**opts)
 
     def _run(self, **opts):

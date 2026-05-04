@@ -9,18 +9,7 @@
 # doesn't lose its file descriptor. `notifempty` skips empty rotations
 # (errors.log is usually empty).
 
-/var/log/topquaranta/novetats.log
-/var/log/topquaranta/senyal.log
-/var/log/topquaranta/neteja.log
-/var/log/topquaranta/top.log
-/var/log/topquaranta/top-provisional.log
-/var/log/topquaranta/recover.log
-/var/log/topquaranta/ingestar.log
-/var/log/topquaranta/metadata.log
-/var/log/topquaranta/errors.log
-/var/log/topquaranta/backup.log
-/var/log/topquaranta/arxivar.log
-/var/log/topquaranta/whisper.log
+/var/log/topquaranta/*.log
 {
     weekly
     rotate 8
@@ -30,4 +19,11 @@
     notifempty
     copytruncate
     su topquaranta topquaranta
+    # Disk hygiene: prune social PNG renders older than 60 days
+    # (Caddy serves them from /var/cache/topquaranta/social/renders/).
+    # Per the May-2026 audit, these accumulate ~80 MB and were never
+    # cleaned. Runs once a week alongside the rotation.
+    prerotate
+        find /var/cache/topquaranta/social/renders/ -name '*.png' -mtime +60 -delete 2>/dev/null || true
+    endscript
 }

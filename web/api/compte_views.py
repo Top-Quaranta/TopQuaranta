@@ -724,6 +724,14 @@ def exportar_dades(request: Request) -> Response:
         Publicacio,
         UserArtista,
     )
+    from music.models import StaffAuditLog
+
+    # Optional dep: axes records login attempts. If the user disabled
+    # axes (test settings), skip silently.
+    try:
+        from axes.models import AccessAttempt, AccessLog
+    except ImportError:  # pragma: no cover
+        AccessAttempt = AccessLog = None
 
     logger = logging.getLogger(__name__)
     u = request.user
@@ -837,6 +845,47 @@ def exportar_dades(request: Request) -> Response:
             }
             for m in Missatge.objects.filter(destinatari=u)
         ],
+        # NB: HistorialRevisio is intentionally anonymous (no
+        # `usuari` FK) — it captures *what* was decided, not who
+        # decided it. The actor info lives in StaffAuditLog below
+        # (which is what an RGPD subject-access request needs anyway:
+        # actions affecting them, not back-office decisions about
+        # third-party songs).
+        # Audit trail of staff actions where this user is the target
+        # (e.g. a moderator deactivating, resetting 2FA, sending
+        # password reset). Useful for the user to know who did what
+        # to their account.
+        "audit_log_sobre_meu": [
+            {
+                "action": log.action,
+                "actor_username": log.actor.username if log.actor else "",
+                "target_label": log.target_label,
+                "created_at": log.created_at.isoformat(),
+            }
+            for log in StaffAuditLog.objects.filter(
+                target_type="usuari", target_id=u.pk
+            )
+            .select_related("actor")
+            .order_by("-created_at")
+        ],
+        # Login activity (axes). IP + user-agent + timestamps from
+        # successful and failed attempts. Helps a user verify their
+        # account isn't being attacked.
+        "login_history": (
+            [
+                {
+                    "ip": a.ip_address,
+                    "user_agent": a.user_agent,
+                    "attempt_time": a.attempt_time.isoformat(),
+                    "failures_since_start": a.failures_since_start,
+                }
+                for a in AccessAttempt.objects.filter(username=u.username).order_by(
+                    "-attempt_time"
+                )[:200]
+            ]
+            if AccessAttempt is not None
+            else []
+        ),
     }
 
     body_json = json.dumps(payload, indent=2, ensure_ascii=False)
@@ -866,7 +915,11 @@ def baixa_newsletter(request: Request) -> Response:
     every newsletter email; works without login.
 
     Token is `signing.dumps({"u": user.pk}, salt="newsletter-baixa")`
-    with the project SECRET_KEY. No max_age — links don't expire."""
+    with the project SECRET_KEY. **Expires after 1 year** (May-2026
+    audit fix): a leaked archived-newsletter inbox would otherwise
+    grant a permanent unsubscribe primitive. New tokens are issued
+    on every send so legitimate links keep working as long as the
+    user receives the newsletter regularly."""
     from django.core import signing
 
     from comptes.models import Usuari
@@ -875,8 +928,19 @@ def baixa_newsletter(request: Request) -> Response:
     if not token:
         return Response({"error": "Falta el token."}, status=400)
     try:
-        data = signing.loads(token, salt="newsletter-baixa")
+        data = signing.loads(token, salt="newsletter-baixa", max_age=60 * 60 * 24 * 365)
         user_pk = int(data["u"])
+    except signing.SignatureExpired:
+        return Response(
+            {
+                "error": (
+                    "Aquest enllaç ha caducat. Si vols donar-te de baixa "
+                    "demana un enllaç nou des de qualsevol newsletter recent o "
+                    "des del teu perfil a /compte/perfil."
+                )
+            },
+            status=400,
+        )
     except (signing.BadSignature, KeyError, ValueError, TypeError):
         return Response({"error": "Token invàlid."}, status=400)
     try:

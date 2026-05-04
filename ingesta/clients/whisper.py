@@ -43,13 +43,26 @@ _model = None
 
 
 def get_model():
-    """Lazy-load faster-whisper large-v3 (int8 CPU); cache module-wide."""
+    """Lazy-load faster-whisper (int8 CPU); cache module-wide.
+
+    Model size is configurable via the `WHISPER_MODEL` env var (default
+    `large-v3`). Recommended trade-offs on a 4 GB Hetzner CX22 box:
+      * `large-v3`: 1.5 GB on disk, ≈3 GB RAM. Best lang-ID accuracy.
+      * `medium`:    1 GB on disk, ≈1.5 GB RAM. Comparable accuracy on
+        ≥5 s previews; safer when running concurrently with other
+        memory-hungry crons.
+      * `small`:     500 MB / ≈1 GB RAM. Faster but worse on multilingual
+        edge cases.
+    """
     global _model
     if _model is None:
         # Deferred import so Django startup doesn't pay the 1.5 GB cost.
+        import os
+
         from faster_whisper import WhisperModel
 
-        _model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+        size = os.environ.get("WHISPER_MODEL", "large-v3")
+        _model = WhisperModel(size, device="cpu", compute_type="int8")
     return _model
 
 

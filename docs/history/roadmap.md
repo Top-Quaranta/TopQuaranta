@@ -65,7 +65,33 @@ l'activitat des d'abril 2026 viu en sprints.
 Per ordre de prioritat (no alfabètic). Quan se'n fa un, es mou a la
 secció _completats_ amb la data i el detall.
 
-### 1. Sprint — Distribució v2 (refinaments + estadístiques)
+### 1. Sprint — Python 3.10 → 3.12 upgrade
+
+> Bloca múltiples updates Dependabot que requereixen Python ≥3.11 o
+> ≥3.12 (Django 6, scikit-learn 1.8, futurs majors).
+
+- [ ] Comprovar compatibility de tot el codi amb Python 3.12
+      (pytest amb `--use-deprecated=legacy-resolver` no, però sí
+      mirar deprecated APIs com `datetime.utcnow` que 3.12 dispara
+      DeprecationWarning).
+- [ ] Crear nou `.venv` amb Python 3.12 a `/home/topquaranta/app/.venv-py312/`
+      en paral·lel amb el .venv actual.
+- [ ] Reinstal·lar requirements; verificar que tot instal·la sense
+      conflictes.
+- [ ] Run pytest sencer + smoke a un dry-run dels crons principals.
+- [ ] Actualitzar `topquaranta-web.service` per apuntar al nou venv,
+      reload, verificar.
+- [ ] Actualitzar `tq-run` (script bash a `/home/topquaranta/bin/`)
+      per apuntar al nou venv.
+- [ ] Actualitzar `python` references al `Caddyfile` si n'hi ha.
+- [ ] Pujar Django 5.2 → 6.0.x i scikit-learn ≥1.8 (Dependabot
+      reobrirà PRs automàticament després del bump).
+- [ ] Eliminar `.venv` antic.
+
+Window estimat: 1-2 sessions de 4h cadascuna (testing exhaustiu
+per minimitzar regressions).
+
+### 2. Sprint — Distribució v2 (refinaments + estadístiques)
 
 > Iteració sobre la infraestructura multi-canal del Sprint I bis.
 > El renderer i els clients ja són sòlids; ara toca **mesurar què
@@ -154,7 +180,7 @@ secció _completats_ amb la data i el detall.
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
 
-### 2. Sprint K — Analytics ètica (interna)
+### 3. Sprint K — Analytics ètica (interna)
 
 > Mètriques agregades sense vulnerar el manifest. GoAccess sobre
 > logs Caddy + comptadors interns + UTM convention.
@@ -169,7 +195,7 @@ secció _completats_ amb la data i el detall.
 - [ ] Documentació al `docs/product/definition.md` i `/legal/privacitat`
       sobre què mesurem internament.
 
-### 3. Backlog menor
+### 4. Backlog menor
 
 Items petits per fer en sessions curtes:
 

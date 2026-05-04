@@ -1,7 +1,7 @@
 # CLAUDE_MODELS.md — Django Data Models
 
 > Post-Sprint-4 snapshot (2026-04-21). All models are Django-managed. No
-> unmanaged / legacy models remain. DB: 37 tables total (18 domain + Django
+> unmanaged / legacy models remain. DB: 48 tables total (18 domain + Django
 > internals: auth_*, django_session, axes_*, otp_totp_*, otp_static_*,
 > django_migrations, django_content_type).
 

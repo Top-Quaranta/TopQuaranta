@@ -1,21 +1,40 @@
 # CLAUDE.md — TopQuaranta
 
 > Persistent memory for Claude Code. Read this file first on every session.
-> Last updated: 2026-05-03 — `obtenir_novetats` P2 redesigned around
-> `Album.last_album_check` cooldown (24 h / 7 d / 30 d by age); the
-> legacy `cancons_obtingudes` flag is deprecated after it was found
-> masking ~3.7 k phantom albums marked "OK" with zero tracks.
-> `_create_track` + `_upsert_track` now compare contributors against
-> *every* `ArtistaDeezer.deezer_id` for the artista (not just the
-> principal) so artists with multiple Deezer profiles don't trigger
-> signal D5 self-collab crashes; ISRC collisions during ingest skip
-> the duplicate row instead of aborting the artista's transaction.
-> `obtenir_metadata` iterates *all* of an artista's Deezer profiles
-> so label-secondary catalogues (Àlex Pérez 1479910 = Música Global)
-> are no longer invisible. Bluesky + Mastodon publish 4-image
-> carousels (portada + 3 list slides); every channel has a real
-> remote delete via `/staff/social/eliminar-remot/`. Newsletter
-> opt-in lives at `/compte/perfil`.
+> Last updated: 2026-05-04 — May-2026 audit sprint applied across
+> security, performance, code quality and architecture:
+>
+> **Security**: cookies SECURE flag + HSTS, Django 5.2.13 (3 CVE
+> patches), Dependabot security alerts enabled, PII removed from
+> auth logs (`user.pk` instead of `user.email`), ConfiguracioGlobal
+> endpoint masks fields matching `_token|_secret|_password|_key|
+> _apikey`, `upload_imatge` validates Pillow's `img.format` not
+> just the spoofable `content_type`, ScopedRateThrottle on
+> `auth_login` (5/min), `data_export` (3/h), `newsletter_unsubscribe`
+> (10/min), Postgres role `topquaranta` lost CREATEDB.
+>
+> **Privacy/RGPD**: `exportar-dades` now includes `StaffAuditLog`
+> entries targeting the user + axes login history; newsletter
+> unsubscribe token expires after 1 year (was permanent — leaked
+> archived emails were a forever-unsubscribe primitive).
+>
+> **Ops**: shared `"ram_heavy"` SingletonLock between
+> `analitzar_whisper` and `obtenir_metadata_musicbrainz` (closes
+> the 4 GB CX22 OOM); `WHISPER_MODEL` env-configurable;
+> `logrotate` globs `*.log` and prunes social PNG renders >60d.
+>
+> **Performance**: SPA staff routes lazy-loaded — anon bundle
+> 1.205→1.030 KB (-15%); `cache_for_anon` TTL 60s→300s on
+> `/ranking`, `/mapa`, `/albums-list`, `/home-stats`; new
+> `Canco.objects.public()` and `.pendents()` manager methods to
+> stop repeating `verificada=True, activa=True`; index
+> `UserArtista (usuari, -created_at)`; dropped redundant standalone
+> indexes on `SocialPost.platform/.tipus`.
+>
+> **Architecture**: `ingesta/social/*` moved to `social/*` (channel
+> clients + renderer + payload + captions belong with publishing,
+> not ingestion); `web/api/views.py` renamed to `mapa_views.py`
+> for symmetry; `Album.cancons_obtingudes` purged from writes.
 
 ## Other docs
 
@@ -105,7 +124,7 @@ the SPA palette but has no dependency on mm-design.
   deploy/cron.topquaranta /etc/cron.d/topquaranta` — cron auto-reloads.
 - **Logrotate:** `/etc/logrotate.d/topquaranta` (source:
   `deploy/logrotate.topquaranta`).
-- **DB:** `topquaranta` on localhost. 37 tables (18 domain + Django/axes/
+- **DB:** `topquaranta` on localhost. 48 tables (18 domain + Django/axes/
   otp/session internals).
 - **Working dir:** `/home/topquaranta/app/`. Virtualenv: `.venv/`.
 - **Repo:** `github.com/Top-Quaranta/TopQuaranta` (private).
@@ -258,7 +277,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **207 passed, 8 skipped**.
+Mock all external HTTP — no real API calls. Current suite: **211 passed, 8 skipped**.
 Run: `.venv/bin/python -m pytest -q`.
 
 React SPA: Vitest not yet wired for runtime tests; builds validated via

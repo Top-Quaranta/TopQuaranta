@@ -19,7 +19,7 @@
   per la pàgina pública d'artistes.
 - **Auth**: sessions Django + CSRF + TOTP 2FA per staff.
 - **Pipeline**: nightly chain documentada a `docs/architecture/pipeline.md`.
-- **DB**: PostgreSQL 14, 38 taules (nova `Album.last_album_check`).
+- **DB**: PostgreSQL 14, 48 taules (nova `Album.last_album_check`).
   Volums actuals (2026-05-03): ~1.9k artistes aprovats, ~2.5k cançons
   verificades, 5 territoris amb top oficial actiu.
 - **ML**: 79 features, ROC-AUC 0.9994 (post Whisper + MB).

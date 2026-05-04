@@ -146,31 +146,7 @@ secció _completats_ amb la data i el detall.
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
 
-### 2. Wiring de la SPA al beacon analytics
-
-> K1-K4 ha deixat l'endpoint públic `POST /api/v1/analytics/event/`
-> amb un allowlist de 8 esdeveniments preparat (`spa_route_view`,
-> `search_query`, `share_click`, `escolta_click`, `play_preview`,
-> `newsletter_signup`, `directori_filter`, `mapa_zoom`). Falta
-> connectar-los des de la SPA on toca:
-
-- [ ] `spa_route_view` a un router-listener global (un sol fetch
-      per navegació, batchejat amb `navigator.sendBeacon` quan
-      sigui possible per no bloquejar la navegació).
-- [ ] `escolta_click` als botons d'`ExternalListenLinks` (dim1 =
-      dsp). Deixa veure quina plataforma es clica més.
-- [ ] `share_click` als botons de share que afegim a CancoPage,
-      AlbumPage, ArtistaPage (dim1 = surface, dim2 = network).
-- [ ] `search_query` quan l'usuari fa una cerca a /artistes amb el
-      FilterPanel (dim1 = scope).
-- [ ] `mapa_zoom` quan l'usuari canvia de nivell a `/mapa` (dim1 =
-      level).
-- [ ] Documentar la convenció UTM
-      (`?utm_source=instagram&utm_campaign=top-YYYY-wWW`) als
-      captions del renderer perquè el cron `publicar_canal` posi
-      el `utm_*` automàticament a l'URL del peu de publicació.
-
-### 3. Backlog menor
+### 2. Backlog menor
 
 Items petits per fer en sessions curtes:
 
@@ -186,6 +162,23 @@ Items petits per fer en sessions curtes:
       `tags=newsletter-YYYY-wWW` si etiquetem cada enviament. Un cop
       fet, el dashboard `/staff/analytics` afegeix open-rate per
       setmana.
+- [ ] **Convenció UTM al renderer social** — actualment els captions
+      de `publicar_canal` apunten a `https://topquaranta.cat` pel
+      peu, sense `?utm_source=…&utm_campaign=…`. Si afegim
+      automàticament `?utm_source=<canal>&utm_campaign=top-YYYY-wWW`
+      al link del peu, el dashboard analytics passa de "1 click
+      mastodon" residual a una sèrie real per canal × campanya.
+      Cal tocar `social/captions.py` (helper `caption_short`) i
+      verificar que els tres canals on es renderitza el link al peu
+      (Mastodon, Bluesky, Telegram) reben l'URL UTM-itzada.
+- [ ] **Botons de compartir** a `CancoPage`/`AlbumPage`/`ArtistaPage`
+      (Web Share API + fallbacks copy-to-clipboard / Mastodon /
+      Bluesky / Telegram). Amb l'allowlist `share_click` ja
+      preparada al backend, només cal cridar
+      `trackEvent('share_click', surface, network)` als handlers.
+- [ ] **Reproductor de previews** (Deezer 30 s) als detall de
+      cançó. Si s'afegeix, l'event `play_preview` ja és a
+      l'allowlist.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
 - [ ] **Stalwart polish** (post Sprint I bis):
@@ -223,7 +216,7 @@ Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
 
-### Sprint K — Suite analytics ètica completa ✅ (2026-05-04)
+### Sprint K — Suite analytics ètica completa + SPA wiring ✅ (2026-05-04)
 
 Quatre commits seqüencials (K1-K4) + GoAccess + un fix de
 soroll, una sola sessió de ~3 h. Suite construïda des de zero
@@ -277,6 +270,17 @@ de tercers, cap fingerprint.
   `logger.exception` (ERROR) a `logger.warning` per a hiccups
   d'API tercers. Resol l'email watchdog de tq-health que mostrava
   un fals "Django errors today: 1" persistent fins a mitjanit.
+* **SPA beacon wiring** (commit `bd71d38`): `lib/analytics.js`
+  amb `trackPageview` + `trackEvent` via `navigator.sendBeacon`
+  (sobreviu a unloads, no bloca clics). Cablejat:
+  `spa_route_view` global via `RouteAnalytics` listener,
+  `escolta_click` a cada pill d'`ExternalListenLinks` (dim1=dsp,
+  dim2=surface), `search_query` + `directori_filter` a
+  `ArtistesPage`, `mapa_zoom` a cada drill-down de `MapaPage`,
+  `newsletter_signup` a `ComptePerfilPage` en transició False→True
+  (no fa doble-comptatge amb `registre_complet`). `share_click` i
+  `play_preview` queden dormants a l'allowlist fins que la UI
+  tinga els botons.
 
 Tests: +27 a la suite (events helper, middleware, snapshot,
 ingest, recollir social, digest). Total **243 passed**.

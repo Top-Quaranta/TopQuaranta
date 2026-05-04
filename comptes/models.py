@@ -59,6 +59,13 @@ class UserArtista(models.Model):
     class Meta:
         verbose_name = "Vinculació usuari-artista"
         verbose_name_plural = "Vinculacions usuari-artista"
+        indexes = [
+            # Hot lookup: SPA `/compte` shows the user's managed
+            # artists; backoffice queries `UserArtista.objects.filter(
+            # usuari=u)` repeatedly. Without this index pg_stat showed
+            # 2.363 seq_scan vs 4 idx_scan (May-2026 audit).
+            models.Index(fields=["usuari", "-created_at"]),
+        ]
 
     def __str__(self) -> str:
         status = "verificat" if self.verificat else self.estat

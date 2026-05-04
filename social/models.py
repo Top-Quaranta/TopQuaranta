@@ -54,8 +54,13 @@ class SocialPost(models.Model):
         (STATUS_OMES, "Omès"),  # fase no l'inclou OR no hi ha contingut
     ]
 
-    platform = models.CharField(max_length=30, choices=PLATFORM_CHOICES, db_index=True)
-    tipus = models.CharField(max_length=30, choices=TIPUS_CHOICES, db_index=True)
+    # `db_index=False` (May-2026 audit): both fields are always
+    # combined with `setmana` via `unique_together` (which already
+    # creates a composite index). The standalone indexes had 0
+    # idx_scan in pg_stat. Drops 4 indexes (Django adds the `_like`
+    # variant for varchar) and saves write overhead.
+    platform = models.CharField(max_length=30, choices=PLATFORM_CHOICES)
+    tipus = models.CharField(max_length=30, choices=TIPUS_CHOICES)
     # Empty for non-territorial types (top_ppcc, nous_*).
     territori = models.CharField(max_length=4, blank=True, default="")
     setmana = models.DateField(db_index=True, help_text="Monday of the ISO week.")

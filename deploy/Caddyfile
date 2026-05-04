@@ -124,13 +124,13 @@ www.topquaranta.cat {
 		#   base-uri                   — prevents <base> tag injection.
 		#   object-src 'none'          — no Flash/Java/plugin embeds.
 		#   upgrade-insecure-requests  — transparent http→https upgrade.
-		# `>` (Caddy's "set if absent" prefix) means upstream Django
+		# `?` (Caddy's "default-set" prefix) means upstream Django
 		# views CAN override this for legitimate cases — currently
 		# only the GoAccess HTML report at
 		# /api/v1/staff/analytics/goaccess/, which needs `data:` fonts
 		# and `'unsafe-eval'` for D3 to render. Every other response
 		# inherits the strict baseline below.
-		>Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+		?Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
 	}
 	log {
 		output file /var/log/caddy/topquaranta_access.log {

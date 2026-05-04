@@ -107,7 +107,96 @@ for cmd in "${!MAX_AGE_HOURS[@]}"; do
     printf "%-32s  %-12s  %s\n" "$cmd" "$display" "$last"
 done
 
-# Recent errors from Django LOGGING (errors_file handler in base.py).
+# ── Disk space ────────────────────────────────────────────────────────
+# Hetzner CX22 is 38 GB. Whisper HF cache is 3 GB and backups grow
+# ~19 MB/day; without monitoring the box silently fills (we hit 99 %
+# 2026-05-04 mid-Python-upgrade, almost bricked the server). Alert
+# when free drops below 10 %.
+echo
+DISK_USE=$(df / --output=pcent | tail -1 | tr -d ' %')
+DISK_AVAIL=$(df -h / --output=avail | tail -1 | tr -d ' ')
+if [[ "$DISK_USE" -ge 90 ]]; then
+    echo "Disk: ${DISK_USE}% used, ${DISK_AVAIL} free  ⚠ ALERT (>90%)"
+    overall=1
+elif [[ "$DISK_USE" -ge 80 ]]; then
+    echo "Disk: ${DISK_USE}% used, ${DISK_AVAIL} free  (warn — clean cache or rotate logs soon)"
+else
+    echo "Disk: ${DISK_USE}% used, ${DISK_AVAIL} free"
+fi
+
+# ── Web surface smoke ─────────────────────────────────────────────────
+# Catches "we deployed and the site is broken" within the hour without
+# waiting for users to complain. Three layers, ordered so the cheapest
+# fail surfaces first:
+#   1. SPA index.html via Caddy (public URL): 200 + has the
+#      <div id="root"> mount point + has a <link rel="stylesheet">
+#      referencing a hashed asset.
+#   2. Hashed CSS asset: 200 (catches a broken `npm run build` where
+#      Vite emitted index.html with a stale asset reference).
+#   3. Backend JSON API via gunicorn directly (skips Caddy): /api/v1/
+#      ranking/ returns 200 + body parses + has at least one row
+#      (catches a backend regression where the SPA loads but every
+#      page is empty).
+# The SPA layer goes through Caddy (TLS + DNS + reverse-proxy), the
+# API layer hits gunicorn straight so we can isolate which side is
+# broken when a regression hits.
+echo
+PUBLIC_BASE="${TQ_HEALTH_WEB_PUBLIC:-https://www.topquaranta.cat}"
+BACKEND_BASE="${TQ_HEALTH_WEB_BACKEND:-http://127.0.0.1:8083}"
+WEB_OK=1
+
+# 1. SPA shell via the public URL — this exercises Caddy + TLS + Vite dist.
+spa_body=$(curl -fsSk --max-time 10 "$PUBLIC_BASE/" 2>/dev/null || true)
+if [[ -z "$spa_body" ]]; then
+    echo "Web SPA shell:                           ⚠ no response from $PUBLIC_BASE/"
+    WEB_OK=0
+elif ! grep -q 'id="root"' <<< "$spa_body"; then
+    echo "Web SPA shell:                           ⚠ /  served but no <div id=\"root\"> mount"
+    WEB_OK=0
+else
+    css_path=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.css' <<< "$spa_body" | head -1)
+    if [[ -z "$css_path" ]]; then
+        echo "Web SPA shell:                           ⚠ /  served but no hashed CSS link found (broken Vite build?)"
+        WEB_OK=0
+    else
+        # 2. Hashed CSS asset reachable.
+        css_status=$(curl -fsSk --max-time 5 -o /dev/null -w "%{http_code}" "$PUBLIC_BASE$css_path" 2>/dev/null || echo "000")
+        if [[ "$css_status" == "200" ]]; then
+            echo "Web SPA shell:                           OK ($css_path → 200)"
+        else
+            echo "Web SPA shell:                           ⚠ CSS $css_path → $css_status (stale dist? collectstatic missing?)"
+            WEB_OK=0
+        fi
+    fi
+fi
+
+# 3. JSON API content sanity — go to gunicorn directly so a Caddy
+# misconfig doesn't mask a backend regression.
+top_body=$(curl -fsS --max-time 10 "$BACKEND_BASE/api/v1/top/?territori=PPCC" 2>/dev/null || true)
+if [[ -z "$top_body" ]]; then
+    echo "Web /api/v1/top/?territori=PPCC:         ⚠ no response from gunicorn :8083"
+    WEB_OK=0
+elif ! grep -qE '"entries"|"posicio"' <<< "$top_body"; then
+    echo "Web /api/v1/top/?territori=PPCC:         ⚠ 200 but body lacks expected keys (entries/posicio)"
+    WEB_OK=0
+else
+    echo "Web /api/v1/top/?territori=PPCC:         OK"
+fi
+
+stats_body=$(curl -fsS --max-time 10 "$BACKEND_BASE/api/v1/stats/" 2>/dev/null || true)
+if [[ -z "$stats_body" ]]; then
+    echo "Web /api/v1/stats/:                      ⚠ no response"
+    WEB_OK=0
+elif ! grep -q '"cancons_verificades"' <<< "$stats_body"; then
+    echo "Web /api/v1/stats/:                      ⚠ 200 but no cancons_verificades key"
+    WEB_OK=0
+else
+    echo "Web /api/v1/stats/:                      OK"
+fi
+
+if (( WEB_OK == 0 )); then overall=1; fi
+
+# ── Recent errors from Django LOGGING (errors_file handler in base.py).
 echo
 if [[ -f "$ERRORS_LOG" ]]; then
     today=$(date +%Y-%m-%d)

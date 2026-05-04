@@ -188,6 +188,11 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 170,
         "skip_concern": 1,
     },
+    "generar_goaccess": {
+        "frequency_label": "Cada nit 23:30",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
 }
 
 

@@ -97,6 +97,12 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # dashboard /staff/analytics no depèn d'aquest cron.)
 0 8 * * 1   topquaranta   /home/topquaranta/bin/tq-run enviar_digest_setmanal >> /var/log/topquaranta/analytics.log 2>&1
 
+# 23:30 → Generate the GoAccess HTML report from Caddy access logs
+# (Caddy JSON → CLF → goaccess). Writes to /var/cache/topquaranta/
+# goaccess/report.html, served back behind staff auth at
+# /api/v1/staff/analytics/goaccess/. Last 30 days by default.
+30 23 * * * topquaranta   /home/topquaranta/bin/tq-run generar_goaccess >> /var/log/topquaranta/analytics.log 2>&1
+
 # ─────────────────────────────────────────────────────────────────────
 # Weekly
 # ─────────────────────────────────────────────────────────────────────

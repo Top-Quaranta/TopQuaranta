@@ -79,6 +79,14 @@ urlpatterns = [
         staff_views.analytics_summary,
         name="staff_analytics_summary",
     ),
+    # GoAccess Caddy-log report — proxied behind IsStaff. The file
+    # itself lives outside Django's static dirs precisely so it
+    # can't leak via Caddy's file_server.
+    path(
+        "staff/analytics/goaccess/",
+        staff_views.goaccess_report,
+        name="staff_goaccess_report",
+    ),
     # Pendents
     path("staff/pendents/", staff_views.pendents_list, name="staff_pendents_list"),
     path(

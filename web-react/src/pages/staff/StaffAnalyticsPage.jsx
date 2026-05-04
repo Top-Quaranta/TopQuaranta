@@ -468,6 +468,27 @@ function WebTab({ data }) {
 
   return (
     <div className="space-y-4">
+      <Card
+        title="Anàlisi de logs Caddy (GoAccess)"
+        hint="Hot-paths, 404s, bots, geo — generat cada nit a les 23:30."
+        right={
+          <a
+            href="/api/v1/staff/analytics/goaccess/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs px-3 py-1.5 rounded bg-tq-ink text-tq-yellow hover:opacity-90"
+          >
+            Obrir informe →
+          </a>
+        }
+      >
+        <p className="text-xs text-tq-ink/70">
+          GoAccess processa <code>/var/log/caddy/topquaranta_access.log</code> i
+          mostra el que Django no veu (assets estàtics, errors 404, distribució
+          geogràfica, bots…). El fitxer es serveix només a través d'aquest
+          endpoint amb sessió staff + 2FA — no és accessible públicament.
+        </p>
+      </Card>
       <Card title="Pageviews diaris" hint="Sèrie temporal sumada (totes les rutes)">
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={events.pageview || []}>

@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import datetime
 from collections import defaultdict
+from pathlib import Path
 
 from django.db.models import Sum
+from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -41,6 +43,11 @@ from analytics.models import (
     MetricaSocialPost,
 )
 from web.api.staff._common import IsStaff
+
+# GoAccess writes here from `generar_goaccess`. Served back via
+# the staff-only proxy below — never a public Caddy handle, so the
+# report stays gated by session + 2FA.
+GOACCESS_REPORT = Path("/var/cache/topquaranta/goaccess/report.html")
 
 
 def _parse_days(request: Request, default: int = 30, cap: int = 365) -> int:
@@ -238,3 +245,35 @@ def analytics_summary(request: Request) -> Response:
             },
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsStaff])
+def goaccess_report(request: Request) -> HttpResponse:
+    """Proxy the GoAccess HTML report behind staff session + 2FA.
+
+    GoAccess writes the report to `/var/cache/topquaranta/goaccess/
+    report.html` (cron `generar_goaccess`, runs nightly). Caddy never
+    serves that path directly — the only way in is through this
+    endpoint, so only OTP-verified staff see Caddy access analytics.
+
+    Returns 503 with a friendly hint if the report hasn't been
+    generated yet (first-boot, or the cron has been silenced for
+    a while). Otherwise streams the file with the right MIME so the
+    browser renders it inline.
+    """
+    if not GOACCESS_REPORT.exists():
+        return HttpResponse(
+            "<p>L'informe GoAccess encara no s'ha generat. Executa "
+            "<code>manage.py generar_goaccess</code> o espera al "
+            "següent tic del cron (cada nit a les 23:30).</p>",
+            content_type="text/html; charset=utf-8",
+            status=503,
+        )
+    try:
+        return FileResponse(
+            open(GOACCESS_REPORT, "rb"),
+            content_type="text/html; charset=utf-8",
+        )
+    except FileNotFoundError as exc:  # race against a fresh regen
+        raise Http404("report missing") from exc

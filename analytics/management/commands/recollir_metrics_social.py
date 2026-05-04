@@ -175,12 +175,17 @@ class Command(BaseCommand):
                 continue
             try:
                 metrics = fetch(ext_id)
-            except Exception:  # noqa: BLE001 — fail-open per cron
-                logger.exception(
-                    "metrics fetch failed for %s pk=%s ext=%s",
+            except Exception as exc:  # noqa: BLE001 — fail-open per cron
+                # WARNING (not ERROR): a transient hiccup on a third
+                # party shouldn't dirty errors.log and trip the
+                # `tq-health --email-on-fail` watchdog. The cron is
+                # idempotent — next night's run picks it up again.
+                logger.warning(
+                    "metrics fetch failed for %s pk=%s ext=%s: %s",
                     post.platform,
                     post.pk,
                     ext_id,
+                    exc,
                 )
                 errored += 1
                 continue
@@ -208,8 +213,9 @@ class Command(BaseCommand):
         for platform, fetch_acct in ACCOUNT_STATS.items():
             try:
                 stats = fetch_acct()
-            except Exception:  # noqa: BLE001
-                logger.exception("account stats fetch failed for %s", platform)
+            except Exception as exc:  # noqa: BLE001
+                # See WARNING rationale above (per-post block).
+                logger.warning("account stats fetch failed for %s: %s", platform, exc)
                 continue
             for metric_name, value in stats.items():
                 if metric_name == "raw":

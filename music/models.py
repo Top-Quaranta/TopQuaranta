@@ -213,6 +213,17 @@ class Artista(models.Model):
     )
     mb_discography_cache = models.JSONField(default=dict, blank=True)
     mb_last_sync = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Round-robin cursor into MB's release-group list (May-2026
+    # ops fix). MB rate-limits at 1 req/sec and one big artist
+    # (e.g. Schenker, 48 release-groups × ~1.1 s each = >50 s of
+    # MB calls plus the per-track recordings) used to monopolise an
+    # entire cron tick. We now process at most
+    # `MB_RGS_PER_RUN` (= 20, see music.constants) release-groups
+    # per call to `sync_from_mbid`; the cursor advances and resets
+    # to 0 once a full pass is done. Big artists then drain over
+    # several ticks predictably while small ones still finish in
+    # one.
+    mb_sync_cursor = models.PositiveIntegerField(default=0)
     # MBIDs that staff has explicitly rejected for this artist. The
     # auto-resolver skips any candidate whose id appears here, so a
     # homonym that matched once can't silently match again on the next

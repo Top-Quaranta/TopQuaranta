@@ -388,31 +388,52 @@ def sync_from_mbid(artista) -> dict:
 
     # Discography — release-groups.
     try:
-        rgs = mb.get_artist_release_groups(artista.musicbrainz_id)
+        rgs_all = mb.get_artist_release_groups(artista.musicbrainz_id)
     except Exception:
         logger.exception("MB release-groups failed for %s", artista.musicbrainz_id)
-        rgs = []
-    result["rgs"] = len(rgs)
+        rgs_all = []
+    result["rgs"] = len(rgs_all)
+
+    # Round-robin pagination: only process MB_RGS_PER_RUN release-
+    # groups this tick, advancing the cursor. Spreads big-discography
+    # artistes (Schenker 48 RGs, Walsh 41) across multiple ticks so
+    # one of them can't monopolise the cron's hour budget. The MB
+    # detail call per RG (`get_release_group_with_recordings`) is
+    # the expensive bit (1 req/s).
+    from music.constants import MB_RGS_PER_RUN
+
+    cursor = artista.mb_sync_cursor or 0
+    if cursor >= len(rgs_all):
+        cursor = 0  # full pass complete — start over
+    rgs = rgs_all[cursor : cursor + MB_RGS_PER_RUN]
+    new_cursor = cursor + MB_RGS_PER_RUN
+    if new_cursor >= len(rgs_all):
+        new_cursor = 0  # we're at the tail — wrap on next tick
+    result["rg_cursor"] = cursor
+    result["rg_window_end"] = min(cursor + MB_RGS_PER_RUN, len(rgs_all))
 
     # Reset any stale MB-reconciliation fields on this artist's albums
-    # and cançons before re-matching. Motivation: if staff corrected an
+    # and cançons before re-matching — but only at the start of a new
+    # full cycle (cursor=0). Otherwise we'd undo the matches found in
+    # the previous mid-cycle ticks. Motivation: if staff corrected an
     # MBID after a wrong auto-resolve (e.g. Meteor valencià → Meteor
     # Medellín), the obsolete mb_release_group_id / mb_recording_id /
     # mb_work_id / mb_lyrics_language / mbrainz_confirmed stay behind
     # because sync_from_mbid only sets True on new matches. Reset
     # wholesale here so the new sync is authoritative.
-    Album.objects.filter(artista=artista).update(
-        mb_release_group_id="",
-        mb_type_secondary="",
-        mb_status="",
-        mbrainz_confirmed=None,
-    )
-    Canco.objects.filter(artista=artista).update(
-        mb_recording_id="",
-        mb_work_id="",
-        mb_lyrics_language="",
-        mbrainz_confirmed=None,
-    )
+    if cursor == 0:
+        Album.objects.filter(artista=artista).update(
+            mb_release_group_id="",
+            mb_type_secondary="",
+            mb_status="",
+            mbrainz_confirmed=None,
+        )
+        Canco.objects.filter(artista=artista).update(
+            mb_recording_id="",
+            mb_work_id="",
+            mb_lyrics_language="",
+            mbrainz_confirmed=None,
+        )
 
     # Index our albums by normalized title for matching.
     nostres_albums = {
@@ -517,12 +538,27 @@ def sync_from_mbid(artista) -> dict:
                     result["cancons_matched"] += 1
 
     # Cache the canonical discography for quick Canco-creation checks.
+    # Pagination-aware: accumulate ISRCs/titles across the slices of
+    # one full pass; only reset to fresh content when the cursor
+    # wraps back to 0 (i.e. we've just finished a complete cycle).
+    if cursor == 0:
+        # First slice of a new cycle — start the cache fresh.
+        cache_isrcs = set()
+        cache_titles: list[dict] = []
+    else:
+        # Mid-cycle — extend the existing cache.
+        prev_cache = artista.mb_discography_cache or {}
+        cache_isrcs = set(prev_cache.get("isrcs", []) or [])
+        cache_titles = list(prev_cache.get("titles", []) or [])
+    cache_isrcs.update(discography_isrcs)
+    cache_titles.extend(discography_titles)
     artista.mb_discography_cache = {
-        "isrcs": sorted(discography_isrcs),
-        "titles": discography_titles[:500],  # cap to keep row size reasonable
+        "isrcs": sorted(cache_isrcs),
+        "titles": cache_titles[:500],  # cap to keep row size reasonable
     }
-    result["isrcs"] = len(discography_isrcs)
+    result["isrcs"] = len(cache_isrcs)  # cumulative ISRCs in cache
     artista.mb_last_sync = timezone.now()
+    artista.mb_sync_cursor = new_cursor
     artista.save()
     return result
 

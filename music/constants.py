@@ -134,6 +134,16 @@ RATIO_PRIOR_P = 0.5
 # case: US rapper at 100 vs CAT band at 91).
 MB_AUTO_MATCH_SCORE = 50
 
+# Round-robin pagination for MusicBrainz discography sync
+# (`mb_sync.sync_from_mbid`). MB enforces 1 req/sec; an artist with
+# many release-groups (e.g. 48) plus the per-track `recordings`
+# detail call would otherwise eat ~50 s of a single cron tick. We
+# process at most this many release-groups per `sync_from_mbid`
+# call; the cursor advances and resets to 0 once a full pass
+# completes. Big artists drain over several ticks predictably while
+# small ones still finish in one. Added 2026-05-04.
+MB_RGS_PER_RUN = 20
+
 # API rate limits (seconds between calls)
 DEEZER_RATE_LIMIT = 1.0
 LASTFM_RATE_LIMIT = 0.2

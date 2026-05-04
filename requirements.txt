@@ -2,14 +2,14 @@
 #   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 # (torch is pinned to the CPU-only build; PyPI doesn't host +cpu wheels.)
 
-django==5.2.13
+django==6.0.4
 psycopg2-binary==2.9.12
 python-decouple==3.8
 dj-database-url==3.1.2
 requests==2.33.1
 gunicorn==25.3.0
 djangorestframework==3.17.1
-scikit-learn>=1.7
+scikit-learn>=1.8.0
 joblib>=1.5
 # Security
 argon2-cffi==25.1.0          # S10: stronger password hashing

@@ -90,6 +90,19 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=None, help="Max API calls.")
         parser.add_argument("--dry-run", action="store_true")
+        # Caught 2026-05-05: a backfill / first-deploy run can sweep
+        # thousands of artistes in a single hour, all getting
+        # `last_checked_deezer` within minutes of each other. The
+        # 24h cooldown then makes them all re-eligible together
+        # 24h later → a "thundering herd" of re-checks one hour per
+        # day, and silence the other 23. Capping the per-run P3
+        # work keeps the timestamps spread out naturally.
+        parser.add_argument(
+            "--max-p3-per-run",
+            type=int,
+            default=200,
+            help="Cap on P3 (per-artist) work per cron tick.",
+        )
 
     def handle(self, *args, **options):
         # `SingletonLock` exits with code 75 (EX_TEMPFAIL) if the
@@ -105,6 +118,7 @@ class Command(BaseCommand):
     def _run(self, *args, **options):
         limit = options["limit"]
         dry_run = options["dry_run"]
+        max_p3 = int(options.get("max_p3_per_run") or 0)
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN — no DB writes."))
@@ -277,6 +291,14 @@ class Command(BaseCommand):
             artista = p3_qs.first()
             if not artista:
                 self.stdout.write("  No more work to do.")
+                break
+
+            # Per-tick P3 cap (see --max-p3-per-run docstring above).
+            if max_p3 and p3 >= max_p3:
+                self.stdout.write(
+                    f"  P3 cap hit ({max_p3}). Stopping; "
+                    f"next cron tick will pick up where we left off."
+                )
                 break
 
             calls += 1

@@ -39,8 +39,17 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # so a sudden queue surge — e.g. a `obtenir_metadata --force` run that
 # spawns dozens of pendent collaborators — drains over several ticks
 # instead of one long lock-monopolising run that blocks the next 1-2
-# scheduled invocations. ~3 s/artist HTTP, so 200 ≈ 10 min worst case.
-30 * * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_musicbrainz --limit 200 >> /var/log/topquaranta/mb.log 2>&1
+# scheduled invocations.
+#
+# Cap reduced 200 → 100 on 2026-05-05: artistes with huge MB
+# discographies (synth-wave catalogues with 50+ albums) pushed real
+# durations to 40+ min, occasionally 5 h. The hourly cadence + 30-min
+# `ram_heavy` window means anything over 30 min collides with the next
+# tick AND with the daily Whisper run. 100 caps comfortably under
+# 17 min real time. Total throughput unchanged at the day level
+# (~2400 artistes/24 h vs the cap of ~4800/day at 200) — and at our
+# pendents queue size that's still 2× over-provisioned.
+30 * * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_metadata_musicbrainz --limit 100 >> /var/log/topquaranta/mb.log 2>&1
 
 # ─────────────────────────────────────────────────────────────────────
 # Nightly pipeline (UTC) — each step feeds the next
@@ -52,11 +61,21 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 04:00 → Purge expired unverified tracks (older than DIES_CADUCITAT).
 0 4 * * *   topquaranta   /home/topquaranta/bin/tq-run netejar_caducades >> /var/log/topquaranta/neteja.log 2>&1
 
-# 05:00 → Whisper language ID on new tracks with Deezer previews.
-# Backfill of the historical 6.7k catalogue finished 2026-04-25; from
-# now on the daily intake is <50 tracks/night, so --limit 100 leaves
-# plenty of headroom (~45 min worst case at 27 s/track CPU).
-0 5 * * *   topquaranta   /home/topquaranta/bin/tq-run analitzar_whisper --limit 100 >> /var/log/topquaranta/whisper.log 2>&1
+# 04:00 → Whisper language ID on new tracks with Deezer previews.
+# Backfill of the historical 6.7k catalogue finished 2026-04-25.
+#
+# Time slot moved 05:00 → 04:00 UTC (2026-05-05) and limit raised
+# 100 → 200. Rationale:
+#   - At 04:00 UTC the most recent MB tick is 03:30, which with the
+#     reduced --limit 100 (above) finishes by ~03:47. Whisper has a
+#     clean ~30 min window with `ram_heavy.lock` free before the
+#     next MB tick at 04:30.
+#   - --limit 200 (was 100) drains ingest backlog twice as fast on
+#     the days when several hundred new tracks land at once. Worst
+#     case duration: 200 × 27 s/track CPU ≈ 90 min, but that only
+#     happens after a multi-day backlog. Steady-state 50-100 tracks
+#     fits well within the MB-free window before 04:30.
+0 4 * * *   topquaranta   /home/topquaranta/bin/tq-run analitzar_whisper --limit 200 >> /var/log/topquaranta/whisper.log 2>&1
 
 # 05:00 → Last.fm artist metadata refresh. ~2 reqs/artist (info +
 # similar), rate-limited to 0.2 s each ≈ 200 s for --limit 500. Runs

@@ -22,6 +22,13 @@
 > `analitzar_whisper` and `obtenir_metadata_musicbrainz` (closes
 > the 4 GB CX22 OOM); `WHISPER_MODEL` env-configurable;
 > `logrotate` globs `*.log` and prunes social PNG renders >60d.
+> Cron tuning (2026-05-05): MB `--limit 200→100` (caps duration
+> ≤17 min instead of occasional 5 h); Whisper `--limit 100→200`
+> and slot moved 05:00→04:00 UTC so it's clear of the 04:30 MB
+> tick. Resolves a recurring `SKIPPED_BY_LOCK` on Whisper when
+> a long MB run held `ram_heavy.lock`. New `--max-p3-per-run 200`
+> on `obtenir_novetats` prevents thundering-herd re-checks after
+> a backfill (see commit 8200cc7).
 >
 > **Performance**: SPA staff routes lazy-loaded — anon bundle
 > 1.205→1.030 KB (-15%); `cache_for_anon` TTL 60s→300s on

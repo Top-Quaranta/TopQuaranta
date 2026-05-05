@@ -93,6 +93,36 @@ tail -50 /var/log/topquaranta/<tag>.log     # e.g. senyal.log for obtenir_senyal
   drain in ~6-7 hours, then the steady-state queue shrinks. If
   the queue never settles, check that the legacy
   `cancons_obtingudes` filter wasn't reintroduced.
+- **`obtenir_novetats` returning `Total crides: 0` for many hours
+  in a row** (no new tracks ingesting): the per-artist 24 h cooldown
+  on `last_checked_deezer` clusters all timestamps together if a
+  single run swept the entire fleet (caught 2026-05-05 after a
+  backfill processed all 1900 artistes in 40 min). Two-step fix:
+  (a) cap future runs with `--max-p3-per-run 200` (already in the
+  cron line); (b) one-shot redistribution to scatter the existing
+  timestamps:
+  ```python
+  from django.utils import timezone
+  from datetime import timedelta
+  import random
+  from music.models import Artista
+  qs = list(Artista.objects.filter(aprovat=True, deezer_ids__isnull=False).distinct())
+  random.shuffle(qs)
+  step = (24 * 3600) // max(len(qs), 1)
+  now = timezone.now()
+  for i, a in enumerate(qs):
+      a.last_checked_deezer = now - timedelta(hours=24) + timedelta(seconds=i * step)
+      a.save(update_fields=["last_checked_deezer"])
+  ```
+- **Whisper SKIPPED_BY_LOCK at 04:00 UTC** (was 05:00 pre-2026-05-05):
+  the shared `ram_heavy.lock` is held by an MB cron that overran its
+  30-min slot. The 2026-05-05 cron tuning (MB `--limit 100`, Whisper
+  slot 04:00 UTC with `--limit 200`) prevents this in steady state.
+  If it still happens, check the artiste being processed by the live
+  MB run — large foreign discographies (50+ albums) can stretch the
+  walltime. One-off fix: `kill` the MB python PID and let the next
+  hour's MB tick continue from where it stopped (the cron is
+  idempotent — `mb_last_sync` records progress).
 
 **If you fixed it:** re-run manually to clear the FAIL:
 ```bash

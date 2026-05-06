@@ -1,0 +1,35 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/artistes">Artistes</a> ›
+  <a href="/artista/{{ album.artista.slug }}">{{ album.artista.nom }}</a> › {{ album.nom }}
+</nav>
+<h1>{{ album.nom }}</h1>
+<p class="meta-line">
+  Àlbum de <a href="/artista/{{ album.artista.slug }}">{{ album.artista.nom }}</a>
+  {% if album.data_llancament %} · {{ album.data_llancament|date:"d/m/Y" }}{% endif %}
+  {% if tracks %} · {{ tracks|length }} cançons{% endif %}
+</p>
+
+{% if album.imatge_url %}
+<p><img src="{{ album.imatge_url }}" alt="Portada de {{ album.nom }}" style="max-width: 280px; border-radius: 6px;"></p>
+{% endif %}
+
+{% if tracks %}
+<h2>Tracklist</h2>
+<table>
+  <thead><tr><th class="pos">#</th><th>Cançó</th></tr></thead>
+  <tbody>
+    {% for t in tracks %}
+    <tr>
+      <td class="pos">{{ forloop.counter }}.</td>
+      <td>
+        <a href="/canco/{{ t.slug }}">{{ t.nom }}</a>
+        {% if not t.verificada %}<span class="pill">no verificada</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -267,6 +267,12 @@ class Artista(models.Model):
     nb_similars_lastfm = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    # SEO Sprint S (2026-05-06): single source of truth for sitemap
+    # `lastmod` and HTTP `Last-Modified` headers on the per-artist
+    # SSR view. Initial migration backfills from `mb_last_sync` when
+    # available, falling back to `created_at` — see migration
+    # `music/0061_*` for the rationale.
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
 
     class Meta:
         ordering = ["nom"]
@@ -739,6 +745,10 @@ class Album(models.Model):
     mbrainz_confirmed = models.BooleanField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    # SEO Sprint S (2026-05-06). See Artista.updated_at note. Initial
+    # backfill uses `last_album_check` when set (which Cron P2 touches
+    # on every Deezer re-scan).
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
 
     class Meta:
         ordering = ["-data_llancament"]
@@ -872,6 +882,11 @@ class Canco(models.Model):
     mbrainz_confirmed = models.BooleanField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    # SEO Sprint S (2026-05-06). See Artista.updated_at note. No
+    # better proxy than created_at on Canco — `auto_now=True` from
+    # this point captures every staff edit / verification flip /
+    # ML reclassification going forward.
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
 
     class Meta:
         ordering = ["nom"]

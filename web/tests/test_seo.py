@@ -1,0 +1,158 @@
+"""Smoke tests for the SEO/SSR surface.
+
+What we're locking in:
+  - Each entity URL renders 200 with a unique <title>.
+  - Each response carries Vary: User-Agent (so caches don't cross
+    over between bot HTML and SPA shell).
+  - JSON-LD blocks are present + parse as JSON.
+  - Indexability rules: un-approved artist → 404, un-verified
+    canco → 404, descartat album → 404.
+  - Helmet hook (`/api/v1/seo/<entity>/<slug>/`) returns the same
+    title the SSR template uses.
+"""
+
+from __future__ import annotations
+
+import datetime
+import json
+import re
+
+import pytest
+from django.test import Client
+
+from music.models import Album, Artista, Canco
+
+
+@pytest.fixture
+def client():
+    return Client()
+
+
+@pytest.fixture
+def artista(db):
+    return Artista.objects.create(
+        nom="Test Artist",
+        slug="test-artist",
+        aprovat=True,
+    )
+
+
+@pytest.fixture
+def album(db, artista):
+    return Album.objects.create(
+        nom="Test Album",
+        slug="test-album",
+        artista=artista,
+        descartat=False,
+    )
+
+
+@pytest.fixture
+def canco(db, artista, album):
+    return Canco.objects.create(
+        nom="Test Track",
+        slug="test-track",
+        artista=artista,
+        album=album,
+        verificada=True,
+        activa=True,
+    )
+
+
+def _jsonld_blocks(html: str) -> list[dict]:
+    blocks = re.findall(
+        r'<script type="application/ld\+json">(.+?)</script>', html, re.DOTALL
+    )
+    return [json.loads(b) for b in blocks]
+
+
+@pytest.mark.django_db
+def test_homepage_seo_renders(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "TopQuaranta" in body
+    assert "<title>" in body
+    assert "User-Agent" in r.get("Vary", "")
+
+
+@pytest.mark.django_db
+def test_artista_seo_unique_title(client, artista):
+    r = client.get(f"/artista/{artista.slug}")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "Test Artist" in body
+    # Title is per-page, NOT the homepage one.
+    assert "Test Artist" in re.search(r"<title>(.+?)</title>", body).group(1)
+
+
+@pytest.mark.django_db
+def test_artista_seo_jsonld_is_musicgroup(client, artista):
+    r = client.get(f"/artista/{artista.slug}")
+    blocks = _jsonld_blocks(r.content.decode())
+    musicgroup = next((b for b in blocks if b.get("@type") == "MusicGroup"), None)
+    assert musicgroup is not None
+    assert musicgroup["name"] == "Test Artist"
+
+
+@pytest.mark.django_db
+def test_canco_seo_404_when_unverified(client, canco):
+    canco.verificada = False
+    canco.save()
+    r = client.get(f"/canco/{canco.slug}")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_artista_seo_404_when_unapproved(client, artista):
+    artista.aprovat = False
+    artista.save()
+    r = client.get(f"/artista/{artista.slug}")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_album_seo_404_when_descartat(client, album):
+    album.descartat = True
+    album.save()
+    r = client.get(f"/album/{album.slug}")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_seo_api_endpoint_for_helmet(client, artista):
+    r = client.get(f"/api/v1/seo/artista/{artista.slug}/")
+    assert r.status_code == 200
+    payload = r.json()
+    assert "Test Artist" in payload["title"]
+    assert payload["canonical_url"].endswith(f"/artista/{artista.slug}")
+    assert payload["og_image"]
+
+
+@pytest.mark.django_db
+def test_seo_api_unknown_entity_400(client):
+    r = client.get("/api/v1/seo/squirrel/something/")
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
+def test_breadcrumbs_present(client, artista):
+    blocks = _jsonld_blocks(client.get(f"/artista/{artista.slug}").content.decode())
+    bc = next((b for b in blocks if b.get("@type") == "BreadcrumbList"), None)
+    assert bc is not None
+    items = bc["itemListElement"]
+    assert len(items) >= 2  # at least Inici + leaf
+    assert items[0]["name"] == "Inici"
+
+
+@pytest.mark.django_db
+def test_canonical_url_is_absolute(client, artista):
+    body = client.get(f"/artista/{artista.slug}").content.decode()
+    canonical = re.search(r'<link rel="canonical" href="(.+?)"', body).group(1)
+    assert canonical.startswith("https://www.topquaranta.cat/")
+
+
+@pytest.mark.django_db
+def test_hreflang_ca_present(client, artista):
+    body = client.get(f"/artista/{artista.slug}").content.decode()
+    assert 'hreflang="ca"' in body

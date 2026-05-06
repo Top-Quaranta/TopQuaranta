@@ -1,0 +1,93 @@
+{% load static seo_tags %}<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# ── Per-page metadata (single source of truth in web/seo/meta.py) ── #}
+  <title>{{ meta.title }}</title>
+  <meta name="description" content="{{ meta.description }}">
+  <link rel="canonical" href="{{ meta.canonical_url }}">
+  <link rel="alternate" hreflang="ca" href="{{ meta.canonical_url }}">
+  <link rel="alternate" hreflang="x-default" href="{{ meta.canonical_url }}">
+  {% if meta.keywords %}<meta name="keywords" content="{{ meta.keywords|join:', ' }}">{% endif %}
+
+  {# ── Open Graph (Mastodon, Bluesky, Telegram, WhatsApp, FB) ── #}
+  <meta property="og:type" content="{{ meta.og_type }}">
+  <meta property="og:title" content="{{ meta.title }}">
+  <meta property="og:description" content="{{ meta.description }}">
+  <meta property="og:url" content="{{ meta.canonical_url }}">
+  <meta property="og:image" content="{{ meta.og_image }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="{{ meta.locale }}">
+  <meta property="og:site_name" content="{{ meta.site_name }}">
+
+  {# ── Twitter card (also read by some other crawlers) ── #}
+  <meta name="twitter:card" content="{{ meta.twitter_card }}">
+  <meta name="twitter:title" content="{{ meta.title }}">
+  <meta name="twitter:description" content="{{ meta.description }}">
+  <meta name="twitter:image" content="{{ meta.og_image }}">
+
+  <meta name="theme-color" content="#facc15">
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="googlebot" content="index, follow">
+
+  {# ── Schema.org structured data ── #}
+  {% for block in jsonld_blocks %}
+  <script type="application/ld+json">{{ block|safe_json }}</script>
+  {% endfor %}
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  {# Minimal inline CSS — no external stylesheets so JS-disabled
+     fallback renders fast. Mirrors the SPA palette (yellow on ink)
+     without dragging the full mm-design bundle. #}
+  <style>
+    :root { color-scheme: dark; --ink: #0a0a0a; --yellow: #facc15; --gray: #9ca3af; }
+    html, body { background: var(--ink); color: #fff; font-family: 'Roboto', system-ui, sans-serif; margin: 0; }
+    .container { max-width: 920px; margin: 0 auto; padding: 24px 16px; }
+    h1, h2, h3 { font-family: 'Playfair Display', Georgia, serif; color: var(--yellow); }
+    h1 { font-size: 2.4rem; margin: 0 0 16px; }
+    h2 { font-size: 1.6rem; margin: 32px 0 12px; }
+    h3 { font-size: 1.15rem; margin: 16px 0 8px; }
+    a { color: var(--yellow); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    nav.breadcrumbs { font-size: 0.85rem; color: var(--gray); margin-bottom: 12px; }
+    nav.breadcrumbs a { color: var(--gray); }
+    nav.breadcrumbs a:hover { color: var(--yellow); }
+    .meta-line { color: var(--gray); font-size: 0.95rem; margin: 0 0 24px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid #1f2937; }
+    th { color: var(--gray); font-weight: 500; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pos { color: var(--yellow); font-weight: bold; width: 3em; }
+    ul.bare { list-style: none; padding: 0; margin: 0; }
+    ul.bare li { padding: 6px 0; border-bottom: 1px solid #1f2937; }
+    .albums-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; margin: 16px 0; }
+    .album-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #1f2937; }
+    .album-card p { font-size: 0.85rem; margin: 6px 0 0; }
+    .pill { display: inline-block; background: #1f2937; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; color: var(--gray); margin-right: 4px; }
+    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #1f2937; font-size: 0.85rem; color: var(--gray); }
+    .nojs-banner { background: #1f2937; padding: 8px 16px; text-align: center; font-size: 0.85rem; color: var(--gray); }
+    .nojs-banner a { color: var(--yellow); }
+  </style>
+</head>
+<body>
+  <noscript>
+    <div class="nojs-banner">
+      Estàs veient la versió simple de TopQuaranta. <a href="{{ meta.canonical_url }}">Activa JavaScript</a> per veure la versió completa amb gràfiques i mapa interactiu.
+    </div>
+  </noscript>
+  <div class="container">
+    {% block content %}{% endblock %}
+    <footer>
+      <p><a href="/">TopQuaranta</a> — el rànquing setmanal de música en català. Dades de Last.fm, Deezer i MusicBrainz; algorisme obert.</p>
+      <p>
+        <a href="/legal/privacitat">Privacitat</a> ·
+        <a href="/legal/termes">Termes</a> ·
+        <a href="/legal/cookies">Cookies</a> ·
+        <a href="/com-funciona">Com funciona</a> ·
+        <a href="/rss/top.xml">RSS</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

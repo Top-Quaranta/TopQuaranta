@@ -1,0 +1,66 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/artistes">Artistes</a> › {{ artista.nom }}
+</nav>
+<h1>{{ artista.nom }}</h1>
+<p class="meta-line">
+  {% if artista.bio %}{{ artista.bio|truncatewords:50 }}{% else %}Artista de música en català. {% endif %}
+</p>
+
+{% if artista.localitats.all %}
+<p>
+  <strong>D'on és:</strong>
+  {% for loc in artista.localitats.all %}{% if loc.municipi %}{{ loc.municipi.nom }} ({{ loc.municipi.comarca }}){% else %}{{ loc.localitat_manual }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
+</p>
+{% endif %}
+
+{% if artista.genere %}<p><strong>Gènere:</strong> {{ artista.genere }}</p>{% endif %}
+
+{% if albums %}
+<h2>Discografia</h2>
+<div class="albums-grid">
+  {% for al in albums %}
+  <div class="album-card">
+    <a href="/album/{{ al.slug }}">
+      {% if al.imatge_url %}<img src="{{ al.imatge_url }}" alt="Portada de {{ al.nom }}" loading="lazy">{% endif %}
+      <p><strong>{{ al.nom }}</strong>{% if al.data_llancament %} <span class="pill">{{ al.data_llancament.year }}</span>{% endif %}</p>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if cancons %}
+<h2>Cançons</h2>
+<ul class="bare">
+  {% for c in cancons %}
+  <li>
+    <a href="/canco/{{ c.slug }}">{{ c.nom }}</a>
+    {% if c.album %} <span class="pill"><a href="/album/{{ c.album.slug }}">{{ c.album.nom }}</a></span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if similars %}
+<h2>Artistes similars</h2>
+<ul class="bare">
+  {% for s in similars %}
+  <li><a href="/artista/{{ s.slug }}">{{ s.nom }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Enllaços externs</h2>
+<ul class="bare">
+  {% if artista.spotify_url %}<li><a href="{{ artista.spotify_url }}" rel="nofollow">Spotify</a></li>{% endif %}
+  {% if artista.bandcamp_url %}<li><a href="{{ artista.bandcamp_url }}" rel="nofollow">Bandcamp</a></li>{% endif %}
+  {% if artista.youtube_url %}<li><a href="{{ artista.youtube_url }}" rel="nofollow">YouTube</a></li>{% endif %}
+  {% if artista.instagram_url %}<li><a href="{{ artista.instagram_url }}" rel="nofollow">Instagram</a></li>{% endif %}
+  {% if artista.facebook_url %}<li><a href="{{ artista.facebook_url }}" rel="nofollow">Facebook</a></li>{% endif %}
+  {% if artista.tiktok_url %}<li><a href="{{ artista.tiktok_url }}" rel="nofollow">TikTok</a></li>{% endif %}
+  {% if artista.viquipedia_url %}<li><a href="{{ artista.viquipedia_url }}" rel="nofollow">Viquipèdia</a></li>{% endif %}
+  {% if artista.musicbrainz_id %}<li><a href="https://musicbrainz.org/artist/{{ artista.musicbrainz_id }}" rel="nofollow">MusicBrainz</a></li>{% endif %}
+</ul>
+{% endblock %}

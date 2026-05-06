@@ -1,0 +1,35 @@
+{% extends "seo/_base.html" %}
+{% load seo_tags %}
+{% block content %}
+<h1>TopQuaranta</h1>
+<p class="meta-line">
+  El rànquing setmanal de música en català als Països Catalans.
+  Mesurem què sona a Last.fm i Deezer, i actualitzem cada dissabte.
+</p>
+
+<h2>Top 5 d'aquesta setmana</h2>
+<table>
+  <thead>
+    <tr><th class="pos">#</th><th>Cançó</th><th>Artista</th><th>Àlbum</th></tr>
+  </thead>
+  <tbody>
+    {% for r in top5 %}
+    <tr>
+      <td class="pos">{{ r.posicio }}</td>
+      <td><a href="/canco/{{ r.canco.slug }}">{{ r.canco.nom }}</a></td>
+      <td><a href="/artista/{{ r.canco.artista.slug }}">{{ r.canco.artista.nom }}</a></td>
+      <td>{% if r.canco.album %}<a href="/album/{{ r.canco.album.slug }}">{{ r.canco.album.nom }}</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="/top">Veure el top complet (40 cançons) →</a></p>
+
+<h2>Explora</h2>
+<ul class="bare">
+  <li><a href="/top">Top setmanal per territori</a> — Catalunya, País Valencià, Illes Balears, Andorra, Catalunya del Nord, Franja de Ponent, L'Alguer.</li>
+  <li><a href="/artistes">Directori d'artistes</a> — tots els artistes verificats.</li>
+  <li><a href="/mapa">Mapa de la música en català</a> — territoris, comarques i municipis.</li>
+  <li><a href="/com-funciona">Com funciona</a> — l'algorisme obert i les fonts de dades.</li>
+</ul>
+{% endblock %}

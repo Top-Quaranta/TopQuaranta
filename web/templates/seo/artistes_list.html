@@ -1,0 +1,21 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › Artistes
+</nav>
+<h1>Directori d'artistes</h1>
+<p class="meta-line">
+  Tots els artistes que fan música en català al sistema TopQuaranta.
+  {{ artistes|length }} artistes verificats, ordenats pel nombre de cançons al top.
+</p>
+
+<ul class="bare">
+  {% for a in artistes %}
+  <li>
+    <a href="/artista/{{ a.slug }}">{{ a.nom }}</a>
+    <span class="pill">{{ a.n_cancons }} cançons</span>
+  </li>
+  {% endfor %}
+</ul>
+<p>Per al directori interactiu amb filtres per territori, comarca i municipi: <a href="https://www.topquaranta.cat/artistes">/artistes (versió completa)</a>.</p>
+{% endblock %}

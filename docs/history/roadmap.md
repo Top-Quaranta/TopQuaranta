@@ -146,7 +146,62 @@ secció _completats_ amb la data i el detall.
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
 
-### 2. Backlog menor
+### 2. Sprint S — SEO complet (Bloc D pendent)
+
+> Estratègia documentada el 2026-05-06 a `docs/architecture/seo.md`.
+> Blocs A+B+C executats el mateix dia. Bloc D queda pendent per
+> dependències externes (GSC verificació, PSI API key) i per feina
+> off-page que no és estrictament codi.
+
+**Decisions de l'sprint** (preses 2026-05-06):
+- Templates SSR-bot estil **full alternative HTML** (no només meta) —
+  utilitzable per usuaris amb JS desactivat (a11y win) a banda de
+  servir per als crawlers.
+- **OG image dinàmica** generada per Django per cada entitat (similar
+  al renderer social), no estàtic.
+- **Skip `/genere/<slug>`** per ara — `Artista.genere` és free-text i
+  cal curar la llista canònica abans de fer pàgines indexables. Quan
+  es faci, mapejar Artista.genere → 8-10 valors canònics.
+- **Bot UA list inclou bots d'IA** (GPTBot, ClaudeBot, PerplexityBot,
+  Bytespider) — apareixem al training data, és free reach.
+- **`updated_at` com a `auto_now=True`** + backfill intel·ligent per
+  model (Artista: mb_last_sync, Album: last_album_check, Canco:
+  created_at).
+- **304 Not Modified** quan l'entitat no ha canviat — estalvi de
+  bandwidth + premia el crawl budget.
+- **`hreflang="ca"`** als links alternates encara que només tenim
+  un idioma (assenyala explícitament Catalan a Google internacional).
+- **Política d'indexació**: només `verificada=True, activa=True` per
+  cançons; `aprovat=True` per artistes; albums = aprovat OR té cançons
+  verificades. **Quan staff desverifica una entitat, el SSR retorna
+  404** (Google la treu del SERP en hores).
+
+**Bloc D pendent** (necessita feina externa):
+- [ ] **Core Web Vitals**: WebP, font preload, JS chunk splitting
+      més agressiu (manualChunks per recharts), critical CSS inline.
+      Target: LCP/INP/CLS verds a Mòbil + Desktop al PageSpeed Insights.
+- [ ] **GSC monitoring**: nova pestanya "SEO" al `/staff/analytics`
+      amb impressions, clicks, CTR, posició mitjana per query, top
+      URLs, errors d'indexació. Necessita:
+      - Verificació del domini a Google Search Console (TXT DNS via
+        cdmon, ~10 min de feina manual).
+      - Service account a Google Cloud + GSC API enabled + JSON key.
+- [ ] **PageSpeed Insights API**: cron diari `recollir_metrics_psi`
+      per emmagatzemar CWV per page. Necessita una API key gratuïta
+      a Google Cloud.
+- [ ] **`/genere/<slug>`**: curar llista canònica de 8-10 gèneres,
+      mapejar Artista.genere → canònic, generar pàgines.
+- [ ] **Wikidata enrichment**: afegir `P5826` (TopQuaranta artist ID)
+      property a Wikidata (procés manual via tutorial wikidata.org).
+- [ ] **MusicBrainz outreach**: afegir el nostre URL com a `urls` a
+      cada artiste de MB (procés manual o cron amb credencials MB).
+- [ ] **Press kit page** (`/premsa`): logos, dossier PDF, contacte —
+      atrau backlinks naturals.
+- [ ] **Embed widget**: codi JS embedable (`<iframe>` o
+      `<div data-tq-top="...">` + script.js) perquè blogs/festivals
+      mostrin un mini-top a la seva web. Cada embed és un backlink.
+
+### 4. Backlog menor
 
 Items petits per fer en sessions curtes:
 

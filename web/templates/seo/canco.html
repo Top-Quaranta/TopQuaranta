@@ -1,0 +1,43 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/artistes">Artistes</a> ›
+  <a href="/artista/{{ canco.artista.slug }}">{{ canco.artista.nom }}</a> › {{ canco.nom }}
+</nav>
+<h1>{{ canco.nom }}</h1>
+<p class="meta-line">
+  Cançó de <a href="/artista/{{ canco.artista.slug }}">{{ canco.artista.nom }}</a>
+  {% if canco.album %} · de l'àlbum <a href="/album/{{ canco.album.slug }}">{{ canco.album.nom }}</a>{% endif %}
+  {% if canco.data_llancament %} · {{ canco.data_llancament|date:"d/m/Y" }}{% endif %}
+</p>
+
+{% if canco.album.imatge_url %}
+<p><img src="{{ canco.album.imatge_url }}" alt="Portada de {{ canco.album.nom }}" style="max-width: 240px; border-radius: 6px;"></p>
+{% endif %}
+
+{% if posicions_actuals %}
+<h2>Posició actual al top setmanal</h2>
+<ul class="bare">
+  {% for r in posicions_actuals %}
+  <li><strong>{{ r.territori }}</strong> — posició <strong>{{ r.posicio }}</strong></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if canco.artistes_col.all %}
+<h2>Col·laboradors</h2>
+<ul class="bare">
+  {% for col in canco.artistes_col.all %}
+  <li><a href="/artista/{{ col.slug }}">{{ col.nom }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Escolta-la</h2>
+<ul class="bare">
+  {% if canco.spotify_id %}<li><a href="https://open.spotify.com/track/{{ canco.spotify_id }}" rel="nofollow">Spotify</a></li>{% endif %}
+  {% if canco.deezer_id %}<li><a href="https://www.deezer.com/track/{{ canco.deezer_id }}" rel="nofollow">Deezer</a></li>{% endif %}
+  {% if canco.isrc %}<li><a href="https://music.apple.com/search?term={{ canco.nom }}" rel="nofollow">Apple Music</a></li>{% endif %}
+  <li><a href="https://music.youtube.com/search?q={{ canco.artista.nom }} {{ canco.nom }}" rel="nofollow">YouTube Music</a></li>
+</ul>
+{% endblock %}

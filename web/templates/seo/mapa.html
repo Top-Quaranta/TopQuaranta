@@ -1,0 +1,28 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › Mapa
+</nav>
+<h1>Mapa de la música en català</h1>
+<p class="meta-line">
+  TopQuaranta classifica cada artista pel seu territori d'origen. Aquí pots
+  explorar l'activitat musical en català per regió.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Territori</th><th>Artistes</th><th>Top</th></tr>
+  </thead>
+  <tbody>
+    {% for t in territoris %}
+    <tr>
+      <td>{{ t.nom }}</td>
+      <td>{{ t.n_artistes }}</td>
+      <td><a href="/top?territori={{ t.codi }}">Top {{ t.nom }} →</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p>Per al mapa SVG interactiu amb drill-down a comarca i municipi, vés a <a href="https://www.topquaranta.cat/mapa">/mapa (versió completa)</a>.</p>
+{% endblock %}

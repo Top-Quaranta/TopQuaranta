@@ -1,0 +1,38 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › Top
+</nav>
+<h1>Top {{ territori_nom }}</h1>
+<p class="meta-line">
+  Setmana del {{ monday|date:"d/m/Y" }}. {% if is_provisional %}<strong>Rànquing provisional</strong> — es tanca cada dissabte.{% else %}Rànquing oficial setmanal.{% endif %}
+</p>
+
+<table>
+  <thead>
+    <tr><th class="pos">#</th><th>Cançó</th><th>Artista</th><th>Àlbum</th></tr>
+  </thead>
+  <tbody>
+    {% for r in entries %}
+    <tr>
+      <td class="pos">{{ r.posicio }}</td>
+      <td><a href="/canco/{{ r.canco.slug }}">{{ r.canco.nom }}</a></td>
+      <td><a href="/artista/{{ r.canco.artista.slug }}">{{ r.canco.artista.nom }}</a></td>
+      <td>{% if r.canco.album %}<a href="/album/{{ r.canco.album.slug }}">{{ r.canco.album.nom }}</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Altres territoris</h2>
+<ul class="bare">
+  <li><a href="/top?territori=PPCC">Top global (Països Catalans)</a></li>
+  <li><a href="/top?territori=CAT">Top Catalunya</a></li>
+  <li><a href="/top?territori=VAL">Top País Valencià</a></li>
+  <li><a href="/top?territori=BAL">Top Illes Balears</a></li>
+  <li><a href="/top?territori=AND">Top Andorra</a></li>
+  <li><a href="/top?territori=CNO">Top Catalunya del Nord</a></li>
+  <li><a href="/top?territori=FRA">Top Franja de Ponent</a></li>
+  <li><a href="/top?territori=ALG">Top de l'Alguer</a></li>
+</ul>
+{% endblock %}

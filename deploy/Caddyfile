@@ -68,6 +68,7 @@ www.topquaranta.cat {
 		path /sitemap.xml
 		path /robots.txt
 		path /rss/*
+		path /og/*
 		path /compte/2fa/*
 		path /compte/activar/*
 		path /compte/nova-clau/*
@@ -77,6 +78,28 @@ www.topquaranta.cat {
 		path /compte/logout/
 	}
 	handle @django {
+		reverse_proxy 127.0.0.1:8083
+	}
+
+	# ── SEO / SSR-for-bots ──
+	# When the User-Agent is a recognised crawler / link-preview bot,
+	# reverse-proxy the public SEO paths to Django so the response
+	# carries per-page <title>, meta description, OG / Twitter cards
+	# and JSON-LD. Humans with a real browser keep getting the SPA
+	# from disk so they don't pay an extra round-trip. Sprint S
+	# (2026-05-06) — see docs/architecture/seo.md.
+	#
+	# UA list includes search engines (Googlebot, Bingbot,
+	# DuckDuckBot, YandexBot, Applebot), social link previews
+	# (Mastodon-class servers, Bluesky, Slackbot, TelegramBot,
+	# WhatsApp, facebookexternalhit, Twitterbot, LinkedInBot,
+	# Discordbot) and the AI crawlers we want indexing us
+	# (GPTBot, ClaudeBot, PerplexityBot, Bytespider).
+	@bot {
+		header_regexp User-Agent (?i)(googlebot|bingbot|duckduckbot|yandexbot|applebot|baiduspider|slurp|mastodon|pleroma|akkoma|misskey|bluesky|slackbot|telegrambot|whatsapp|facebookexternalhit|twitterbot|linkedinbot|discordbot|skypeuripreview|gptbot|claudebot|perplexitybot|bytespider|google-pagerenderer|googleother|amazonbot|chatgpt-user|cohere-ai|anthropic-ai|aria/|ia_archiver|petalbot|seznambot|vkshare|w3c_validator|developers\.google\.com)
+		path / /top /artistes /mapa /artista/* /album/* /canco/*
+	}
+	handle @bot {
 		reverse_proxy 127.0.0.1:8083
 	}
 

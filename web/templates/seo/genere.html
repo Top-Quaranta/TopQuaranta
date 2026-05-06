@@ -1,0 +1,19 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/artistes">Artistes</a> › {{ label }}
+</nav>
+<h1>{{ label }} en català</h1>
+<p class="meta-line">
+  {{ artistes|length }} artistes de {{ label|lower }} verificats al sistema TopQuaranta.
+</p>
+
+<ul class="bare">
+  {% for a in artistes %}
+  <li>
+    <a href="/artista/{{ a.slug }}">{{ a.nom }}</a>
+    <span class="pill">{{ a.n_cancons }} cançons</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

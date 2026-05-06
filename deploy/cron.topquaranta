@@ -103,6 +103,11 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # external call so a Mastodon hiccup doesn't break the dashboard.
 30 22 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_social >> /var/log/topquaranta/analytics.log 2>&1
 
+# 02:00 → Daily SEO inference: canonical genre + dona/home percent
+# from MB+Last.fm tags. Cheap (~5 s for 2 k artistes); idempotent.
+0 2 * * *   topquaranta   /home/topquaranta/bin/tq-run inferir_genere >> /var/log/topquaranta/seo.log 2>&1
+5 2 * * *   topquaranta   /home/topquaranta/bin/tq-run inferir_percentatge_femeni >> /var/log/topquaranta/seo.log 2>&1
+
 # 21:00 → SEO snapshots (Sprint S Bloc D, 2026-05-06).
 #  - GSC: pulls T-2 day's search-analytics. Idempotent.
 #  - PSI: 12 PageSpeed Insights calls (6 URLs × mobile+desktop).

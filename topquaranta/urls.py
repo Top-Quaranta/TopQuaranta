@@ -88,6 +88,11 @@ urlpatterns = [
         seo_views.decada_seo,
         name="seo_decada",
     ),
+    path(
+        "genere/<slug:slug>",
+        seo_views.genere_seo,
+        name="seo_genere",
+    ),
     # SPA Helmet hook — matches the SSR templates exactly.
     path(
         "api/v1/seo/<str:entity>/",

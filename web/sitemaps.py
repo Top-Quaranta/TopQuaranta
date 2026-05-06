@@ -252,6 +252,30 @@ class DecadesSitemap(Sitemap):
         return f"/decada/{decada}"
 
 
+class GeneresSitemap(Sitemap):
+    """`/genere/<slug>` for every canonical genre with ≥3 approved
+    artistes (Sprint S Bloc D, 2026-05-06)."""
+
+    changefreq = "weekly"
+    priority = 0.5
+    protocol = "https"
+
+    def items(self):
+        from django.db.models import Count
+
+        rows = (
+            Artista.objects.filter(aprovat=True)
+            .exclude(genere_canonical="")
+            .values("genere_canonical")
+            .annotate(n=Count("id"))
+            .filter(n__gte=3)
+        )
+        return [r["genere_canonical"] for r in rows]
+
+    def location(self, slug):
+        return f"/genere/{slug}"
+
+
 sitemaps = {
     "static": StaticSitemap,
     "artistes": ArtistesSitemap,
@@ -261,5 +285,6 @@ sitemaps = {
     "territoris_landing": TerritorisLandingSitemap,
     "comarques": ComarquesSitemap,
     "decades": DecadesSitemap,
+    "generes": GeneresSitemap,
     "top_historic": TopHistoricSitemap,
 }

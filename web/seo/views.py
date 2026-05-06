@@ -647,6 +647,75 @@ def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
 
 @require_safe
 @_vary_ua
+def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
+    """`/genere/<slug>` — música en català per gènere canònic.
+
+    Sprint S Bloc D pt 3 (2026-05-06): programmatic SEO surface
+    backed by `Artista.genere_canonical` (data-driven inference
+    from Last.fm + MB tags).
+    """
+    valid = {k for k, _ in Artista.GENERE_CANONICAL_CHOICES}
+    if slug not in valid:
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    label = dict(Artista.GENERE_CANONICAL_CHOICES)[slug]
+    artistes = list(
+        Artista.objects.filter(aprovat=True, genere_canonical=slug)
+        .annotate(
+            n_cancons=Count(
+                "cancons",
+                filter=Q(cancons__verificada=True, cancons__activa=True),
+                distinct=True,
+            )
+        )
+        .order_by("-n_cancons", "nom")[:80]
+    )
+    if len(artistes) < 3:
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    page_meta = meta.Meta(
+        title=f"{label} en català · TopQuaranta",
+        description=meta._trim(
+            f"Artistes de {label.lower()} en català. {len(artistes)} bandes "
+            "i cantants verificats al sistema TopQuaranta."
+        ),
+        canonical_url=f"https://www.topquaranta.cat/genere/{slug}",
+        og_image=f"https://www.topquaranta.cat/og/default.png",
+        og_type="website",
+        keywords=[
+            f"{label} català",
+            f"música {label.lower()}",
+            "música en català",
+        ],
+    )
+    blocks = [
+        jsonld.breadcrumbs_jsonld(
+            [
+                ("Inici", "/"),
+                ("Artistes", "/artistes"),
+                (label, f"/genere/{slug}"),
+            ]
+        ),
+    ]
+    return render(
+        request,
+        "seo/genere.html",
+        {
+            "meta": page_meta,
+            "jsonld_blocks": blocks,
+            "slug": slug,
+            "label": label,
+            "artistes": artistes,
+        },
+    )
+
+
+@require_safe
+@_vary_ua
 def mapa_seo(request: HttpRequest) -> HttpResponse:
     """`/mapa` — basic SSR fallback. Doesn't render the SVG (heavy);
     instead lists territoris with their KPIs + links to the per-territori

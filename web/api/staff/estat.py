@@ -208,6 +208,16 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 26,
         "skip_concern": 1,
     },
+    "inferir_genere": {
+        "frequency_label": "Cada nit 02:00",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
+    "inferir_percentatge_femeni": {
+        "frequency_label": "Cada nit 02:05",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
 }
 
 

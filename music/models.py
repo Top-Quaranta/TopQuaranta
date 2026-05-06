@@ -266,6 +266,38 @@ class Artista(models.Model):
     # pendents page so high-affinity discoveries float to the top.
     nb_similars_lastfm = models.PositiveIntegerField(default=0)
 
+    # SEO Sprint S Bloc D (2026-05-06): canonical genre for the
+    # `/genere/<slug>` programmatic-SEO surface. Auto-inferred by the
+    # `inferir_genere` cron from `lastfm_tags` + `mb_tags` via the
+    # mapping in `music.genere`. Staff can pin a value manually
+    # (sets `genere_locked=True`) and the cron will leave it alone.
+    GENERE_CANONICAL_CHOICES = [
+        ("pop", "Pop"),
+        ("rock", "Rock"),
+        ("indie", "Indie / Alternatiu"),
+        ("punk", "Punk"),
+        ("hardcore", "Hardcore"),
+        ("metal", "Metal"),
+        ("ska", "Ska"),
+        ("reggae", "Reggae"),
+        ("folk", "Folk"),
+        ("cantautor", "Cantautor / a"),
+        ("electronica", "Electrònica"),
+        ("hip-hop", "Hip-hop / Rap"),
+        ("urba", "Urbà"),
+        ("jazz", "Jazz"),
+        ("experimental", "Experimental"),
+        ("infantil", "Infantil"),
+    ]
+    genere_canonical = models.CharField(
+        max_length=20,
+        choices=GENERE_CANONICAL_CHOICES,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    genere_locked = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     # SEO Sprint S (2026-05-06): single source of truth for sitemap
     # `lastmod` and HTTP `Last-Modified` headers on the per-artist

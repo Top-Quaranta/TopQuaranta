@@ -146,7 +146,7 @@ secció _completats_ amb la data i el detall.
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
 
-### 2. Sprint S — SEO complet (Bloc D pendent)
+### 2. Sprint S — SEO Bloc D (CWV + GSC + off-page) — només pendent
 
 > Estratègia documentada el 2026-05-06 a `docs/architecture/seo.md`.
 > Blocs A+B+C executats el mateix dia. Bloc D queda pendent per
@@ -261,6 +261,74 @@ Items petits per fer en sessions curtes:
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
+
+### Sprint S — SEO complet (Bloc A + B + C) ✅ (2026-05-06)
+
+Tres commits seqüencials que converteixen el SPA de "5 URLs visibles a Google"
+a "~7 320 URLs amb metadata rica + JSON-LD + dynamic OG cards + sitemap-index
++ IndexNow real-time push" — sense tocar ni una línia del bundle de la SPA.
+
+* **Block A** (commit `5b435a4`): nucli SSR-for-bots.
+  - `web/seo/` mòdul (`meta.py`, `jsonld.py`, `views.py`, `ogimage.py`).
+  - 6 vistes Django pre-renderitzades (homepage, top, artistes, artista,
+    album, canco, mapa) amb `@condition` (304 Not Modified), Vary:
+    User-Agent stamped, indexability rules (un-approved → 404).
+  - Templates HTML self-contained, mirroring the SPA palette via inline
+    CSS, JS-disabled friendly.
+  - JSON-LD: WebSite + Organization + MusicGroup + MusicAlbum +
+    MusicRecording + MusicPlaylist + BreadcrumbList. Tots passen el
+    Google Rich Results Test.
+  - Dynamic OG image generator (1200×630 PNG amb fonts brand, cached
+    per `updated_at`).
+  - `Caddyfile` `@bot` matcher per UA + path: routes Googlebot, Mastodon,
+    Bluesky, Telegram, WhatsApp, GPTBot, ClaudeBot, PerplexityBot, etc.
+    cap a Django; humans van al SPA.
+  - Migracions `music/0063` + `0064` per afegir `updated_at`
+    `auto_now=True` amb backfill intel·ligent (Coalesce mb_last_sync /
+    last_album_check / created_at).
+
+* **Block B** (commit `930fa56`): discovery layer.
+  - Sitemap-index propi (`/sitemap.xml`) referenciant 9 sub-sitemaps:
+    static, artistes (1 979), albums (2 212), cançons (3 028),
+    territoris, territoris_landing, comarques (61 auto), decades (6
+    auto), top_historic (14 setmanes). Total: ~7 320 URLs.
+  - `web/seo/indexnow.py`: protocol IndexNow per Bing/Yandex/consortium.
+    Cada `aprovar_artista` / `aprovar_canco` dispara un push real-time;
+    le quedem anuncïe al moment, no al sitemap recrawl.
+  - Verification key file servit a `/<KEY>.txt` via TemplateView.
+  - `react-helmet-async` cablejat al SPA: `<SeoHead entity slug>` mounted
+    a les 7 pàgines públiques (Home, Top, Artistes, Artista, Album,
+    Cançó, Mapa). Llegeix `/api/v1/seo/<entity>/<slug>/` per garantir
+    paritat amb el SSR. Cap drift entre humans i bots.
+
+* **Block C** (commit `18b65a6`): long-tail surface.
+  - 4 noves rutes SSR: `/top/<territori>/setmana/<YYYY-WW>`,
+    `/territori/<codi>`, `/comarca/<slug>`, `/decada/<XXX0>`.
+  - Thin-page guards: comarca amb <3 artistes 404; dècada amb <5
+    cançons 404; tot historic sense data 404. Sense pàgines buides al
+    crawl.
+  - 3 sub-sitemaps generats automàticament (territoris_landing,
+    comarques, decades) amb els mateixos thresholds.
+  - `docs/architecture/seo.md` (nou): 200 línies de referència
+    arquitectural cobrint dynamic rendering rationale, mòduls,
+    indexability rules, JSON-LD coverage, OG images, SPA Helmet parity,
+    edge cases (Vary, 304, 404 vs 410), testing, Bloc D backlog.
+
+Tests: 19 nous (per-entity titles únics, JSON-LD parses, indexability
+404s, Helmet API match, hreflang ca, long-tail thin guards, sitemap-
+index, IndexNow key file). Full suite **269 passing**.
+
+Smoke real:
+  - `curl -A Googlebot https://www.topquaranta.cat/artista/rosalia` →
+    título "Rosalía — Música en català · TopQuaranta", MusicGroup
+    JSON-LD amb 5 albums + 1 track + sameAs a MB/Insta/YouTube.
+  - `curl -A Mozilla` mateix URL → SPA shell + Helmet pulla la mateixa
+    metadata client-side.
+  - `/sitemap.xml` → sitemap-index amb 9 seccions; cada subsitemap té
+    real lastmod.
+  - `/territori/CAT`, `/decada/2020`, `/top/CAT/setmana/2026-W17` tots
+    serveixen rich HTML amb breadcrumbs + JSON-LD.
+  - `/og/artista/rosalia` → 200 image/png 1200×630 generat on-the-fly.
 
 ### Sprint K — Suite analytics ètica completa + SPA wiring + UTM ✅ (2026-05-04)
 

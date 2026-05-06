@@ -145,13 +145,39 @@ def artistes_list(request: Request) -> Response:
         ).distinct()
         qs = qs.filter(pk__in=top_artist_ids)
 
+    # Sprint S Bloc D pt 3 (2026-05-06): filter by canonical genre.
+    # Values come from `Artista.GENERE_CANONICAL_CHOICES` — see the
+    # /genere/<slug> SEO surface for the same list.
+    genere = (request.GET.get("genere") or "").strip().lower()
+    if genere:
+        qs = qs.filter(genere_canonical=genere)
+
     q = (request.GET.get("q") or "").strip()
     if q:
         qs = qs.annotate(_nom_norm=unaccent_field("nom")).filter(
             _nom_norm__contains=normalize_search_term(q)
         )
 
-    qs = qs.distinct().order_by("nom")
+    # Sort. Default is alphabetical (`nom`); `popularitat` orders by
+    # cumulative Last.fm playcount across all the artiste's verified
+    # cançons (the same metric the mapa uses to rank). Annotated as
+    # `_plays` so it doesn't conflict with any existing field.
+    sort = (request.GET.get("sort") or "nom").strip().lower()
+    if sort == "popularitat":
+        from django.db.models import Max, Sum
+
+        qs = (
+            qs.annotate(
+                _plays=Sum(
+                    "cancons__senyals__lastfm_playcount",
+                    default=0,
+                )
+            )
+            .distinct()
+            .order_by("-_plays", "nom")
+        )
+    else:
+        qs = qs.distinct().order_by("nom")
 
     try:
         per_page = min(int(request.GET.get("per_page") or 40), 100)

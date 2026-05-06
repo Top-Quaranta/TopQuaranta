@@ -90,10 +90,39 @@ function ArtistaCard({ a }) {
   )
 }
 
+// Sprint S Bloc D pt 3 (2026-05-06): canonical genre choices mirror
+// `Artista.GENERE_CANONICAL_CHOICES` on the backend. Kept in sync via
+// the `/api/v1/artistes/?genere=<slug>` endpoint contract.
+const GENERES = [
+  ['',             'Tots els gèneres'],
+  ['pop',          'Pop'],
+  ['rock',         'Rock'],
+  ['indie',        'Indie / Alternatiu'],
+  ['punk',         'Punk'],
+  ['hardcore',     'Hardcore'],
+  ['metal',        'Metal'],
+  ['ska',          'Ska'],
+  ['reggae',       'Reggae'],
+  ['folk',         'Folk'],
+  ['cantautor',    'Cantautor / a'],
+  ['electronica',  'Electrònica'],
+  ['hip-hop',      'Hip-hop / Rap'],
+  ['urba',         'Urbà'],
+  ['jazz',         'Jazz'],
+  ['experimental', 'Experimental'],
+  ['infantil',     'Infantil'],
+]
+
+const SORT_CHOICES = [
+  ['nom',         'Per nom (A→Z)'],
+  ['popularitat', 'Per popularitat'],
+]
+
 export default function ArtistesPage() {
   const [params, setParams] = useSearchParams()
   const q    = params.get('q') || ''
   const page = parseInt(params.get('page') || '1', 10)
+  const sort = params.get('sort') || 'nom'
   const applied = {
     territori: (params.get('territori') || '').toUpperCase(),
     comarca:   params.get('comarca')   || '',
@@ -101,6 +130,7 @@ export default function ArtistesPage() {
     amb_dones: params.get('amb_dones') || '',
     nou:       params.get('nou')       || '',
     al_top:    params.get('al_top')    || '',
+    genere:    params.get('genere')    || '',
   }
 
   const [data, setData] = useState(null)
@@ -120,6 +150,7 @@ export default function ArtistesPage() {
       if (v) qs.set(k, v)
     }
     if (page > 1) qs.set('page', String(page))
+    if (sort && sort !== 'nom') qs.set('sort', sort)
     qs.set('per_page', '40')
     api.get(`/artistes/?${qs}`)
       .then(setData)
@@ -127,7 +158,8 @@ export default function ArtistesPage() {
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, applied.territori, applied.comarca, applied.municipi,
-      applied.amb_dones, applied.nou, applied.al_top, page])
+      applied.amb_dones, applied.nou, applied.al_top, applied.genere,
+      sort, page])
 
   // Apply a filter set (from FilterPanel) into URL params, dropping
   // empty values and resetting pagination.
@@ -214,6 +246,41 @@ export default function ArtistesPage() {
           >
             {(p, setP) => <ArtistesFilters pending={p} setPending={setP} />}
           </FilterPanel>
+          {/* Quick-pick gènere + ordenació, fora del panell perquè
+              són els toggles més freqüents i mereixen ser una sola
+              passada de mirada en lloc de dos clics. */}
+          <select
+            value={applied.genere}
+            onChange={e => {
+              const out = new URLSearchParams(params)
+              if (e.target.value) out.set('genere', e.target.value)
+              else out.delete('genere')
+              out.delete('page')
+              setParams(out)
+            }}
+            aria-label="Filtrar per gènere"
+            className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white focus:outline-none focus:border-tq-yellow"
+          >
+            {GENERES.map(([v, label]) => (
+              <option key={v} value={v} className="text-tq-ink">{label}</option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={e => {
+              const out = new URLSearchParams(params)
+              if (e.target.value && e.target.value !== 'nom') out.set('sort', e.target.value)
+              else out.delete('sort')
+              out.delete('page')
+              setParams(out)
+            }}
+            aria-label="Ordenar"
+            className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white focus:outline-none focus:border-tq-yellow"
+          >
+            {SORT_CHOICES.map(([v, label]) => (
+              <option key={v} value={v} className="text-tq-ink">{label}</option>
+            ))}
+          </select>
         </form>
       </Section>
 

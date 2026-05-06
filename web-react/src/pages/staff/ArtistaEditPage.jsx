@@ -327,6 +327,12 @@ export default function ArtistaEditPage() {
         nom: a.nom,
         lastfm_nom: a.lastfm_nom,
         genere: a.genere,
+        // Sprint S Bloc D pt 3: send the canonical genre too. The
+        // backend flips `genere_locked=True` whenever a non-empty
+        // value lands here, so the inferer leaves the row alone on
+        // future runs. Sending '' un-locks → next inferer pass
+        // re-infers from tags.
+        genere_canonical: a.genere_canonical || '',
         percentatge_femeni: a.percentatge_femeni,
         aprovat: a.aprovat,
         musicbrainz_id: a.musicbrainz?.id || '',
@@ -378,8 +384,31 @@ export default function ArtistaEditPage() {
             {/* `lastfm_nom` lives in the LastfmAliasesCard below
                 (paired with LastfmPanel) so all Last.fm-related
                 editing is in one place, mirroring the MusicBrainz row. */}
-            <label className="text-xs font-semibold">Gènere
+            <label className="text-xs font-semibold">Gènere lliure (legacy)
               <Input value={a.genere || ''} onChange={e => patch({ genere: e.target.value })} className="w-full mt-1 font-normal" />
+            </label>
+            {/* Sprint S Bloc D pt 3 (2026-05-06): canonical genre
+                feeds the /genere/<slug> SEO surface. Auto-inferred
+                nightly from MB + Last.fm tags via `inferir_genere`.
+                Setting a non-empty value here flips
+                `genere_locked=True` server-side so the inferer leaves
+                this row alone. */}
+            <label className="text-xs font-semibold">
+              Gènere canònic (SEO)
+              {a.genere_locked && (
+                <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] bg-tq-yellow/20 text-tq-yellow-deep rounded">manual</span>
+              )}
+              <Select
+                aria-label="Gènere canònic"
+                value={a.genere_canonical || ''}
+                onChange={e => patch({ genere_canonical: e.target.value })}
+                className="w-full mt-1 font-normal"
+              >
+                <option value="">— Sense fixar (s'autoinfererà cada nit)</option>
+                {(a.genere_choices || []).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </Select>
             </label>
             <label className="text-xs font-semibold">% femení
               <Select aria-label="Percentatge femení" value={a.percentatge_femeni || ''} onChange={e => patch({ percentatge_femeni: e.target.value })} className="w-full mt-1 font-normal">

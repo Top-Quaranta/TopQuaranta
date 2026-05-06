@@ -269,9 +269,18 @@ def artista_detail(request: Request, pk: int) -> Response:
             "nom",
             "lastfm_nom",
             "genere",
+            "genere_canonical",
             "percentatge_femeni",
             "musicbrainz_id",
         ] + [f for f, _ in Artista.SOCIAL_LINK_FIELDS]
+        # Sprint S Bloc D pt 3: when staff sets `genere_canonical`
+        # manually, lock the field so the nightly inferer doesn't
+        # overwrite it. Same for `percentatge_femeni`. Idempotent —
+        # sending the same value re-locks (no-op).
+        if "genere_canonical" in data:
+            artista.genere_locked = bool((data.get("genere_canonical") or "").strip())
+        if "genere_locked" in data:
+            artista.genere_locked = bool(data["genere_locked"])
         old_mbid = artista.musicbrainz_id
         for f in simple_fields:
             if f in data:
@@ -360,6 +369,9 @@ def artista_detail(request: Request, pk: int) -> Response:
         {
             "lastfm_nom": artista.lastfm_nom or "",
             "percentatge_femeni": artista.percentatge_femeni or "",
+            "genere_canonical": artista.genere_canonical or "",
+            "genere_locked": artista.genere_locked,
+            "genere_choices": list(Artista.GENERE_CANONICAL_CHOICES),
             "social": {
                 f: getattr(artista, f) or "" for f, _ in Artista.SOCIAL_LINK_FIELDS
             },

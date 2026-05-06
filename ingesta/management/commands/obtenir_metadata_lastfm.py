@@ -138,14 +138,19 @@ class Command(BaseCommand):
             return
         self.stdout.write(f"  · {artista.nom} (pk={artista.pk}) …", ending="")
 
-        info = get_artist_info(name)
+        # Sprint S Bloc D follow-up (2026-05-06): pass the MBID when
+        # we have one. Last.fm uses MBID over name and skips its
+        # autocorrect/redirect, which prevents homonym collisions
+        # like "Fades" silently resolving to "The Fades" (English).
+        mbid = artista.musicbrainz_id or None
+        info = get_artist_info(name, mbid=mbid)
         new_pendents = 0
         bumped_similars = 0
 
         if info:
             if not dry_run:
                 self._fill_artist_fields(artista, info)
-            similar = get_artist_similar(name, limit=100)
+            similar = get_artist_similar(name, limit=100, mbid=mbid)
             # Per-source dedup: many Last.fm pages list the same
             # artist under multiple spellings ('Delên' AND 'dêlen'
             # in the same response). Resolving each candidate

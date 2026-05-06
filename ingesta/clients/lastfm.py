@@ -412,29 +412,49 @@ def _artist_api_call(method: str, **extra) -> dict | None:
     return None
 
 
-def get_artist_info(artist_name: str) -> dict | None:
-    """Fetch the artist.getInfo block for `artist_name`.
+def get_artist_info(
+    artist_name: str, mbid: str | None = None, autocorrect: bool = True
+) -> dict | None:
+    """Fetch the artist.getInfo block.
 
-    Returns the raw `artist` dict from Last.fm (with `bio`, `stats`,
-    `image`, `tags`, `ontour`, `url`…) or None on any failure.
-    Autocorrect is on, so the returned name may differ slightly from
-    the input — callers should preserve our `lastfm_nom`/`nom` rather
-    than overwriting from the response.
+    Disambiguation strategy (Sprint S Bloc D follow-up, 2026-05-06):
+      * When we have a MusicBrainz ID, pass it as `mbid` — Last.fm
+        looks the artist up by GID and **ignores the name argument**,
+        which means no autocorrect/redirect surprises (caught: our
+        Mallorcan band "Fades" silently became the English punk
+        "The Fades" because Last.fm's name autocorrect prefers the
+        higher-listener artist).
+      * Without an MBID we fall back to name + autocorrect=1 (the
+        legacy behaviour) but callers can pass `autocorrect=False`
+        to disable the redirect — useful when staff has flagged a
+        homonym collision.
+
+    Returns the raw `artist` dict from Last.fm or None on any failure.
     """
-    data = _artist_api_call("artist.getInfo", artist=artist_name)
+    params: dict = {"artist": artist_name}
+    if mbid:
+        # `mbid` wins over `artist` on Last.fm's side, but pass both
+        # so that on the rare case the MBID is rejected (deleted
+        # entry, malformed) we degrade to the name lookup.
+        params["mbid"] = mbid
+    if not autocorrect:
+        params["autocorrect"] = "0"
+    data = _artist_api_call("artist.getInfo", **params)
     if not data:
         return None
     return data.get("artist") or None
 
 
-def get_artist_similar(artist_name: str, limit: int = 100) -> list[dict]:
-    """Fetch the artist.getSimilar list for `artist_name`.
-
-    Returns a list of similar-artist dicts as Last.fm hands them
-    (`name`, `match`, `url`, `image`, `mbid`). Empty list on any
-    failure. Caller is responsible for filtering by `match` threshold.
-    """
-    data = _artist_api_call("artist.getSimilar", artist=artist_name, limit=limit)
+def get_artist_similar(
+    artist_name: str, limit: int = 100, mbid: str | None = None
+) -> list[dict]:
+    """Fetch the artist.getSimilar list. Same MBID-disambiguation
+    strategy as `get_artist_info` — when we have an MBID, pass it
+    so Last.fm bypasses name-based autocorrect."""
+    params: dict = {"artist": artist_name, "limit": limit}
+    if mbid:
+        params["mbid"] = mbid
+    data = _artist_api_call("artist.getSimilar", **params)
     if not data:
         return []
     similar = (data.get("similarartists") or {}).get("artist") or []

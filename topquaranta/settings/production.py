@@ -83,3 +83,8 @@ INSTAGRAM_TOKEN_EXPIRES_AT = config("INSTAGRAM_TOKEN_EXPIRES_AT", default="")
 GSC_SERVICE_ACCOUNT_FILE = config("GSC_SERVICE_ACCOUNT_FILE", default="")
 GSC_SITE_URL = config("GSC_SITE_URL", default="sc-domain:topquaranta.cat")
 PSI_API_KEY = config("PSI_API_KEY", default="")
+# OAuth fallback (workaround for the SA-on-sc-domain GSC UI bug):
+# mint a refresh_token via the OAuth Playground once and pin here.
+GSC_OAUTH_CLIENT_ID = config("GSC_OAUTH_CLIENT_ID", default="")
+GSC_OAUTH_CLIENT_SECRET = config("GSC_OAUTH_CLIENT_SECRET", default="")
+GSC_OAUTH_REFRESH_TOKEN = config("GSC_OAUTH_REFRESH_TOKEN", default="")

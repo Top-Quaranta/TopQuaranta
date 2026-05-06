@@ -37,8 +37,55 @@ logger = logging.getLogger(__name__)
 GSC_SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
 
 
+def _oauth_credentials():
+    """Build user-OAuth credentials when configured. Used as a
+    workaround for the GSC UI bug where DNS-verified domain
+    properties refuse to add Service Account emails as users (the
+    'no valid Google account' error). OAuth bypasses this — the
+    user delegates their own Google identity, which has Owner
+    access by virtue of being the property owner.
+
+    Settings: GSC_OAUTH_CLIENT_ID, GSC_OAUTH_CLIENT_SECRET,
+    GSC_OAUTH_REFRESH_TOKEN (mint via the OAuth Playground; one-shot).
+    """
+    from google.oauth2.credentials import Credentials
+
+    client_id = getattr(settings, "GSC_OAUTH_CLIENT_ID", "")
+    client_secret = getattr(settings, "GSC_OAUTH_CLIENT_SECRET", "")
+    refresh_token = getattr(settings, "GSC_OAUTH_REFRESH_TOKEN", "")
+    if not (client_id and client_secret and refresh_token):
+        return None
+    return Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=GSC_SCOPES,
+    )
+
+
+def _service_account_credentials():
+    """Service Account auth path. Works on URL-prefix properties
+    where the SA email is added as a property user."""
+    from google.oauth2 import service_account
+
+    sa_file = getattr(settings, "GSC_SERVICE_ACCOUNT_FILE", "")
+    if not sa_file or not Path(sa_file).exists():
+        return None
+    return service_account.Credentials.from_service_account_file(
+        sa_file, scopes=GSC_SCOPES
+    )
+
+
 class Command(BaseCommand):
     help = "Recull el snapshot diari de Google Search Console."
+
+    def _build_credentials(self):
+        """Try OAuth first (delegated user) then Service Account.
+        OAuth is the recommended path because it sidesteps the GSC
+        UI bug with sc-domain properties refusing SA emails."""
+        return _oauth_credentials() or _service_account_credentials()
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -55,26 +102,21 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
 
-        sa_file = getattr(settings, "GSC_SERVICE_ACCOUNT_FILE", None)
         site_url = getattr(settings, "GSC_SITE_URL", None)
-        if not sa_file or not Path(sa_file).exists():
-            self.stdout.write(
-                self.style.WARNING(
-                    "GSC_SERVICE_ACCOUNT_FILE no configurat o inexistent. "
-                    "Ometent la passada."
-                )
-            )
-            return
         if not site_url:
             self.stdout.write(self.style.WARNING("GSC_SITE_URL no configurat."))
             return
 
-        creds = service_account.Credentials.from_service_account_file(
-            sa_file, scopes=GSC_SCOPES
-        )
+        creds = self._build_credentials()
+        if creds is None:
+            self.stdout.write(
+                self.style.WARNING(
+                    "Cap credencial GSC vàlida (ni SA ni OAuth). Ometent."
+                )
+            )
+            return
         svc = build("searchconsole", "v1", credentials=creds, cache_discovery=False)
 
         target_date = opts.get("date")

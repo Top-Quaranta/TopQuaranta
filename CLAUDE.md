@@ -288,7 +288,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **269 passed, 8 skipped**.
+Mock all external HTTP — no real API calls. Current suite: **290 passed, 8 skipped**.
 Run: `.venv/bin/python -m pytest -q`.
 
 React SPA: Vitest not yet wired for runtime tests; builds validated via

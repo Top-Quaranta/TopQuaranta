@@ -1,3 +1,4 @@
+from django.contrib.sitemaps.views import index as sitemap_index
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from django.views.generic import TemplateView
@@ -14,9 +15,17 @@ from web.sitemaps import sitemaps
 urlpatterns = [
     path("api/v1/", include("web.api.urls")),
     path("compte/", include("comptes.urls")),
-    # SEO surfaces.
+    # SEO surfaces. Sprint S Block B (2026-05-06): expanded to a
+    # proper sitemap-index referencing per-entity sub-sitemaps so
+    # crawlers can fetch only the slice they care about.
     path(
         "sitemap.xml",
+        sitemap_index,
+        {"sitemaps": sitemaps},
+        name="django.contrib.sitemaps.views.index",
+    ),
+    path(
+        "sitemap-<section>.xml",
         sitemap,
         {"sitemaps": sitemaps},
         name="django.contrib.sitemaps.views.sitemap",
@@ -25,6 +34,16 @@ urlpatterns = [
         "robots.txt",
         TemplateView.as_view(
             template_name="web/robots.txt",
+            content_type="text/plain",
+        ),
+    ),
+    # IndexNow ownership verification. Bing/Yandex GET the key
+    # file at `https://<host>/<key>.txt` and check it equals the
+    # `key` we submit alongside URLs. See web/seo/indexnow.py.
+    path(
+        "8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b.txt",
+        TemplateView.as_view(
+            template_name="seo/indexnow_key.txt",
             content_type="text/plain",
         ),
     ),

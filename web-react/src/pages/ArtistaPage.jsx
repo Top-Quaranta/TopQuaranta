@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { SeoHead } from '../lib/seoHead'
 import Alert from '../components/ui/Alert'
 import { albumUrl, cancoUrl } from '../lib/urls'
 import FeedbackButton from '../components/FeedbackButton'
@@ -84,6 +85,7 @@ export default function ArtistaPage() {
 
   return (
     <article className="max-w-4xl mx-auto text-white space-y-6">
+      <SeoHead entity="artista" slug={slug} />
       {/* Header card */}
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.imatge_url ? (

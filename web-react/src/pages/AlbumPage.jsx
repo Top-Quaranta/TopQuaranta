@@ -12,6 +12,7 @@ import Alert from '../components/ui/Alert'
 import { cancoUrl } from '../lib/urls'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
+import { SeoHead } from '../lib/seoHead'
 
 function formatDuration(ms) {
   if (!ms) return '—'
@@ -64,6 +65,7 @@ export default function AlbumPage() {
 
   return (
     <article className="max-w-4xl mx-auto text-white space-y-6">
+      <SeoHead entity="album" slug={slug} />
       {/* Header */}
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.imatge_url ? (

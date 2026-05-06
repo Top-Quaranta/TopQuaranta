@@ -127,10 +127,21 @@ def _try_auto_unlink_homonym_deezer(
 
 
 def aprovar_canco(canco: Canco) -> None:
-    """Approve a single track: record historial, set verificada=True."""
+    """Approve a single track: record historial, set verificada=True.
+
+    Also pings IndexNow so Bing/Yandex (and the rest of the
+    consortium) crawl the new public URL within hours instead of
+    waiting for our weekly sitemap recrawl. Fail-open — never blocks
+    the staff flow.
+    """
     crear_historial(canco, "aprovada", "ok")
     canco.verificada = True
     canco.save(update_fields=["verificada"])
+    # Late import — avoids a circular dependency at app start
+    # (web.seo.indexnow imports music models).
+    from web.seo.indexnow import notify_canco
+
+    notify_canco(canco)
 
 
 def aprovar_canco_auto_ml(canco: Canco) -> None:
@@ -146,6 +157,9 @@ def aprovar_canco_auto_ml(canco: Canco) -> None:
     crear_historial(canco, "aprovada", MOTIU_AUTO_ML)
     canco.verificada = True
     canco.save(update_fields=["verificada"])
+    from web.seo.indexnow import notify_canco
+
+    notify_canco(canco)
 
 
 def rebutjar_album(album: Album, motiu: str) -> int:

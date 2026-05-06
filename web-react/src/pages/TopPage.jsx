@@ -20,6 +20,7 @@ import { cancoUrl } from '../lib/urls'
 import MmIcon from '../components/MmIcon'
 import { TrendCue, TERRITORI_NOM } from '../components/editorial'
 import { fmtDataLlarga } from '../lib/format'
+import { SeoHead } from '../lib/seoHead'
 
 /* Pill order — alphabetical by user-facing name, "Global" first.
  * "Altres" stays at the end. */
@@ -252,6 +253,7 @@ export default function TopPage() {
 
   return (
     <div className="space-y-0">
+      <SeoHead entity="top" />
       <TopHero
         data={data}
         territori={territori}

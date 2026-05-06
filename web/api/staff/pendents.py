@@ -357,6 +357,12 @@ def pendent_aprovar(request: Request, pk: int) -> Response:
         artista.pendent_review = False
         artista.save(update_fields=["aprovat", "pendent_review"])
 
+        # Push the new public URLs to IndexNow so Bing/Yandex pick
+        # them up within hours. Fail-open per the helper.
+        from web.seo.indexnow import notify_artista
+
+        notify_artista(artista)
+
         # Auto-approve any user propostes that reference this artist
         # via Deezer ID overlap. Saves staff from a second click on a
         # proposta that's already resolved by the pendent approval.

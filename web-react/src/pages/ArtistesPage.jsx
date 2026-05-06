@@ -20,6 +20,7 @@ import {
 } from '../components/editorial'
 import FilterPanel from '../components/staff/FilterPanel'
 import { Field, Select } from '../components/staff/StaffTable'
+import { SeoHead } from '../lib/seoHead'
 
 const TERRITORIS = [
   ['',    'Tots els territoris'],
@@ -169,6 +170,7 @@ export default function ArtistesPage() {
 
   return (
     <div className="space-y-0">
+      <SeoHead entity="artistes" />
       <Section tone="ink">
         <p className="text-[10px] uppercase tracking-widest text-tq-yellow">
           Directori

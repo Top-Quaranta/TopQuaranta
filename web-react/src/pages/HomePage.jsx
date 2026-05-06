@@ -30,6 +30,7 @@ import {
   TERR_COLORS, TERRITORI_NOM, FOCUS_TERRITORIS,
 } from '../components/editorial'
 import { albumUrl, artistaUrl, cancoUrl } from '../lib/urls'
+import { SeoHead } from '../lib/seoHead'
 
 /* ── Section 1 · Hero ──────────────────────────────────────────────── */
 
@@ -777,6 +778,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-0">
+      <SeoHead entity="homepage" />
       <HeroSection />
       <StatsSection />
       <TopAndAsidesSection />

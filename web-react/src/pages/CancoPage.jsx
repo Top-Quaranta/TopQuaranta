@@ -22,6 +22,7 @@ import { albumUrl } from '../lib/urls'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import TopBreakdownPanel from '../components/TopBreakdownPanel'
+import { SeoHead } from '../lib/seoHead'
 
 const TERRITORI_COLORS = {
   PPCC: '#427c42', CAT: '#c99b0c', VAL: '#cf3339', BAL: '#0047ba',
@@ -89,6 +90,7 @@ export default function CancoPage() {
 
   return (
     <article className="max-w-4xl mx-auto text-white space-y-6">
+      <SeoHead entity="canco" slug={slug} />
       {/* Header */}
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.album?.imatge_url ? (

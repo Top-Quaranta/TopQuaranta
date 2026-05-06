@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { Section } from '../components/editorial'
+import { SeoHead } from '../lib/seoHead'
 
 const TERRITORI_NOM = {
   CAT: 'Catalunya',
@@ -371,6 +372,7 @@ export default function MapaPage() {
 
   return (
     <div className="space-y-0">
+      <SeoHead entity="mapa" />
       {/* ── Hero band ───────────────────────────────────────────── */}
       <Section tone="ink">
         <p className="text-[10px] uppercase tracking-widest text-tq-yellow">

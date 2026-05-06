@@ -1122,6 +1122,7 @@ class StaffAuditLog(models.Model):
         ("artista_edit", "Artista: edició"),
         ("artista_mbid_auto_unassign", "Artista: MBID auto-rebutjat"),
         ("artista_mbid_auto_restore", "Artista: MBID restaurat (correcció)"),
+        ("artista_sync_mb", "Artista: re-sincronitzar des de MusicBrainz"),
         ("lastfm_alias_confirm", "Last.fm alias: confirmat"),
         ("lastfm_alias_reject", "Last.fm alias: rebutjat (homònim)"),
         ("lastfm_alias_delete", "Last.fm alias: eliminat"),
@@ -1129,6 +1130,7 @@ class StaffAuditLog(models.Model):
         # Artistes pendents (auto-discovered)
         ("pendent_aprovar", "Pendent: aprovar"),
         ("pendent_descartar", "Pendent: descartar"),
+        ("pendent_orphan_merged", "Pendent: fusionar òrfan amb canònic"),
         # Àlbums
         ("album_edit", "Àlbum: edició"),
         ("album_descartar", "Àlbum: descartar"),
@@ -1144,12 +1146,26 @@ class StaffAuditLog(models.Model):
         ("usuari_desactivar", "Usuari: desactivar"),
         ("usuari_reactivar", "Usuari: reactivar"),
         ("usuari_reset_2fa", "Usuari: reset 2FA"),
+        ("usuari_esborrar", "Usuari: esborrar (RGPD)"),
+        ("usuari_reenviar_verificacio", "Usuari: reenviar email de verificació"),
+        (
+            "usuari_enviar_reset_password",
+            "Usuari: enviar email de reset de contrasenya",
+        ),
+        # Feedback
+        ("feedback_resolt", "Feedback: marcat com a resolt"),
         # Edits performed by a verified artist manager (UserArtista.verificat)
         # via the public /compte/artista/<pk>/editar endpoint. Distinct from
         # `artista_edit` so the audit page can filter staff vs. self-service.
         ("gestor_edita_artista", "Artista: edició per gestor"),
-        # Sprint I — social distribution.
+        # Sprint I — social distribution. `social_publicat` is the
+        # legacy Instagram-only label; the multi-channel cron writes
+        # one of `<channel>_publicat` per CHANNELS in publicar_canal.py.
         ("social_publicat", "Social: publicat (Instagram)"),
+        ("mastodon_publicat", "Social: publicat (Mastodon)"),
+        ("bluesky_publicat", "Social: publicat (Bluesky)"),
+        ("telegram_publicat", "Social: publicat (Telegram)"),
+        ("newsletter_publicat", "Social: publicat (Newsletter)"),
     ]
 
     actor = models.ForeignKey(

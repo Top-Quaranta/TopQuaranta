@@ -106,7 +106,10 @@ function LastfmAliasesCard({ pk, aliases, lastfmNom, onLastfmNomChange, onChange
                   : <Pill tone="yellow">Candidat</Pill>}
                 <code className="font-mono font-semibold text-sm">{al.nom}</code>
                 <a
-                  href={`https://www.last.fm/music/${encodeURIComponent(al.nom)}`}
+                  // `+noredirect` opts out of Last.fm's silent merge of
+                  // low-listener artists into homonyms (Fades → The Fades).
+                  // Always use this form for staff/audit links.
+                  href={`https://www.last.fm/music/+noredirect/${encodeURIComponent(al.nom)}`}
                   target="_blank"
                   rel="noopener"
                   className="text-[11px] underline text-tq-ink/75 hover:text-tq-ink"

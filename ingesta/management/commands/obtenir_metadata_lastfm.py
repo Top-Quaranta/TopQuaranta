@@ -211,9 +211,15 @@ class Command(BaseCommand):
 
     def _fill_artist_fields(self, artista: Artista, info: dict) -> None:
         """Copy fields from the Last.fm `artist` block into the Artista."""
+        from ingesta.clients.lastfm import to_noredirect_url
+
         url = (info.get("url") or "").strip()
         if url:
-            artista.lastfm_url = url
+            # Store the `+noredirect` form so every UI link clicks
+            # straight to the literal page (the website otherwise
+            # silently merges low-listener artists into namesakes —
+            # Fades → The Fades). API-layer twin of autocorrect=0.
+            artista.lastfm_url = to_noredirect_url(url)
 
         stats = info.get("stats") or {}
         try:

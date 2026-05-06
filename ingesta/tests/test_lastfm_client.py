@@ -3,7 +3,47 @@ from unittest.mock import call, patch
 import pytest
 import requests
 
-from ingesta.clients.lastfm import MAX_RETRIES, RATE_LIMIT_SLEEP, get_track_info
+from ingesta.clients.lastfm import (
+    MAX_RETRIES,
+    RATE_LIMIT_SLEEP,
+    get_track_info,
+    to_noredirect_url,
+)
+
+
+class TestToNoredirectUrl:
+    def test_rewrites_canonical_form(self):
+        assert (
+            to_noredirect_url("https://www.last.fm/music/Fades")
+            == "https://www.last.fm/music/+noredirect/Fades"
+        )
+
+    def test_idempotent_on_already_noredirect(self):
+        url = "https://www.last.fm/music/+noredirect/Fades"
+        assert to_noredirect_url(url) == url
+
+    def test_preserves_path_after_artist(self):
+        assert (
+            to_noredirect_url("https://www.last.fm/music/Manel/_/En+la+Pell")
+            == "https://www.last.fm/music/+noredirect/Manel/_/En+la+Pell"
+        )
+
+    def test_handles_http_and_no_www(self):
+        assert (
+            to_noredirect_url("http://last.fm/music/Boira")
+            == "http://last.fm/music/+noredirect/Boira"
+        )
+
+    def test_noop_on_empty(self):
+        assert to_noredirect_url("") == ""
+        assert to_noredirect_url(None) == ""
+
+    def test_noop_on_non_lastfm_url(self):
+        assert (
+            to_noredirect_url("https://www.deezer.com/artist/123")
+            == "https://www.deezer.com/artist/123"
+        )
+
 
 FAKE_API_KEY = "test_api_key_123"
 

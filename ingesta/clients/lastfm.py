@@ -14,6 +14,30 @@ LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/"
 RATE_LIMIT_SLEEP = LASTFM_RATE_LIMIT
 MAX_RETRIES = MAX_API_RETRIES
 
+# Rewrites `last.fm/music/<artist>[/...]` → `last.fm/music/+noredirect/<artist>[/...]`.
+# Idempotent (skips URLs that already contain `+noredirect`) and a no-op on
+# anything that isn't a Last.fm music URL. The website silently redirects
+# low-listener artists to higher-listener namesakes (Fades → The Fades,
+# Miley Cyrus → some other Miley); the +noredirect form opts out. This is
+# the API-layer twin of `autocorrect=0` we already use.
+_NOREDIRECT_RE = re.compile(
+    r"^(https?://(?:www\.)?last\.fm/music/)(?!\+noredirect/)", re.I
+)
+
+
+def to_noredirect_url(url: str | None) -> str:
+    """Force the +noredirect form on a Last.fm `/music/<artist>` URL.
+
+    Examples:
+      `https://www.last.fm/music/Fades` → `…/music/+noredirect/Fades`
+      `https://www.last.fm/music/+noredirect/Fades` → unchanged
+      `` / None / non-Last.fm URLs → returned as-is.
+    """
+    if not url:
+        return url or ""
+    return _NOREDIRECT_RE.sub(r"\1+noredirect/", url)
+
+
 # Regex strips applied when a track is "not found" with the original name.
 # Each pattern removes the matched suffix (anchored to end of string).
 _TRACK_SUFFIX_STRIP = [

@@ -43,6 +43,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
+from ingesta.clients.lastfm import to_noredirect_url
 from music.audit import log_staff_action
 from music.constants import MOTIUS_REBUIG, MOTIUS_VALIDS, TERRITORI_NOMS
 from music.ml import recalcular_ml_si_cal
@@ -416,7 +417,13 @@ def artista_detail(request: Request, pk: int) -> Response:
                 "auto_match_disabled": artista.mb_auto_match_disabled,
             },
             "lastfm": {
-                "url": artista.lastfm_url or "",
+                # Force +noredirect on the public link so a click
+                # never bounces to a homonym (Fades → The Fades).
+                # Defence in depth — the cron writes already include
+                # this transform, but legacy rows haven't been
+                # re-synced yet and we don't want them to point
+                # wrong in the meantime.
+                "url": to_noredirect_url(artista.lastfm_url or ""),
                 "bio_summary": artista.lastfm_bio_summary or "",
                 "bio_content": artista.lastfm_bio_content or "",
                 "bio_published": (

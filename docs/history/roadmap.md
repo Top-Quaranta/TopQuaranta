@@ -209,12 +209,56 @@ secció _completats_ amb la data i el detall.
 
 Items petits per fer en sessions curtes:
 
+- [ ] **Backups off-site** — `tq-backup` només a disc local del CX22.
+      Pèrdua de disc = mort. Triar destí (Hetzner Storage Box ~3€/mes
+      o B2 ~0,5€/mes) i pipe per `age` per encriptar. URGENT.
 - [ ] Snapshot baseline del model RF abans del proper retrain (`cp
       ml_model.joblib ml_model.baseline-YYYY-MM-DD.joblib`) per A/B
       sobre el set de 48 clips si el nou retrain regredeix.
 - [ ] Test coverage 52% → 70%. Gaps coneguts: `music/services.py`,
       `music/verificacio.py`, `ranking/senyal.py`. Sessions curtes a
-      estones lliures.
+      estones lliures. (`obtenir_senyal` ja a 87 % — 2026-05-06.)
+- [ ] **Centralitzar hardcodes** (auditoria 2026-05-06): hex colors
+      a `social/colors.py` (4 callsites), magic layout numbers a
+      `social/constants.py` (~9), pagination defaults a
+      `settings.API_PAGINATION` (~5 endpoints), URLs socials/
+      newsletter a `settings.SITE_URLS`, timeouts duplicats
+      (3× `TIMEOUT_S=60`) a `social/constants.py`. ~35 callsites
+      en total. Refactor segur, una sessió.
+- [ ] **Modularitat** (auditoria 2026-05-06):
+      `Artista.objects.with_ppcc()/with_mbid()/with_localitats()`
+      managers (~10 callsites); `web/api/serializers.py` per a
+      `serialize_artista_compact/full/canco_card/album_card`
+      (~20 callsites); `useApi(url)` hook a `web-react/src/hooks/`
+      (61 useEffect repetits); `BaseSignalCommand` per a `--dry-run`
+      + `--limit` + `SingletonLock` (~12 commands).
+- [ ] **Algorithm robustness** (auditoria 2026-05-06): branch (4)
+      "lifetime extrapolation" a `algorisme.py:352` infla weekly_plays
+      d'una Canco recent-verificada amb ≥7 dies de senyal-buit. Gate
+      per `canco.verificada_at` o per la primera SenyalDiari row.
+- [ ] **Alias double-count guard URL-based** (auditoria 2026-05-06):
+      `get_track_info_literal:258` fa case-fold check; importar i
+      reutilitzar `_normalize_lastfm_url` de `detectar_lastfm_aliases`
+      (URL-based, més robust).
+- [ ] **`StaffAuditLog.ACTION_CHOICES`**: afegir-hi `usuari_esborrar`,
+      `usuari_reenviar_verificacio`, `usuari_enviar_reset_password`,
+      `feedback_resolve`, `comentari_esborrar` (writes ja existents).
+- [ ] **CSP `unsafe-inline`** (Caddyfile): migrar a nonce-based al
+      build de Vite. Sprint dedicat de seguretat.
+- [ ] **Codi mort** (auditoria 2026-05-06): esborrar
+      `ingesta/pipeline.py` (placeholder), 8 fitxers Django
+      boilerplate buits (`music/views.py`, `music/tests.py`,
+      `ingesta/views.py`, `ingesta/models.py`, `ingesta/tests.py`,
+      `social/views.py`, `social/admin.py`, `ranking/tests.py`),
+      `Album.cancons_obtingudes` deprecat (migració neta), i
+      `backfill_album_source.py` un cop verificada la cua buida.
+- [ ] **Watchdog silent-noop** (auditoria 2026-05-06): `tq-run`
+      retorna `status=OK` quan exit-code=0. Una comanda pot no fer
+      cap feina i exit 0. `tq-health` hauria de flag-ejar quan
+      "did N units of work" = 0 múltiples runs consecutius.
+- [ ] **Secret rotation runbook** (auditoria 2026-05-06): documentar
+      cadència (12 mesos?) per BREVO, RESEND, HETZNER, CDMON, SPOTIFY
+      refresh, LASTFM a `docs/ops/runbook.md`.
 - [ ] **Brevo open/click rate** per als emails de newsletter.
       Sprint K (analytics) va deixar les bases per a `MetricaSocial*`;
       Brevo exposa `/v3/smtp/statistics/aggregatedReport` amb

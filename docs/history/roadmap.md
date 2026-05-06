@@ -102,9 +102,11 @@ secció _completats_ amb la data i el detall.
       no inundem la cua MB amb soroll com el cas Àlex Pérez 1479910.
 
 **Refinaments del renderer** (post-feedback usuari):
-- [ ] **Slides de novetats**: re-aplicar el patró readability v3
-      (font sizes + tighter top padding) a `_feed_album_slide` i
-      `_feed_singles_slide`, que han quedat amb les mides antigues.
+- [x] **Slides de novetats** (lliurat 2026-05-06): aplicada
+      readability v3 a `_feed_album_slide` (artist 36 → 44, títol-
+      cover gutter de 50 px → 20 px) i `_feed_singles_slide`
+      (f_song 28 → 40, top padding y+12 → y+0). Mateixes
+      proporcions de cover/icon/row_h que el feed_list_slide.
 - [ ] **Stories CTA** (`_story_cta`): veure si la mida del títol
       «Top complet a» queda balancejat amb el nou volum del títol
       cançó (80 pt). Possiblement bumpar de 56 → 64.

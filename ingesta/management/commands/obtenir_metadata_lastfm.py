@@ -139,18 +139,27 @@ class Command(BaseCommand):
         self.stdout.write(f"  · {artista.nom} (pk={artista.pk}) …", ending="")
 
         # Sprint S Bloc D follow-up (2026-05-06): pass the MBID when
-        # we have one. Last.fm uses MBID over name and skips its
-        # autocorrect/redirect, which prevents homonym collisions
-        # like "Fades" silently resolving to "The Fades" (English).
+        # we have one *and* always pass autocorrect=0. Two layers of
+        # the same disambiguation:
+        #   - MBID lookup wins on Last.fm's side and skips name-based
+        #     autocorrect entirely.
+        #   - autocorrect=0 (the API equivalent of `/music/+noredirect/`
+        #     on the website) suppresses the silent merge that turns
+        #     "Fades" into "The Fades" or "Miley Cyrus" into the wrong
+        #     entry — relevant on the no-MBID fallback path.
+        # We trust `artista.lastfm_nom` (curated by staff). If it
+        # mismatches, returning None is what we want — staff will see
+        # the empty stats and either fix the name or set
+        # `lastfm_auto_match_disabled=True`.
         mbid = artista.musicbrainz_id or None
-        info = get_artist_info(name, mbid=mbid)
+        info = get_artist_info(name, mbid=mbid, autocorrect=False)
         new_pendents = 0
         bumped_similars = 0
 
         if info:
             if not dry_run:
                 self._fill_artist_fields(artista, info)
-            similar = get_artist_similar(name, limit=100, mbid=mbid)
+            similar = get_artist_similar(name, limit=100, mbid=mbid, autocorrect=False)
             # Per-source dedup: many Last.fm pages list the same
             # artist under multiple spellings ('Delên' AND 'dêlen'
             # in the same response). Resolving each candidate

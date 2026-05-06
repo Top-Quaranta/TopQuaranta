@@ -446,14 +446,22 @@ def get_artist_info(
 
 
 def get_artist_similar(
-    artist_name: str, limit: int = 100, mbid: str | None = None
+    artist_name: str,
+    limit: int = 100,
+    mbid: str | None = None,
+    autocorrect: bool = True,
 ) -> list[dict]:
     """Fetch the artist.getSimilar list. Same MBID-disambiguation
     strategy as `get_artist_info` — when we have an MBID, pass it
-    so Last.fm bypasses name-based autocorrect."""
+    so Last.fm bypasses name-based autocorrect. Callers can also
+    force `autocorrect=False` to suppress the silent name-merge
+    even on the no-MBID path (the API equivalent of the web
+    `/music/+noredirect/<name>` trick)."""
     params: dict = {"artist": artist_name, "limit": limit}
     if mbid:
         params["mbid"] = mbid
+    if not autocorrect:
+        params["autocorrect"] = "0"
     data = _artist_api_call("artist.getSimilar", **params)
     if not data:
         return []

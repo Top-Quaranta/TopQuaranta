@@ -81,24 +81,51 @@ def _normalize_track(name: str) -> str:
     return name
 
 
-def _api_call(artist_name: str, track_name: str) -> tuple[dict | None, int | None]:
+def _api_call(
+    artist_name: str,
+    track_name: str,
+    *,
+    autocorrect: bool = False,
+    track_mbid: str | None = None,
+    artist_mbid: str | None = None,
+) -> tuple[dict | None, int | None]:
     """
     Single Last.fm call with retries.
     Returns (data_dict, error_code) — data_dict is the parsed track on success,
     None otherwise; error_code is the Last.fm error number (e.g. 6 = not found)
     or None for transport errors.
+
+    Disambiguation strategy (May-2026 audit follow-up):
+      * `autocorrect` defaults to **False** (= the API equivalent of
+        `https://www.last.fm/music/+noredirect/<artist>`). Last.fm's
+        autocorrect silently merges "Fades" → "The Fades" at the
+        artist layer, which then poisons every track lookup against
+        that name. We trust our curated `lastfm_nom`. Callers can
+        opt back into autocorrect=1 (e.g. the alias detector) by
+        passing autocorrect=True.
+      * When we have a MusicBrainz `mbid` (recording- or artist-level),
+        pass it. Last.fm uses the MBID over the name and skips name
+        resolution entirely. Track-level recording MBIDs come from
+        `Canco.mb_recording_id` (populated by `obtenir_metadata_musicbrainz`).
     """
     # Last.fm's index is in NFC; we occasionally get NFD strings from
     # Postgres (legacy imports with combining accents). Normalise here
     # so `Só` stored as O+U+0301 matches `Ó` (U+00D3) on their side.
-    params = {
+    params: dict = {
         "method": "track.getInfo",
         "api_key": settings.LASTFM_API_KEY,
         "artist": unicodedata.normalize("NFC", artist_name),
         "track": unicodedata.normalize("NFC", track_name),
         "format": "json",
-        "autocorrect": 1,
+        "autocorrect": 1 if autocorrect else 0,
     }
+    if track_mbid:
+        params["mbid"] = track_mbid
+    if artist_mbid:
+        # Last.fm doesn't have a separate artist_mbid param on
+        # track.getInfo, but passing it doesn't hurt — the server
+        # ignores unknown params. Kept for forward compat.
+        params["artist_mbid"] = artist_mbid
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -272,25 +299,44 @@ def get_track_info_literal(
     return None
 
 
-def get_track_info(artist_name: str, track_name: str) -> dict | None:
+def get_track_info(
+    artist_name: str,
+    track_name: str,
+    *,
+    track_mbid: str | None = None,
+    artist_mbid: str | None = None,
+) -> dict | None:
     """
     Fetch cumulative playcount and listeners for a track from Last.fm.
     Returns a dict with playcount/listeners AND the names Last.fm actually
-    returned (may differ from the input because autocorrect=1), or None
-    on any failure.
+    returned, or None on any failure.
+
+    Disambiguation strategy (May-2026 audit follow-up):
+      * `autocorrect=0` is the default (the API equivalent of the
+        website's `+noredirect` URL). Trust the curated `lastfm_nom`;
+        a name typo that returns None is recoverable via the err=6
+        normalisation + top-tracks fallback below.
+      * Pass `track_mbid` (from `Canco.mb_recording_id`) when known —
+        Last.fm uses MBID over name, immune to homonym redirects.
+      * Pass `artist_mbid` (from `Artista.musicbrainz_id`) for forward
+        compat; the server tolerates unknown params.
 
     R5: `returned_track` and `returned_artist` are the names the API
     responded with. The caller compares them against what we asked for
-    and flags silent drift. Without this, a track with a common name
-    can accumulate playcount from a completely different artist without
-    any signal that we're conflating them.
+    and flags silent drift. With autocorrect=0 they should equal the
+    input, but Last.fm sometimes case-folds (caught 2026-05-01).
 
     On Last.fm "Track not found" (error 6), retries once with a normalized
     track name (parentheticals like "(feat. X)" / "(Acoustic Version)" and
     suffixes like " - Live" stripped, plus unicode quotes converted to ASCII).
     Never raises.
     """
-    track, err = _api_call(artist_name, track_name)
+    track, err = _api_call(
+        artist_name,
+        track_name,
+        track_mbid=track_mbid,
+        artist_mbid=artist_mbid,
+    )
     if track is not None:
         rt, ra = _extract_returned_names(track)
         return {
@@ -304,7 +350,12 @@ def get_track_info(artist_name: str, track_name: str) -> dict | None:
     if err == 6:
         normalized = _normalize_track(track_name)
         if normalized and normalized != track_name:
-            track2, err2 = _api_call(artist_name, normalized)
+            track2, err2 = _api_call(
+                artist_name,
+                normalized,
+                track_mbid=track_mbid,
+                artist_mbid=artist_mbid,
+            )
             if track2 is not None:
                 logger.info(
                     "Last.fm recovered '%s'/'%s' via normalization to '%s'",

@@ -159,7 +159,14 @@ def canco_refetch_senyal(request: Request, pk: int) -> Response:
     canco = get_object_or_404(Canco.objects.select_related("artista"), pk=pk)
     artist_name = canco.artista.lastfm_nom or canco.artista.nom
     track_name = canco.lastfm_lookup_nom
-    result = get_track_info(artist_name, track_name)
+    # Pass MBIDs so this on-demand recheck has the same disambiguation
+    # safety net as the cron path (May-2026 audit follow-up).
+    result = get_track_info(
+        artist_name,
+        track_name,
+        track_mbid=canco.mb_recording_id or None,
+        artist_mbid=canco.artista.musicbrainz_id or None,
+    )
     today = datetime.date.today()
 
     # Replace any existing row for today — we want the freshest truth.

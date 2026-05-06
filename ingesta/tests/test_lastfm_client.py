@@ -44,7 +44,10 @@ class TestGetTrackInfoSuccess:
         assert params["artist"] == "Txarango"
         assert params["track"] == "Benvolguts"
         assert params["api_key"] == FAKE_API_KEY
-        assert params["autocorrect"] == 1
+        # May-2026 audit: default flipped to autocorrect=0 (= the API
+        # equivalent of the website's `+noredirect` URL) to defend
+        # against silent homonym redirects (Fades → The Fades style).
+        assert params["autocorrect"] == 0
 
 
 class TestGetTrackInfoTrackNotFound:

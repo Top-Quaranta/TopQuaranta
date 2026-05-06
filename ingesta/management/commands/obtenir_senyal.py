@@ -194,7 +194,32 @@ class Command(BaseCommand):
             artist_name = canco.artista.lastfm_nom
             track_name = canco.lastfm_lookup_nom
 
-            result = get_track_info(artist_name, track_name)
+            # May-2026 audit follow-up: skip rows with empty
+            # `lastfm_nom`. Without this guard the request goes out
+            # with `artist=""`, returns error 6, and the song
+            # accumulates zero plays forever — a silent failure mode
+            # invisible to staff because `error=True` looks like
+            # any other transient Last.fm hiccup.
+            if not artist_name:
+                skipped += 1
+                logger.warning(
+                    "skip canco pk=%s — artista pk=%s has empty lastfm_nom",
+                    canco.pk,
+                    canco.artista_id,
+                )
+                continue
+
+            # May-2026 audit follow-up: thread MBIDs through to
+            # Last.fm. Recording-level MBID (when MB cron has matched
+            # the track) makes the lookup immune to the homonym
+            # redirect that artist-level autocorrect=0 also defends
+            # against. Belt and braces.
+            result = get_track_info(
+                artist_name,
+                track_name,
+                track_mbid=canco.mb_recording_id or None,
+                artist_mbid=canco.artista.musicbrainz_id or None,
+            )
 
             # Sum playcounts/listeners across confirmed aliases of this
             # artist — the Last.fm fragmentation fix (2026-05-01). For

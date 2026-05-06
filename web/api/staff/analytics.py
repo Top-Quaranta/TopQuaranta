@@ -376,16 +376,32 @@ def analytics_seo(request: Request) -> Response:
         row["ctr"] = round(c / i, 4) if i else 0.0
 
     # ── Top queries by clicks ───────────────────────────────────────
-    top_queries = list(
+    # Avg position weighted by impressions: Σ(position × imp) / Σ(imp).
+    # Computed in Python after the aggregate-only query because
+    # mixing ORM aggregation with division-by-aggregate requires
+    # NULLIF + Coalesce wrappers that get ugly fast. N is small
+    # (≤ 30 queries × ≤ days of history) so the follow-up scans
+    # are cheap.
+    top_queries_raw = list(
         MetricaSEOQuery.objects.filter(data__gte=since)
         .values("query")
         .annotate(
             impressions=Sum("impressions"),
             clicks=Sum("clicks"),
-            avg_position=Sum("position") / max(1, Sum("impressions")),
         )
         .order_by("-clicks", "-impressions")[:30]
     )
+    top_queries = []
+    for row in top_queries_raw:
+        rows = list(
+            MetricaSEOQuery.objects.filter(
+                data__gte=since, query=row["query"]
+            ).values_list("position", "impressions")
+        )
+        total_imp = sum(i or 0 for _, i in rows) or 1
+        weighted = sum((p or 0) * (i or 0) for p, i in rows) / total_imp
+        row["avg_position"] = round(weighted, 2)
+        top_queries.append(row)
 
     # ── Top pages by clicks ─────────────────────────────────────────
     top_pages = list(

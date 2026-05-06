@@ -710,19 +710,24 @@ def _feed_album_slide(item: dict) -> Image.Image:
     cover_r = _rounded(cover, 24)
     img.paste(cover_r, ((FEED_W - 800) // 2, 160), cover_r)
 
-    # Title + artist underneath
+    # Title + artist underneath. May-2026 readability v3: artist
+    # bumped 36 → 44 (matches the story-canço pattern) and the
+    # vertical anchors slide up 30 px so the block hugs the cover.
+    # Cover is at y=160, h=800 → bottom at y=960; we want a small
+    # ~20 px gutter, so title at y=980 and artist at y=1054 (line
+    # height 74, room for the 44-pt body without descender clipping).
     f_t = fonts.display_bold(54)
-    f_a = fonts.sans_regular(36)
+    f_a = fonts.sans_regular(44)
     title = _truncate(d, item["nom"], f_t, FEED_W - 120)
     artist = _truncate(d, item["artista_nom"], f_a, FEED_W - 120)
     d.text(
-        ((FEED_W - d.textlength(title, font=f_t)) // 2, 1010),
+        ((FEED_W - d.textlength(title, font=f_t)) // 2, 980),
         title,
         font=f_t,
         fill=colors.COLOR_WHITE,
     )
     d.text(
-        ((FEED_W - d.textlength(artist, font=f_a)) // 2, 1080),
+        ((FEED_W - d.textlength(artist, font=f_a)) // 2, 1054),
         artist,
         font=f_a,
         fill=colors.COLOR_TEXT_MUTED,
@@ -759,9 +764,14 @@ def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image
     # Accent rule under the header.
     d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill="#cf3339")
 
+    # May-2026 readability v3 pass — mirror `_feed_list_slide`. Same
+    # row_h/list_top, but the song title gets bumped 28 → 40 pt and
+    # both glyphs hug the top of the row (y+0 / y+54). Cover (80 px)
+    # and territory icon (48 px) anchors are unchanged so the rest of
+    # the layout stays put.
     row_h = 105
     list_top = 170
-    f_song = fonts.display_bold(28)
+    f_song = fonts.display_bold(40)  # was 28
     f_artist = fonts.sans_regular(22)
     icon_size = 48
 
@@ -796,7 +806,9 @@ def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image
         text_w = (FEED_W - 60 - icon_size - 20) - text_x
         song = _truncate(d, e["nom"], f_song, text_w)
         artist = _truncate(d, e["artista_nom"], f_artist, text_w)
-        d.text((text_x, y + 12), song, font=f_song, fill=colors.COLOR_WHITE)
+        # Tight top padding (y+0) for the 40-pt song; artist drops to
+        # y+54 to clear the title's descenders.
+        d.text((text_x, y), song, font=f_song, fill=colors.COLOR_WHITE)
         d.text((text_x, y + 54), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
 
     if total_pages > 1:

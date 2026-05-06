@@ -236,22 +236,61 @@ def _top_artistes_backlog(limit: int = 15) -> list[dict]:
     can actually clear. Includes a sample of 3 track titles for
     context and an MBID hint so staff can spot homonym-collision
     candidates at a glance.
+
+    Count semantics MUST match the destination link
+    `/staff/cancons?artista_pk=<pk>&verificada=0`, which filters
+    `Q(artista=pk) | Q(artistes_col__pk=pk)` — i.e. every track where
+    the artiste is the main act OR a collaborator. Counting only the
+    main FK (the previous behaviour) systematically under-reported,
+    sometimes drastically when an artiste mainly appears on others'
+    tracks (caught 2026-05-05 — staff reported the dashboard number
+    being lower than the linked page count).
     """
-    qs = (
-        Artista.objects.filter(aprovat=True)
-        .annotate(
-            n_backlog=Count(
-                "cancons",
-                filter=Q(cancons__verificada=False, cancons__activa=True),
-            )
-        )
-        .filter(n_backlog__gt=0)
-        .order_by("-n_backlog")[:limit]
-    )
+    # SQL-level approach: collect (artiste_pk, canco_pk) pairs from
+    # both relations and dedupe in Python. At our current scale
+    # (~3 k unverified active tracks total) this is well under 10 k
+    # tuples — trivially fast and avoids the buggy multi-M2M
+    # `annotate(Count, distinct=True)` SQL Django generates when two
+    # related-name JOINs are combined in a single QuerySet.
+    main_pairs = Canco.objects.filter(
+        verificada=False, activa=True, artista__aprovat=True
+    ).values_list("artista_id", "pk")
+    col_pairs = Canco.objects.filter(
+        verificada=False,
+        activa=True,
+        artistes_col__aprovat=True,
+    ).values_list("artistes_col", "pk")
+
+    pairs: set[tuple[int, int]] = set()
+    pairs.update(main_pairs)
+    pairs.update(t for t in col_pairs if t[0] is not None)
+
+    counts: dict[int, int] = {}
+    for artiste_pk, _ in pairs:
+        counts[artiste_pk] = counts.get(artiste_pk, 0) + 1
+
+    top_pks = sorted(counts.items(), key=lambda x: -x[1])[:limit]
+    if not top_pks:
+        return []
+
+    artistes_by_pk = {
+        a.pk: a for a in Artista.objects.filter(pk__in=[pk for pk, _ in top_pks])
+    }
+
     rows = []
-    for a in qs:
+    for pk, n_backlog in top_pks:
+        a = artistes_by_pk.get(pk)
+        if a is None:
+            continue
+        # Samples include collab tracks too so the preview matches
+        # what staff sees on the destination page.
         samples = list(
-            a.cancons.filter(verificada=False, activa=True)
+            Canco.objects.filter(
+                Q(artista=a) | Q(artistes_col=a),
+                verificada=False,
+                activa=True,
+            )
+            .distinct()
             .order_by("-data_llancament")
             .values_list("nom", flat=True)[:3]
         )
@@ -260,7 +299,7 @@ def _top_artistes_backlog(limit: int = 15) -> list[dict]:
                 "pk": a.pk,
                 "nom": a.nom,
                 "slug": a.slug,
-                "n_backlog": a.n_backlog,
+                "n_backlog": n_backlog,
                 "musicbrainz_id": a.musicbrainz_id or "",
                 "mb_end_date": a.mb_end_date.isoformat() if a.mb_end_date else None,
                 "samples": samples,

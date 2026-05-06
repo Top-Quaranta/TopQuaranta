@@ -145,6 +145,36 @@ function downloadCsv(filename, csv) {
   URL.revokeObjectURL(url)
 }
 
+/** Human-friendly delta between `then` and `serverNow`. Both ISO. */
+function relTime(thenIso, serverNowIso) {
+  if (!thenIso || !serverNowIso) return '—'
+  const ms = new Date(serverNowIso).getTime() - new Date(thenIso).getTime()
+  if (ms < 0) return 'just ara'
+  const minutes = Math.round(ms / 60_000)
+  if (minutes < 1) return 'just ara'
+  if (minutes < 60) return `fa ${minutes} min`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `fa ${hours} h`
+  const days = Math.round(hours / 24)
+  return `fa ${days} d`
+}
+
+/**
+ * Compose the subtitle with per-source freshness.
+ *
+ * The four sources have different cadences (snapshot_pipeline daily
+ * 23:00, recollir_metrics_social daily 22:30, events live, social
+ * platform daily) so a single global "last updated" would lie
+ * about whichever bit is staler. We show all four compactly.
+ */
+function formatFreshness(lu) {
+  const parts = []
+  if (lu.events) parts.push(`Esdeveniments ${relTime(lu.events + 'T00:00:00Z', lu.now)}`)
+  if (lu.pipeline_snapshot) parts.push(`Pipeline ${relTime(lu.pipeline_snapshot + 'T00:00:00Z', lu.now)}`)
+  if (lu.social_post) parts.push(`Social ${relTime(lu.social_post, lu.now)}`)
+  return parts.length ? `Actualitzat: ${parts.join(' · ')}` : null
+}
+
 // ── Tab views ──────────────────────────────────────────────────────
 
 function ResumTab({ data }) {
@@ -724,6 +754,13 @@ export default function StaffAnalyticsPage() {
     )
   }
 
+  // Build a per-source freshness summary for the subtitle. Each
+  // source has its own cron cadence, so a single timestamp would
+  // be misleading — we expose all four with relative labels (the
+  // server's `now` lets us compute the relative offset without
+  // depending on the client clock being correct).
+  const freshness = data?.last_updated ? formatFreshness(data.last_updated) : null
+
   return (
     <section>
       <PageHeader
@@ -731,6 +768,11 @@ export default function StaffAnalyticsPage() {
         subtitle="Mètriques agregades, sense dades personals · ètica per disseny"
         right={right}
       />
+      {freshness && (
+        <p className="text-[11px] text-white/60 mb-4 -mt-2">
+          {freshness}
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/10 mb-4 overflow-x-auto">

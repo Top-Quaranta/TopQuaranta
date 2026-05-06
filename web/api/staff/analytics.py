@@ -28,7 +28,7 @@ import datetime
 from collections import defaultdict
 from pathlib import Path
 
-from django.db.models import Sum
+from django.db.models import Max, Sum
 from django.http import FileResponse, Http404, HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
@@ -224,12 +224,38 @@ def analytics_summary(request: Request) -> Response:
         for m in top_posts
     ]
 
+    # ── Last-updated timestamps per source (so the UI can show
+    #    when the dashboard data was last refreshed). Three sources
+    #    write into these tables on different cadences:
+    #      - snapshot_pipeline (23:00 UTC daily) → MetricaPipeline
+    #      - recollir_metrics_social (22:30 UTC daily) → MetricaSocial*
+    #      - middleware + register() → MetricaEsdeveniment (live)
+    #    We surface the max(updated_at) per source so a stale snapshot
+    #    cron is visible at a glance — same panel where the data
+    #    already lives.
+    pipeline_latest = MetricaPipeline.objects.aggregate(m=Max("data"))["m"]
+    events_latest = MetricaEsdeveniment.objects.aggregate(m=Max("data"))["m"]
+    social_post_latest = MetricaSocialPost.objects.aggregate(m=Max("fetched_at"))["m"]
+    social_platform_latest = MetricaSocialPlatform.objects.aggregate(m=Max("data"))["m"]
+
+    def _iso(v):
+        return v.isoformat() if v else None
+
     return Response(
         {
             "window": {
                 "days": days,
                 "since": since.isoformat(),
                 "until": today.isoformat(),
+            },
+            "last_updated": {
+                # Server clock at response time — trivially the freshest
+                # signal available to the UI without an extra round-trip.
+                "now": timezone.now().isoformat(),
+                "pipeline_snapshot": _iso(pipeline_latest),
+                "events": _iso(events_latest),
+                "social_post": _iso(social_post_latest),
+                "social_platform": _iso(social_platform_latest),
             },
             "pipeline": dict(pipeline),
             "events": dict(events),

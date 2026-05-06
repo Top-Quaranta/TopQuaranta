@@ -37,8 +37,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from analytics.models import (
+    MetricaCWV,
     MetricaEsdeveniment,
     MetricaPipeline,
+    MetricaSEOQuery,
     MetricaSocialPlatform,
     MetricaSocialPost,
 )
@@ -336,3 +338,105 @@ def goaccess_report(request: Request) -> HttpResponse:
     # legacy fallback).
     resp["X-Frame-Options"] = "DENY"
     return resp
+
+
+# ── SEO dashboard endpoint (Sprint S Bloc D) ────────────────────────
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsStaff])
+def analytics_seo(request: Request) -> Response:
+    """Aggregate SEO snapshot for the `/staff/analytics` SEO tab.
+
+    Returns:
+      - top_queries: the 30 queries with most clicks in the window
+      - top_pages: the 30 URLs with most clicks in the window
+      - daily_kpis: per-day total impressions + clicks + avg CTR/position
+      - cwv: latest Core Web Vitals row per (URL, mobile|desktop)
+    """
+    days = _parse_days(request, default=28, cap=90)
+    today = timezone.localdate()
+    since = today - datetime.timedelta(days=days - 1)
+
+    # ── Daily KPI series ────────────────────────────────────────────
+    daily = list(
+        MetricaSEOQuery.objects.filter(data__gte=since)
+        .values("data")
+        .annotate(
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+        )
+        .order_by("data")
+    )
+    for row in daily:
+        row["data"] = row["data"].isoformat()
+        # Avg CTR computed correctly = clicks/impressions (not avg of CTRs).
+        i = row["impressions"] or 0
+        c = row["clicks"] or 0
+        row["ctr"] = round(c / i, 4) if i else 0.0
+
+    # ── Top queries by clicks ───────────────────────────────────────
+    top_queries = list(
+        MetricaSEOQuery.objects.filter(data__gte=since)
+        .values("query")
+        .annotate(
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+            avg_position=Sum("position") / max(1, Sum("impressions")),
+        )
+        .order_by("-clicks", "-impressions")[:30]
+    )
+
+    # ── Top pages by clicks ─────────────────────────────────────────
+    top_pages = list(
+        MetricaSEOQuery.objects.filter(data__gte=since)
+        .values("page")
+        .annotate(
+            impressions=Sum("impressions"),
+            clicks=Sum("clicks"),
+        )
+        .order_by("-clicks", "-impressions")[:30]
+    )
+
+    # ── Latest CWV per (url, category) ──────────────────────────────
+    # Python-side dedup so it works on Postgres + SQLite.
+    latest_cwv: dict[tuple, dict] = {}
+    for r in MetricaCWV.objects.order_by("-data").values(
+        "url",
+        "category",
+        "data",
+        "score",
+        "lcp_ms",
+        "inp_ms",
+        "cls",
+        "fcp_ms",
+        "ttfb_ms",
+    ):
+        key = (r["url"], r["category"])
+        latest_cwv.setdefault(key, r)
+    cwv = list(latest_cwv.values())
+    for r in cwv:
+        r["data"] = r["data"].isoformat()
+
+    # ── Last update timestamp per source ───────────────────────────
+    last_gsc = MetricaSEOQuery.objects.aggregate(m=Max("data"))["m"]
+    last_psi = MetricaCWV.objects.aggregate(m=Max("data"))["m"]
+
+    return Response(
+        {
+            "window": {
+                "days": days,
+                "since": since.isoformat(),
+                "until": today.isoformat(),
+            },
+            "last_updated": {
+                "now": timezone.now().isoformat(),
+                "gsc": last_gsc.isoformat() if last_gsc else None,
+                "psi": last_psi.isoformat() if last_psi else None,
+            },
+            "daily_kpis": daily,
+            "top_queries": top_queries,
+            "top_pages": top_pages,
+            "cwv": cwv,
+        }
+    )

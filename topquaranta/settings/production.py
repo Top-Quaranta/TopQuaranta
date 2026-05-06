@@ -75,3 +75,11 @@ else:
 INSTAGRAM_ACCESS_TOKEN = config("INSTAGRAM_ACCESS_TOKEN", default="")
 INSTAGRAM_USER_ID = config("INSTAGRAM_USER_ID", default="")
 INSTAGRAM_TOKEN_EXPIRES_AT = config("INSTAGRAM_TOKEN_EXPIRES_AT", default="")
+
+# ── Sprint S Bloc D: SEO monitoring (GSC + PSI) ─────────────────────────
+# Service Account JSON for GSC search-analytics. Path-based so we don't
+# inline the private key into env. Empty path = feature disabled
+# (cron writes a warning + exits gracefully).
+GSC_SERVICE_ACCOUNT_FILE = config("GSC_SERVICE_ACCOUNT_FILE", default="")
+GSC_SITE_URL = config("GSC_SITE_URL", default="sc-domain:topquaranta.cat")
+PSI_API_KEY = config("PSI_API_KEY", default="")

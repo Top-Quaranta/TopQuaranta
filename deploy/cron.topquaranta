@@ -103,6 +103,12 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # external call so a Mastodon hiccup doesn't break the dashboard.
 30 22 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_social >> /var/log/topquaranta/analytics.log 2>&1
 
+# 21:00 → SEO snapshots (Sprint S Bloc D, 2026-05-06).
+#  - GSC: pulls T-2 day's search-analytics. Idempotent.
+#  - PSI: 12 PageSpeed Insights calls (6 URLs × mobile+desktop).
+0 21 * * *  topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_gsc >> /var/log/topquaranta/seo.log 2>&1
+30 21 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_psi >> /var/log/topquaranta/seo.log 2>&1
+
 # 23:00 → Daily snapshot of pipeline-state gauges into MetricaPipeline
 # (cançons verificades / pendents / rebutjades, cobertura whisper+MB,
 # usuaris actius, distribució per territori). Idempotent — re-runs on

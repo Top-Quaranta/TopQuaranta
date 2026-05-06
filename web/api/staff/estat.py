@@ -193,6 +193,21 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 26,
         "skip_concern": 1,
     },
+    "recollir_metrics_gsc": {
+        "frequency_label": "Cada nit 21:00",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+        # Until the SA is added as a property user, this cron logs a
+        # warning and exits 0. Silenced so the watchdog doesn't email
+        # daily; remove `silenced` once the GSC permission lands.
+        "silenced": True,
+        "silenced_reason": "Pendent que el SA sigui afegit a GSC",
+    },
+    "recollir_metrics_psi": {
+        "frequency_label": "Cada nit 21:30",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
 }
 
 

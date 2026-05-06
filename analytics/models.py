@@ -221,3 +221,89 @@ class MetricaSocialPlatform(models.Model):
 
     def __str__(self) -> str:
         return f"{self.data} {self.platform}/{self.metric}={self.valor}"
+
+
+# ── SEO monitoring (Sprint S Bloc D) ────────────────────────────────
+
+
+class MetricaSEOQuery(models.Model):
+    """Daily Google Search Console snapshot per (query, page).
+
+    GSC's `searchanalytics.query` gives us, for a 1-day range with
+    `dimensions=['query', 'page']`, the impressions / clicks / CTR /
+    avg position for every (search-term, landing-page) pair. We
+    persist a thin slice of that so the staff dashboard can chart
+    "how is this query trending" without re-fetching from GSC each
+    time.
+
+    Note: GSC anonymises queries that received <10 clicks across
+    very few users; those rows simply don't appear in the response.
+    No PII concerns on our side.
+    """
+
+    data = models.DateField(db_index=True)
+    query = models.CharField(max_length=200)
+    page = models.CharField(max_length=400)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)
+    ctr = models.FloatField(default=0.0)
+    position = models.FloatField(default=0.0)
+
+    class Meta:
+        verbose_name = "Mètrica SEO per query"
+        verbose_name_plural = "Mètriques SEO per query"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["data", "query", "page"],
+                name="metricaseoquery_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["-data", "-clicks"]),
+            models.Index(fields=["query", "-data"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.data} '{self.query}' → {self.page} ({self.clicks}/{self.impressions})"
+
+
+class MetricaCWV(models.Model):
+    """Daily PageSpeed Insights snapshot per URL + form factor.
+
+    Tracks the Core Web Vitals (LCP, INP, CLS, FCP, TTFB) for the
+    representative SPA pages — homepage, /top, /artistes, a sample
+    artista page, etc. The cron polls PSI's `runPagespeed` API once
+    a day per URL × form-factor (mobile + desktop = 2× the URL count).
+
+    `category` is `mobile` or `desktop` (PSI's strategy parameter).
+    `score` is the overall Performance score 0-100. Per-vital fields
+    are the lab values; field-data values when available go into
+    `raw` for later analysis.
+    """
+
+    data = models.DateField(db_index=True)
+    url = models.CharField(max_length=400)
+    category = models.CharField(max_length=10)  # "mobile" | "desktop"
+    score = models.PositiveIntegerField(null=True, blank=True)
+    lcp_ms = models.PositiveIntegerField(null=True, blank=True)
+    inp_ms = models.PositiveIntegerField(null=True, blank=True)
+    cls = models.FloatField(null=True, blank=True)
+    fcp_ms = models.PositiveIntegerField(null=True, blank=True)
+    ttfb_ms = models.PositiveIntegerField(null=True, blank=True)
+    raw = models.JSONField(blank=True, default=dict)
+
+    class Meta:
+        verbose_name = "Core Web Vitals per URL"
+        verbose_name_plural = "Core Web Vitals per URL"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["data", "url", "category"],
+                name="metricacwv_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["-data", "url", "category"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.data} {self.category} {self.url} score={self.score}"

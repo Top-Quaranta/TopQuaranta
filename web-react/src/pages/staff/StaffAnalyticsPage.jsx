@@ -51,6 +51,7 @@ const TABS = [
   { id: 'social',   label: 'Social'    },
   { id: 'web',      label: 'Web'       },
   { id: 'cohorts',  label: 'Cohorts'   },
+  { id: 'seo',      label: 'SEO'       },
 ]
 
 const WINDOWS = [
@@ -800,7 +801,198 @@ export default function StaffAnalyticsPage() {
         : tab === 'social'   ? <SocialTab data={data} />
         : tab === 'web'      ? <WebTab data={data} />
         : tab === 'cohorts'  ? <CohortsTab data={data} />
+        : tab === 'seo'      ? <SeoTab />
         : null}
     </section>
+  )
+}
+
+
+// ── SEO tab ─────────────────────────────────────────────────────────
+//
+// Independent fetch from `/api/v1/staff/analytics/seo/` — different
+// payload shape from /summary/, larger window default (28 days
+// matches GSC's standard report). Stays empty until the GSC SA gets
+// added as a property user; the cron writes nothing meaningful
+// before then. CWV (PSI) starts populating immediately because the
+// API key works without any per-property setup.
+
+function SeoTab() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    api.get('/staff/analytics/seo/?days=28')
+      .then(setData)
+      .catch(e => setError(e.message))
+  }, [])
+
+  if (error) return <p className="text-sm text-rose-300">Error: {error}</p>
+  if (!data) return <p className="text-sm text-white/70">Carregant…</p>
+
+  const totals = (data.daily_kpis || []).reduce(
+    (acc, r) => ({
+      impressions: acc.impressions + (r.impressions || 0),
+      clicks: acc.clicks + (r.clicks || 0),
+    }),
+    { impressions: 0, clicks: 0 },
+  )
+  const ctr = totals.impressions ? (totals.clicks / totals.impressions) : 0
+
+  const cwvDesktop = (data.cwv || []).filter(r => r.category === 'desktop')
+  const cwvMobile = (data.cwv || []).filter(r => r.category === 'mobile')
+
+  return (
+    <div className="space-y-4">
+      {/* Freshness strip */}
+      <p className="text-[11px] text-white/60">
+        Actualitzat:
+        {' '}GSC {data.last_updated.gsc ? `(${data.last_updated.gsc})` : '—'}
+        {' · '}PSI {data.last_updated.psi ? `(${data.last_updated.psi})` : '—'}
+      </p>
+
+      {/* GSC empty state */}
+      {!data.last_updated.gsc && (
+        <Card title="Google Search Console pendent">
+          <p className="text-xs text-tq-ink/70">
+            Encara no hi ha dades de GSC. El cron diari recollirà el primer
+            snapshot quan el Service Account
+            <code className="bg-tq-ink/5 px-1 rounded">seo-ingest@topquaranta-seo.iam.gserviceaccount.com</code>
+            sigui afegit com a usuari de la propietat
+            <code className="bg-tq-ink/5 px-1 rounded">topquaranta.cat</code> a GSC.
+          </p>
+        </Card>
+      )}
+
+      {/* GSC KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi label="Impressions (28d)" value={totals.impressions} />
+        <Kpi label="Clicks (28d)" value={totals.clicks} />
+        <Kpi label="CTR mitjà" value={null} hint={`${(ctr * 100).toFixed(2)} %`} />
+        <Kpi label="Top queries" value={(data.top_queries || []).length} />
+      </div>
+
+      {/* GSC daily chart */}
+      <Card title="Cerca orgànica · 28 dies" hint="Impressions i clicks via Google Search Console">
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={data.daily_kpis || []}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="data" tick={{ fontSize: 11 }} />
+            <YAxis yAxisId="left"  tick={{ fontSize: 11 }} allowDecimals={false} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
+            <Tooltip />
+            <Legend />
+            <Line yAxisId="left"  type="monotone" dataKey="impressions" name="Impressions" stroke="#facc15" strokeWidth={2} dot={false} />
+            <Line yAxisId="right" type="monotone" dataKey="clicks"      name="Clicks"      stroke="#0a0a0a" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Top queries + top pages tables */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card
+          title="Top 30 queries"
+          hint="Per clicks · 28 dies"
+          right={
+            <button type="button" className="text-xs px-2 py-1 rounded bg-tq-ink text-tq-yellow hover:opacity-90"
+              onClick={() => downloadCsv('seo_queries.csv',
+                rowsToCsv(['query','impressions','clicks','avg_position'], data.top_queries))}>
+              CSV
+            </button>
+          }
+        >
+          <table className="w-full text-xs">
+            <thead className="text-tq-ink/60">
+              <tr>
+                <th className="text-left">Query</th>
+                <th className="text-right">Impr.</th>
+                <th className="text-right">Clicks</th>
+                <th className="text-right">Pos.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.top_queries || []).length === 0 && (
+                <tr><td colSpan={4} className="py-3 text-center text-tq-ink/60">Sense dades.</td></tr>
+              )}
+              {(data.top_queries || []).map((r, i) => (
+                <tr key={i} className="border-t border-tq-ink/5">
+                  <td className="py-1 truncate max-w-[250px]" title={r.query}>{r.query}</td>
+                  <td className="text-right tabular-nums">{(r.impressions || 0).toLocaleString('ca-ES')}</td>
+                  <td className="text-right tabular-nums">{(r.clicks || 0).toLocaleString('ca-ES')}</td>
+                  <td className="text-right tabular-nums">{r.avg_position ? r.avg_position.toFixed(1) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card title="Top 30 pàgines" hint="Per clicks · 28 dies">
+          <table className="w-full text-xs">
+            <thead className="text-tq-ink/60">
+              <tr>
+                <th className="text-left">URL</th>
+                <th className="text-right">Impr.</th>
+                <th className="text-right">Clicks</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.top_pages || []).length === 0 && (
+                <tr><td colSpan={3} className="py-3 text-center text-tq-ink/60">Sense dades.</td></tr>
+              )}
+              {(data.top_pages || []).map((r, i) => (
+                <tr key={i} className="border-t border-tq-ink/5">
+                  <td className="py-1 truncate max-w-[250px]" title={r.page}>
+                    <a href={r.page} className="hover:underline">{r.page.replace('https://www.topquaranta.cat', '')}</a>
+                  </td>
+                  <td className="text-right tabular-nums">{(r.impressions || 0).toLocaleString('ca-ES')}</td>
+                  <td className="text-right tabular-nums">{(r.clicks || 0).toLocaleString('ca-ES')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+
+      {/* Core Web Vitals */}
+      <Card title="Core Web Vitals" hint="PageSpeed Insights · darrer snapshot per URL">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[['Mobile', cwvMobile], ['Desktop', cwvDesktop]].map(([label, rows]) => (
+            <div key={label}>
+              <p className="text-[11px] uppercase tracking-widest text-tq-ink/60 mb-1">{label}</p>
+              <table className="w-full text-xs">
+                <thead className="text-tq-ink/60">
+                  <tr>
+                    <th className="text-left">URL</th>
+                    <th className="text-right">Score</th>
+                    <th className="text-right">LCP</th>
+                    <th className="text-right">CLS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 && (
+                    <tr><td colSpan={4} className="py-3 text-center text-tq-ink/60">Sense dades.</td></tr>
+                  )}
+                  {rows.map((r, i) => {
+                    const scoreColor =
+                      r.score >= 90 ? 'text-emerald-700' :
+                      r.score >= 50 ? 'text-amber-700' : 'text-rose-700'
+                    return (
+                      <tr key={i} className="border-t border-tq-ink/5">
+                        <td className="py-1 truncate max-w-[160px]" title={r.url}>
+                          {r.url.replace('https://www.topquaranta.cat', '') || '/'}
+                        </td>
+                        <td className={'text-right tabular-nums font-semibold ' + scoreColor}>{r.score ?? '—'}</td>
+                        <td className="text-right tabular-nums">{r.lcp_ms ? (r.lcp_ms / 1000).toFixed(1) + 's' : '—'}</td>
+                        <td className="text-right tabular-nums">{r.cls != null ? r.cls.toFixed(3) : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
   )
 }

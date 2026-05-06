@@ -109,6 +109,14 @@ REST_FRAMEWORK = {
         "auth_2fa": "10/min",
         "newsletter_unsubscribe": "10/min",
         "data_export": "3/hour",  # heavy email-generating endpoint
+        # May-2026 audit follow-up. Protects authenticated mail-bombing
+        # vectors and the registration mail-bomb (Brevo free tier is
+        # 300/day; an attacker spraying registrations can burn it in
+        # minutes). All scopes per-IP via ScopedRateThrottle.
+        "registre": "5/hour",  # public, anti-mail-bomb on Brevo budget
+        "feedback_crear": "30/hour",  # auth, anti-spam
+        "account_delete": "3/hour",  # auth, anti-mail-bomb-the-user
+        "dm_send": "20/hour",  # auth, anti-DM-flood + email-flood
     },
 }
 

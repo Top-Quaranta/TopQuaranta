@@ -57,6 +57,44 @@ SPA_DASHBOARD_URL = "/compte/"
 # ─────────────────────────────────────────────────────────────────────────
 
 
+def _client_ip(request: HttpRequest) -> str:
+    """Best-effort client IP extraction for rate-limit keys.
+
+    Caddy sets X-Forwarded-For; trust only the first hop (rightmost
+    is unreliable behind a proxy chain). Falls back to REMOTE_ADDR.
+    """
+    xff = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
+    if xff:
+        return xff.split(",")[0].strip()
+    return (request.META.get("REMOTE_ADDR") or "").strip()
+
+
+def _ratelimit_exceeded(key: str, limit: int, period_s: int) -> bool:
+    """Cache-backed sliding-window-ish counter. May-2026 audit
+    follow-up: avoids adding `django-ratelimit` as a dependency for
+    a single non-DRF view. Counter is per-key, increments on each
+    call, set to expire after `period_s`. Returns True if the count
+    has exceeded `limit` (this caller is over the threshold).
+
+    Race-aware-ish: we use cache.add() to atomically initialize the
+    counter; subsequent hits use cache.incr(). LocMemCache is per-
+    process so with N gunicorn workers the effective limit is N×limit
+    — accepted because the SCALE is small and this is anti-abuse, not
+    DDoS protection.
+    """
+    from django.core.cache import cache
+
+    if cache.add(key, 1, timeout=period_s):
+        return False  # first hit in window
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        # Key expired between add() and incr(); reset.
+        cache.set(key, 1, timeout=period_s)
+        return False
+    return count > limit
+
+
 def registre(request: HttpRequest) -> HttpResponse:
     """User registration: create inactive account and send verification email.
 
@@ -64,11 +102,30 @@ def registre(request: HttpRequest) -> HttpResponse:
     whether the address is new or already registered. If the email is taken
     we silently skip user creation and the verification mail, so an attacker
     cannot use the registration form to map existing accounts.
+
+    Rate-limited (May-2026 audit): 5 POSTs/hour per IP. Without this an
+    attacker could mail-bomb arbitrary email addresses with a verification
+    link AND burn through the Brevo free tier (300/day) in minutes.
     """
     if request.user.is_authenticated:
         return redirect(SPA_DASHBOARD_URL)
 
     if request.method == "POST":
+        ip = _client_ip(request)
+        if ip and _ratelimit_exceeded(
+            f"ratelimit:registre:{ip}", limit=5, period_s=3600
+        ):
+            logger.warning("Registration rate-limit exceeded for IP %s", ip)
+            return render(
+                request,
+                "comptes/registre.html",
+                {
+                    "form": RegistreForm(),
+                    "rate_limited": True,
+                },
+                status=429,
+            )
+
         form = RegistreForm(request.POST)
         if form.is_valid():
             email = form.cleaned_data["email"]

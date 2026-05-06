@@ -47,7 +47,9 @@
 
 Every doc lives under `docs/` organised by audience. Quick map:
 
+- **`docs/EMAIL.md`** — Stalwart + Brevo/Resend smarthost architecture.
 - **`docs/architecture/`** — `models.md`, `pipeline.md`, `algorithm.md`,
+  `analytics.md`, `seo.md` (Sprint S),
   `staff.md`, `api-versioning.md`. Reference for the codebase.
 - **`docs/product/`** — `definition.md` (què compta com a música en català).
 - **`docs/ops/`** — `runbook.md`, `retention.md`, `deprecation.md`,
@@ -118,7 +120,7 @@ the SPA palette but has no dependency on mm-design.
 ## 3. Infrastructure
 
 - **Server:** Hetzner CX22 (`188.245.60.20`), Ubuntu 22.04.
-- **Runtime:** Python 3.10, Django 5.2, PostgreSQL 14. Node 22 + Vite 8
+- **Runtime:** Python 3.12, Django 6.0.4, PostgreSQL 14. Node 22 + Vite 8
   for the SPA.
 - **Reverse proxy:** Caddy (auto TLS). Config: `/etc/caddy/Caddyfile`
   (source of truth: `deploy/Caddyfile`).
@@ -153,6 +155,8 @@ app/
 │                  # community models (PerfilUsuari · Publicacio · Comentari · Missatge)
 ├── web/           # Django API (`web/api/`) + SEO + error handlers
 ├── web-react/     # React SPA — public site + staff panel
+├── social/        # 5-channel distribution clients (IG/Mastodon/Bluesky/Telegram/Newsletter) + renderer + payload + captions
+├── analytics/     # Sprint K — pageviews, UTM, social metrics, GoAccess wrapper
 ├── scripts/       # non-command Python (analysis, archived migrations)
 ├── vendor/        # mm-design tokens (Django side)
 ├── deploy/        # Caddyfile · systemd · cron · logrotate
@@ -284,7 +288,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **211 passed, 8 skipped**.
+Mock all external HTTP — no real API calls. Current suite: **269 passed, 8 skipped**.
 Run: `.venv/bin/python -m pytest -q`.
 
 React SPA: Vitest not yet wired for runtime tests; builds validated via

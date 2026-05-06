@@ -1,17 +1,24 @@
 """User-filed feedback / correction reports."""
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import Feedback
 
+from ._common import _FeedbackCreateThrottle
+
 VALID_TARGETS = {t for t, _ in Feedback.TARGET_CHOICES}
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([_FeedbackCreateThrottle])
 def feedback_crear(request: Request) -> Response:
     """File a feedback/correction report from a public page.
 

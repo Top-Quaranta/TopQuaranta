@@ -11,6 +11,18 @@ class _NewsletterUnsubThrottle(ScopedRateThrottle):
     scope = "newsletter_unsubscribe"
 
 
+class _FeedbackCreateThrottle(ScopedRateThrottle):
+    scope = "feedback_crear"
+
+
+class _AccountDeleteThrottle(ScopedRateThrottle):
+    scope = "account_delete"
+
+
+class _DMSendThrottle(ScopedRateThrottle):
+    scope = "dm_send"
+
+
 def _serialize_user_artista(ua) -> dict:
     a = ua.artista
     return {

@@ -5,13 +5,18 @@ from __future__ import annotations
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import Missatge
 from comptes.models import Usuari as _U
+from web.api.compte_views._common import _DMSendThrottle
 
 from ._common import _enviar_notificacio_missatge, _serialize_missatge
 
@@ -107,6 +112,7 @@ def missatges_amb_usuari(request: Request, altre_pk: int) -> Response:
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([_DMSendThrottle])
 def missatge_crear(request: Request) -> Response:
     """Send a new message. Body: `{destinatari_pk, assumpte, cos}`."""
     viewer = request.user

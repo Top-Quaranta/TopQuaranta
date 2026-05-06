@@ -5,11 +5,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from ._common import _DataExportThrottle, _NewsletterUnsubThrottle
+from ._common import (
+    _AccountDeleteThrottle,
+    _DataExportThrottle,
+    _NewsletterUnsubThrottle,
+)
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([_AccountDeleteThrottle])
 def compte_esborrar_sollicitar(request: Request) -> Response:
     """User requests self-deletion. Sends a signed confirmation email.
 
@@ -275,13 +280,19 @@ def exportar_dades(request: Request) -> Response:
     return Response({"ok": True, "email": u.email})
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([])
 @throttle_classes([_NewsletterUnsubThrottle])
 def baixa_newsletter(request: Request) -> Response:
     """Token-based newsletter unsubscribe (RGPD art. 7.3 — withdrawal
     must be as easy as giving consent). Intended to be linked from
     every newsletter email; works without login.
+
+    **Accepts both GET and POST** so RFC 8058 one-click unsubscribe
+    works (Gmail/Yahoo POST to the URL announced via the
+    `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header).
+    The token can come from the query string (link click) or the
+    POST body (`token=…` form-encoded, per RFC 8058 §3.1).
 
     Token is `signing.dumps({"u": user.pk}, salt="newsletter-baixa")`
     with the project SECRET_KEY. **Expires after 1 year** (May-2026
@@ -293,7 +304,13 @@ def baixa_newsletter(request: Request) -> Response:
 
     from comptes.models import Usuari
 
-    token = (request.GET.get("token") or "").strip()
+    # RFC 8058: token may arrive in form body on the POST one-click
+    # path. GET keeps the legacy query-string contract.
+    token = (
+        request.GET.get("token")
+        or (request.data.get("token") if hasattr(request, "data") else None)
+        or ""
+    ).strip()
     if not token:
         return Response({"error": "Falta el token."}, status=400)
     try:

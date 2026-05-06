@@ -40,6 +40,8 @@ const FILTER_DEFAULTS = {
   amb_dones: '',  // '1' or ''
   nou: '',
   al_top: '',
+  genere: '',
+  sort: 'nom',  // 'nom' | 'popularitat'
 }
 
 function initialsFor(nom) {
@@ -91,26 +93,26 @@ function ArtistaCard({ a }) {
 }
 
 // Sprint S Bloc D pt 3 (2026-05-06): canonical genre choices mirror
-// `Artista.GENERE_CANONICAL_CHOICES` on the backend. Kept in sync via
-// the `/api/v1/artistes/?genere=<slug>` endpoint contract.
+// `Artista.GENERE_CANONICAL_CHOICES` on the backend, alphabetical.
+// Kept in sync via the `/api/v1/artistes/?genere=<slug>` endpoint.
 const GENERES = [
   ['',             'Tots els gèneres'],
-  ['pop',          'Pop'],
-  ['rock',         'Rock'],
-  ['indie',        'Indie / Alternatiu'],
-  ['punk',         'Punk'],
-  ['hardcore',     'Hardcore'],
-  ['metal',        'Metal'],
-  ['ska',          'Ska'],
-  ['reggae',       'Reggae'],
-  ['folk',         'Folk'],
-  ['cantautor',    'Cantautor / a'],
+  ['cantautor',    'Cantautor'],
   ['electronica',  'Electrònica'],
-  ['hip-hop',      'Hip-hop / Rap'],
-  ['urba',         'Urbà'],
-  ['jazz',         'Jazz'],
   ['experimental', 'Experimental'],
+  ['folk',         'Folk'],
+  ['hardcore',     'Hardcore'],
+  ['hip-hop',      'Hip-hop'],
+  ['indie',        'Indie'],
   ['infantil',     'Infantil'],
+  ['jazz',         'Jazz'],
+  ['metal',        'Metal'],
+  ['pop',          'Pop'],
+  ['punk',         'Punk'],
+  ['reggae',       'Reggae'],
+  ['rock',         'Rock'],
+  ['ska',          'Ska'],
+  ['urba',         'Urbà'],
 ]
 
 const SORT_CHOICES = [
@@ -122,7 +124,8 @@ export default function ArtistesPage() {
   const [params, setParams] = useSearchParams()
   const q    = params.get('q') || ''
   const page = parseInt(params.get('page') || '1', 10)
-  const sort = params.get('sort') || 'nom'
+  // `sort` lives inside the FilterPanel state too, but we read it
+  // out separately so the fetch effect's deps stay flat.
   const applied = {
     territori: (params.get('territori') || '').toUpperCase(),
     comarca:   params.get('comarca')   || '',
@@ -131,6 +134,7 @@ export default function ArtistesPage() {
     nou:       params.get('nou')       || '',
     al_top:    params.get('al_top')    || '',
     genere:    params.get('genere')    || '',
+    sort:      params.get('sort')      || 'nom',
   }
 
   const [data, setData] = useState(null)
@@ -150,7 +154,13 @@ export default function ArtistesPage() {
       if (v) qs.set(k, v)
     }
     if (page > 1) qs.set('page', String(page))
-    if (sort && sort !== 'nom') qs.set('sort', sort)
+    // Drop the default `sort=nom` from the URL — it's the natural
+    // state, no need to persist it.
+    if (applied.sort && applied.sort !== 'nom') {
+      qs.set('sort', applied.sort)
+    } else {
+      qs.delete('sort')
+    }
     qs.set('per_page', '40')
     api.get(`/artistes/?${qs}`)
       .then(setData)
@@ -159,15 +169,18 @@ export default function ArtistesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, applied.territori, applied.comarca, applied.municipi,
       applied.amb_dones, applied.nou, applied.al_top, applied.genere,
-      sort, page])
+      applied.sort, page])
 
   // Apply a filter set (from FilterPanel) into URL params, dropping
-  // empty values and resetting pagination.
+  // empty values + the default sort and resetting pagination.
   const applyFilters = (next) => {
     const out = new URLSearchParams()
     if (q) out.set('q', q)
     for (const [k, v] of Object.entries(next)) {
-      if (v) out.set(k, v)
+      if (!v) continue
+      // `sort=nom` is the default — keep the URL clean.
+      if (k === 'sort' && v === 'nom') continue
+      out.set(k, v)
     }
     setParams(out)
     // K1 analytics: which filter dimensions does the audience use
@@ -246,41 +259,6 @@ export default function ArtistesPage() {
           >
             {(p, setP) => <ArtistesFilters pending={p} setPending={setP} />}
           </FilterPanel>
-          {/* Quick-pick gènere + ordenació, fora del panell perquè
-              són els toggles més freqüents i mereixen ser una sola
-              passada de mirada en lloc de dos clics. */}
-          <select
-            value={applied.genere}
-            onChange={e => {
-              const out = new URLSearchParams(params)
-              if (e.target.value) out.set('genere', e.target.value)
-              else out.delete('genere')
-              out.delete('page')
-              setParams(out)
-            }}
-            aria-label="Filtrar per gènere"
-            className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white focus:outline-none focus:border-tq-yellow"
-          >
-            {GENERES.map(([v, label]) => (
-              <option key={v} value={v} className="text-tq-ink">{label}</option>
-            ))}
-          </select>
-          <select
-            value={sort}
-            onChange={e => {
-              const out = new URLSearchParams(params)
-              if (e.target.value && e.target.value !== 'nom') out.set('sort', e.target.value)
-              else out.delete('sort')
-              out.delete('page')
-              setParams(out)
-            }}
-            aria-label="Ordenar"
-            className="px-3 py-1.5 bg-white/5 border border-white/15 rounded-md text-sm text-white focus:outline-none focus:border-tq-yellow"
-          >
-            {SORT_CHOICES.map(([v, label]) => (
-              <option key={v} value={v} className="text-tq-ink">{label}</option>
-            ))}
-          </select>
         </form>
       </Section>
 
@@ -407,6 +385,28 @@ function ArtistesFilters({ pending, setPending }) {
           </Select>
         </Field>
       )}
+
+      <Field label="Gènere">
+        <Select
+          value={pending.genere || ''}
+          onChange={e => setPending({ genere: e.target.value })}
+        >
+          {GENERES.map(([v, label]) => (
+            <option key={v} value={v}>{label}</option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field label="Ordenar per">
+        <Select
+          value={pending.sort || 'nom'}
+          onChange={e => setPending({ sort: e.target.value })}
+        >
+          {SORT_CHOICES.map(([v, label]) => (
+            <option key={v} value={v}>{label}</option>
+          ))}
+        </Select>
+      </Field>
 
       <div className="border-t border-black/10 pt-3 mt-1 flex flex-col gap-2">
         <label className="flex items-center gap-2 text-xs font-semibold text-tq-ink/80">

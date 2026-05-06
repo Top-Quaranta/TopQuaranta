@@ -271,23 +271,27 @@ class Artista(models.Model):
     # `inferir_genere` cron from `lastfm_tags` + `mb_tags` via the
     # mapping in `music.genere`. Staff can pin a value manually
     # (sets `genere_locked=True`) and the cron will leave it alone.
+    # 16 canonical genres, alphabetical (Catalan locale). Labels are
+    # single-word — no slash-separated alternatives — to keep the
+    # dropdown clean. Mapping rationale (data-driven from Last.fm/MB
+    # tags) lives in `music/genere.py`.
     GENERE_CANONICAL_CHOICES = [
-        ("pop", "Pop"),
-        ("rock", "Rock"),
-        ("indie", "Indie / Alternatiu"),
-        ("punk", "Punk"),
-        ("hardcore", "Hardcore"),
-        ("metal", "Metal"),
-        ("ska", "Ska"),
-        ("reggae", "Reggae"),
-        ("folk", "Folk"),
-        ("cantautor", "Cantautor / a"),
+        ("cantautor", "Cantautor"),
         ("electronica", "Electrònica"),
-        ("hip-hop", "Hip-hop / Rap"),
-        ("urba", "Urbà"),
-        ("jazz", "Jazz"),
         ("experimental", "Experimental"),
+        ("folk", "Folk"),
+        ("hardcore", "Hardcore"),
+        ("hip-hop", "Hip-hop"),
+        ("indie", "Indie"),
         ("infantil", "Infantil"),
+        ("jazz", "Jazz"),
+        ("metal", "Metal"),
+        ("pop", "Pop"),
+        ("punk", "Punk"),
+        ("reggae", "Reggae"),
+        ("rock", "Rock"),
+        ("ska", "Ska"),
+        ("urba", "Urbà"),
     ]
     genere_canonical = models.CharField(
         max_length=20,

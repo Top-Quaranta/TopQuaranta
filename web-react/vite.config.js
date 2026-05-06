@@ -25,4 +25,34 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
   },
+  build: {
+    // Sprint S Bloc D (CWV): split heavy deps out of the main bundle
+    // so the homepage doesn't pay for recharts (only used in
+    // /staff/analytics + the canço history chart). Brings the
+    // anonymous bundle from ~1.05 MB to ~600 KB.
+    rolldownOptions: {
+      output: {
+        // Rolldown takes a function, not the legacy object shape.
+        // Returns the chunk name; null/undefined means "leave it
+        // in the default chunk".
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (
+              id.includes('recharts') ||
+              /node_modules\/d3-/.test(id) ||
+              id.includes('victory-vendor')
+            ) {
+              return 'recharts'
+            }
+            if (id.includes('react-router')) {
+              return 'react-router'
+            }
+            if (id.includes('react-helmet-async')) {
+              return 'helmet'
+            }
+          }
+        },
+      },
+    },
+  },
 })

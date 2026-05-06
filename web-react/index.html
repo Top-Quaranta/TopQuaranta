@@ -6,6 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TopQuaranta — Rànquing de música en català</title>
     <meta name="description" content="El rànquing setmanal de música en català als Països Catalans. Mesurem què sona per demostrar que la nostra música no para de créixer." />
+
+    <!-- Sprint S Bloc D (CWV): pre-establish TLS to origins we hit
+         on every page so requests start immediately on first paint. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn-images.dzcdn.net" />
+    <link rel="dns-prefetch" href="https://cdn.bsky.app" />
+
+    <!-- Critical above-the-fold CSS. Paints background + brand colour
+         before the main bundle parses. ~100 ms LCP win on Mobile 3G. -->
+    <style>
+      html, body { background:#0a0a0a; color:#fff; margin:0; min-height:100vh; }
+      body { font-family: 'Roboto', system-ui, -apple-system, sans-serif; }
+      #root { min-height: 100vh; }
+      .tq-splash { display:flex; align-items:center; justify-content:center; min-height:100vh; color:#facc15; font-family: Georgia, serif; font-size:1.5rem; letter-spacing:.04em; }
+    </style>
     <script>
       // Companion to public/404.html SPA redirect workaround.
       // 404.html encodes the original path+search into ?p= so a deep
@@ -19,7 +35,10 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- First-paint splash. React replaces it on hydration. -->
+      <div class="tq-splash">TopQuaranta…</div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

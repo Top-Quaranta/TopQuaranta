@@ -107,6 +107,11 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # + sense tracks principals + ≥1 collab + 1 únic germà aprovat).
 0 2 * * 1   topquaranta   /home/topquaranta/bin/tq-run netejar_pendents_orfes >> /var/log/topquaranta/neteja.log 2>&1
 
+# 02:15 dilluns → Setmanal: descartar pendents col·lab sense ancoratge
+# PPCC ni activitat staff. Tope 500 per execució (drena els ~1.8 k
+# inicials en 4 setmanes).
+15 2 * * 1  topquaranta   /home/topquaranta/bin/tq-run netejar_pendents_no_ppcc >> /var/log/topquaranta/neteja.log 2>&1
+
 # 02:00 → Daily SEO inference: canonical genre + dona/home percent
 # from MB+Last.fm tags. Cheap (~5 s for 2 k artistes); idempotent.
 0 2 * * *   topquaranta   /home/topquaranta/bin/tq-run inferir_genere >> /var/log/topquaranta/seo.log 2>&1

@@ -88,11 +88,13 @@ secció _completats_ amb la data i el detall.
 > backlog menor. Vegeu `docs/architecture/analytics.md`.
 
 **Neteja de pendents col·labs brossa** (caçat 2026-05-03):
-- [ ] Comand `netejar_pendents_no_ppcc` que rebutgi automàticament
-      Artistes amb `font_descoberta=collaborador` + `aprovat=False`
-      + sense localitats PPCC + sense cançons pròpies + sense
-      activitat staff. Aplicar primer en dry-run; mostrar comptador
-      al panell `/staff/estat`.
+- [x] Comand `netejar_pendents_no_ppcc` (lliurat 2026-05-06):
+      descarta `font_descoberta in (collaborador, deezer_contributor)`
+      + `aprovat=False, pendent_review=True` + sense cançons
+      principals + sense localitats PPCC + sense `StaffAuditLog`
+      target. Cap 500/run; cron Mon 02:15. Acció: `pendent_review=False`
+      (descartat) + audit `pendent_descartar` amb `motiu=auto_no_ppcc`.
+      Backlog inicial detectat: ~1830; drena en 4 setmanes.
 - [ ] A `_upsert_track` (i `obtenir_novetats._create_track`):
       saltar la creació automàtica de pendents col·lab quan
       l'artista origen té un Deezer profile mixt (heurística:

@@ -223,6 +223,11 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 170,
         "skip_concern": 1,
     },
+    "netejar_pendents_no_ppcc": {
+        "frequency_label": "Cada dilluns 02:15",
+        "max_age_hours": 170,
+        "skip_concern": 1,
+    },
 }
 
 

@@ -38,13 +38,17 @@ class Command(BaseCommand):
         dry_run = bool(opts.get("dry_run"))
         limit = opts.get("limit")
 
-        qs = Artista.objects.filter(aprovat=True, genere_locked=False).only(
-            "pk",
-            "nom",
-            "lastfm_tags",
-            "mb_tags",
-            "genere_canonical",
-            "lastfm_auto_match_disabled",
+        qs = (
+            Artista.objects.public()
+            .filter(genere_locked=False)
+            .only(
+                "pk",
+                "nom",
+                "lastfm_tags",
+                "mb_tags",
+                "genere_canonical",
+                "lastfm_auto_match_disabled",
+            )
         )
         total = qs.count()
         if limit:

@@ -77,7 +77,7 @@ class Command(BaseCommand):
                 self.style.WARNING("DRY RUN — no API calls, no DB writes.\n")
             )
 
-        qs = Artista.objects.filter(aprovat=True)
+        qs = Artista.objects.public()
 
         if artista_id:
             qs = qs.filter(pk=artista_id)

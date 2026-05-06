@@ -335,7 +335,7 @@ class Command(BaseCommand):
 
         # 1. Approved artist by canonical name.
         approved = (
-            Artista.objects.filter(aprovat=True)
+            Artista.objects.public()
             .filter(Q(lastfm_nom__iexact=sim_name) | Q(nom__iexact=sim_name))
             .order_by("pk")
             .first()

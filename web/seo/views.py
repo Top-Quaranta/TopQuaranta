@@ -178,7 +178,7 @@ def artistes_list_seo(request: HttpRequest) -> HttpResponse:
     rellevants ordenats per nº de cançons al top.
     """
     qs = (
-        Artista.objects.filter(aprovat=True)
+        Artista.objects.public()
         .annotate(
             n_cancons=Count(
                 "cancons",
@@ -444,7 +444,8 @@ def territori_seo(request: HttpRequest, codi: str) -> HttpResponse:
         raise _H()
     nom = meta.TERRITORI_NOMS[codi]
     artistes = list(
-        Artista.objects.filter(aprovat=True, localitats__municipi__territori_id=codi)
+        Artista.objects.public()
+        .filter(localitats__municipi__territori_id=codi)
         .annotate(
             n_cancons=Count(
                 "cancons",
@@ -526,7 +527,8 @@ def comarca_seo(request: HttpRequest, slug: str) -> HttpResponse:
         raise _H()
 
     artistes = list(
-        Artista.objects.filter(aprovat=True, localitats__municipi__comarca=nom_comarca)
+        Artista.objects.public()
+        .filter(localitats__municipi__comarca=nom_comarca)
         .annotate(
             n_cancons=Count(
                 "cancons",
@@ -662,7 +664,8 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
 
     label = dict(Artista.GENERE_CANONICAL_CHOICES)[slug]
     artistes = list(
-        Artista.objects.filter(aprovat=True, genere_canonical=slug)
+        Artista.objects.public()
+        .filter(genere_canonical=slug)
         .annotate(
             n_cancons=Count(
                 "cancons",

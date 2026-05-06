@@ -54,7 +54,7 @@ def _representative_urls() -> list[str]:
         "https://www.topquaranta.cat/mapa",
     ]
     a = (
-        Artista.objects.filter(aprovat=True)
+        Artista.objects.public()
         .annotate(
             n_c=Count(
                 "cancons",

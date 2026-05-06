@@ -59,10 +59,10 @@ class Command(BaseCommand):
 
     # ── Catalog totals ───────────────────────────────────────────────
     def _catalog(self, today) -> None:
-        verif = Canco.objects.filter(verificada=True, activa=True).count()
-        pendents = Canco.objects.filter(verificada=False, activa=True).count()
+        verif = Canco.objects.public().count()
+        pendents = Canco.objects.pendents().count()
         rebutjades = Canco.objects.filter(activa=False).count()
-        aprovats = Artista.objects.filter(aprovat=True).count()
+        aprovats = Artista.objects.public().count()
         pendents_a = Artista.objects.filter(pendent_review=True).count()
 
         _set_int(today, "cancons_verificades", verif)
@@ -85,13 +85,9 @@ class Command(BaseCommand):
         )
 
         # MusicBrainz coverage on approved artistes.
-        aprovats = Artista.objects.filter(aprovat=True)
+        aprovats = Artista.objects.public()
         aprovats_count = aprovats.count() or 1
-        mb_done = (
-            aprovats.exclude(musicbrainz_id="")
-            .exclude(musicbrainz_id__isnull=True)
-            .count()
-        )
+        mb_done = aprovats.with_mbid().count()
         _set_float(
             today,
             "cobertura_mb",

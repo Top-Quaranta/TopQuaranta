@@ -45,8 +45,8 @@ class Command(BaseCommand):
         # Only consider artistes with mb_gender set + percentatge_femeni
         # currently empty. We never overwrite a non-empty choice — staff
         # may have set '50+' or '<50' for a band manually.
-        qs = Artista.objects.filter(aprovat=True, percentatge_femeni="").exclude(
-            mb_gender=""
+        qs = (
+            Artista.objects.public().filter(percentatge_femeni="").exclude(mb_gender="")
         )
         results = Counter()
         with transaction.atomic():

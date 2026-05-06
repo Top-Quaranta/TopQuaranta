@@ -60,9 +60,7 @@ class Command(BaseCommand):
 
         results = Counter()
         for orphan in candidates.iterator():
-            siblings = list(
-                Artista.objects.filter(aprovat=True, nom__iexact=orphan.nom)
-            )
+            siblings = list(Artista.objects.public().filter(nom__iexact=orphan.nom))
             if len(siblings) == 0:
                 results["no_sibling"] += 1
                 self.stdout.write(

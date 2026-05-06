@@ -522,13 +522,11 @@ def _musicbrainz_stats() -> dict:
     seu artista: la idea és veure quantes podríem promoure a verificada
     si aprofitàssim el senyal MB.
     """
-    aprovats_qs = Artista.objects.filter(aprovat=True)
+    aprovats_qs = Artista.objects.public()
     aprovat_total = aprovats_qs.count()
-    aprovats_amb_mbid = (
-        aprovats_qs.exclude(musicbrainz_id__isnull=True)
-        .exclude(musicbrainz_id="")
-        .count()
-    )
+    # `with_mbid()` is the public-facing twin of the inline
+    # `exclude(NULL).exclude("")` we used to repeat — same semantics.
+    aprovats_amb_mbid = aprovats_qs.with_mbid().count()
     aprovats_sense_mbid_qs = aprovats_qs.filter(
         Q(musicbrainz_id__isnull=True) | Q(musicbrainz_id="")
     )
@@ -624,8 +622,8 @@ def estat(request: Request) -> Response:
 
     # ── BD inventory ────────────────────────────────────────────────────
     a_total = Artista.objects.count()
-    a_aprovat = Artista.objects.filter(aprovat=True).count()
-    a_pendent = Artista.objects.filter(aprovat=False, pendent_review=True).count()
+    a_aprovat = Artista.objects.public().count()
+    a_pendent = Artista.objects.pendents().count()
     a_descartat = a_total - a_aprovat - a_pendent
 
     alb_total = Album.objects.count()

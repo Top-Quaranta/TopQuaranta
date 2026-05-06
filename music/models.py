@@ -48,6 +48,35 @@ class Municipi(models.Model):
         return f"{self.nom} ({self.comarca})"
 
 
+class ArtistaQuerySet(models.QuerySet):
+    """Custom manager methods for Artista. May-2026 audit: the
+    `aprovat=True` filter and the PPCC / has-MBID / has-localitats
+    membership tests were repeated across the codebase. Centralising
+    them here mirrors the `CancoQuerySet` pattern.
+    """
+
+    def public(self):
+        """Approved artistes — visible to the public site."""
+        return self.filter(aprovat=True)
+
+    def pendents(self):
+        """In the staff review queue (auto-discovered, awaiting triage)."""
+        return self.filter(aprovat=False, pendent_review=True)
+
+    def with_ppcc(self):
+        """Artistes anchored in Països Catalans (any PPCC localitat).
+
+        A localitat is "PPCC" when it has a non-NULL `municipi` FK
+        (non-PPCC localitats use `localitat_manual` and leave municipi
+        NULL). `distinct()` because the M2M-style join inflates rows.
+        """
+        return self.filter(localitats__municipi__isnull=False).distinct()
+
+    def with_mbid(self):
+        """Artistes with a MusicBrainz ID set."""
+        return self.filter(musicbrainz_id__isnull=False).exclude(musicbrainz_id="")
+
+
 class Artista(models.Model):
     """
     A music artist tracked by TopQuaranta.
@@ -56,7 +85,13 @@ class Artista(models.Model):
     The M2M 'territoris' is kept in sync automatically via signals.
     Artists can belong to multiple territories (e.g. Marala → CAT, VAL, BAL).
     A track appears in territory T if ANY of its artists belongs to T.
+
+    Custom manager: use `Artista.objects.public()` for approved-only,
+    `.pendents()` for the staff queue, `.with_ppcc()` for the PPCC
+    subset, or `.with_mbid()` for MB-resolved artistes.
     """
+
+    objects = ArtistaQuerySet.as_manager()
 
     PERCENTATGE_FEMENI_CHOICES = [
         ("100", "100%"),

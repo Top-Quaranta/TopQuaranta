@@ -43,8 +43,8 @@ def stats(request: Request) -> Response:
     PPCC weekly top that weren't on it the week before — surfaced on
     the countdown band as "X cançons noves aquesta setmana".
     """
-    cancons_verificades = Canco.objects.filter(verificada=True, activa=True).count()
-    artistes_aprovats = Artista.objects.filter(aprovat=True).count()
+    cancons_verificades = Canco.objects.public().count()
+    artistes_aprovats = Artista.objects.public().count()
 
     latest_setmana = (
         TopSetmanal.objects.order_by("-setmana")
@@ -426,7 +426,8 @@ def artistes_descoberta(request: Request) -> Response:
     # after the per-artist image-resolution loop drops anything that
     # raced (e.g. cover removed mid-request). 3× is empirical headroom.
     qs = (
-        Artista.objects.filter(aprovat=True, created_at__gte=cutoff)
+        Artista.objects.public()
+        .filter(created_at__gte=cutoff)
         .annotate(
             te_canco_amb_cover=Exists(has_verified_canco_with_cover),
             ja_al_top=Exists(in_top),

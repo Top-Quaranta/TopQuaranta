@@ -70,7 +70,7 @@ class ArtistesSitemap(Sitemap):
     protocol = "https"
 
     def items(self):
-        return Artista.objects.filter(aprovat=True).only("slug", "updated_at")
+        return Artista.objects.public().only("slug", "updated_at")
 
     def location(self, obj):
         return f"/artista/{obj.slug}"
@@ -207,7 +207,7 @@ class ComarquesSitemap(Sitemap):
 
         # Count approved artistes per comarca; expose only those
         # with ≥3 to avoid thin pages.
-        rows = Artista.objects.filter(aprovat=True).values_list(
+        rows = Artista.objects.public().values_list(
             "localitats__municipi__comarca", flat=True
         )
         counter = Counter(c for c in rows if c)
@@ -264,7 +264,7 @@ class GeneresSitemap(Sitemap):
         from django.db.models import Count
 
         rows = (
-            Artista.objects.filter(aprovat=True)
+            Artista.objects.public()
             .exclude(genere_canonical="")
             .values("genere_canonical")
             .annotate(n=Count("id"))

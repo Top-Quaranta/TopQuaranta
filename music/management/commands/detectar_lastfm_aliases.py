@@ -179,7 +179,7 @@ class Command(BaseCommand):
         min_frag = opts["min_fragmentation"]
         overlap_th = opts["top_tracks_overlap"]
 
-        qs = Artista.objects.filter(aprovat=True).exclude(lastfm_nom="")
+        qs = Artista.objects.public().exclude(lastfm_nom="")
         if artist_pk:
             qs = qs.filter(pk=artist_pk)
         if opts["limit"]:

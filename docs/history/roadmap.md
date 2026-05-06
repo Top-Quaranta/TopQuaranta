@@ -225,9 +225,11 @@ Items petits per fer en sessions curtes:
       newsletter a `settings.SITE_URLS`, timeouts duplicats
       (3× `TIMEOUT_S=60`) a `social/constants.py`. ~35 callsites
       en total. Refactor segur, una sessió.
-- [ ] **Modularitat** (auditoria 2026-05-06):
-      `Artista.objects.with_ppcc()/with_mbid()/with_localitats()`
-      managers (~10 callsites); `web/api/serializers.py` per a
+- [x] `ArtistaQuerySet` managers (lliurat 2026-05-07):
+      `.public()`, `.pendents()`, `.with_ppcc()`, `.with_mbid()`.
+      13 callsites migrats. 6 tests unitaris.
+- [ ] **Modularitat pendent** (auditoria 2026-05-06):
+      `web/api/serializers.py` per a
       `serialize_artista_compact/full/canco_card/album_card`
       (~20 callsites); `useApi(url)` hook a `web-react/src/hooks/`
       (61 useEffect repetits); `BaseSignalCommand` per a `--dry-run`
@@ -245,13 +247,13 @@ Items petits per fer en sessions curtes:
       `feedback_resolve`, `comentari_esborrar` (writes ja existents).
 - [ ] **CSP `unsafe-inline`** (Caddyfile): migrar a nonce-based al
       build de Vite. Sprint dedicat de seguretat.
-- [ ] **Codi mort** (auditoria 2026-05-06): esborrar
-      `ingesta/pipeline.py` (placeholder), 8 fitxers Django
-      boilerplate buits (`music/views.py`, `music/tests.py`,
-      `ingesta/views.py`, `ingesta/models.py`, `ingesta/tests.py`,
-      `social/views.py`, `social/admin.py`, `ranking/tests.py`),
-      `Album.cancons_obtingudes` deprecat (migració neta), i
-      `backfill_album_source.py` un cop verificada la cua buida.
+- [x] **Codi mort** (lliurat 2026-05-07): esborrats 9 fitxers
+      buits/placeholders: `ingesta/pipeline.py`, `music/views.py`,
+      `music/tests.py`, `ingesta/views.py`, `ingesta/models.py`,
+      `ingesta/tests.py`, `social/views.py`, `social/admin.py`,
+      `ranking/tests.py`. Pendent: `Album.cancons_obtingudes` (cal
+      migració d'esquema) i `backfill_album_source.py` (cal
+      verificar cua buida abans).
 - [ ] **Watchdog silent-noop** (auditoria 2026-05-06): `tq-run`
       retorna `status=OK` quan exit-code=0. Una comanda pot no fer
       cap feina i exit 0. `tq-health` hauria de flag-ejar quan

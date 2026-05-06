@@ -132,6 +132,11 @@ urlpatterns = [
         name="staff_artista_mb_clear",
     ),
     path(
+        "staff/artistes/<int:pk>/lastfm-clear/",
+        staff_views.artista_lastfm_clear,
+        name="staff_artista_lastfm_clear",
+    ),
+    path(
         "staff/artistes/<int:pk>/lastfm-aliases/",
         staff_views.artista_lastfm_alias_create,
         name="staff_artista_lastfm_alias_create",

@@ -25,6 +25,7 @@ from web.api.staff.artistes import (  # noqa: F401
     artista_detail,
     artista_lastfm_alias_action,
     artista_lastfm_alias_create,
+    artista_lastfm_clear,
     artista_mb_clear,
     artista_sync_mb,
     artistes_fusionar,

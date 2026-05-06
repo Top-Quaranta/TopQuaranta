@@ -146,11 +146,13 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(pk__in=top_artist_ids)
 
     # Sprint S Bloc D pt 3 (2026-05-06): filter by canonical genre.
-    # Values come from `Artista.GENERE_CANONICAL_CHOICES` — see the
-    # /genere/<slug> SEO surface for the same list.
+    # Multi-value: comma-separated list (e.g. `genere=punk,ska,hardcore`).
+    # Single value also works (the .split(',') of one item is itself).
     genere = (request.GET.get("genere") or "").strip().lower()
     if genere:
-        qs = qs.filter(genere_canonical=genere)
+        wanted = [g for g in (g.strip() for g in genere.split(",")) if g]
+        if wanted:
+            qs = qs.filter(genere_canonical__in=wanted)
 
     q = (request.GET.get("q") or "").strip()
     if q:

@@ -386,15 +386,41 @@ function ArtistesFilters({ pending, setPending }) {
         </Field>
       )}
 
-      <Field label="Gènere">
-        <Select
-          value={pending.genere || ''}
-          onChange={e => setPending({ genere: e.target.value })}
-        >
-          {GENERES.map(([v, label]) => (
-            <option key={v} value={v}>{label}</option>
-          ))}
-        </Select>
+      {/* Multi-select via toggleable chips. State stored as a
+          comma-separated string in `pending.genere` so the URL
+          serialisation is trivial: `?genere=punk,ska,hardcore`.
+          Mobile-friendly (single-tap to toggle, no modal). */}
+      <Field label="Gèneres">
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {GENERES.filter(([v]) => v).map(([v, label]) => {
+            const selected = (pending.genere || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+            const isOn = selected.includes(v)
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  const next = isOn
+                    ? selected.filter(x => x !== v)
+                    : [...selected, v]
+                  setPending({ genere: next.join(',') })
+                }}
+                className={
+                  'px-2.5 py-1 text-xs rounded-full border transition-colors ' +
+                  (isOn
+                    ? 'bg-tq-yellow text-tq-ink border-tq-yellow font-semibold'
+                    : 'bg-white text-tq-ink/70 border-tq-ink/15 hover:border-tq-ink/40')
+                }
+                aria-pressed={isOn}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
       </Field>
 
       <Field label="Ordenar per">

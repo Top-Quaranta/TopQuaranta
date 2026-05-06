@@ -881,3 +881,74 @@ def artista_mb_clear(request: Request, pk: int) -> Response:
             "blocked_mbids": artista.mb_blocked_mbids,
         }
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def artista_lastfm_clear(request: Request, pk: int) -> Response:
+    """Disconnect an artiste from Last.fm to stop ingesting wrong
+    data when Last.fm has the canonical name colliding with another
+    artist (e.g. our Mallorcan LGBT band "Fades" silently
+    redirected to the English punk band "The Fades").
+
+    Body (JSON): {"disable_auto": true|false} — default true.
+
+    Side effects:
+      * Clears all `lastfm_*` fields on the Artista (tags, listeners,
+        playcount, image, bio, similars). Subsequent passes of
+        `obtenir_metadata_lastfm` would normally repopulate them; the
+        `lastfm_auto_match_disabled` flag stops that.
+      * `disable_auto=True` (default): sets
+        `lastfm_auto_match_disabled=True`. The cron skips the artiste
+        forever until staff manually re-enables (no UI for that yet —
+        edit via Django shell if needed).
+      * Re-runs `inferir_genere` immediately on this artiste so the
+        canonical genre falls back to MB-tags-only (or empties if MB
+        is also empty).
+    """
+    artista = get_object_or_404(Artista, pk=pk)
+    disable_auto = bool((request.data or {}).get("disable_auto", True))
+
+    with transaction.atomic():
+        if disable_auto:
+            artista.lastfm_auto_match_disabled = True
+        # Clear Last.fm-derived fields. lastfm_url + lastfm_nom stay
+        # so staff can paste a corrected URL later if MB or another
+        # source eventually identifies the right artist.
+        artista.lastfm_tags = []
+        artista.lastfm_listeners = None
+        artista.lastfm_playcount_total = None
+        artista.lastfm_te_scrobbles = None
+        artista.lastfm_image_small = ""
+        artista.lastfm_image_medium = ""
+        artista.lastfm_image_large = ""
+        artista.lastfm_image_extralarge = ""
+        artista.lastfm_bio_summary = ""
+        artista.lastfm_bio_content = ""
+        artista.lastfm_bio_published = None
+        artista.lastfm_ontour = None
+        artista.lastfm_last_sync = None
+        artista.save()
+
+        # Re-infer genre now that the bad tags are gone (only takes
+        # effect when genere_locked=False, which is the common case).
+        if not artista.genere_locked:
+            from music.genere import infer_canonical
+
+            artista.genere_canonical = infer_canonical([], artista.mb_tags)
+            artista.save(update_fields=["genere_canonical"])
+
+    log_staff_action(
+        request,
+        "artista_edit",
+        target=artista,
+        source="lastfm_clear",
+        disable_auto=disable_auto,
+    )
+    return Response(
+        {
+            "ok": True,
+            "auto_match_disabled": artista.lastfm_auto_match_disabled,
+            "genere_canonical": artista.genere_canonical or "",
+        }
+    )

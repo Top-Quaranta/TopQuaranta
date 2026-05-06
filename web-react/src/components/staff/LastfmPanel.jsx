@@ -12,6 +12,8 @@
  * already strips dangerous tags on its end and the field is only
  * visible to staff, so the risk surface is minimal.
  */
+import { useState } from 'react'
+import { api } from '../../lib/api'
 import { Pill } from './StaffTable'
 
 function Row({ label, value }) {
@@ -40,24 +42,61 @@ function formatNum(n) {
   return Number(n).toLocaleString('ca')
 }
 
-export default function LastfmPanel({ data }) {
+export default function LastfmPanel({ data, onChange }) {
   const hasAnything =
     data?.url || data?.bio_summary || data?.listeners != null || data?.image_large
+  const [busy, setBusy] = useState(false)
+
+  async function disconnect() {
+    if (!confirm(
+      'Desconnectar Last.fm per a aquest artista?\n\n' +
+      'Això:\n' +
+      '  • Esborra els tags, listeners, playcount i bio que tenim de Last.fm.\n' +
+      '  • Atura el cron diari perquè no torni a recollir-ne dades.\n' +
+      '  • Re-infereix el gènere ignorant Last.fm (només MB-tags).\n\n' +
+      "Útil quan Last.fm redirigeix el nom canònic a un homònim " +
+      "(p. ex. 'Fades' → 'The Fades' anglès)."
+    )) return
+    setBusy(true)
+    try {
+      await api.post(`/staff/artistes/${data.pk}/lastfm-clear/`, {
+        disable_auto: true,
+      })
+      onChange?.()
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="bg-white text-tq-ink rounded-lg border border-black/5 p-4">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h2 className="font-semibold text-sm">Last.fm</h2>
-        {data?.url && (
-          <a
-            href={data.url}
-            target="_blank"
-            rel="noopener"
-            className="text-[11px] underline text-tq-ink/70 hover:text-tq-ink"
-          >
-            obrir a Last.fm ↗
-          </a>
-        )}
+        <div className="flex items-center gap-3">
+          {data?.url && (
+            <a
+              href={data.url}
+              target="_blank"
+              rel="noopener"
+              className="text-[11px] underline text-tq-ink/70 hover:text-tq-ink"
+            >
+              obrir a Last.fm ↗
+            </a>
+          )}
+          {!data?.auto_match_disabled && (
+            <button
+              type="button"
+              onClick={disconnect}
+              disabled={busy}
+              className="text-[11px] px-2 py-1 rounded border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              title="Desconnecta Last.fm si la coincidència és incorrecta"
+            >
+              Desconnectar
+            </button>
+          )}
+        </div>
       </div>
 
       {data?.auto_match_disabled && (

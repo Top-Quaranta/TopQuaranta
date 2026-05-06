@@ -39,7 +39,12 @@ class Command(BaseCommand):
         limit = opts.get("limit")
 
         qs = Artista.objects.filter(aprovat=True, genere_locked=False).only(
-            "pk", "nom", "lastfm_tags", "mb_tags", "genere_canonical"
+            "pk",
+            "nom",
+            "lastfm_tags",
+            "mb_tags",
+            "genere_canonical",
+            "lastfm_auto_match_disabled",
         )
         total = qs.count()
         if limit:
@@ -50,7 +55,16 @@ class Command(BaseCommand):
         changed = 0
         with transaction.atomic():
             for a in qs.iterator():
-                new_canonical = infer_canonical(a.lastfm_tags, a.mb_tags)
+                # When Last.fm is locked out for an artiste (homonym
+                # collision: e.g. our Mallorcan LGBT band "Fades"
+                # silently redirected to the English punk band
+                # "The Fades", contaminating tags), feed the inferer
+                # only MB tags. If those are empty too, no signal →
+                # no canonical assigned.
+                lastfm_for_inference = (
+                    [] if a.lastfm_auto_match_disabled else a.lastfm_tags
+                )
+                new_canonical = infer_canonical(lastfm_for_inference, a.mb_tags)
                 if not new_canonical:
                     no_signal += 1
                     if a.genere_canonical and not dry_run:

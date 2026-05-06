@@ -527,7 +527,10 @@ export default function ArtistaEditPage() {
             onLastfmNomChange={v => patch({ lastfm_nom: v })}
             onChange={reload}
           />
-          <LastfmPanel data={{ ...(a.lastfm || {}), pk: a.pk }} />
+          <LastfmPanel
+            data={{ ...(a.lastfm || {}), pk: a.pk }}
+            onChange={reload}
+          />
         </div>
       </div>
     </section>

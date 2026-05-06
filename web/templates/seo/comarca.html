@@ -1,0 +1,20 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/mapa">Mapa</a> › {{ nom_comarca }}
+</nav>
+<h1>Música en català de {{ nom_comarca }}</h1>
+<p class="meta-line">
+  Artistes que fan música en català des de la comarca de {{ nom_comarca }}.
+  {{ artistes|length }} artistes verificats.
+</p>
+
+<ul class="bare">
+  {% for a in artistes %}
+  <li>
+    <a href="/artista/{{ a.slug }}">{{ a.nom }}</a>
+    <span class="pill">{{ a.n_cancons }} cançons</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/top">Top</a> ›
+  <a href="/top?territori={{ territori }}">{{ territori_nom }}</a> ›
+  Setmana {{ week }} de {{ year }}
+</nav>
+<h1>Top {{ territori_nom }} · Setmana {{ week }} de {{ year }}</h1>
+<p class="meta-line">
+  Rànquing setmanal locked el {{ monday|date:"d/m/Y" }} · arxiu històric
+</p>
+
+<table>
+  <thead>
+    <tr><th class="pos">#</th><th>Cançó</th><th>Artista</th><th>Àlbum</th></tr>
+  </thead>
+  <tbody>
+    {% for r in entries %}
+    <tr>
+      <td class="pos">{{ r.posicio }}</td>
+      <td><a href="/canco/{{ r.canco.slug }}">{{ r.canco.nom }}</a></td>
+      <td><a href="/artista/{{ r.canco.artista.slug }}">{{ r.canco.artista.nom }}</a></td>
+      <td>{% if r.canco.album %}<a href="/album/{{ r.canco.album.slug }}">{{ r.canco.album.nom }}</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p><a href="/top?territori={{ territori }}">Veure el top actual de {{ territori_nom }} →</a></p>
+{% endblock %}

@@ -67,6 +67,27 @@ urlpatterns = [
     path("canco/<slug:slug>", seo_views.canco_seo, name="seo_canco"),
     path("canco/<slug:slug>/", seo_views.canco_seo),
     path("mapa", seo_views.mapa_seo, name="seo_mapa"),
+    # Long-tail SEO surfaces (Sprint S Block C).
+    path(
+        "top/<str:territori>/setmana/<str:year_week>",
+        seo_views.top_historic_seo,
+        name="seo_top_historic",
+    ),
+    path(
+        "territori/<str:codi>",
+        seo_views.territori_seo,
+        name="seo_territori",
+    ),
+    path(
+        "comarca/<slug:slug>",
+        seo_views.comarca_seo,
+        name="seo_comarca",
+    ),
+    path(
+        "decada/<str:decada>",
+        seo_views.decada_seo,
+        name="seo_decada",
+    ),
     # SPA Helmet hook — matches the SSR templates exactly.
     path(
         "api/v1/seo/<str:entity>/",

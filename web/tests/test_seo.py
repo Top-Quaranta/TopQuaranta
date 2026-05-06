@@ -156,3 +156,71 @@ def test_canonical_url_is_absolute(client, artista):
 def test_hreflang_ca_present(client, artista):
     body = client.get(f"/artista/{artista.slug}").content.decode()
     assert 'hreflang="ca"' in body
+
+
+# ── Block C: long-tail SSR routes ──────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_territori_cat_renders(client):
+    r = client.get("/territori/CAT")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "Catalunya" in body
+
+
+@pytest.mark.django_db
+def test_territori_unknown_404(client):
+    r = client.get("/territori/XYZ")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_decada_thin_404(client):
+    """Decade with no tracks returns 404 — don't expose thin pages."""
+    r = client.get("/decada/1900")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_decada_invalid_format_404(client):
+    r = client.get("/decada/202")  # not 4 digits ending in 0
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_top_historic_no_data_404(client):
+    """Historical week without TopSetmanal data → 404."""
+    r = client.get("/top/CAT/setmana/1999-W30")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_top_historic_invalid_format_404(client):
+    r = client.get("/top/CAT/setmana/notaweek")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_sitemap_index_lists_all_sections(client):
+    r = client.get("/sitemap.xml")
+    assert r.status_code == 200
+    body = r.content.decode()
+    for s in [
+        "sitemap-static.xml",
+        "sitemap-artistes.xml",
+        "sitemap-albums.xml",
+        "sitemap-cancons.xml",
+        "sitemap-territoris.xml",
+        "sitemap-comarques.xml",
+        "sitemap-decades.xml",
+        "sitemap-top_historic.xml",
+    ]:
+        assert s in body, f"sitemap-index missing {s}"
+
+
+@pytest.mark.django_db
+def test_indexnow_key_file(client):
+    r = client.get("/8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b.txt")
+    assert r.status_code == 200
+    assert b"8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b" in r.content

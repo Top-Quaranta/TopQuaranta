@@ -1,0 +1,20 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › Dècada {{ decada }}
+</nav>
+<h1>Música en català dels {{ decada }}</h1>
+<p class="meta-line">
+  Cançons publicades entre {{ year_start }} i {{ year_end }}. {{ cancons|length }} cançons verificades.
+</p>
+
+<ul class="bare">
+  {% for c in cancons %}
+  <li>
+    <a href="/canco/{{ c.slug }}">{{ c.nom }}</a>
+    <span class="pill"><a href="/artista/{{ c.artista.slug }}">{{ c.artista.nom }}</a></span>
+    {% if c.data_llancament %}<span class="pill">{{ c.data_llancament.year }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

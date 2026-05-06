@@ -172,11 +172,94 @@ class TopHistoricSitemap(Sitemap):
         return setmana
 
 
+class TerritorisLandingSitemap(Sitemap):
+    """`/territori/<codi>` landing pages — 8 long-tail entry points
+    that aggregate artistes by territori (Sprint S Block C)."""
+
+    changefreq = "weekly"
+    priority = 0.6
+    protocol = "https"
+
+    TERRITORIS = ["PPCC", "CAT", "VAL", "BAL", "AND", "CNO", "FRA", "ALG"]
+
+    def items(self):
+        return self.TERRITORIS
+
+    def location(self, codi):
+        return f"/territori/{codi}"
+
+
+class ComarquesSitemap(Sitemap):
+    """`/comarca/<slug>` for every comarca with ≥3 approved artistes
+    (Sprint S Block C). Comarca isn't a model — it's a free-text
+    field on Municipi — so we slugify distinct values on the fly."""
+
+    changefreq = "monthly"
+    priority = 0.5
+    protocol = "https"
+
+    def items(self):
+        from collections import Counter
+
+        from django.utils.text import slugify
+
+        from music.models import Municipi
+
+        # Count approved artistes per comarca; expose only those
+        # with ≥3 to avoid thin pages.
+        rows = Artista.objects.filter(aprovat=True).values_list(
+            "localitats__municipi__comarca", flat=True
+        )
+        counter = Counter(c for c in rows if c)
+        out = []
+        seen = set()
+        for nom, n in counter.items():
+            if n < 3:
+                continue
+            slug = slugify(nom)
+            if slug and slug not in seen:
+                seen.add(slug)
+                out.append(slug)
+        return sorted(out)
+
+    def location(self, slug):
+        return f"/comarca/{slug}"
+
+
+class DecadesSitemap(Sitemap):
+    """`/decada/<XXX0>` for every decade with ≥5 verified cançons
+    (Sprint S Block C)."""
+
+    changefreq = "monthly"
+    priority = 0.4
+    protocol = "https"
+
+    def items(self):
+        from django.db.models import Count
+
+        years = Canco.objects.filter(
+            verificada=True, activa=True, data_llancament__isnull=False
+        ).values_list("data_llancament__year", flat=True)
+        from collections import Counter
+
+        decades = Counter()
+        for y in years:
+            if y:
+                decades[(y // 10) * 10] += 1
+        return [str(d) for d, n in sorted(decades.items()) if n >= 5]
+
+    def location(self, decada):
+        return f"/decada/{decada}"
+
+
 sitemaps = {
     "static": StaticSitemap,
     "artistes": ArtistesSitemap,
     "albums": AlbumsSitemap,
     "cancons": CanconsSitemap,
     "territoris": TerritorisSitemap,
+    "territoris_landing": TerritorisLandingSitemap,
+    "comarques": ComarquesSitemap,
+    "decades": DecadesSitemap,
     "top_historic": TopHistoricSitemap,
 }

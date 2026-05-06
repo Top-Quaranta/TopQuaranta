@@ -333,6 +333,320 @@ def canco_seo(request: HttpRequest, slug: str) -> HttpResponse:
 
 @require_safe
 @_vary_ua
+def top_historic_seo(
+    request: HttpRequest, territori: str, year_week: str
+) -> HttpResponse:
+    """`/top/<territori>/setmana/<YYYY-WW>` — historical weekly chart.
+
+    Sprint S Block C: long-tail SEO surface. Each (territori, setmana)
+    pair gets its own canonical URL so queries like 'top música català
+    setmana 35 2025' land on the right historical chart instead of the
+    live `/top` page.
+
+    Forward-compatible with the sitemap entries from Block B.
+    """
+    territori = territori.upper()
+    if territori not in meta.TERRITORI_NOMS:
+        from django.http import Http404 as _H
+
+        raise _H()
+    try:
+        # ISO week format `YYYY-WNN` — Python's `%G-W%V` round-trip.
+        year, week = year_week.split("-W") if "-W" in year_week else (None, None)
+        if not year or not week:
+            raise ValueError
+        year_i = int(year)
+        week_i = int(week)
+        # ISO week → Monday of that week.
+        monday = datetime.date.fromisocalendar(year_i, week_i, 1)
+    except (ValueError, TypeError):
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    entries = list(
+        TopSetmanal.objects.filter(territori=territori, setmana=monday)
+        .select_related("canco__artista", "canco__album")
+        .order_by("posicio")
+    )
+    if not entries:
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    nom_terr = meta.TERRITORI_NOMS.get(territori, territori)
+    title = f"Top {nom_terr} — Setmana {week_i} de {year_i} · TopQuaranta"
+    desc = (
+        f"Les 40 cançons en català més escoltades de {nom_terr} la "
+        f"setmana {week_i} de {year_i} ({monday.strftime('%d/%m/%Y')}). "
+        "Top setmanal mesurat amb dades reals."
+    )
+    canonical = f"https://www.topquaranta.cat/top/{territori}/setmana/{year_week}"
+    page_meta = meta.Meta(
+        title=title,
+        description=desc,
+        canonical_url=canonical,
+        og_image=f"https://www.topquaranta.cat/og/top/{territori}.png",
+        og_type="website",
+        keywords=[
+            f"top {nom_terr.lower()}",
+            f"música català {year_i}",
+            f"setmana {week_i}",
+        ],
+    )
+
+    entries_for_jsonld = [
+        {
+            "posicio": e.posicio,
+            "canco_nom": e.canco.nom,
+            "canco_slug": e.canco.slug,
+            "artista_nom": e.canco.artista.nom,
+            "artista_slug": e.canco.artista.slug,
+        }
+        for e in entries
+    ]
+    blocks = [
+        jsonld.top_jsonld(territori, monday, entries_for_jsonld),
+        jsonld.breadcrumbs_jsonld(
+            [
+                ("Inici", "/"),
+                ("Top", "/top"),
+                (f"{nom_terr}", f"/top?territori={territori}"),
+                (f"Setmana {week_i} {year_i}", canonical),
+            ]
+        ),
+    ]
+    return render(
+        request,
+        "seo/top_historic.html",
+        {
+            "meta": page_meta,
+            "jsonld_blocks": blocks,
+            "territori": territori,
+            "territori_nom": nom_terr,
+            "entries": entries,
+            "monday": monday,
+            "year": year_i,
+            "week": week_i,
+        },
+    )
+
+
+@require_safe
+@_vary_ua
+def territori_seo(request: HttpRequest, codi: str) -> HttpResponse:
+    """`/territori/<codi>` — landing page per territori with KPIs +
+    top + featured artistes. Programmatic SEO surface."""
+    codi = codi.upper()
+    if codi not in meta.TERRITORI_NOMS or codi == "ALT":
+        from django.http import Http404 as _H
+
+        raise _H()
+    nom = meta.TERRITORI_NOMS[codi]
+    artistes = list(
+        Artista.objects.filter(aprovat=True, localitats__municipi__territori_id=codi)
+        .annotate(
+            n_cancons=Count(
+                "cancons",
+                filter=Q(cancons__verificada=True, cancons__activa=True),
+                distinct=True,
+            )
+        )
+        .distinct()
+        .order_by("-n_cancons", "nom")[:60]
+    )
+    top_entries = list(
+        TopProvisional.objects.filter(territori=codi)
+        .select_related("canco__artista")
+        .order_by("posicio")[:10]
+    )
+    page_meta = meta.Meta(
+        title=f"Música en català de {nom} · TopQuaranta",
+        description=meta._trim(
+            f"Tota la música en català de {nom}: artistes, top setmanal "
+            "i discografia. El catàleg complet d'aquest territori al "
+            "sistema TopQuaranta."
+        ),
+        canonical_url=f"https://www.topquaranta.cat/territori/{codi}",
+        og_image=f"https://www.topquaranta.cat/og/top/{codi}.png",
+        og_type="website",
+        keywords=[
+            f"música {nom}",
+            f"artistes {nom}",
+            "música en català",
+            f"top {nom}",
+        ],
+    )
+    blocks = [
+        jsonld.breadcrumbs_jsonld(
+            [
+                ("Inici", "/"),
+                ("Mapa", "/mapa"),
+                (nom, f"/territori/{codi}"),
+            ]
+        ),
+    ]
+    return render(
+        request,
+        "seo/territori.html",
+        {
+            "meta": page_meta,
+            "jsonld_blocks": blocks,
+            "codi": codi,
+            "nom": nom,
+            "artistes": artistes,
+            "top_entries": top_entries,
+        },
+    )
+
+
+@require_safe
+@_vary_ua
+def comarca_seo(request: HttpRequest, slug: str) -> HttpResponse:
+    """`/comarca/<slug>` — landing page per comarca. Aggregates
+    `Artista` rows whose `localitats.municipi.comarca` matches.
+    """
+    from django.utils.text import slugify
+
+    from music.models import Municipi
+
+    # Find a real comarca name matching the slug. Comarca isn't a
+    # model — it's a free-text CharField on Municipi. Build the slug
+    # → name map from distinct values.
+    distinct_comarques = (
+        Municipi.objects.values_list("comarca", flat=True)
+        .distinct()
+        .order_by("comarca")
+    )
+    slug_to_name = {slugify(c): c for c in distinct_comarques if c}
+    nom_comarca = slug_to_name.get(slug)
+    if not nom_comarca:
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    artistes = list(
+        Artista.objects.filter(aprovat=True, localitats__municipi__comarca=nom_comarca)
+        .annotate(
+            n_cancons=Count(
+                "cancons",
+                filter=Q(cancons__verificada=True, cancons__activa=True),
+                distinct=True,
+            )
+        )
+        .distinct()
+        .order_by("-n_cancons", "nom")[:60]
+    )
+    if len(artistes) < 3:
+        # Don't render thin pages — they'd be flagged as low-quality.
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    page_meta = meta.Meta(
+        title=f"Música en català de {nom_comarca} · TopQuaranta",
+        description=meta._trim(
+            f"Artistes de música en català de la comarca de {nom_comarca}. "
+            f"{len(artistes)} bandes i cantants verificats al sistema "
+            "TopQuaranta."
+        ),
+        canonical_url=f"https://www.topquaranta.cat/comarca/{slug}",
+        og_image=f"https://www.topquaranta.cat/og/default.png",
+        og_type="website",
+        keywords=[
+            f"música {nom_comarca}",
+            f"artistes {nom_comarca}",
+            "música en català",
+        ],
+    )
+    blocks = [
+        jsonld.breadcrumbs_jsonld(
+            [
+                ("Inici", "/"),
+                ("Mapa", "/mapa"),
+                (nom_comarca, f"/comarca/{slug}"),
+            ]
+        ),
+    ]
+    return render(
+        request,
+        "seo/comarca.html",
+        {
+            "meta": page_meta,
+            "jsonld_blocks": blocks,
+            "nom_comarca": nom_comarca,
+            "artistes": artistes,
+        },
+    )
+
+
+@require_safe
+@_vary_ua
+def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
+    """`/decada/<XXX0>` — música en català per dècada. Filters
+    cançons by `data_llancament.year` falling in the decade range.
+    """
+    if not (decada.isdigit() and len(decada) == 4 and decada.endswith("0")):
+        from django.http import Http404 as _H
+
+        raise _H()
+    year_start = int(decada)
+    year_end = year_start + 9
+
+    cancons = list(
+        Canco.objects.filter(
+            verificada=True,
+            activa=True,
+            data_llancament__year__gte=year_start,
+            data_llancament__year__lte=year_end,
+        )
+        .select_related("artista", "album")
+        .order_by("-data_llancament")[:50]
+    )
+    if len(cancons) < 5:
+        from django.http import Http404 as _H
+
+        raise _H()
+
+    title = f"Música en català dels {decada} · TopQuaranta"
+    desc = meta._trim(
+        f"Cançons en català publicades entre {year_start} i {year_end}. "
+        f"{len(cancons)} cançons verificades al sistema TopQuaranta — "
+        "el millor de la dècada de la nostra música."
+    )
+    page_meta = meta.Meta(
+        title=title,
+        description=desc,
+        canonical_url=f"https://www.topquaranta.cat/decada/{decada}",
+        og_image=f"https://www.topquaranta.cat/og/default.png",
+        og_type="website",
+        keywords=[
+            f"música català dècada {decada}",
+            f"cançons {year_start}",
+            f"cançons {year_end}",
+        ],
+    )
+    blocks = [
+        jsonld.breadcrumbs_jsonld(
+            [("Inici", "/"), (f"Dècada {decada}", f"/decada/{decada}")]
+        ),
+    ]
+    return render(
+        request,
+        "seo/decada.html",
+        {
+            "meta": page_meta,
+            "jsonld_blocks": blocks,
+            "decada": decada,
+            "year_start": year_start,
+            "year_end": year_end,
+            "cancons": cancons,
+        },
+    )
+
+
+@require_safe
+@_vary_ua
 def mapa_seo(request: HttpRequest) -> HttpResponse:
     """`/mapa` — basic SSR fallback. Doesn't render the SVG (heavy);
     instead lists territoris with their KPIs + links to the per-territori

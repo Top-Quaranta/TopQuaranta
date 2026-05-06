@@ -1,0 +1,40 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/mapa">Mapa</a> › {{ nom }}
+</nav>
+<h1>Música en català de {{ nom }}</h1>
+<p class="meta-line">
+  {{ artistes|length }} artistes verificats al sistema TopQuaranta.
+  Tota la música en català produïda a {{ nom }}.
+</p>
+
+{% if top_entries %}
+<h2>Top setmanal de {{ nom }}</h2>
+<table>
+  <thead>
+    <tr><th class="pos">#</th><th>Cançó</th><th>Artista</th></tr>
+  </thead>
+  <tbody>
+    {% for r in top_entries %}
+    <tr>
+      <td class="pos">{{ r.posicio }}</td>
+      <td><a href="/canco/{{ r.canco.slug }}">{{ r.canco.nom }}</a></td>
+      <td><a href="/artista/{{ r.canco.artista.slug }}">{{ r.canco.artista.nom }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p><a href="/top?territori={{ codi }}">Top complet (40 cançons) →</a></p>
+{% endif %}
+
+<h2>Artistes de {{ nom }}</h2>
+<ul class="bare">
+  {% for a in artistes %}
+  <li>
+    <a href="/artista/{{ a.slug }}">{{ a.nom }}</a>
+    <span class="pill">{{ a.n_cancons }} cançons</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

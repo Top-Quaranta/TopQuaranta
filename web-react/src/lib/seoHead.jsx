@@ -48,6 +48,18 @@ export function SeoHead({ entity, slug = '', fallback = null }) {
 
   if (!meta) return null
 
+  // Schema.org JSON-LD blocks. Critical for Google's Rich Results
+  // Test, which executes JS but doesn't see structured data unless
+  // the page actually adds a <script type="application/ld+json">.
+  // The Django endpoint returns the SAME builders the SSR templates
+  // use; we just mirror them into the SPA's <head>.
+  const jsonldBlocks = Array.isArray(meta.jsonld) ? meta.jsonld : []
+  const escapeJsonForScript = (obj) =>
+    JSON.stringify(obj)
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026')
+
   return (
     <Helmet>
       <title>{meta.title}</title>
@@ -68,6 +80,11 @@ export function SeoHead({ entity, slug = '', fallback = null }) {
       <meta name="twitter:title" content={meta.title} />
       <meta name="twitter:description" content={meta.description} />
       <meta name="twitter:image" content={meta.og_image} />
+      {jsonldBlocks.map((block, i) => (
+        <script key={i} type="application/ld+json">
+          {escapeJsonForScript(block)}
+        </script>
+      ))}
     </Helmet>
   )
 }

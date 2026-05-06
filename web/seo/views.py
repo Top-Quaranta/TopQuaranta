@@ -688,23 +688,66 @@ def seo_api(request: HttpRequest, entity: str, slug: str = "") -> JsonResponse:
     sets the exact same `<head>` for human users. Cached lightly per
     entity; no PII.
     """
+    blocks: list = []
     if entity == "homepage":
         m = meta.for_homepage()
+        blocks = [jsonld.website_jsonld()]
     elif entity == "top":
-        m = meta.for_top(request.GET.get("territori"))
+        territori = (request.GET.get("territori") or "PPCC").upper()
+        m = meta.for_top(territori)
+        # Top blocks: include MusicPlaylist + breadcrumbs.
+        today = timezone.localdate()
+        monday = today - datetime.timedelta(days=today.weekday())
+        entries_qs = TopSetmanal.objects.filter(
+            territori=territori, setmana=monday
+        ).select_related("canco__artista")
+        if not entries_qs.exists():
+            entries_qs = (
+                TopProvisional.objects.filter(territori=territori)
+                .select_related("canco__artista")
+                .order_by("posicio")[:40]
+            )
+        entries = [
+            {
+                "posicio": e.posicio,
+                "canco_nom": e.canco.nom,
+                "canco_slug": e.canco.slug,
+                "artista_nom": e.canco.artista.nom,
+                "artista_slug": e.canco.artista.slug,
+            }
+            for e in entries_qs
+        ]
+        blocks = [
+            jsonld.top_jsonld(territori, monday, entries),
+            jsonld.breadcrumbs_jsonld([("Inici", "/"), ("Top", "/top")]),
+        ]
     elif entity == "artistes":
         m = meta.for_artistes_list()
+        blocks = [
+            jsonld.breadcrumbs_jsonld([("Inici", "/"), ("Artistes", "/artistes")])
+        ]
     elif entity == "mapa":
         m = meta.for_mapa()
+        blocks = [jsonld.breadcrumbs_jsonld([("Inici", "/"), ("Mapa", "/mapa")])]
     elif entity == "artista":
         a = (
             Artista.objects.filter(slug=slug, aprovat=True)
-            .prefetch_related("localitats__municipi")
+            .prefetch_related("localitats__municipi__territori")
             .first()
         )
         if not a:
             return JsonResponse({"error": "not_found"}, status=404)
         m = meta.for_artista(a)
+        blocks = [
+            jsonld.artista_jsonld(a),
+            jsonld.breadcrumbs_jsonld(
+                [
+                    ("Inici", "/"),
+                    ("Artistes", "/artistes"),
+                    (a.nom, f"/artista/{a.slug}"),
+                ]
+            ),
+        ]
     elif entity == "album":
         al = (
             Album.objects.filter(slug=slug, descartat=False, artista__aprovat=True)
@@ -714,6 +757,17 @@ def seo_api(request: HttpRequest, entity: str, slug: str = "") -> JsonResponse:
         if not al:
             return JsonResponse({"error": "not_found"}, status=404)
         m = meta.for_album(al)
+        blocks = [
+            jsonld.album_jsonld(al),
+            jsonld.breadcrumbs_jsonld(
+                [
+                    ("Inici", "/"),
+                    ("Artistes", "/artistes"),
+                    (al.artista.nom, f"/artista/{al.artista.slug}"),
+                    (al.nom, f"/album/{al.slug}"),
+                ]
+            ),
+        ]
     elif entity == "canco":
         c = (
             Canco.objects.filter(slug=slug, verificada=True, activa=True)
@@ -723,8 +777,21 @@ def seo_api(request: HttpRequest, entity: str, slug: str = "") -> JsonResponse:
         if not c:
             return JsonResponse({"error": "not_found"}, status=404)
         m = meta.for_canco(c)
+        blocks = [
+            jsonld.canco_jsonld(c),
+            jsonld.breadcrumbs_jsonld(
+                [
+                    ("Inici", "/"),
+                    ("Artistes", "/artistes"),
+                    (c.artista.nom, f"/artista/{c.artista.slug}"),
+                    (c.nom, f"/canco/{c.slug}"),
+                ]
+            ),
+        ]
     else:
         return JsonResponse({"error": "unknown_entity"}, status=400)
-    resp = JsonResponse(m.asdict())
+    payload = m.asdict()
+    payload["jsonld"] = blocks
+    resp = JsonResponse(payload)
     resp["Cache-Control"] = "public, max-age=300"  # 5 min TTL
     return resp

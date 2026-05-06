@@ -99,7 +99,7 @@ www.topquaranta.cat {
 	# Discordbot) and the AI crawlers we want indexing us
 	# (GPTBot, ClaudeBot, PerplexityBot, Bytespider).
 	@bot {
-		header_regexp User-Agent (?i)(googlebot|bingbot|duckduckbot|yandexbot|applebot|baiduspider|slurp|mastodon|pleroma|akkoma|misskey|bluesky|slackbot|telegrambot|whatsapp|facebookexternalhit|twitterbot|linkedinbot|discordbot|skypeuripreview|gptbot|claudebot|perplexitybot|bytespider|google-pagerenderer|googleother|amazonbot|chatgpt-user|cohere-ai|anthropic-ai|aria/|ia_archiver|petalbot|seznambot|vkshare|w3c_validator|developers\.google\.com)
+		header_regexp User-Agent (?i)(googlebot|google-inspectiontool|google-richresultstest|google-pagerenderer|googleother|adsbot-google|bingbot|bingpreview|duckduckbot|yandexbot|applebot|baiduspider|slurp|mastodon|pleroma|akkoma|misskey|bluesky|slackbot|telegrambot|whatsapp|facebookexternalhit|twitterbot|linkedinbot|discordbot|skypeuripreview|gptbot|claudebot|perplexitybot|bytespider|amazonbot|chatgpt-user|cohere-ai|anthropic-ai|aria/|ia_archiver|petalbot|seznambot|vkshare|w3c_validator|developers\.google\.com)
 		path / /top /artistes /mapa /artista/* /album/* /canco/* /territori/* /comarca/* /decada/* /top/*
 	}
 	handle @bot {

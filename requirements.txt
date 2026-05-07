@@ -16,6 +16,10 @@ argon2-cffi==25.1.0          # S10: stronger password hashing
 django-axes==8.3.1           # S4: brute-force login protection
 django-otp==1.7.0            # S11: TOTP 2FA for staff
 qrcode[pil]==8.2             # S11: render enrollment QR (pulls Pillow)
+# Social renderer — brand logo + territory icons rasterisation. Caught
+# 2026-05-07: missing in production meant every territorial portada
+# published with an empty pill where the logo should have been.
+cairosvg==2.9.0
 # Language identification (Whisper LID as a staff signal on Canco)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.11.0+cpu            # CPU-only PyTorch for faster-whisper backbone

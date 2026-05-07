@@ -116,8 +116,12 @@ function LayoutInner({ children }) {
       {/* ── Yellow header ── */}
       <header className="bg-tq-yellow text-tq-ink sticky top-0 z-40">
         <div className="h-12 flex items-center gap-6 px-6 lg:px-12">
-          <Link to="/" className="shrink-0 text-tq-ink" aria-label="TopQuaranta — Inici">
-            <TopQuarantaLogo className="h-7 w-auto" />
+          <Link
+            to="/"
+            className="shrink-0 text-tq-ink font-display font-bold text-lg leading-none tracking-tight whitespace-nowrap"
+            aria-label="TopQuaranta — Inici"
+          >
+            <span className="text-tq-yellow-deep">Top</span>Quaranta
           </Link>
 
           <nav

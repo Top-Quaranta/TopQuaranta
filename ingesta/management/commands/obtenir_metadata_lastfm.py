@@ -178,8 +178,18 @@ class Command(BaseCommand):
                 sim_name = (sim.get("name") or "").strip()
                 if not sim_name:
                     continue
+                # `artist.getSimilar` includes the MBID per similar
+                # when Last.fm has it. Pass it down so the resolver
+                # can match by MusicBrainz ID — Last.fm's `name`
+                # field is its CANONICAL spelling (autocorrected at
+                # index time), so a Mallorcan "Fades" recommended
+                # by another artiste comes back as "The Fades" if
+                # Last.fm has merged the pages. Resolving by MBID
+                # avoids creating a "The Fades" pendent that points
+                # at our actual Mallorcan band.
+                sim_mbid = (sim.get("mbid") or "").strip() or None
                 target, created = self._resolve_similar_target(
-                    sim_name, dry_run=dry_run
+                    sim_name, sim_mbid=sim_mbid, dry_run=dry_run
                 )
                 if target is None:
                     continue
@@ -300,38 +310,56 @@ class Command(BaseCommand):
         )
 
     def _resolve_similar_target(
-        self, sim_name: str, *, dry_run: bool
+        self, sim_name: str, *, sim_mbid: str | None = None, dry_run: bool
     ) -> tuple[Artista | None, bool]:
         """Resolve a similar-name to a canonical Artista, alias-aware.
 
-        Lookup order (case-insensitive). Step 2 (alias-of-approved)
-        beats step 3 (literal-match of pendent) by design — this is
-        what catches stale duplicates created before the alias path
-        existed.
+        Lookup order (case-insensitive). Step 0 (MBID) wins over name
+        matching: Last.fm's `name` field on similar entries is the
+        canonical spelling (autocorrected at index time), so a
+        Mallorcan "Fades" listed as a similar comes back as "The
+        Fades" — the WRONG band's name. The MBID, when present,
+        unambiguously identifies our intended target. Step 2
+        (alias-of-approved) beats step 3 (literal-match of pendent)
+        by design — catches stale duplicates created before the
+        alias path existed.
 
         Caught 2026-05-01 with Anna Roig: the canonical (ASCII
         apostrophe) was approved at pk=6717 with a confirmed alias
         for the typographic spelling. A stale pendent at pk=7078
-        also held that typographic spelling as its lastfm_nom from
-        a previous similars-cron run. The first version of this
-        function found pk=7078 first (literal lastfm_nom match,
-        ordered by aprovat-desc but no approved row at that
-        spelling) and kept treating it as a separate entity. New
-        order resolves the alias to pk=6717.
+        also held that typographic spelling. The first version of
+        this function found pk=7078 first; new order resolves the
+        alias to pk=6717.
 
+        Caught 2026-05-07 with Fades: 22 "The Fades" pendents had
+        accumulated because Last.fm's `getSimilar` returned them as
+        the canonical spelling for what was originally our Mallorcan
+        Fades. MBID lookup (step 0) is the fix.
+
+          0. ANY Artista with the given MusicBrainz ID (approved or
+             pendent — MBID is unique). Skipped when no mbid given
+             or no row matches.
           1. APPROVED Artista with lastfm_nom OR nom matching.
           2. APPROVED Artista via confirmed ArtistaLastfmAlias.
-          3. NON-approved Artista with lastfm_nom OR nom matching
-             (pendent / descartat — pre-existing rows from before
-             the alias path existed).
+          3. NON-approved Artista with lastfm_nom OR nom matching.
           4. Create new pendent placeholder.
 
-        Returns (artista_or_None, created_flag). Counts are NOT
-        touched here — the caller writes a row to
-        `ArtistaLastfmSimilar` and `_replace_similars` recomputes
-        the cached `nb_similars_lastfm`.
+        Returns (artista_or_None, created_flag).
         """
         from music.models import ArtistaLastfmAlias
+
+        # 0. MBID lookup — wins over name when Last.fm has the right
+        # MBID for this similar. Doesn't filter on aprovat: matching
+        # on a pendent that already exists at the right MBID is
+        # better than creating a duplicate at the autocorrected name.
+        if sim_mbid:
+            by_mbid = (
+                Artista.objects.filter(musicbrainz_id=sim_mbid)
+                .order_by("-aprovat", "pk")  # approved beats pendent
+                .first()
+            )
+            if by_mbid is not None:
+                return by_mbid, False
 
         # 1. Approved artist by canonical name.
         approved = (

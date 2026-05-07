@@ -222,6 +222,43 @@ class Command(BaseCommand):
             if not artista.musicbrainz_id:
                 mbid = resolve_mbid(artista)
                 if mbid:
+                    # Pre-flight uniqueness check. The DB has a UNIQUE
+                    # constraint on `musicbrainz_id`, and `resolve_mbid`
+                    # can pick the same MBID for two distinct Artistas
+                    # whose names share a Last.fm canonical (e.g.
+                    # "Cecilio G" pk=5025 vs "Cecilio.G" pk=18813 →
+                    # both → 03ee196d-...). Without this guard the cron
+                    # raises IntegrityError and the whole iteration is
+                    # lost. Caught 2026-05-07.
+                    other = (
+                        Artista.objects.filter(musicbrainz_id=mbid)
+                        .exclude(pk=artista.pk)
+                        .only("pk", "nom")
+                        .first()
+                    )
+                    if other is not None:
+                        logger.warning(
+                            "MBID collision: %s (pk=%s) wanted %s but "
+                            "it's already on %s (pk=%s) — blocking + skipping",
+                            artista.nom,
+                            artista.pk,
+                            mbid,
+                            other.nom,
+                            other.pk,
+                        )
+                        # Add to blocked list so subsequent runs don't
+                        # re-attempt the same dead-end.
+                        blocked = list(artista.mb_blocked_mbids or [])
+                        if mbid not in blocked:
+                            blocked.append(mbid)
+                            artista.mb_blocked_mbids = blocked
+                        artista.mb_last_sync = timezone.now()
+                        artista.save(update_fields=["mb_blocked_mbids", "mb_last_sync"])
+                        self.stdout.write(
+                            f"  [collision] {artista.nom} → {mbid} blocked "
+                            f"(taken by pk={other.pk} {other.nom!r})"
+                        )
+                        return
                     artista.musicbrainz_id = mbid
                     artista.save(update_fields=["musicbrainz_id"])
                     self.stdout.write(f"  [name] {artista.nom} → MBID {mbid}")

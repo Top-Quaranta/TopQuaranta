@@ -145,6 +145,12 @@ def _top_for_territoris(
         canco_id__in=cancons.keys(),
         data__gte=window_start,
         error=False,
+        # 2026-05-07 audit follow-up: drift-flagged rows are kept in
+        # the DB for staff inspection but excluded from the ranking
+        # signal. Without this guard, a Fades→TheFades-style silent
+        # autocorrect on the err=6 retry path could pump the wrong
+        # band's playcount into our weekly chart.
+        corregit=False,
         lastfm_playcount__isnull=False,
     ).only("canco_id", "data", "lastfm_playcount"):
         senyals_by_canco[s.canco_id].append(s)

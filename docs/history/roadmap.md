@@ -238,13 +238,19 @@ Items petits per fer en sessions curtes:
       "lifetime extrapolation" a `algorisme.py:352` infla weekly_plays
       d'una Canco recent-verificada amb ≥7 dies de senyal-buit. Gate
       per `canco.verificada_at` o per la primera SenyalDiari row.
+- [x] **`corregit=True` exclòs del ranking** (lliurat 2026-05-07):
+      `algorisme.py` ara filtra `error=False, corregit=False` al
+      pull de senyal. Defensa contra contaminació a l'err=6 retry
+      path quan `_detect_drift` flag-eja un artiste mismatched.
 - [ ] **Alias double-count guard URL-based** (auditoria 2026-05-06):
       `get_track_info_literal:258` fa case-fold check; importar i
       reutilitzar `_normalize_lastfm_url` de `detectar_lastfm_aliases`
       (URL-based, més robust).
-- [ ] **`StaffAuditLog.ACTION_CHOICES`**: afegir-hi `usuari_esborrar`,
-      `usuari_reenviar_verificacio`, `usuari_enviar_reset_password`,
-      `feedback_resolve`, `comentari_esborrar` (writes ja existents).
+- [x] **`StaffAuditLog.ACTION_CHOICES`** (lliurat 2026-05-07): afegit
+      `artista_sync_mb`, `pendent_orphan_merged`, `feedback_resolt`,
+      `usuari_esborrar`, `usuari_reenviar_verificacio`,
+      `usuari_enviar_reset_password`, `<channel>_publicat` × 4.
+      Migració 0067.
 - [ ] **CSP `unsafe-inline`** (Caddyfile): migrar a nonce-based al
       build de Vite. Sprint dedicat de seguretat.
 - [x] **Codi mort** (lliurat 2026-05-07): esborrats 9 fitxers

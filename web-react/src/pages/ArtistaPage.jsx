@@ -9,9 +9,7 @@
  *
  * Unapproved artists ship a minimal "under review" page.
  */
-import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
 import { SeoHead } from '../lib/seoHead'
 import Alert from '../components/ui/Alert'
 import { albumUrl, cancoUrl } from '../lib/urls'
@@ -19,6 +17,7 @@ import FeedbackButton from '../components/FeedbackButton'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import { useAuth } from '../context/AuthContext'
+import useApi from '../hooks/useApi'
 
 const TERRITORI_NOM = {
   CAT: 'Catalunya', VAL: 'País Valencià', BAL: 'Illes Balears',
@@ -30,18 +29,9 @@ const TERRITORI_NOM = {
 export default function ArtistaPage() {
   const { slug } = useParams()
   const { profile } = useAuth()
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    api.get(`/artistes/${slug}/`)
-      .then(setData)
-      .catch(e => setError(e.status === 404 ? 'Artista no trobat.' : (e.message || 'Error')))
-      .finally(() => setLoading(false))
-  }, [slug])
+  const { data, error, loading } = useApi(`/artistes/${slug}/`, {
+    mapError: (e) => (e.status === 404 ? 'Artista no trobat.' : null),
+  })
 
   // Publish the page target so the shared footer "Corregir" button
   // addresses this artist. Must run unconditionally before any early

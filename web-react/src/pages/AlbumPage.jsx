@@ -5,14 +5,13 @@
  * plus a track listing. Tracks that have ever appeared in a ranking
  * show a small "top" badge.
  */
-import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
 import { cancoUrl } from '../lib/urls'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import { SeoHead } from '../lib/seoHead'
+import useApi from '../hooks/useApi'
 
 function formatDuration(ms) {
   if (!ms) return '—'
@@ -26,18 +25,9 @@ export default function AlbumPage() {
   // Matched route can be `/album/:slug` or `/artista/:artistaSlug/:albumSlug`.
   const params = useParams()
   const slug = params.albumSlug || params.slug
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    api.get(`/albums/${slug}/`)
-      .then(setData)
-      .catch(e => setError(e.status === 404 ? 'Àlbum no trobat.' : (e.message || 'Error')))
-      .finally(() => setLoading(false))
-  }, [slug])
+  const { data, error, loading } = useApi(`/albums/${slug}/`, {
+    mapError: (e) => (e.status === 404 ? 'Àlbum no trobat.' : null),
+  })
 
   useFeedbackTarget(
     data

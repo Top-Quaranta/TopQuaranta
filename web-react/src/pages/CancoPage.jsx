@@ -10,19 +10,18 @@
  * The chart lines colour-match territory colors defined in HomePage
  * to keep the brand language consistent.
  */
-import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   CartesianGrid, Line, LineChart, ResponsiveContainer,
   Tooltip, XAxis, YAxis, Legend,
 } from 'recharts'
-import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
 import { albumUrl } from '../lib/urls'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import TopBreakdownPanel from '../components/TopBreakdownPanel'
 import { SeoHead } from '../lib/seoHead'
+import useApi from '../hooks/useApi'
 
 const TERRITORI_COLORS = {
   PPCC: '#427c42', CAT: '#c99b0c', VAL: '#cf3339', BAL: '#0047ba',
@@ -51,18 +50,9 @@ export default function CancoPage() {
   // The leaf slug is the authoritative lookup in either case.
   const params = useParams()
   const slug = params.cancoSlug || params.slug
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    api.get(`/cancons/${slug}/`)
-      .then(setData)
-      .catch(e => setError(e.status === 404 ? 'Cançó no trobada.' : (e.message || 'Error')))
-      .finally(() => setLoading(false))
-  }, [slug])
+  const { data, error, loading } = useApi(`/cancons/${slug}/`, {
+    mapError: (e) => (e.status === 404 ? 'Cançó no trobada.' : null),
+  })
 
   useFeedbackTarget(
     data

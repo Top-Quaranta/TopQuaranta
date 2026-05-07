@@ -96,11 +96,16 @@ class TestGetTrackInfoTrackNotFound:
     def test_track_not_found(self, mock_get, mock_sleep):
         """Last.fm error 6 → returns None, no exception.
 
-        The client makes two calls: (1) track.getInfo returns err=6, and
-        (2) a last-resort artist.getTopTracks fallback. Both mocked to
-        return the same err=6 shape; the fallback returns empty tracks
-        and the whole chain yields None. No rate-limit retries on
-        API-level errors.
+        The client makes three calls: (1) track.getInfo with
+        autocorrect=0 returns err=6, (2) track.getInfo retry with
+        autocorrect=1 also returns err=6, (3) a last-resort
+        artist.getTopTracks fallback. All mocked to err=6; no
+        rate-limit retries fire on API-level errors.
+
+        2026-05-07 follow-up: the autocorrect=1 retry runs
+        unconditionally on err=6 (was previously gated on
+        `normalized != track_name`, which skipped it for case-only
+        mismatches and left the cron with ~12 % spurious errors).
         """
         mock_get.return_value.status_code = 200
         mock_get.return_value.raise_for_status.return_value = None
@@ -112,10 +117,8 @@ class TestGetTrackInfoTrackNotFound:
         result = get_track_info("Unknown Artist", "Unknown Track")
 
         assert result is None
-        # One getInfo + one getTopTracks fallback. The normalized-name
-        # retry is skipped because _normalize_track("Unknown Track") ==
-        # "Unknown Track".
-        assert mock_get.call_count == 2
+        # 1 literal getInfo + 1 autocorrect=1 retry + 1 top-tracks fallback.
+        assert mock_get.call_count == 3
 
 
 class TestGetTrackInfoTopTracksFallback:
@@ -126,9 +129,14 @@ class TestGetTrackInfoTopTracksFallback:
         via the artist.getTopTracks fallback when track.getInfo fails.
         """
         responses = [
-            # track.getInfo(+ Arcade) → err=6
+            # 1) track.getInfo(+ Arcade, autocorrect=0) → err=6
             {"error": 6, "message": "Track not found"},
-            # artist.getTopTracks → contains + ARCADE with playcount
+            # 2) track.getInfo(+ Arcade, autocorrect=1) retry → still err=6
+            #    (the case-folded variant '+ ARCADE' is not what Last.fm
+            #     autocorrects to either; it requires fuzzy match against
+            #     the artist's top tracks). 2026-05-07 added.
+            {"error": 6, "message": "Track not found"},
+            # 3) artist.getTopTracks → contains + ARCADE with playcount
             {
                 "toptracks": {
                     "track": [

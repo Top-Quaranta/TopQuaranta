@@ -353,6 +353,13 @@ def get_track_info(
     On Last.fm "Track not found" (error 6), retries once with a normalized
     track name (parentheticals like "(feat. X)" / "(Acoustic Version)" and
     suffixes like " - Live" stripped, plus unicode quotes converted to ASCII).
+    The retry uses **`autocorrect=1`** so case/whitespace/punctuation
+    variations within the same artist's catalogue are recovered (caught
+    2026-05-07: the autocorrect=0-everywhere default produced 506 extra
+    errors/day for legit track-name variations like "Cançó" vs "cançó").
+    The artist-level homonym risk this re-introduces is bounded by
+    `_detect_drift` at the caller, which flags `corregit=True` on
+    artist-name mismatch — and the ranking algorithm now filters those.
     Never raises.
     """
     track, err = _api_call(
@@ -370,31 +377,46 @@ def get_track_info(
             "returned_artist": ra,
         }
 
-    # Retry with normalized name only on "Track not found"
+    # On "Track not found", retry with autocorrect=1. Two sub-cases
+    # both handled by the same call when the track name has been
+    # normalised, otherwise just one. autocorrect=1 here recovers
+    # case-only / whitespace / punctuation variations that the literal
+    # call missed; artist-level homonym risk is caught by `_detect_drift`
+    # at the caller and the ranking algorithm's `corregit=False` filter.
     if err == 6:
         normalized = _normalize_track(track_name)
-        if normalized and normalized != track_name:
-            track2, err2 = _api_call(
-                artist_name,
-                normalized,
-                track_mbid=track_mbid,
-                artist_mbid=artist_mbid,
-            )
-            if track2 is not None:
+        retry_name = (
+            normalized if (normalized and normalized != track_name) else track_name
+        )
+        track2, err2 = _api_call(
+            artist_name,
+            retry_name,
+            autocorrect=True,
+            track_mbid=track_mbid,
+            artist_mbid=artist_mbid,
+        )
+        if track2 is not None:
+            if retry_name != track_name:
                 logger.info(
                     "Last.fm recovered '%s'/'%s' via normalization to '%s'",
                     artist_name,
                     track_name,
-                    normalized,
+                    retry_name,
                 )
-                rt, ra = _extract_returned_names(track2)
-                return {
-                    "playcount": int(track2.get("playcount", 0)),
-                    "listeners": int(track2.get("listeners", 0)),
-                    "returned_track": rt,
-                    "returned_artist": ra,
-                }
-            err = err2 if err2 is not None else err
+            else:
+                logger.info(
+                    "Last.fm recovered '%s'/'%s' via autocorrect retry",
+                    artist_name,
+                    track_name,
+                )
+            rt, ra = _extract_returned_names(track2)
+            return {
+                "playcount": int(track2.get("playcount", 0)),
+                "listeners": int(track2.get("listeners", 0)),
+                "returned_track": rt,
+                "returned_artist": ra,
+            }
+        err = err2 if err2 is not None else err
 
         # Final fallback: search the artist's top tracks for a near-exact
         # match to the track name. Catches case-only variants like

@@ -285,6 +285,44 @@ Then re-run `manage.py migrate music`.
 
 ---
 
+## 9.4. WORK_DONE protocol — silent-noop detection
+
+`tq-run` recognises an opt-in line in command output:
+
+```
+WORK_DONE=<int>
+```
+
+The LAST occurrence is parsed and written to the status file as
+`work_done=N`. `tq-run` also tracks `consecutive_zero_work=N` —
+incremented when `WORK_DONE=0`, reset otherwise. The staff
+dashboard at `/staff/estat` surfaces both.
+
+**Why**: a cron exiting 0 with no real work (early-return on empty
+queryset, silent skip path, etc.) used to look identical to a healthy
+run. `obtenir_novetats` was stuck for ~12 days in 2026-05 with
+nightly `status=OK` reports; the SKIPPED_BY_LOCK path closed one
+hole, this protocol closes another.
+
+To opt a command in, emit one line at the end of `handle()`:
+
+```python
+self.stdout.write(f"WORK_DONE={n_rows_written}")
+```
+
+What "work" means is up to the command — pick whatever quantity
+would be 0 if the command is broken. Examples:
+
+  - `obtenir_senyal`: `success + errors` (rows written to SenyalDiari).
+  - `obtenir_novetats` (when migrated): albums actually re-checked.
+  - `inferir_genere` (when migrated): artistes whose canonical genre
+    changed.
+
+Commands that don't opt in are unaffected; `work_done` stays
+unset on the dashboard.
+
+---
+
 ## 9.5. CSP inline-style hash regeneration
 
 The Caddyfile `Content-Security-Policy` allows the single inline

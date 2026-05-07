@@ -323,6 +323,16 @@ class Command(BaseCommand):
             )
         )
 
+        # `tq-run` watchdog protocol (2026-05-07): the LAST line matching
+        # `^WORK_DONE=<int>$` becomes `work_done=N` in the status file.
+        # `tq-run` then tracks `consecutive_zero_work` so a stuck cron
+        # (returning 0 every tick) becomes visible at /staff/estat
+        # without a hand-tuned per-command threshold. We count rows
+        # actually written to SenyalDiari (success + errors); skipped
+        # is "already done by an earlier run today" and shouldn't
+        # reset the zero-counter.
+        self.stdout.write(f"WORK_DONE={success + errors}")
+
         # 2026-04-23 (algorithm v2.0): the percentile-rank normalisation
         # used to run here. It's gone — the new ranking algorithm consumes
         # raw `lastfm_playcount` deltas directly (see ranking/algorisme.py).

@@ -795,6 +795,18 @@ def estat(request: Request) -> Response:
                     # of a stuck process (caught 2026-05-01 with
                     # `obtenir_novetats` hung ~12 days).
                     "consecutive_skips": int(parsed.get("consecutive_skips") or 0),
+                    # WORK_DONE protocol (2026-05-07): commands that
+                    # opt in emit a final `WORK_DONE=N` line; tq-run
+                    # surfaces N here + `consecutive_zero_work`. Both
+                    # may be missing/None when the command doesn't
+                    # opt in, in which case the dashboard treats them
+                    # as "no signal".
+                    "work_done": (
+                        int(parsed["work_done"]) if parsed.get("work_done") else None
+                    ),
+                    "consecutive_zero_work": int(
+                        parsed.get("consecutive_zero_work") or 0
+                    ),
                     "frequency_label": meta.get("frequency_label", ""),
                     "max_age_hours": meta.get("max_age_hours"),
                     "skip_concern": meta.get("skip_concern"),

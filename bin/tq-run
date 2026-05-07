@@ -106,6 +106,25 @@ if [[ $rc -eq 75 ]]; then
         echo "EOF"
     } > "$tmp_status"
 else
+    # Opt-in WORK_DONE protocol (2026-05-07): commands that want to
+    # surface "did N units of work" to the watchdog emit a final line
+    # `WORK_DONE=<int>` to stdout. Pick the LAST occurrence (so a
+    # progress-line that happens to look the same earlier doesn't
+    # mask the final summary). Default empty when the command is
+    # silent — no auto-alarm; just visibility for operators.
+    work_done=$(grep -E '^WORK_DONE=[0-9]+$' "$tmpout" | tail -n1 | cut -d= -f2)
+    # Track consecutive zero-work runs. Only meaningful when
+    # work_done is present AND equals 0; missing → reset count.
+    prev_zero_count=0
+    if [[ -f "$status_file" ]]; then
+        prev_zero_count=$(grep '^consecutive_zero_work=' "$status_file" | cut -d= -f2 || echo 0)
+        prev_zero_count=${prev_zero_count:-0}
+    fi
+    if [[ "$work_done" == "0" ]]; then
+        zero_count=$((prev_zero_count + 1))
+    else
+        zero_count=0
+    fi
     {
         echo "command=$cmd"
         echo "args=$*"
@@ -115,6 +134,10 @@ else
         echo "max_attempts=$max_attempts"
         if [[ $rc -eq 0 ]]; then echo "status=OK"; else echo "status=FAIL"; fi
         echo "consecutive_skips=0"
+        if [[ -n "$work_done" ]]; then
+            echo "work_done=$work_done"
+            echo "consecutive_zero_work=$zero_count"
+        fi
         echo "last_output<<EOF"
         tail -n 20 "$tmpout"
         echo "EOF"

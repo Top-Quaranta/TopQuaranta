@@ -41,6 +41,15 @@ COLOR_DANGER = "#cf3339"  # mm-color-error / red — used for arrow-down
 # "NOU" badge
 COLOR_NEW = COLOR_YELLOW  # same yellow; reused as the badge fill
 
+# Novetats slide accents — semantic aliases of palette tokens. Aliases
+# (not literal hex) so a future palette change propagates and so the
+# renderer reads as "novetats: albums accent" instead of an opaque
+# "#0047ba". Both happen to coincide with TERR_COLORS values today
+# (BAL blue, VAL red) but the meaning is editorial, not territorial —
+# kept distinct so we can rebrand without touching territory mappings.
+COLOR_NOVETATS_ALBUMS = "#0047ba"  # mm-color-blue
+COLOR_NOVETATS_SINGLES = COLOR_DANGER  # red, mm-color-error
+
 # Per-territory accent. Mirrors `TERR_COLORS` from
 # `web-react/src/components/editorial.jsx` — keep the two in sync.
 # Used to recolour position-number squares, intro headers, and the

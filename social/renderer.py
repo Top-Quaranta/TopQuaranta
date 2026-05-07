@@ -193,7 +193,7 @@ def _pill(
     text: str,
     font,
     fill: str,
-    text_fill: str = "#ffffff",
+    text_fill: str = colors.COLOR_WHITE,
     pad_x: int = 22,
     pad_y: int = 12,
     radius: int = 22,
@@ -596,7 +596,11 @@ def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
     """
     from .captions import _setmana_label
 
-    accent = "#0047ba" if tipus == "nous_albums" else "#cf3339"
+    accent = (
+        colors.COLOR_NOVETATS_ALBUMS
+        if tipus == "nous_albums"
+        else colors.COLOR_NOVETATS_SINGLES
+    )
     label = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"
 
     img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
@@ -754,7 +758,7 @@ def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image
         y=44,
         text="Nous singles",
         font=f_h,
-        fill="#cf3339",
+        fill=colors.COLOR_NOVETATS_SINGLES,
         text_fill=colors.COLOR_WHITE,
         pad_x=20,
         pad_y=10,
@@ -762,7 +766,11 @@ def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image
     )
 
     # Accent rule under the header.
-    d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill="#cf3339")
+    d.rounded_rectangle(
+        (60, 130, FEED_W - 60, 138),
+        radius=4,
+        fill=colors.COLOR_NOVETATS_SINGLES,
+    )
 
     # May-2026 readability v3 pass — mirror `_feed_list_slide`. Same
     # row_h/list_top, but the song title gets bumped 28 → 40 pt and

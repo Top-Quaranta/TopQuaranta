@@ -12,8 +12,8 @@
  */
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
+import useApi from '../hooks/useApi'
 import {
   Section, TerritoriBadge,
   TERR_COLORS, TERRITORI_NOM,
@@ -137,39 +137,21 @@ export default function ArtistesPage() {
     sort:      params.get('sort')      || 'nom',
   }
 
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [qDraft, setQDraft] = useState(q)
-
   useEffect(() => { setQDraft(q) }, [q])
 
-  // Fetch results whenever the URL state changes.
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    const qs = new URLSearchParams()
-    if (q) qs.set('q', q)
-    for (const [k, v] of Object.entries(applied)) {
-      if (v) qs.set(k, v)
-    }
-    if (page > 1) qs.set('page', String(page))
-    // Drop the default `sort=nom` from the URL — it's the natural
-    // state, no need to persist it.
-    if (applied.sort && applied.sort !== 'nom') {
-      qs.set('sort', applied.sort)
-    } else {
-      qs.delete('sort')
-    }
-    qs.set('per_page', '40')
-    api.get(`/artistes/?${qs}`)
-      .then(setData)
-      .catch(e => setError(e.message || 'Error'))
-      .finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, applied.territori, applied.comarca, applied.municipi,
-      applied.amb_dones, applied.nou, applied.al_top, applied.genere,
-      applied.sort, page])
+  // Build the path so useApi keys cancellation+refetch off it. No
+  // need to enumerate filters as deps — they're encoded into `path`.
+  const _qs = new URLSearchParams()
+  if (q) _qs.set('q', q)
+  for (const [k, v] of Object.entries(applied)) {
+    if (v) _qs.set(k, v)
+  }
+  if (page > 1) _qs.set('page', String(page))
+  // `sort=nom` is the default — keep the URL clean.
+  if (applied.sort && applied.sort !== 'nom') _qs.set('sort', applied.sort)
+  _qs.set('per_page', '40')
+  const { data, error, loading } = useApi(`/artistes/?${_qs}`)
 
   // Apply a filter set (from FilterPanel) into URL params, dropping
   // empty values + the default sort and resetting pagination.

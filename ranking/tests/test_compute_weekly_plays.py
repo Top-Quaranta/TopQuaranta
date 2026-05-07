@@ -20,6 +20,12 @@ from ranking.algorisme import _compute_weekly_plays
 class _Senyal:
     data: date
     lastfm_playcount: int | None
+    # Track identity at sample time. Required so the track-switch
+    # guard (added 2026-05-08 after the Pau Vallvé / Sopa de Cabra /
+    # Smoking Souls live-album spike) can compare baseline to latest
+    # and refuse the delta when Last.fm has flipped to a different
+    # recording.
+    lastfm_returned_track: str = ""
 
 
 @dataclass
@@ -139,3 +145,91 @@ def test_no_release_date_no_baseline_returns_zero():
     canco = _Canco(data_llancament=None)
     signals = [_Senyal(date(2026, 5, 7), 1000)]
     assert _compute_weekly_plays(canco, signals, today) == 0.0
+
+
+# ── Track-switch guard (2026-05-08) ────────────────────────────────
+
+
+def test_track_switch_blocks_baseline_branch_2():
+    """The Pau Vallvé / Sopa de Cabra / Smoking Souls live-album
+    spike: 13 days at pc=3 against `lastfm_returned_track="X (Live)"`,
+    then today's signal returns pc=6906 against
+    `lastfm_returned_track="X"` (the studio version Last.fm fell back
+    to). Without the guard, the delta would be 6 903 phantom plays;
+    with it, the baseline is rejected as a different recording and
+    the function falls through to branch (4) → 0.
+    """
+    today = date(2026, 5, 7)
+    canco = _Canco(data_llancament=date(2024, 1, 1))  # not a fresh release
+    signals = [
+        _Senyal(date(2026, 4, 30), 3, "Guarda'm l'aire (en directe)"),
+        _Senyal(date(2026, 5, 7), 6906, "Guarda'm l'aire"),
+    ]
+    assert _compute_weekly_plays(canco, signals, today) == 0.0
+
+
+def test_same_track_baseline_still_used():
+    """Sanity: when `lastfm_returned_track` matches between baseline
+    and latest, the delta is honoured. Same shape as the previous
+    test but with consistent track identity."""
+    today = date(2026, 5, 7)
+    canco = _Canco(data_llancament=date(2024, 1, 1))
+    signals = [
+        _Senyal(date(2026, 4, 30), 100, "Buguenvíl·lies (Live)"),
+        _Senyal(date(2026, 5, 7), 250, "Buguenvíl·lies (Live)"),
+    ]
+    # delta = 150, gap = 7 d → 150 plays
+    assert _compute_weekly_plays(canco, signals, today) == 150.0
+
+
+def test_track_switch_blocks_remasteritzada():
+    """Enemic Interior case (caught 2026-05-08): `"X (Remasteritzada)"`
+    baseline against `"X"` latest. The track-identity normaliser
+    keeps the parenthetical intact (only case + accents + punctuation
+    collapse to whitespace), so the two strings remain distinct and
+    the delta is rejected.
+    """
+    today = date(2026, 5, 7)
+    canco = _Canco(data_llancament=date(2024, 1, 1))
+    signals = [
+        _Senyal(date(2026, 4, 30), 30, "Camisa de Força (Remasteritzada)"),
+        _Senyal(date(2026, 5, 7), 7600, "Camisa de Força"),
+    ]
+    assert _compute_weekly_plays(canco, signals, today) == 0.0
+
+
+def test_track_switch_with_window_match_falls_back_to_branch_3():
+    """When branch 2 has a match-track baseline AND a different-track
+    candidate within window, the match-track wins. When only the
+    different-track exists in window, branch 2 returns nothing and
+    branch 3 looks for older same-track data."""
+    today = date(2026, 5, 7)
+    canco = _Canco(data_llancament=date(2024, 1, 1))
+    signals = [
+        # 14 d back — same track, would qualify for branch 3
+        _Senyal(date(2026, 4, 23), 50, "Vida (en directe)"),
+        # 7 d back — DIFFERENT track (Last.fm flipped temporarily)
+        _Senyal(date(2026, 4, 30), 6000, "Vida"),
+        # today — back to live
+        _Senyal(date(2026, 5, 7), 60, "Vida (en directe)"),
+    ]
+    # Branch 2 candidates window = [-9d, -5d]: only the 4-30 row,
+    # which is a different track → filtered. Branch 3 finds the 4-23
+    # same-track row. delta = 60 - 50 = 10 over 14 d → 5.0/week.
+    assert _compute_weekly_plays(canco, signals, today) == 5.0
+
+
+def test_legacy_signal_with_empty_returned_track_falls_through():
+    """Pre-2026 SenyalDiari rows had `lastfm_returned_track` empty
+    by default. The guard must NOT punish them (fall back to legacy
+    behaviour: trust the baseline) — otherwise the algorithm goes
+    silent overnight on an old DB."""
+    today = date(2026, 5, 7)
+    canco = _Canco(data_llancament=date(2024, 1, 1))
+    signals = [
+        _Senyal(date(2026, 4, 30), 100, ""),  # legacy: track unknown
+        _Senyal(date(2026, 5, 7), 200, ""),
+    ]
+    # Delta = 100, gap = 7 d → 100 plays. No track filter applied
+    # because `ref_track_n` is empty.
+    assert _compute_weekly_plays(canco, signals, today) == 100.0

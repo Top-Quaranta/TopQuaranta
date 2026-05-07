@@ -35,6 +35,7 @@ FRA / ALG / CAR) plus literal ALT (artists from outside the PPCC).
 from __future__ import annotations
 
 import logging
+import unicodedata
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
@@ -322,6 +323,50 @@ def _compute_weekly_plays(
     if canco.data_llancament and canco.data_llancament > today - timedelta(days=7):
         return max(0.0, float(playcount_today))
 
+    # Track-switch guard (2026-05-08): a baseline is only valid if it
+    # was sampled against the SAME recording the latest signal points
+    # at. When Last.fm's autocorrect/fallback shifts which track URL
+    # answers our query (live → studio, remix → original, etc.), the
+    # raw playcount delta no longer represents weekly activity — it's
+    # the lifetime gap between two different recordings, which can
+    # easily inflate a 1-play live track to 30 000 phantom plays in a
+    # single day. Caught 2026-05-08: 53 cançons (Pau Vallvé live,
+    # Sopa de Cabra live, Smoking Souls live, Enemic Interior
+    # remasteritzades, etc.) all spiked overnight when Last.fm started
+    # collapsing variant queries onto the main recording. Filtering
+    # baseline candidates by normalised `lastfm_returned_track` keeps
+    # the delta honest; cançons with no matching baseline fall through
+    # to the no-data branch (4) and return 0 until SenyalDiari
+    # accumulates a fresh baseline against the new track identity.
+    #
+    # We deliberately use a track-identity normaliser (case + accents
+    # + punctuation collapsed to spaces) rather than the
+    # `_normalize_track` helper from `ingesta.clients.lastfm`, which
+    # is designed for retry queries and aggressively strips
+    # `(Live)` / `(Remaster)` / `(feat. X)` parentheticals. That
+    # stripping is the wrong semantics here — we WANT to distinguish
+    # live from studio recordings, the whole point of the guard.
+
+    def _track_identity(s: str) -> str:
+        if not s:
+            return ""
+        s = unicodedata.normalize("NFD", s)
+        s = "".join(c for c in s if not unicodedata.combining(c))
+        s = s.lower()
+        s = "".join(c if c.isalnum() or c.isspace() else " " for c in s)
+        return " ".join(s.split())
+
+    ref_track_n = _track_identity(latest.lastfm_returned_track or "")
+
+    def _same_recording(s: SenyalDiari) -> bool:
+        if not ref_track_n:
+            # We don't have a track identity to compare; fall back to
+            # the legacy behaviour (no filter). Happens for very old
+            # SenyalDiari rows that predate the `lastfm_returned_track`
+            # column being populated.
+            return True
+        return _track_identity(s.lastfm_returned_track or "") == ref_track_n
+
     # 2) Preferred: rolling 7-day delta with ±window.
     target = today - timedelta(days=7)
     window_lo = today - timedelta(days=7 + _WEEK_WINDOW_DAYS)
@@ -332,6 +377,7 @@ def _compute_weekly_plays(
         if s is not latest
         and s.lastfm_playcount is not None
         and window_lo <= s.data <= window_hi
+        and _same_recording(s)
     ]
     if candidates:
         baseline = min(candidates, key=lambda s: abs((s.data - target).days))
@@ -346,6 +392,7 @@ def _compute_weekly_plays(
         if s is not latest
         and s.lastfm_playcount is not None
         and s.data <= today - timedelta(days=4)
+        and _same_recording(s)
     ]
     if older:
         baseline = older[-1]

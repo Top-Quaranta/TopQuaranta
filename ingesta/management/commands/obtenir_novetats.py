@@ -52,36 +52,33 @@ def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
     return HistorialRevisio.objects.filter(decisio="rebutjada").filter(q).exists()
 
 
-def _get_or_create_artista(deezer_id: int, name: str) -> Artista | None:
-    """Look up artist by Deezer ID (via ArtistaDeezer), or create new."""
+def _lookup_artista_by_deezer(deezer_id: int) -> Artista | None:
+    """Return an existing Artista that has `deezer_id` in any of its
+    `ArtistaDeezer` rows, or None. Doesn't create anything — pendent
+    creation has been moved to `aprovar_canco` (see
+    `Canco.contributors_raw` docstring)."""
+    if not deezer_id:
+        return None
     ad = (
         ArtistaDeezer.objects.filter(deezer_id=deezer_id)
         .select_related("artista")
         .first()
     )
-    if ad:
-        return ad.artista
-    try:
-        artista = Artista.objects.create(
-            nom=name,
-            lastfm_nom=name,
-            aprovat=False,
-            auto_descobert=True,
-            pendent_review=True,
-            font_descoberta="deezer_contributor",
-        )
-        ArtistaDeezer.objects.get_or_create(
-            deezer_id=deezer_id,
-            defaults={"artista": artista, "principal": True},
-        )
-        return artista
-    except IntegrityError:
-        ad = (
-            ArtistaDeezer.objects.filter(deezer_id=deezer_id)
-            .select_related("artista")
-            .first()
-        )
-        return ad.artista if ad else None
+    return ad.artista if ad else None
+
+
+def _defer_contributor(canco: Canco, deezer_id: int, name: str, role: str) -> None:
+    """Append a contributor to `canco.contributors_raw` for later
+    materialisation by `processar_collaboradors_pendents` on
+    approval. No-ops if the entry is already present (dedup by
+    deezer_id). Doesn't save — caller does it."""
+    if not deezer_id:
+        return
+    raw = list(canco.contributors_raw or [])
+    if any(entry.get("deezer_id") == deezer_id for entry in raw):
+        return
+    raw.append({"deezer_id": deezer_id, "name": name or "", "role": role})
+    canco.contributors_raw = raw
 
 
 class Command(BaseCommand):
@@ -366,26 +363,46 @@ class Command(BaseCommand):
         # contributor resolution below raises.
         try:
             contributors = data.get("contributors", [])
+            main_deezer_ids = set(
+                canco.artista.deezer_ids.values_list("deezer_id", flat=True)
+            )
             if contributors:
                 main = contributors[0]
                 main_id = main.get("id")
                 main_name = main.get("name", "")
-                if main_id and main_id != canco.artista.deezer_id_principal:
-                    real_artista = _get_or_create_artista(main_id, main_name)
+                if main_id and main_id not in main_deezer_ids:
+                    # Deezer disagrees about who the main artist is.
+                    # Existing Artista mapped to that Deezer ID (if any)
+                    # gets reused as the canco's main; otherwise we keep
+                    # the current canco.artista and defer creation —
+                    # staff will resolve at verification.
+                    real_artista = _lookup_artista_by_deezer(main_id)
                     if real_artista:
                         canco.artista = real_artista
+                    else:
+                        _defer_contributor(canco, main_id, main_name, "main")
 
-                # Add secondary contributors
+                # Secondary contributors — reuse existing Artistas as
+                # `artistes_col` immediately; defer net-new ones.
                 for c in contributors[1:]:
                     c_id = c.get("id")
                     c_name = c.get("name", "")
-                    if c_id and c_id != canco.artista.deezer_id_principal:
-                        collab = _get_or_create_artista(c_id, c_name)
-                        if collab:
-                            canco.artistes_col.add(collab)
+                    if not c_id or c_id in main_deezer_ids:
+                        continue
+                    collab = _lookup_artista_by_deezer(c_id)
+                    if collab and collab.pk != canco.artista_id:
+                        canco.artistes_col.add(collab)
+                    elif not collab:
+                        _defer_contributor(canco, c_id, c_name, "secondary")
 
             canco.save(
-                update_fields=["isrc", "preview_url", "artista_id", "data_llancament"]
+                update_fields=[
+                    "isrc",
+                    "preview_url",
+                    "artista_id",
+                    "data_llancament",
+                    "contributors_raw",
+                ]
             )
         finally:
             classificar_i_guardar(canco)
@@ -449,9 +466,12 @@ class Command(BaseCommand):
                         existing.artista.deezer_ids.values_list("deezer_id", flat=True)
                     )
                     if main_id and main_id not in main_deezer_ids:
-                        collab = _get_or_create_artista(main_id, main_name)
+                        collab = _lookup_artista_by_deezer(main_id)
                         if collab and collab.pk != existing.artista_id:
                             existing.artistes_col.add(collab)
+                        elif not collab:
+                            _defer_contributor(existing, main_id, main_name, "main")
+                            existing.save(update_fields=["contributors_raw"])
                 logger.info(
                     "ISRC %s: merged deezer_id=%s into existing canco id=%s",
                     isrc,
@@ -463,9 +483,11 @@ class Command(BaseCommand):
         # Resolve main artist. Same multi-Deezer-ID guard as above:
         # if any of the album.artista's Deezer profiles is the main
         # contributor, keep the album's artista — don't create a
-        # phantom duplicate.
+        # phantom duplicate. Net-new "main" disagreements are
+        # deferred via `contributors_raw` (see helper docstring).
         contributors = track_data.get("contributors", [])
         artista = album.artista
+        deferred_main: tuple[int, str] | None = None
         if contributors:
             main = contributors[0]
             main_id = main.get("id")
@@ -474,9 +496,11 @@ class Command(BaseCommand):
                 artista.deezer_ids.values_list("deezer_id", flat=True)
             )
             if main_id and main_id not in main_deezer_ids:
-                resolved = _get_or_create_artista(main_id, main_name)
+                resolved = _lookup_artista_by_deezer(main_id)
                 if resolved:
                     artista = resolved
+                else:
+                    deferred_main = (main_id, main_name)
 
         # Fix album date
         album_date_str = track_data.get("album_release_date", "")
@@ -515,14 +539,27 @@ class Command(BaseCommand):
         # as tracks with ml_classe=''. classificar_i_guardar is
         # idempotent, so running it once here is fine.
         try:
+            dirty = False
+            if deferred_main:
+                _defer_contributor(canco, deferred_main[0], deferred_main[1], "main")
+                dirty = True
             if contributors:
+                main_deezer_ids = set(
+                    canco.artista.deezer_ids.values_list("deezer_id", flat=True)
+                )
                 for c in contributors[1:]:
                     c_id = c.get("id")
                     c_name = c.get("name", "")
-                    if c_id and c_id != artista.deezer_id_principal:
-                        collab = _get_or_create_artista(c_id, c_name)
-                        if collab:
-                            canco.artistes_col.add(collab)
+                    if not c_id or c_id in main_deezer_ids:
+                        continue
+                    collab = _lookup_artista_by_deezer(c_id)
+                    if collab and collab.pk != canco.artista_id:
+                        canco.artistes_col.add(collab)
+                    elif not collab:
+                        _defer_contributor(canco, c_id, c_name, "secondary")
+                        dirty = True
+            if dirty:
+                canco.save(update_fields=["contributors_raw"])
         finally:
             classificar_i_guardar(canco)
         return True
@@ -553,6 +590,11 @@ class Command(BaseCommand):
                 tipus=tipus,
                 imatge_url=album_data.get("cover_xl", ""),
                 source_deezer_id=source_deezer_id,
+                # Deezer's `album.label` is the record-label string
+                # ("Halley Records", autoedit names, etc.). Useful as
+                # ML signal + staff-curation cue. Empty when Deezer
+                # omits the field.
+                label=(album_data.get("label") or "").strip()[:200],
             )
         except IntegrityError:
             return False

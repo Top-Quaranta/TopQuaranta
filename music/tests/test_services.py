@@ -192,6 +192,94 @@ class TestAprovarCanco:
         ).exists()
 
 
+# ── processar_collaboradors_pendents ────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestProcessarCollaboradorsPendents:
+    @patch("web.seo.indexnow.notify_canco")
+    def test_creates_pendent_artista_from_raw_on_approve(self, _ix):
+        """The deferred contributor materialises into a pendent
+        Artista + ArtistaDeezer + artistes_col only when the
+        canco is approved."""
+        a = _mk_artista()
+        c = _mk_canco(
+            a,
+            verificada=False,
+            contributors_raw=[
+                {"deezer_id": 9991, "name": "Producer Foo", "role": "secondary"}
+            ],
+        )
+        aprovar_canco(c)
+        c.refresh_from_db()
+        assert c.contributors_raw == []
+        # Pendent created.
+        producer = Artista.objects.get(nom="Producer Foo")
+        assert producer.aprovat is False
+        assert producer.pendent_review is True
+        assert producer.font_descoberta == "deezer_contributor"
+        assert ArtistaDeezer.objects.filter(deezer_id=9991, artista=producer).exists()
+        assert producer in c.artistes_col.all()
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_reuses_existing_artista_by_deezer_id(self, _ix):
+        """A contributor whose Deezer ID already maps to an existing
+        Artista must NOT create a duplicate; it links via
+        artistes_col instead."""
+        a = _mk_artista()
+        existing = _mk_artista(nom="Existing Featuring")
+        ArtistaDeezer.objects.create(artista=existing, deezer_id=4242, principal=True)
+        c = _mk_canco(
+            a,
+            verificada=False,
+            contributors_raw=[
+                {"deezer_id": 4242, "name": "Some Other Name", "role": "secondary"}
+            ],
+        )
+        aprovar_canco(c)
+        c.refresh_from_db()
+        assert c.contributors_raw == []
+        assert Artista.objects.filter(nom="Some Other Name").count() == 0
+        assert existing in c.artistes_col.all()
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_skips_self_collab(self, _ix):
+        """A contributor whose Deezer ID is one of the canco's
+        artista's own profiles is a self-collab — skip silently."""
+        a = _mk_artista()
+        ArtistaDeezer.objects.create(artista=a, deezer_id=11, principal=True)
+        ArtistaDeezer.objects.create(artista=a, deezer_id=22, principal=False)
+        c = _mk_canco(
+            a,
+            verificada=False,
+            contributors_raw=[{"deezer_id": 22, "name": a.nom, "role": "main"}],
+        )
+        aprovar_canco(c)
+        c.refresh_from_db()
+        assert c.contributors_raw == []
+        assert c.artistes_col.count() == 0
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_no_pendent_creation_when_canco_rebutjada(self, _ix):
+        """Songs that get rejected never enter the verified path —
+        their `contributors_raw` stays untouched, no pendents bloom.
+        This is the whole point of the deferral."""
+        from music.services import rebutjar_canco
+
+        a = _mk_artista()
+        c = _mk_canco(
+            a,
+            verificada=False,
+            contributors_raw=[
+                {"deezer_id": 7777, "name": "Wrong Featuring", "role": "secondary"}
+            ],
+        )
+        rebutjar_canco(c, "album_incorrecte")
+        # No pendent created from the contributors_raw.
+        assert not Artista.objects.filter(nom="Wrong Featuring").exists()
+        assert not ArtistaDeezer.objects.filter(deezer_id=7777).exists()
+
+
 # ── rebutjar_album / rebutjar_artista ──────────────────────────────
 
 

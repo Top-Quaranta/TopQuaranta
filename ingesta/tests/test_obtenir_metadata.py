@@ -283,3 +283,78 @@ class TestIngestarMetadataDeezer:
         artista.refresh_from_db()
         assert artista.deezer_id_principal == 98469
         assert Canco.objects.count() == 1
+
+    @patch("ingesta.management.commands.obtenir_metadata.deezer")
+    def test_album_label_captured_from_deezer(self, mock_deezer):
+        """Deezer's `album.label` is now stored on `Album.label`.
+        Auditat 2026-05-07 — abans no es llegia ni guardava."""
+        artista = _make_artista(deezer_id=98469)
+        album_with_label = {
+            **MOCK_ALBUM,
+            "label": "Halley Records",
+        }
+        mock_deezer.get_artist_albums.return_value = [album_with_label]
+        mock_deezer.get_album_tracks.return_value = [MOCK_TRACK]
+
+        call_command("obtenir_metadata", artista_id=artista.pk)
+
+        album = Album.objects.first()
+        assert album.label == "Halley Records"
+
+    @patch("ingesta.management.commands.obtenir_metadata.deezer")
+    def test_secondary_contributor_deferred_to_contributors_raw(self, mock_deezer):
+        """A new secondary contributor (Deezer ID we've never seen)
+        is no longer auto-created as `Artista(pendent_review=True)`.
+        Instead it lands on `Canco.contributors_raw` for materialisation
+        at verification time. See `Canco.contributors_raw` docstring."""
+        artista = _make_artista(deezer_id=98469)
+        track_with_contributor = {
+            **MOCK_TRACK,
+            "contributors": [
+                {"id": 98469, "name": "Zoo", "role": "Main"},
+                {"id": 88888, "name": "Producer Foo", "role": "Featured"},
+            ],
+        }
+        mock_deezer.get_artist_albums.return_value = [MOCK_ALBUM]
+        mock_deezer.get_album_tracks.return_value = [track_with_contributor]
+
+        call_command("obtenir_metadata", artista_id=artista.pk)
+
+        # No Artista created for "Producer Foo" — the deferral is the fix.
+        assert not Artista.objects.filter(nom="Producer Foo").exists()
+        # Instead the contributor is parked on the canco for later.
+        canco = Canco.objects.get(deezer_id=500)
+        assert canco.contributors_raw == [
+            {"deezer_id": 88888, "name": "Producer Foo", "role": "secondary"}
+        ]
+
+    @patch("ingesta.management.commands.obtenir_metadata.deezer")
+    def test_secondary_contributor_with_known_deezer_id_attaches_immediately(
+        self, mock_deezer
+    ):
+        """When the contributor's Deezer ID already maps to an Artista
+        in our DB, attach via artistes_col now — only net-new
+        contributors get deferred."""
+        artista = _make_artista(deezer_id=98469)
+        # Pre-existing collaborator we already track.
+        existing = Artista.objects.create(
+            nom="Existing Featuring",
+            lastfm_nom="Existing Featuring",
+            aprovat=True,
+        )
+        ArtistaDeezer.objects.create(artista=existing, deezer_id=4242, principal=True)
+        track = {
+            **MOCK_TRACK,
+            "contributors": [
+                {"id": 98469, "name": "Zoo", "role": "Main"},
+                {"id": 4242, "name": "Existing Featuring", "role": "Featured"},
+            ],
+        }
+        mock_deezer.get_artist_albums.return_value = [MOCK_ALBUM]
+        mock_deezer.get_album_tracks.return_value = [track]
+
+        call_command("obtenir_metadata", artista_id=artista.pk)
+
+        canco = Canco.objects.get(deezer_id=500)
+        assert canco.contributors_raw == []
+        assert existing in canco.artistes_col.all()

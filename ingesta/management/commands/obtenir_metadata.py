@@ -346,6 +346,9 @@ class Command(BaseCommand):
             "data_llancament": data.get("release_date"),
             "tipus": tipus,
             "imatge_url": data.get("cover_xl", ""),
+            # Deezer's `album.label` (record-label string). See
+            # `Album.label` docstring for usage. Empty when omitted.
+            "label": (data.get("label") or "").strip()[:200],
         }
         if source_deezer_id is not None:
             defaults["source_deezer_id"] = source_deezer_id
@@ -366,21 +369,28 @@ class Command(BaseCommand):
 
     def _resolve_main_artist(
         self, artista: Artista, contributors: list[dict]
-    ) -> Artista:
-        """
-        Determine the real main artist from Deezer contributors.
-        The first contributor (or the one with role="Main") is the real main artist.
-        If it differs from the album's artist, get or create it.
+    ) -> tuple[Artista, tuple[int, str] | None]:
+        """Determine the real main artist from Deezer contributors.
+
+        Returns `(artista_to_use, deferred_main)` where
+        `deferred_main` is `(deezer_id, name)` when Deezer's main
+        contributor doesn't match the album's artista AND no Artista
+        with that Deezer ID exists yet — caller stores it on
+        `Canco.contributors_raw` for later materialisation by
+        `aprovar_canco`. Avoids creating pendents from cançons that
+        end up rebutjades (76 % of rejection cases per 2026-05-07
+        audit). Existing ArtistaDeezer matches are reused immediately.
         """
         if not contributors:
-            return artista
+            return artista, None
 
         main = contributors[0]
         main_id = main.get("id")
         main_name = main.get("name", "")
 
-        if not main_id or main_id == artista.deezer_id_principal:
-            return artista
+        all_deezer_ids = set(artista.deezer_ids.values_list("deezer_id", flat=True))
+        if not main_id or main_id in all_deezer_ids:
+            return artista, None
 
         ad = (
             ArtistaDeezer.objects.filter(deezer_id=main_id)
@@ -388,26 +398,10 @@ class Command(BaseCommand):
             .first()
         )
         if ad:
-            return ad.artista
+            return ad.artista, None
 
-        new_artista = Artista.objects.create(
-            nom=main_name,
-            lastfm_nom=main_name,
-            aprovat=False,
-            auto_descobert=True,
-            pendent_review=True,
-            font_descoberta="deezer_contributor",
-        )
-        ArtistaDeezer.objects.get_or_create(
-            deezer_id=main_id,
-            defaults={"artista": new_artista, "principal": True},
-        )
-        logger.info(
-            "Created main artist '%s' (deezer_id=%d) from track contributor",
-            main_name,
-            main_id,
-        )
-        return new_artista
+        # Net-new "main" — defer creation until the canco is verified.
+        return artista, (main_id, main_name)
 
     def _upsert_track(
         self, artista: Artista, album: Album, data: dict, force: bool
@@ -427,7 +421,7 @@ class Command(BaseCommand):
 
         # Resolve the real main artist from contributors
         contributors = data.get("contributors", [])
-        real_artista = self._resolve_main_artist(artista, contributors)
+        real_artista, deferred_main = self._resolve_main_artist(artista, contributors)
 
         defaults = {
             "nom": titlecase_catala(data["title"]),
@@ -506,7 +500,7 @@ class Command(BaseCommand):
         # if adding collaborators below raises. See the equivalent
         # pattern in ingesta/management/commands/obtenir_novetats.py.
         try:
-            if (created or force) and contributors:
+            if (created or force) and (contributors or deferred_main):
                 # Build the set of *all* Deezer IDs that map to the
                 # main artista (not just the principal). When an
                 # artista has several profiles (e.g. autoedit + label),
@@ -515,6 +509,19 @@ class Command(BaseCommand):
                 main_deezer_ids = set(
                     real_artista.deezer_ids.values_list("deezer_id", flat=True)
                 )
+                dirty = False
+                if deferred_main:
+                    raw = list(canco.contributors_raw or [])
+                    if not any(e.get("deezer_id") == deferred_main[0] for e in raw):
+                        raw.append(
+                            {
+                                "deezer_id": deferred_main[0],
+                                "name": deferred_main[1],
+                                "role": "main",
+                            }
+                        )
+                        canco.contributors_raw = raw
+                        dirty = True
                 for contributor in contributors:
                     c_id = contributor.get("id")
                     c_name = contributor.get("name", "")
@@ -527,25 +534,26 @@ class Command(BaseCommand):
                     )
                     if ad:
                         collab = ad.artista
+                        if collab.pk != canco.artista_id:
+                            canco.artistes_col.add(collab)
                     else:
-                        collab = Artista.objects.create(
-                            nom=c_name,
-                            lastfm_nom=c_name,
-                            aprovat=False,
-                            auto_descobert=True,
-                            pendent_review=True,
-                            font_descoberta="collaborador",
-                        )
-                        ArtistaDeezer.objects.get_or_create(
-                            deezer_id=c_id,
-                            defaults={"artista": collab, "principal": True},
-                        )
-                        logger.info(
-                            "Created collaborator Artista '%s' (deezer_id=%d)",
-                            c_name,
-                            c_id,
-                        )
-                    canco.artistes_col.add(collab)
+                        # Defer pendent-Artista creation until the
+                        # canco is verified (see Canco.contributors_raw
+                        # docstring + music.services.processar_
+                        # collaboradors_pendents).
+                        raw = list(canco.contributors_raw or [])
+                        if not any(e.get("deezer_id") == c_id for e in raw):
+                            raw.append(
+                                {
+                                    "deezer_id": c_id,
+                                    "name": c_name or "",
+                                    "role": "secondary",
+                                }
+                            )
+                            canco.contributors_raw = raw
+                            dirty = True
+                if dirty:
+                    canco.save(update_fields=["contributors_raw"])
         finally:
             if created or force:
                 from music.ml import classificar_i_guardar

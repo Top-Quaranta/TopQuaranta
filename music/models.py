@@ -791,6 +791,16 @@ class Album(models.Model):
         ),
     )
 
+    # Record label as reported by Deezer's `album.label` field (e.g.
+    # "Halley Records", "Bankrobber", "Producciones Peligrosas",
+    # autoedit names). Stored verbatim — Deezer keeps the raw label
+    # string, no normalisation. Useful as ML signal (`same_label_as_
+    # approved`, `label_compartit_amb_PPCC`) and as a staff-curation
+    # cue. Populated by `obtenir_metadata` + `obtenir_novetats` when
+    # creating/updating Albums; empty string on legacy rows or when
+    # Deezer omits the field.
+    label = models.CharField(max_length=200, blank=True, db_index=True)
+
     # MusicBrainz cross-reference. `mbrainz_confirmed=True` means MB has a
     # release-group attributed to the Artista's MBID that matches this album.
     mb_release_group_id = models.CharField(max_length=36, blank=True, db_index=True)
@@ -914,6 +924,26 @@ class Canco(models.Model):
         db_index=True,
         help_text="False = pending admin review. Only verified tracks enter the ranking.",
     )
+    # Raw Deezer contributors that did NOT match the canco's main
+    # `artista` and didn't already exist in our DB by `deezer_id`.
+    # Populated by `obtenir_novetats._create_track`,
+    # `obtenir_novetats._backfill_isrc`, and
+    # `obtenir_metadata._upsert_track` instead of immediately creating
+    # `Artista(pendent_review=True)` rows.
+    #
+    # This deferral is the 2026-05-07 fix for the dominant rejection
+    # cause: 76 % of song rebuigs are `album_incorrecte` — Deezer
+    # name-collapsed two homonymous artists into a single profile, and
+    # every track from the wrong "Dept" dragged a chain of unrelated
+    # collaborators into our pending review queue. By postponing the
+    # pendent-Artista creation until staff verifies the canco, we
+    # avoid creating pendents from cançons that end up rebutjades —
+    # eliminating ~76 % of the queue noise outright.
+    #
+    # Shape: `[{"name": str, "deezer_id": int, "role": "main"|"secondary"}]`.
+    # Processed by `music.services.processar_collaboradors_pendents`
+    # on `aprovar_canco` / `aprovar_canco_auto_ml`, then cleared.
+    contributors_raw = models.JSONField(default=list, blank=True)
     ml_classe = models.CharField(max_length=1, blank=True, db_index=True)
     ml_confianca = models.FloatField(null=True, blank=True)
     # Whisper large-v3 language identification over the Deezer preview.

@@ -126,17 +126,90 @@ def _try_auto_unlink_homonym_deezer(
     return True
 
 
+def processar_collaboradors_pendents(canco: Canco) -> int:
+    """Materialise `canco.contributors_raw` into real Artista rows.
+
+    Walks the deferred contributors list captured during ingest and,
+    for each entry whose `deezer_id` doesn't already map to an
+    Artista, creates a new `Artista(pendent_review=True,
+    auto_descobert=True, font_descoberta="deezer_contributor")`
+    plus the matching `ArtistaDeezer` row. All resulting Artistas
+    (newly created + already-existing matched-by-Deezer-ID) are
+    added to `canco.artistes_col`. The list is then cleared.
+
+    Return: number of new Artista rows created.
+
+    Called from `aprovar_canco` / `aprovar_canco_auto_ml` so pendents
+    are only created when staff (or ML auto-approval) confirms the
+    canco belongs in our catalog. See `Canco.contributors_raw`
+    docstring for context (2026-05-07 audit: 76 % of song rebuigs
+    are `album_incorrecte`; deferring pendent creation eliminates
+    that share of the staff-review queue noise).
+    """
+    raw = list(canco.contributors_raw or [])
+    if not raw:
+        return 0
+
+    # Late import to avoid the music ↔ ingest circular at startup.
+    from music.models import ArtistaDeezer
+
+    created = 0
+    main_deezer_ids = set(canco.artista.deezer_ids.values_list("deezer_id", flat=True))
+    for entry in raw:
+        c_id = entry.get("deezer_id")
+        c_name = (entry.get("name") or "").strip()
+        if not c_id or c_id in main_deezer_ids:
+            continue
+        ad = (
+            ArtistaDeezer.objects.filter(deezer_id=c_id)
+            .select_related("artista")
+            .first()
+        )
+        if ad:
+            collab = ad.artista
+        else:
+            collab = Artista.objects.create(
+                nom=c_name or f"deezer:{c_id}",
+                lastfm_nom=c_name,
+                aprovat=False,
+                auto_descobert=True,
+                pendent_review=True,
+                font_descoberta="deezer_contributor",
+            )
+            ArtistaDeezer.objects.get_or_create(
+                deezer_id=c_id,
+                defaults={"artista": collab, "principal": True},
+            )
+            created += 1
+            logger.info(
+                "Materialised pending collab Artista '%s' (deezer_id=%d) from canco %d",
+                c_name,
+                c_id,
+                canco.pk,
+            )
+        if collab.pk != canco.artista_id:
+            canco.artistes_col.add(collab)
+
+    canco.contributors_raw = []
+    canco.save(update_fields=["contributors_raw"])
+    return created
+
+
 def aprovar_canco(canco: Canco) -> None:
     """Approve a single track: record historial, set verificada=True.
 
-    Also pings IndexNow so Bing/Yandex (and the rest of the
-    consortium) crawl the new public URL within hours instead of
-    waiting for our weekly sitemap recrawl. Fail-open — never blocks
-    the staff flow.
+    Also materialises any deferred `contributors_raw` into real
+    Artista rows + `artistes_col` links — see
+    `processar_collaboradors_pendents` for context.
+
+    Pings IndexNow so Bing/Yandex (and the rest of the consortium)
+    crawl the new public URL within hours instead of waiting for our
+    weekly sitemap recrawl. Fail-open — never blocks the staff flow.
     """
     crear_historial(canco, "aprovada", "ok")
     canco.verificada = True
     canco.save(update_fields=["verificada"])
+    processar_collaboradors_pendents(canco)
     # Late import — avoids a circular dependency at app start
     # (web.seo.indexnow imports music models).
     from web.seo.indexnow import notify_canco
@@ -147,16 +220,18 @@ def aprovar_canco(canco: Canco) -> None:
 def aprovar_canco_auto_ml(canco: Canco) -> None:
     """ML auto-approval (A++ blind-trust path).
 
-    Same outcome as `aprovar_canco` but tags the historial entry with
-    `motiu="auto_ml"` so the training pipeline can filter these rows
-    out — otherwise the model would learn from its own decisions and
-    drift toward over-confidence.
+    Same outcome as `aprovar_canco` (including
+    `processar_collaboradors_pendents`) but tags the historial entry
+    with `motiu="auto_ml"` so the training pipeline can filter these
+    rows out — otherwise the model would learn from its own decisions
+    and drift toward over-confidence.
     """
     from .constants import MOTIU_AUTO_ML
 
     crear_historial(canco, "aprovada", MOTIU_AUTO_ML)
     canco.verificada = True
     canco.save(update_fields=["verificada"])
+    processar_collaboradors_pendents(canco)
     from web.seo.indexnow import notify_canco
 
     notify_canco(canco)

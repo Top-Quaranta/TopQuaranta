@@ -21,12 +21,12 @@ from pathlib import Path
 
 import requests
 
+from social.constants import HTTP_TIMEOUT_S as TIMEOUT_S
 from social.models import BlueskyAuth
 
 logger = logging.getLogger(__name__)
 
 PDS_BASE = "https://bsky.social"
-TIMEOUT_S = 60
 
 # Process-local session cache keyed by handle (so two consecutive
 # posts in the same cron run share one login).

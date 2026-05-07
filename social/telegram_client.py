@@ -23,12 +23,12 @@ import logging
 
 import requests
 
+from social.constants import HTTP_TIMEOUT_S as TIMEOUT_S
 from social.models import TelegramAuth
 
 logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.telegram.org"
-TIMEOUT_S = 60
 MEDIA_GROUP_MAX = 10
 CAPTION_MAX = 1024
 

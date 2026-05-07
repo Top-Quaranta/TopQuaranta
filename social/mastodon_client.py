@@ -17,13 +17,10 @@ from pathlib import Path
 
 import requests
 
+from social.constants import HTTP_TIMEOUT_S as TIMEOUT_S
 from social.models import MastodonAuth
 
 logger = logging.getLogger(__name__)
-
-# 60 s covers a slow toot upload comfortably without hanging the
-# cron longer than necessary.
-TIMEOUT_S = 60
 
 
 def _row() -> MastodonAuth | None:

@@ -22,8 +22,8 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import useApi from '../hooks/useApi'
 import MmIcon from '../components/MmIcon'
 import {
   Section, SectionHeader, TerritoriBadge, TrendCue,
@@ -114,10 +114,7 @@ function HeroSection() {
 /* ── Section 2 · Stats ─────────────────────────────────────────────── */
 
 function StatsSection() {
-  const [data, setData] = useState(null)
-  useEffect(() => {
-    api.get('/stats/').then(setData).catch(() => setData(null))
-  }, [])
+  const { data } = useApi('/stats/')
   // Labels avoid the internal jargon ("verificades", "aprovats") —
   // a visitor doesn't need to know the staff state machine.
   const items = [
@@ -185,11 +182,7 @@ function TopRow({ e }) {
 /* Top in two stacked-side columns of 5 each — keeps the section
  * vertically short while preserving the same 10 entries. */
 function TopList5x5() {
-  const [data, setData] = useState(null)
-  useEffect(() => {
-    api.get('/top/?territori=PPCC&oficial=true&limit=10')
-      .then(setData).catch(() => setData(null))
-  }, [])
+  const { data } = useApi('/top/?territori=PPCC&oficial=true&limit=10')
   const entries = data?.entries || []
   const left = entries.slice(0, 5)
   const right = entries.slice(5, 10)
@@ -216,10 +209,7 @@ function TopList5x5() {
  * in a row). Replaces the previous "nova entrada" + "artista
  * destacat" stack. */
 function CancoDestacadaCard() {
-  const [data, setData] = useState(null)
-  useEffect(() => {
-    api.get('/top/canco-destacada/').then(setData).catch(() => setData(null))
-  }, [])
+  const { data } = useApi('/top/canco-destacada/')
   const e = data?.entry
   if (!e) return null
   return (
@@ -286,12 +276,10 @@ function fmtMes(iso) {
 }
 
 function LlancamentsGrid() {
-  const [items, setItems] = useState([])
-  useEffect(() => {
-    api.get('/albums/?ordering=-data_llancament&amb_verificades=true&limit=10')
-      .then(d => setItems(d.results || []))
-      .catch(() => setItems([]))
-  }, [])
+  const { data } = useApi(
+    '/albums/?ordering=-data_llancament&amb_verificades=true&limit=10',
+  )
+  const items = data?.results || []
   if (items.length === 0) return null
   return (
     <ul className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -327,13 +315,9 @@ function LlancamentsGrid() {
  * square cover size as the album tiles so the two halves feel
  * visually balanced. 3 entries on top of each other. */
 function DescobertaColumn() {
-  const [items, setItems] = useState([])
-  useEffect(() => {
-    // 4 entries → 2×2 on desktop, matching the album cover size.
-    api.get('/artistes/descoberta/?limit=4')
-      .then(d => setItems(d.results || []))
-      .catch(() => setItems([]))
-  }, [])
+  // 4 entries → 2×2 on desktop, matching the album cover size.
+  const { data } = useApi('/artistes/descoberta/?limit=4')
+  const items = data?.results || []
   if (items.length === 0) return null
   return (
     <div>
@@ -414,17 +398,16 @@ function TerritoriFocusSection() {
     () => FOCUS_TERRITORIS[isoWeek(new Date()) % FOCUS_TERRITORIS.length],
     [],
   )
-  const [topData, setTopData] = useState(null)
-  const [count, setCount] = useState(null)
-
-  useEffect(() => {
-    setTopData(null); setCount(null)
-    api.get(`/top/?territori=${focusCodi}&oficial=true&limit=3`)
-      .then(setTopData).catch(() => setTopData(null))
-    api.get(`/artistes/?territori=${focusCodi}&per_page=1`)
-      .then(d => setCount(d.total ?? null))
-      .catch(() => setCount(null))
-  }, [focusCodi])
+  // Two parallel hook calls keyed off focusCodi — both refetch on
+  // territory change, both reset to null while loading (handled by
+  // useApi's path-keyed reset).
+  const { data: topData } = useApi(
+    `/top/?territori=${focusCodi}&oficial=true&limit=3`,
+  )
+  const { data: artistesPage } = useApi(
+    `/artistes/?territori=${focusCodi}&per_page=1`,
+  )
+  const count = artistesPage?.total ?? null
 
   const color = TERR_COLORS[focusCodi]
   const entries = topData?.entries || []
@@ -593,26 +576,29 @@ function RegistreCTACard() {
 
 function NoticiesSection() {
   const { profile } = useAuth()
-  const [pub, setPub] = useState(null)
-  const [intern, setIntern] = useState(null)
-  useEffect(() => {
-    if (profile) {
-      // Authenticated: load both feeds via the unified internal endpoint.
-      api.get('/comunitat/publicacions/?filtre=publiques&page=1')
-        .then(d => setPub((d.results || []).filter(p => p.estat === 'publicat').slice(0, 3)))
-        .catch(() => setPub([]))
-      api.get('/comunitat/publicacions/?filtre=internes&page=1')
-        .then(d => setIntern((d.results || []).filter(p => p.estat === 'publicat').slice(0, 3)))
-        .catch(() => setIntern([]))
-    } else {
-      // Anonymous: only the public feed is reachable. Internes column
-      // is replaced by the registration CTA below.
-      api.get('/comunitat/publicacions-publiques/?page=1')
-        .then(d => setPub((d.results || []).slice(0, 3)))
-        .catch(() => setPub([]))
-      setIntern([])
-    }
-  }, [profile])
+  // Authenticated path uses the unified internal endpoint (returns
+  // drafts/pending too, filtered out below). Anonymous path can only
+  // read publicacions-publiques (already filtered to published).
+  const pubPath = profile
+    ? '/comunitat/publicacions/?filtre=publiques&page=1'
+    : '/comunitat/publicacions-publiques/?page=1'
+  const internPath = profile
+    ? '/comunitat/publicacions/?filtre=internes&page=1'
+    : null
+  const { data: pubData } = useApi(pubPath)
+  const { data: internData } = useApi(internPath)
+  const _filterPub = (rows) =>
+    profile
+      ? rows.filter((p) => p.estat === 'publicat').slice(0, 3)
+      : rows.slice(0, 3)
+  const pub = pubData ? _filterPub(pubData.results || []) : null
+  const intern = profile
+    ? internData
+      ? (internData.results || [])
+          .filter((p) => p.estat === 'publicat')
+          .slice(0, 3)
+      : null
+    : []
   // For authenticated users we hide the section if both columns
   // end up empty. Anon visitors always see the section because the
   // CTA is a useful slot regardless.
@@ -668,7 +654,6 @@ function CompteEnrereSection() {
   // Tick every second so the seconds digit moves. Cheap re-render —
   // only this leaf component subscribes.
   const [now, setNow] = useState(() => new Date())
-  const [novetatsCount, setNovetatsCount] = useState(null)
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
@@ -676,12 +661,10 @@ function CompteEnrereSection() {
   }, [])
 
   // One-shot: pull the "X cançons noves" indicator from the same
-  // /stats/ payload the strip on top uses (cached 60 s on the server).
-  useEffect(() => {
-    api.get('/stats/')
-      .then(d => setNovetatsCount(d.cancons_noves_setmana ?? null))
-      .catch(() => setNovetatsCount(null))
-  }, [])
+  // /stats/ payload the strip on top uses (cached 60 s on the server,
+  // so the StatsSection above hits the same cache key on this page).
+  const { data: stats } = useApi('/stats/')
+  const novetatsCount = stats?.cancons_noves_setmana ?? null
 
   const published = topPublishedToday(now)
   const target = useMemo(() => nextSaturday9(now), [now])

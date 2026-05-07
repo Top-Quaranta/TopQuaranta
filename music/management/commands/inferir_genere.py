@@ -31,8 +31,10 @@ class Command(BaseCommand):
     help = "Infereix Artista.genere_canonical des dels tags Last.fm + MB."
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true")
-        parser.add_argument("--limit", type=int, default=None)
+        from music.management_helpers import add_dry_run, add_limit
+
+        add_dry_run(parser)
+        add_limit(parser)
 
     def handle(self, *args, **opts):
         dry_run = bool(opts.get("dry_run"))

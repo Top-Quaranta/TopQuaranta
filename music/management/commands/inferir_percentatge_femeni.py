@@ -37,7 +37,9 @@ class Command(BaseCommand):
     help = "Inferir Artista.percentatge_femeni des de MusicBrainz mb_gender."
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true")
+        from music.management_helpers import add_dry_run
+
+        add_dry_run(parser)
 
     def handle(self, *args, **opts):
         dry_run = bool(opts.get("dry_run"))

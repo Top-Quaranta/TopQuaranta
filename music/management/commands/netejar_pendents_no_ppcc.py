@@ -49,6 +49,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 
 from music.audit import log_staff_action
+from music.management_helpers import add_dry_run
 from music.models import Artista, StaffAuditLog
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class Command(BaseCommand):
     SAFE_SOURCES = ("collaborador", "deezer_contributor", "lastfm_similar")
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true")
+        add_dry_run(parser)
         parser.add_argument(
             "--max",
             type=int,

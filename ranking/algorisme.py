@@ -294,13 +294,19 @@ def _compute_weekly_plays(
        back-corrections) clamp to 0.
     3. **Older delta fallback** (any signal ≥4 days back): same idea,
        just with whatever historical sample we have.
-    4. **Lifetime extrapolation**: when the canço is **older than 7
-       days** but we still lack a baseline (no SenyalDiari row from
-       a week ago — typically newly-ingested catalogue), treat
-       `playcount_today` as cumulative plays over the canço's life
-       and rescale to 7 days. Capped denominator at DIES_CADUCITAT.
-       This branch is **specifically not** for fresh releases
-       (branch 1 already handles those without inflation).
+    4. **No data → 0**: when the canço is older than 7 days and we
+       lack any baseline (no SenyalDiari row at least 4 days back),
+       return 0. We used to fall back to lifetime extrapolation
+       (treating `playcount_today` as cumulative plays over the
+       canço's life and rescaling to 7 days), but that conflated
+       gradual long-tail accumulation with current-week activity:
+       a 6-month-old song with 70 k Last.fm plays produced a fake
+       weekly figure of ~2.7 k even when its actual recent listens
+       were near zero. Decision 2026-05-07: trust only what
+       SenyalDiari has actually observed. Newly-verified catalogue
+       songs will appear in the ranking with a 1-2 week lag while
+       their signal accumulates — accepted trade-off for the honest
+       weekly number.
     """
     if not signals:
         return 0.0
@@ -349,16 +355,12 @@ def _compute_weekly_plays(
         delta = playcount_today - baseline.lastfm_playcount
         return max(0.0, delta * 7.0 / gap_days)
 
-    # 4) Lifetime extrapolation — last resort. Cap denominator at
-    # DIES_CADUCITAT so very old tracks don't get a microscopic value
-    # (they're already filtered out by the eligibility query upstream
-    # but the cap keeps the math honest if the function is used
-    # standalone). Falls back to release date if available, otherwise
-    # to the gap between the latest signal and the canço's creation.
-    if canco.data_llancament:
-        lifetime_days = max((today - canco.data_llancament).days, 1)
-        lifetime_days = min(lifetime_days, DIES_CADUCITAT)
-        return max(0.0, playcount_today * 7.0 / lifetime_days)
+    # 4) No data — return 0. See the docstring's branch (4) note.
+    # Removed the lifetime-extrapolation fallback (2026-05-07) because
+    # it conflated long-tail accumulated plays with current-week
+    # activity. Newly-verified catalogue songs lag 1-2 weeks here as
+    # their SenyalDiari accumulates; that's the accepted price of
+    # never publishing a fabricated weekly number.
     return 0.0
 
 

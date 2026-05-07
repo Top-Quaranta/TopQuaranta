@@ -10,11 +10,11 @@
  * Authenticated users see internal + public + their own posts; the
  * anonymous public feed lives at /comunitat/public (separate page).
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
 import { stripMarkdown } from '../lib/strip-markdown'
 import { useAuth } from '../context/AuthContext'
+import useApi from '../hooks/useApi'
 
 const FILTRE_OPTS = [
   ['',          'Tot'],
@@ -106,22 +106,15 @@ function AnonView() {
 export default function ComunitatPage() {
   const { profile } = useAuth()
   const [filtre, setFiltre] = useState('')
-  const [data, setData] = useState(null)
   const [page, setPage] = useState(1)
-  const [visibleDirectori, setVisibleDirectori] = useState(false)
 
-  useEffect(() => {
-    if (!profile) return
-    const params = new URLSearchParams({ filtre, page })
-    api.get(`/comunitat/publicacions/?${params}`).then(setData).catch(() => setData(null))
-  }, [profile, filtre, page])
+  const _params = new URLSearchParams({ filtre, page })
+  const { data } = useApi(profile ? `/comunitat/publicacions/?${_params}` : null)
 
-  useEffect(() => {
-    if (!profile) return
-    api.get('/compte/dashboard/')
-      .then(d => setVisibleDirectori(!!d.perfil?.visible_directori))
-      .catch(() => {})
-  }, [profile])
+  // Two endpoints, two hook calls. The dashboard fetch only needs to
+  // know visible_directori, so we derive that from the hook's data.
+  const { data: dashboard } = useApi(profile ? '/compte/dashboard/' : null)
+  const visibleDirectori = !!dashboard?.perfil?.visible_directori
 
   if (!profile) return <AnonView />
 

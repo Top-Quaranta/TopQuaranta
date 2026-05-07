@@ -5,19 +5,14 @@
  * Separate from /comunitat (which also shows internal posts to
  * registered users) so the routing stays explicit.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
 import { stripMarkdown } from '../lib/strip-markdown'
+import useApi from '../hooks/useApi'
 
 export default function ComunitatPublicaPage() {
-  const [data, setData] = useState(null)
   const [page, setPage] = useState(1)
-
-  useEffect(() => {
-    api.get(`/comunitat/publicacions-publiques/?page=${page}`)
-      .then(setData).catch(() => setData(null))
-  }, [page])
+  const { data } = useApi(`/comunitat/publicacions-publiques/?page=${page}`)
 
   return (
     <section className="max-w-3xl mx-auto text-white">

@@ -196,6 +196,23 @@ fi
 
 if (( WEB_OK == 0 )); then overall=1; fi
 
+# ── Pending Django migrations (added 2026-05-07 after the
+# Album.label deploy ordering bug — caught a 30-email inbox flood
+# when code was reloaded before the migration adding the column was
+# applied. Surfacing pending migrations in tq-health gives the
+# operator at least one cron tick to catch the desync before user
+# requests start hitting `column does not exist` 500s).
+echo
+PY=/home/topquaranta/app/.venv/bin/python
+if (cd /home/topquaranta/app && \
+    DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
+    "$PY" manage.py migrate --check >/dev/null 2>&1); then
+    echo "DB migrations:                           OK (schema matches code)"
+else
+    echo "DB migrations:                           ⚠ pending — run tq-deploy or migrate"
+    overall=1
+fi
+
 # ── Recent errors from Django LOGGING (errors_file handler in base.py).
 echo
 if [[ -f "$ERRORS_LOG" ]]; then

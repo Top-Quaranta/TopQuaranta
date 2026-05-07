@@ -316,7 +316,27 @@ Claude Code runs on the production server. GitHub is canonical:
 At the end of each session, update `docs/history/roadmap.md` to reflect reality.
 
 **Deploy routine:**
+
+Always use `sudo /home/topquaranta/bin/tq-deploy` after editing code.
+Never run a bare `systemctl reload` after a code change.
+
+`tq-deploy` enforces the safe order: pull → check & apply migrations →
+build SPA if touched → reload gunicorn → smoke-test. Caught
+2026-05-07: a push that referenced a new `Album.label` column was
+reloaded by gunicorn `--reload` BEFORE the migration was applied;
+every `/album/<slug>` visitor hit a 500, generating 30 admin emails
+in 15 min. See `docs/ops/runbook.md §9.4 bis` for the post-mortem.
+
+If `tq-deploy` doesn't fit (e.g. partial deploy, debugging), the
+manual safe order is:
 1. Edit code (Python and/or React).
-2. If SPA touched: `cd web-react && npm run build`.
-3. `sudo systemctl reload topquaranta-web` — graceful worker swap, no 502.
-4. Verify: `curl -sI https://www.topquaranta.cat/api/v1/auth/me/`.
+2. **`python manage.py migrate`** if any new migration was added.
+3. If SPA touched: `cd web-react && npm run build`.
+4. `sudo systemctl reload topquaranta-web` — graceful worker swap, no 502.
+5. Verify: `curl -sI https://www.topquaranta.cat/api/v1/auth/me/`.
+
+Detection net: `tq-health` (hourly cron) emits a `DB migrations: …`
+row that flags pending migrations within an hour even when the
+wrapper is bypassed. Pytest gate at
+`topquaranta/tests/test_deploy_safety.py` asserts the static
+invariants (no orphan model changes, scripts well-formed).

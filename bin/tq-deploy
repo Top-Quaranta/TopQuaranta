@@ -1,0 +1,117 @@
+#!/bin/bash
+# Ordered deploy: pull → check migrations → migrate → build SPA → reload → smoke.
+#
+# Why this exists (caught 2026-05-07): a `feat(ingest)` push landed
+# code that read `Album.label` *before* the migration adding that
+# column was applied. Gunicorn `--reload` picked up the new code in
+# under a second; every visitor to /album/<slug> hit a 500 for ~15
+# minutes, sending one admin email per request — 30 emails landed
+# in the inbox before anyone noticed. The `tq-health` signature-
+# dedup we added the same day doesn't cover this path because
+# Django's `AdminEmailHandler` mails directly, not via tq-health.
+#
+# This wrapper enforces the ordering that the operator can't
+# reliably do by hand:
+#   1. `git pull --ff-only` so we know what's about to deploy.
+#   2. `manage.py migrate --check` → if pending, run `migrate` BEFORE
+#      gunicorn touches the new code.
+#   3. If `web-react/src/` changed in the pulled commits, run
+#      `npm run build`.
+#   4. `systemctl reload topquaranta-web` (gracefully swap workers).
+#   5. Smoke-test a public route + a hot API endpoint.
+#
+# Usage:
+#   sudo /home/topquaranta/bin/tq-deploy              # full deploy
+#   sudo /home/topquaranta/bin/tq-deploy --skip-build # if SPA isn't touched
+#   sudo /home/topquaranta/bin/tq-deploy --dry        # show plan, no changes
+#
+# Exit codes:
+#   0 OK
+#   1 migration step failed
+#   2 SPA build failed
+#   3 reload failed
+#   4 smoke test failed
+
+set -euo pipefail
+
+APP_DIR=/home/topquaranta/app
+PY=$APP_DIR/.venv/bin/python
+SETTINGS=topquaranta.settings.production
+SKIP_BUILD=0
+DRY=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --skip-build) SKIP_BUILD=1 ;;
+        --dry) DRY=1 ;;
+        *) echo "Unknown flag: $arg"; exit 64 ;;
+    esac
+done
+
+run() {
+    if [ "$DRY" = "1" ]; then
+        echo "[DRY] $*"
+    else
+        "$@"
+    fi
+}
+
+cd "$APP_DIR"
+
+echo "→ git pull --ff-only"
+PRE_HEAD=$(git rev-parse HEAD)
+run git pull --ff-only
+POST_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "$PRE_HEAD")
+
+echo
+echo "→ Check pending migrations"
+if "$PY" -m django migrate --check --settings=$SETTINGS >/dev/null 2>&1; then
+    echo "  ✓ DB schema up to date"
+else
+    echo "  ! Pending migrations detected — applying BEFORE gunicorn reload"
+    if ! run "$PY" manage.py migrate --settings=$SETTINGS; then
+        echo "  ✗ migrate failed — aborting deploy"
+        exit 1
+    fi
+    echo "  ✓ Migrations applied"
+fi
+
+echo
+if [ "$SKIP_BUILD" = "0" ] && [ "$PRE_HEAD" != "$POST_HEAD" ]; then
+    if git diff --name-only "$PRE_HEAD" "$POST_HEAD" | grep -q '^web-react/'; then
+        echo "→ SPA changed — npm run build"
+        if ! (cd web-react && run npm run build); then
+            echo "  ✗ build failed — aborting before reload"
+            exit 2
+        fi
+    else
+        echo "→ SPA untouched — skip build"
+    fi
+fi
+
+echo
+echo "→ systemctl reload topquaranta-web"
+if ! run systemctl reload topquaranta-web; then
+    echo "  ✗ reload failed"
+    exit 3
+fi
+
+echo
+echo "→ Smoke test"
+sleep 1
+if [ "$DRY" = "0" ]; then
+    code=$(curl -s -o /dev/null -w "%{http_code}" https://www.topquaranta.cat/)
+    if [ "$code" != "200" ]; then
+        echo "  ✗ public homepage returned $code (expected 200)"
+        exit 4
+    fi
+    code=$(curl -s -o /dev/null -w "%{http_code}" "https://www.topquaranta.cat/api/v1/top/?territori=PPCC")
+    if [ "$code" != "200" ]; then
+        echo "  ✗ hot API endpoint returned $code (expected 200)"
+        exit 4
+    fi
+    echo "  ✓ homepage 200, /api/v1/top 200"
+fi
+
+echo
+echo "✓ Deploy complete (HEAD=${POST_HEAD:0:7})"

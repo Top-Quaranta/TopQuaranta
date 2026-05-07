@@ -1,0 +1,84 @@
+#!/bin/bash
+# Pre-flight check before applying a Django migration on production.
+#
+# Lists long-running `manage.py` processes (≥5 min) that would carry
+# stale model definitions in memory if the migration drops/alters a
+# column. Caught 2026-05-07: a 2 h 30 min `obtenir_metadata_musicbrainz`
+# kept the old `Album.cancons_obtingudes` field in memory after we
+# dropped the column, accumulating 15 errors before being killed.
+#
+# Usage:
+#   /home/topquaranta/bin/tq-pre-migrate           # report
+#   /home/topquaranta/bin/tq-pre-migrate --kill    # report + kill them
+#
+# See docs/ops/runbook.md §10 for the full procedure.
+
+set -euo pipefail
+
+THRESHOLD_MIN=5
+KILL_FLAG=${1:-}
+
+# `ps -o etime` gives elapsed time; we want minutes. Format varies:
+# "MM:SS" (<1h), "HH:MM:SS" (<1d), "DD-HH:MM:SS" (≥1d).
+elapsed_to_min() {
+    local s=$1
+    if [[ "$s" =~ ^([0-9]+)-([0-9]+):([0-9]+):([0-9]+)$ ]]; then
+        # DD-HH:MM:SS
+        echo $(( ${BASH_REMATCH[1]} * 1440 + ${BASH_REMATCH[2]} * 60 + ${BASH_REMATCH[3]} ))
+    elif [[ "$s" =~ ^([0-9]+):([0-9]+):([0-9]+)$ ]]; then
+        # HH:MM:SS
+        echo $(( ${BASH_REMATCH[1]} * 60 + ${BASH_REMATCH[2]} ))
+    elif [[ "$s" =~ ^([0-9]+):([0-9]+)$ ]]; then
+        # MM:SS
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo 0
+    fi
+}
+
+found=0
+declare -a stale_pids=()
+
+while read -r pid etime cmd; do
+    [[ -z "$pid" ]] && continue
+    mins=$(elapsed_to_min "$etime")
+    if (( mins >= THRESHOLD_MIN )); then
+        if (( found == 0 )); then
+            printf '%-8s %-10s %s\n' "PID" "ELAPSED" "COMMAND"
+            printf '%-8s %-10s %s\n' "---" "-------" "-------"
+        fi
+        printf '%-8s %-10s %s\n' "$pid" "$etime" "$cmd"
+        stale_pids+=("$pid")
+        found=$((found + 1))
+    fi
+done < <(ps -eo pid,etime,cmd --no-headers \
+    | grep -E '/manage\.py |/.venv/bin/python.*manage\.py' \
+    | grep -v -- '--no-pre-migrate-warning' \
+    | grep -v 'tq-pre-migrate')
+
+if (( found == 0 )); then
+    echo "No stale Django processes (≥${THRESHOLD_MIN} min). Safe to migrate."
+    exit 0
+fi
+
+echo
+echo "→ ${found} stale process(es) detected."
+echo "  These likely carry the OLD model in memory. If your migration"
+echo "  drops/renames a column or model, every query they make after"
+echo "  migrate will crash with 'column does not exist' or similar."
+echo
+
+if [[ "$KILL_FLAG" == "--kill" ]]; then
+    echo "Killing ${stale_pids[*]} as requested..."
+    for pid in "${stale_pids[@]}"; do
+        kill "$pid" 2>/dev/null || sudo kill "$pid" 2>/dev/null || true
+    done
+    sleep 2
+    echo "Done. Next cron tick (≤15 min) will start fresh python with new code."
+    exit 0
+else
+    echo "To kill them: $0 --kill"
+    echo "Then apply the migration."
+    echo "See docs/ops/runbook.md §10 for the full checklist."
+    exit 1
+fi

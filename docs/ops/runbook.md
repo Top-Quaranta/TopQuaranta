@@ -323,6 +323,47 @@ unset on the dashboard.
 
 ---
 
+## 9.4 bis. Deploy ordering — always `tq-deploy`
+
+**Caught 2026-05-07**: a `feat(ingest)` push landed code that read
+`Album.label` BEFORE the migration adding the column was applied.
+Gunicorn `--reload` picked up the new code in under a second; every
+visitor to `/album/<slug>` hit a 500 for ~15 minutes, sending one
+admin email per request — 30 emails landed in the inbox before
+anyone noticed.
+
+**The rule**: never run `git pull` followed by a bare
+`systemctl reload` on the production box. Always:
+
+```bash
+sudo /home/topquaranta/bin/tq-deploy
+```
+
+`tq-deploy` enforces the safe ordering:
+  1. `git pull --ff-only`
+  2. `manage.py migrate --check` → if pending, `migrate` BEFORE the
+     reload (otherwise the new code reads columns the DB doesn't
+     have)
+  3. `npm run build` if `web-react/` changed in the pulled commits
+  4. `systemctl reload topquaranta-web`
+  5. Smoke-test homepage + a hot API endpoint
+
+Flags: `--skip-build` (when SPA isn't touched), `--dry` (show plan).
+Exit codes: 1 migration failed, 2 build failed, 3 reload failed,
+4 smoke test failed.
+
+**Detection net**: `tq-health` now emits a `DB migrations: ...`
+row (added 2026-05-07). If somehow a deploy bypasses `tq-deploy`
+and leaves the DB behind the code, the next hourly tick of the
+`tq-health --email-on-fail` cron flags it. The signature-dedup
+limits inbox noise to one alert per distinct failure state.
+
+**Pytest gates**: `topquaranta/tests/test_deploy_safety.py` asserts
+(a) `makemigrations --check` is clean (every model change has a
+committed migration), (b) `tq-deploy` and `tq-health` parse with
+`bash -n`, (c) `tq-health` still emits the migration-status row.
+A future refactor that drops any of these silently breaks a test.
+
 ## 9.5. CSP inline-style hash regeneration
 
 The Caddyfile `Content-Security-Policy` allows the single inline

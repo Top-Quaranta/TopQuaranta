@@ -221,14 +221,31 @@ if (( EMAIL_ON_FAIL )); then
     # Restore stdout so the rest of the script can still print.
     exec 1>&3 3>&-
     if (( overall != 0 )); then
-        # Use Django's `mail_admins` (Brevo SMTP) — `mail`/`mailx`
-        # binaries aren't installed on the box and we don't want a
-        # new system dep just for this. Subject summarises the bad
-        # lines so the inbox preview is useful at a glance.
+        # Signature-based dedup (2026-05-07): without this the cron
+        # fires every hour and sends the same alert email each time
+        # for as long as a failure persists — the inbox fills up
+        # with copies of an alert the operator already saw. Caught
+        # when 15 historical MB-cron errors kept counting toward
+        # "errors today" for hours after the underlying process was
+        # killed and the issue resolved.
+        #
+        # Hash the failure summary; only email when the hash CHANGES.
+        # That means:
+        #   - first time something breaks → email fires (state set).
+        #   - same broken state next hour → silent (state unchanged).
+        #   - new failure appears OR count of errors grows →
+        #     hash changes → fresh email.
+        #   - everything recovers → next OK run wipes the state file
+        #     so the NEXT failure (whenever it happens) emails again.
         bad=$(grep -E "STALE|STUCK|FAIL|NO_STATUS" "$REPORT" | head -3 | tr '\n' ' | ')
-        cd /home/topquaranta/app
-        DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
-            /home/topquaranta/app/.venv/bin/python -c "
+        sig_input="$bad|errors=${n:-0}"
+        SIG_FILE=/var/log/topquaranta/status/_health.alert_sig
+        current_sig=$(printf '%s' "$sig_input" | sha256sum | cut -d' ' -f1)
+        last_sig=$(cat "$SIG_FILE" 2>/dev/null || echo "")
+        if [[ "$current_sig" != "$last_sig" ]]; then
+            cd /home/topquaranta/app
+            DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
+                /home/topquaranta/app/.venv/bin/python -c "
 import sys
 import django
 django.setup()
@@ -237,7 +254,13 @@ body = sys.stdin.read()
 subject = '[TopQuaranta] Pipeline alert: ' + ${bad@Q}
 mail_admins(subject, body)
 " < "$REPORT" 2>/dev/null \
-            || cat "$REPORT" >&2  # fall back to stderr if mail fails
+                && echo "$current_sig" > "$SIG_FILE" \
+                || cat "$REPORT" >&2  # fall back to stderr if mail fails
+        fi
+    else
+        # Everything's OK — clear the signature so the NEXT failure
+        # (whenever it appears) gets a fresh alert.
+        rm -f /var/log/topquaranta/status/_health.alert_sig
     fi
     rm -f "$REPORT"
 fi

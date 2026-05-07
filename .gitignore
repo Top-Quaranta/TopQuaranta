@@ -27,7 +27,11 @@ media/
 
 # Node
 node_modules/
-package-lock.json
+# `package-lock.json` is COMMITTED for reproducible builds — needed by
+# CI (`npm ci` + setup-node cache). Do NOT add it back to the ignore
+# list. Caught 2026-05-07 when the new frontend-tests CI job failed
+# with "Some specified paths were not resolved, unable to cache
+# dependencies".
 
 # OS
 .DS_Store

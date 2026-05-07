@@ -11,6 +11,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
 import { useAuth } from '../context/AuthContext'
+import useApi from '../hooks/useApi'
 
 const inputClass =
   'px-3 py-2 rounded-md bg-white text-tq-ink text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-tq-yellow'
@@ -27,22 +28,14 @@ function useDebounced(value, ms = 200) {
 function ArtistaSearch({ onPick, initialSlug }) {
   const [q, setQ] = useState('')
   const dq = useDebounced(q)
-  const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (!dq || dq.length < 2) {
-      setResults([])
-      return
-    }
-    setLoading(true)
-    api
-      .get(`/artistes/?q=${encodeURIComponent(dq)}&per_page=8`)
-      .then(data => setResults(data.results || []))
-      .catch(() => setResults([]))
-      .finally(() => setLoading(false))
-  }, [dq])
+  // useApi treats null path as no-op, so the <2-char gate falls
+  // through naturally without a manual reset of results.
+  const path = dq && dq.length >= 2
+    ? `/artistes/?q=${encodeURIComponent(dq)}&per_page=8`
+    : null
+  const { data, loading } = useApi(path)
+  const results = data?.results || []
 
   return (
     <div className="relative">

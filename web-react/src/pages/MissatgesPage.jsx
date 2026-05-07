@@ -5,10 +5,11 @@
  * unread counters. Clicking one expands the thread inline. Replies and
  * net-new messages share the composer at the bottom.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useSearchParams, Navigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import useApi from '../hooks/useApi'
 
 function fmtDate(iso) {
   if (!iso) return ''
@@ -59,23 +60,16 @@ function Conversa({ c, active, onOpen }) {
 }
 
 function Thread({ altrePk, onSent }) {
-  const [data, setData] = useState(null)
+  const { data, error: loadErr, reload } = useApi(`/missatges/amb/${altrePk}/`)
   const [assumpte, setAssumpte] = useState('')
   const [cos, setCos] = useState('')
   const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-
-  useEffect(() => {
-    setData(null); setErr('')
-    api.get(`/missatges/amb/${altrePk}/`)
-      .then(setData)
-      .catch(e => setErr(e.message))
-  }, [altrePk])
+  const [sendErr, setSendErr] = useState('')
 
   async function enviar(e) {
     e.preventDefault()
     if (!cos.trim()) return
-    setBusy(true); setErr('')
+    setBusy(true); setSendErr('')
     try {
       await api.post('/missatges/nou/', {
         destinatari_pk: altrePk,
@@ -83,15 +77,15 @@ function Thread({ altrePk, onSent }) {
         cos,
       })
       setCos(''); setAssumpte('')
-      const fresh = await api.get(`/missatges/amb/${altrePk}/`)
-      setData(fresh)
+      reload()
       onSent?.()
     } catch (e) {
-      setErr(e.payload?.error || e.message)
+      setSendErr(e.payload?.error || e.message)
     } finally { setBusy(false) }
   }
 
-  if (err) return <p className="text-red-300 p-4">{err}</p>
+  const err = sendErr || loadErr
+  if (err && !data) return <p className="text-red-300 p-4">{err}</p>
   if (!data) return <p className="text-white/60 p-4">Carregant…</p>
 
   return (
@@ -162,23 +156,20 @@ function Thread({ altrePk, onSent }) {
 
 export default function MissatgesPage() {
   const { profile, loading } = useAuth()
-  const [inbox, setInbox] = useState(null)
   const [params, setParams] = useSearchParams()
-  const [err, setErr] = useState('')
+  const { data: inbox, error: err, reload: loadInbox } = useApi(
+    profile && !loading ? '/missatges/' : null,
+  )
 
   const altrePk = params.get('amb')
-
-  function loadInbox() {
-    api.get('/missatges/').then(setInbox).catch(e => setErr(e.message))
-  }
-  useEffect(loadInbox, [])
 
   if (loading) return null
   if (!profile) return <Navigate to="/compte/accedir?next=/comunitat/missatges" replace />
 
   function openConversa(pk) {
     setParams({ amb: String(pk) })
-    // Unread → 0 on open.
+    // Unread → 0 on open. Wait for the read-mark POST to land before
+    // refetching the inbox so the count drops cleanly.
     setTimeout(loadInbox, 300)
   }
 

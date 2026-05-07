@@ -5,10 +5,10 @@
  * (visible_directori=True). No individual profile page exists —
  * this listing is the maximum exposure surface.
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import useApi from '../hooks/useApi'
 
 const TERRITORIS = [
   ['',      'Tots els territoris'],
@@ -28,18 +28,15 @@ export default function ComunitatDirectoriPage() {
   const [rol, setRol] = useState('')
   const [territori, setTerritori] = useState('')
   const [obert, setObert] = useState(false)
-  const [data, setData] = useState(null)
   const [page, setPage] = useState(1)
 
-  useEffect(() => {
-    if (!profile) return
-    const p = new URLSearchParams({ page })
-    if (q) p.set('q', q)
-    if (rol) p.set('rol', rol)
-    if (territori) p.set('territori', territori)
-    if (obert) p.set('obert', '1')
-    api.get(`/comunitat/directori/?${p}`).then(setData).catch(() => setData(null))
-  }, [profile, q, rol, territori, obert, page])
+  // Build path so useApi keys cancellation+refetch off it.
+  const _p = new URLSearchParams({ page })
+  if (q) _p.set('q', q)
+  if (rol) _p.set('rol', rol)
+  if (territori) _p.set('territori', territori)
+  if (obert) _p.set('obert', '1')
+  const { data } = useApi(profile ? `/comunitat/directori/?${_p}` : null)
 
   if (loading) return null
   if (!profile) return <Navigate to="/compte/accedir?next=/comunitat/directori" replace />

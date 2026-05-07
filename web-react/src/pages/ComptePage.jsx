@@ -9,9 +9,8 @@
  *   - Row 3: "Les meves propostes" — grid of PropostaCard + dashed
  *            "Proposar artista" AddCard.
  */
-import { useEffect, useState } from 'react'
+import useApi from '../hooks/useApi'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
 import Badge from '../components/ui/Badge'
 import { useAuth } from '../context/AuthContext'
@@ -201,18 +200,11 @@ function AddCard({ to, label }) {
 export default function ComptePage() {
   const { profile, loading: authLoading, signOut } = useAuth()
   const navigate = useNavigate()
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (authLoading || !profile) return
-    setLoading(true)
-    api.get('/compte/dashboard/')
-      .then(setData)
-      .catch(e => setError(e.message || 'Error'))
-      .finally(() => setLoading(false))
-  }, [authLoading, profile])
+  // Gate the fetch on auth: hook treats `null` path as a no-op, so
+  // we don't fire a request before the AuthContext settles.
+  const { data, error, loading } = useApi(
+    !authLoading && profile ? '/compte/dashboard/' : null,
+  )
 
   if (authLoading) return null
   if (!profile) return <Navigate to="/compte/accedir" replace />

@@ -760,19 +760,6 @@ class Album(models.Model):
     data_llancament = models.DateField(null=True, blank=True)
     tipus = models.CharField(max_length=10, choices=TIPUS_CHOICES, default="album")
     imatge_url = models.URLField(blank=True)
-    cancons_obtingudes = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text=(
-            "DEPRECATED (May 2026). The hourly cron used to skip albums "
-            "with this flag set, which produced ~3.7k 'phantom' albums "
-            "marked OK but holding zero tracks (Deezer flake + the "
-            "`album_old` shortcut). Replaced by `last_album_check` + "
-            "an age-based cooldown so every non-discarded album is "
-            "re-scanned periodically and missing tracks recover on the "
-            "next tick. Field kept for backward compat; do not filter on it."
-        ),
-    )
     last_album_check = models.DateTimeField(
         null=True,
         blank=True,

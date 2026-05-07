@@ -266,6 +266,47 @@ Then re-run `manage.py migrate music`.
 
 ---
 
+## 9. Secret rotation
+
+> Cadence: every secret in `.env` and the Django DB should be rotated
+> at least once a year. After a known compromise (laptop loss, phishing
+> click, suspected leak in logs/screenshots), rotate **immediately**.
+
+| Secret | Where | How |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | `.env` | Generate (`python -c "import secrets; print(secrets.token_urlsafe(50))"`); replace in `.env`; `sudo systemctl reload topquaranta-web`. **Side effect**: every active session is invalidated, every `signing.dumps` token (newsletter unsubscribe, email-confirm-delete) breaks — accept it, affected users get a fresh link on next email cycle. |
+| Postgres `topquaranta` password | `DATABASE_URL` in `.env` | `sudo -u postgres psql -c "ALTER USER topquaranta WITH PASSWORD '...';"` → update `.env` → reload web. |
+| `LASTFM_API_KEY` + `LASTFM_API_SECRET` | `.env` | Re-issue at `https://www.last.fm/api/account` → update `.env` → reload. Cron picks up the new key on next tick. |
+| `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` | `.env` | Re-issue at Spotify Developer Dashboard. After update, **re-OAuth** via `/staff/social/spotify/` since the existing refresh_token gets invalidated. |
+| Spotify refresh_token | `SpotifyAuth` row (pk=1) | Re-OAuth from `/staff/social/spotify/` when the daily sync starts failing `invalid_grant`. |
+| `INSTAGRAM_ACCESS_TOKEN` | `.env` | Auto-refreshed by cron `renovar_token_instagram` monthly. Manual override: regenerate at Meta Graph API Explorer (`pages_read_engagement` + `instagram_content_publish` scopes) → update `.env` → reload. |
+| `BREVO_API_KEY` | Stalwart MTA relay config | Brevo dashboard → API & SMTP → regenerate v3 key → update Stalwart relay → `sudo systemctl restart stalwart-mail`. |
+| `RESEND_API_KEY` | Stalwart MTA relay config | Resend dashboard → API Keys → roll → update Stalwart → restart. |
+| `HETZNER_API_TOKEN` | `.env` | Hetzner Cloud Console → Security → API Tokens → roll → update `.env`. Used by manual scripts only; no restart needed. |
+| `CDMON_API_KEY` | `.env` | CDMON panel → API → regenerate → update `.env`. Manual scripts only. |
+| `MastodonAuth.access_token` | DB row (singleton) | Re-OAuth from `/staff/social/mastodon/`. |
+| `BlueskyAuth.app_password` | DB row (singleton) | Generate new app password at bsky.app → settings → app passwords → update via `/staff/social/bluesky/`. |
+| `TelegramAuth.bot_token` | DB row (singleton) | Re-issue from BotFather (`/revoke` then `/token`) → update via `/staff/social/telegram/`. |
+
+**Rotation checklist** (do in this order to avoid downtime):
+
+1. Generate the new secret BEFORE invalidating the old one (most
+   providers let both coexist briefly).
+2. Update `.env` (or DB row).
+3. Reload the affected service:
+   - Django path → `sudo systemctl reload topquaranta-web`
+   - Mail path   → `sudo systemctl restart stalwart-mail`
+   - Cron-only   → nothing; next tick uses new value.
+4. Verify by triggering one operation that uses the secret.
+5. **Only then** revoke the old secret on the provider's side.
+
+**After a compromise** (deviates from above): revoke the old secret
+**first**, accept the temporary breakage, then issue and deploy the
+new one. The risk of a leaked secret being used outweighs the
+deploy window.
+
+---
+
 ## Phone numbers
 
 This is a single-operator project. The phone number is yours. In that

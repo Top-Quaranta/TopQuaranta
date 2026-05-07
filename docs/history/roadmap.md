@@ -155,12 +155,12 @@ secció _completats_ amb la data i el detall.
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
 
-### 2. Sprint S — SEO Bloc D (CWV + GSC + off-page) — només pendent
+### 2. Sprint S — SEO Bloc D (CWV + off-page outreach)
 
 > Estratègia documentada el 2026-05-06 a `docs/architecture/seo.md`.
-> Blocs A+B+C executats el mateix dia. Bloc D queda pendent per
-> dependències externes (GSC verificació, PSI API key) i per feina
-> off-page que no és estrictament codi.
+> Blocs A+B+C executats el mateix dia. **GSC ja verificat + PSI cron
+> actiu + `/genere/<slug>` lliurats després** (auditoria 2026-05-07);
+> el que queda és Core Web Vitals + outreach manual.
 
 **Decisions de l'sprint** (preses 2026-05-06):
 - Templates SSR-bot estil **full alternative HTML** (no només meta) —
@@ -168,9 +168,6 @@ secció _completats_ amb la data i el detall.
   servir per als crawlers.
 - **OG image dinàmica** generada per Django per cada entitat (similar
   al renderer social), no estàtic.
-- **Skip `/genere/<slug>`** per ara — `Artista.genere` és free-text i
-  cal curar la llista canònica abans de fer pàgines indexables. Quan
-  es faci, mapejar Artista.genere → 8-10 valors canònics.
 - **Bot UA list inclou bots d'IA** (GPTBot, ClaudeBot, PerplexityBot,
   Bytespider) — apareixem al training data, és free reach.
 - **`updated_at` com a `auto_now=True`** + backfill intel·ligent per
@@ -185,21 +182,16 @@ secció _completats_ amb la data i el detall.
   verificades. **Quan staff desverifica una entitat, el SSR retorna
   404** (Google la treu del SERP en hores).
 
-**Bloc D pendent** (necessita feina externa):
+**Lliurat post-Bloc-C**:
+- [x] **GSC monitoring**: domini verificat, dades arribant.
+- [x] **PageSpeed Insights API**: cron `recollir_metrics_psi` 21:30.
+- [x] **`/genere/<slug>`**: vista a `web/seo/views.py:652` amb
+      `Artista.genere_canonical` data-driven.
+
+**Bloc D pendent**:
 - [ ] **Core Web Vitals**: WebP, font preload, JS chunk splitting
       més agressiu (manualChunks per recharts), critical CSS inline.
       Target: LCP/INP/CLS verds a Mòbil + Desktop al PageSpeed Insights.
-- [ ] **GSC monitoring**: nova pestanya "SEO" al `/staff/analytics`
-      amb impressions, clicks, CTR, posició mitjana per query, top
-      URLs, errors d'indexació. Necessita:
-      - Verificació del domini a Google Search Console (TXT DNS via
-        cdmon, ~10 min de feina manual).
-      - Service account a Google Cloud + GSC API enabled + JSON key.
-- [ ] **PageSpeed Insights API**: cron diari `recollir_metrics_psi`
-      per emmagatzemar CWV per page. Necessita una API key gratuïta
-      a Google Cloud.
-- [ ] **`/genere/<slug>`**: curar llista canònica de 8-10 gèneres,
-      mapejar Artista.genere → canònic, generar pàgines.
 - [ ] **Wikidata enrichment**: afegir `P5826` (TopQuaranta artist ID)
       property a Wikidata (procés manual via tutorial wikidata.org).
 - [ ] **MusicBrainz outreach**: afegir el nostre URL com a `urls` a
@@ -224,34 +216,40 @@ Items petits per fer en sessions curtes:
 - [ ] Test coverage 52% → 70%. Gaps coneguts: `music/services.py`,
       `music/verificacio.py`, `ranking/senyal.py`. Sessions curtes a
       estones lliures. (`obtenir_senyal` ja a 87 % — 2026-05-06.)
-- [ ] **Centralitzar hardcodes** (auditoria 2026-05-06): hex colors
-      a `social/colors.py` (4 callsites), magic layout numbers a
-      `social/constants.py` (~9), pagination defaults a
-      `settings.API_PAGINATION` (~5 endpoints), URLs socials/
-      newsletter a `settings.SITE_URLS`, timeouts duplicats
-      (3× `TIMEOUT_S=60`) a `social/constants.py`. ~35 callsites
-      en total. Refactor segur, una sessió.
+- [ ] **Centralitzar hardcodes** (auditoria 2026-05-06): part feta —
+      `social/colors.py` i `social/constants.py` existeixen
+      (`HTTP_TIMEOUT_S=60` ja consolidat). Pendent:
+      `settings.API_PAGINATION` (~5 endpoints amb `page_size=N`
+      hardcodejats), `settings.SITE_URLS` (URLs socials + newsletter),
+      i auditoria final dels callsites residuals (~1 hex color encara
+      al wild a `social/`).
 - [x] `ArtistaQuerySet` managers (lliurat 2026-05-07):
       `.public()`, `.pendents()`, `.with_ppcc()`, `.with_mbid()`.
       13 callsites migrats. 6 tests unitaris.
-- [ ] **Modularitat pendent** (auditoria 2026-05-06):
-      `web/api/serializers.py` per a
-      `serialize_artista_compact/full/canco_card/album_card`
-      (~20 callsites); `useApi(url)` hook a `web-react/src/hooks/`
-      (61 useEffect repetits); `BaseSignalCommand` per a `--dry-run`
-      + `--limit` + `SingletonLock` (~12 commands).
-- [ ] **Algorithm robustness** (auditoria 2026-05-06): branch (4)
-      "lifetime extrapolation" a `algorisme.py:352` infla weekly_plays
-      d'una Canco recent-verificada amb ≥7 dies de senyal-buit. Gate
-      per `canco.verificada_at` o per la primera SenyalDiari row.
+- [x] **`web/api/serializers.py`** (lliurat 2026-05-06, commit `3f7bd86`):
+      shared serializers + migració d'album/canco/top/home. Pendent
+      ampliar a la resta d'endpoints quan toque.
+- [x] **`useApi` hook** (lliurat 2026-05-06): a `web-react/src/hooks/useApi.js`.
+      HomePage subcomponents, ArtistesPage, MapaPage, ComunitatPage,
+      ComunitatPublicaPage, ComunitatPublicarPage, MissatgesPage,
+      SolicitarGestio search ja migrats. Resta SPA pendent per migrar
+      gradualment.
+- [ ] **`BaseSignalCommand`** (auditoria 2026-05-06): per a `--dry-run`
+      + `--limit` + `SingletonLock` (~12 commands). Encara no creat;
+      `music/management_helpers.py` (commit `d8d3643`) ha extret
+      l'argparse boilerplate compartit, però la classe-base com a tal
+      queda pendent.
+- [x] **Algorithm robustness — extrapolation gate** (lliurat 2026-05-07,
+      commit `253faf2`): drop "lifetime extrapolation"; `algorisme.py`
+      ara només compta senyal observat real.
 - [x] **`corregit=True` exclòs del ranking** (lliurat 2026-05-07):
       `algorisme.py` ara filtra `error=False, corregit=False` al
       pull de senyal. Defensa contra contaminació a l'err=6 retry
       path quan `_detect_drift` flag-eja un artiste mismatched.
 - [ ] **Alias double-count guard URL-based** (auditoria 2026-05-06):
-      `get_track_info_literal:258` fa case-fold check; importar i
-      reutilitzar `_normalize_lastfm_url` de `detectar_lastfm_aliases`
-      (URL-based, més robust).
+      `_normalize_lastfm_url` ja existeix a `detectar_lastfm_aliases.py:56`
+      però `get_track_info_literal:258` encara fa case-fold check propi.
+      Pendent: importar i reutilitzar la versió URL-based (més robust).
 - [x] **`StaffAuditLog.ACTION_CHOICES`** (lliurat 2026-05-07): afegit
       `artista_sync_mb`, `pendent_orphan_merged`, `feedback_resolt`,
       `usuari_esborrar`, `usuari_reenviar_verificacio`,
@@ -263,16 +261,17 @@ Items petits per fer en sessions curtes:
       buits/placeholders: `ingesta/pipeline.py`, `music/views.py`,
       `music/tests.py`, `ingesta/views.py`, `ingesta/models.py`,
       `ingesta/tests.py`, `social/views.py`, `social/admin.py`,
-      `ranking/tests.py`. Pendent: `Album.cancons_obtingudes` (cal
-      migració d'esquema) i `backfill_album_source.py` (cal
-      verificar cua buida abans).
-- [ ] **Watchdog silent-noop** (auditoria 2026-05-06): `tq-run`
-      retorna `status=OK` quan exit-code=0. Una comanda pot no fer
-      cap feina i exit 0. `tq-health` hauria de flag-ejar quan
-      "did N units of work" = 0 múltiples runs consecutius.
-- [ ] **Secret rotation runbook** (auditoria 2026-05-06): documentar
-      cadència (12 mesos?) per BREVO, RESEND, HETZNER, CDMON, SPOTIFY
-      refresh, LASTFM a `docs/ops/runbook.md`.
+      `ranking/tests.py`. **`Album.cancons_obtingudes`** purgat per
+      migració `0069_remove_album_cancons_obtingudes`. Pendent:
+      `backfill_album_source.py` (cal verificar cua buida abans).
+- [ ] **Watchdog silent-noop → tq-health** (auditoria 2026-05-06):
+      `tq-run` retorna `status=OK` quan exit-code=0. El protocol
+      WORK_DONE ja existeix (commit `c3d0f7d`) i les comandes el
+      poden emetre, però `tq-health` encara no flag-eja "0 units of
+      work" en runs consecutius. Pendent: connectar el protocol a
+      `tq-health`.
+- [x] **Secret rotation runbook** (lliurat — secció §9 a
+      `docs/ops/runbook.md`).
 - [ ] **Brevo open/click rate** per als emails de newsletter.
       Sprint K (analytics) va deixar les bases per a `MetricaSocial*`;
       Brevo exposa `/v3/smtp/statistics/aggregatedReport` amb

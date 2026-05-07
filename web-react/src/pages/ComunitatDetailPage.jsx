@@ -5,26 +5,22 @@
  * others see read-only. Reuses the server-side authorisation checks
  * (API returns 404 to unauthorised callers on unpublished rows).
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
 import { useAuth } from '../context/AuthContext'
 import Markdown from '../components/Markdown'
+import useApi from '../hooks/useApi'
 
 function Comentaris({ pubPk, autorPostUsername }) {
   const { profile } = useAuth()
-  const [items, setItems] = useState(null)
+  const { data: items, error: loadErr, reload } = useApi(
+    `/comunitat/publicacions/${pubPk}/comentaris/`,
+  )
   const [cos, setCos] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-
-  function load() {
-    api.get(`/comunitat/publicacions/${pubPk}/comentaris/`)
-      .then(setItems)
-      .catch(e => setErr(e.message))
-  }
-  useEffect(load, [pubPk])
 
   async function send(e) {
     e.preventDefault()
@@ -33,7 +29,7 @@ function Comentaris({ pubPk, autorPostUsername }) {
     try {
       await api.post(`/comunitat/publicacions/${pubPk}/comentaris/`, { cos })
       setCos('')
-      load()
+      reload()
     } catch (e) {
       setErr(e.payload?.error || e.message)
     } finally { setBusy(false) }
@@ -43,16 +39,19 @@ function Comentaris({ pubPk, autorPostUsername }) {
     if (!confirm('Esborrar aquest comentari?')) return
     try {
       await api.delete(`/comunitat/comentaris/${id}/`)
-      load()
+      reload()
     } catch (e) { setErr(e.payload?.error || e.message) }
   }
+
+  // Show fetch errors (load) alongside mutation errors (send/remove).
+  const displayErr = err || loadErr
 
   return (
     <section className="mt-6">
       <h2 className="text-lg font-bold mb-3">
         Comentaris {items && `(${items.length})`}
       </h2>
-      {err && <p className="text-red-300 text-sm mb-3">{err}</p>}
+      {displayErr && <p className="text-red-300 text-sm mb-3">{displayErr}</p>}
       {items?.length === 0 && (
         <p className="text-white/50 text-sm mb-3">Cap comentari encara.</p>
       )}
@@ -144,12 +143,7 @@ export default function ComunitatDetailPage() {
   const { pk } = useParams()
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const [pub, setPub] = useState(null)
-  const [err, setErr] = useState(null)
-
-  useEffect(() => {
-    api.get(`/comunitat/publicacions/${pk}/`).then(setPub).catch(e => setErr(e.message))
-  }, [pk])
+  const { data: pub, error: err } = useApi(`/comunitat/publicacions/${pk}/`)
 
   if (err) {
     return (

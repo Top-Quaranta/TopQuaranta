@@ -12,10 +12,9 @@
  * can disable the arrows at the boundaries — a visitor never lands
  * on an empty week.
  */
-import { useEffect, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
+import useApi from '../hooks/useApi'
 import { cancoUrl } from '../lib/urls'
 import MmIcon from '../components/MmIcon'
 import { TrendCue, TERRITORI_NOM } from '../components/editorial'
@@ -231,21 +230,13 @@ export default function TopPage() {
   const territori = (params.get('t') || 'PPCC').toUpperCase()
   const setmanaParam = params.get('s') || ''
 
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    const qs = new URLSearchParams()
-    qs.set('territori', territori)
-    if (setmanaParam) qs.set('setmana', setmanaParam)
-    api.get(`/top/?${qs}`)
-      .then(setData)
-      .catch(err => setError(err.message || 'Error'))
-      .finally(() => setLoading(false))
-  }, [territori, setmanaParam])
+  // Build path so useApi can use it as the cache/dep key. Recomputing
+  // the URLSearchParams here keeps the call deterministic for the
+  // hook's path-based memoisation.
+  const _qs = new URLSearchParams()
+  _qs.set('territori', territori)
+  if (setmanaParam) _qs.set('setmana', setmanaParam)
+  const { data, error, loading } = useApi(`/top/?${_qs}`)
 
   const entries = data?.entries || []
   const left  = entries.slice(0, 20)

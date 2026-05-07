@@ -22,17 +22,49 @@ import rawColor from '../assets/logo-topquaranta-rect.svg?raw'
 // Viewbox aspect ratio of the source SVG: 1876.9116 × 380.45602 → ≈4.93.
 const ASPECT_RATIO = 1876.9116 / 380.45602
 
+// Inkscape exports SVGs with `style="fill:X;stroke:Y;..."` inline on
+// every path. When that string is injected via `dangerouslySetInnerHTML`,
+// the HTML parser preserves the `style` attribute literally but does
+// NOT populate the element's `.style` property — so the browser
+// computes `fill: black` (the SVG default) instead of the intended
+// brand colour. Caught 2026-05-07 with the header logo rendering as
+// a flat black blob despite #0047ba/#cf3339/#f1c22f fills being in
+// the markup.
+//
+// Fix: extract `fill:X` and `stroke:X` from the inline `style` and
+// promote them to plain `fill="X"` / `stroke="X"` attributes, which
+// the HTML parser DOES wire up as SVG presentation attributes. We
+// keep the rest of the style intact (opacity, fill-rule,
+// stroke-width, …) — those work via the attribute path too but are
+// already harmless.
+function promoteStyleToAttributes(svg) {
+  return svg.replace(/style="([^"]*)"/g, (match, css) => {
+    const get = (prop) => {
+      const m = css.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`))
+      return m ? m[1].trim() : null
+    }
+    const fill = get('fill')
+    const stroke = get('stroke')
+    let extras = ''
+    if (fill) extras += ` fill="${fill}"`
+    if (stroke) extras += ` stroke="${stroke}"`
+    return `${match}${extras}`
+  })
+}
+
 // The source SVG ships with hardcoded `width`/`height` attributes and
 // no explicit sizing class. Strip them so the <svg> fills its wrapper
 // <span> instead of rendering at native pixels.
 function normalise(svg) {
-  return svg
-    .replace(/\swidth="[^"]*"/, '')
-    .replace(/\sheight="[^"]*"/, '')
-    .replace(
-      /<svg\b/,
-      '<svg style="width:100%;height:100%;display:block"',
-    )
+  return promoteStyleToAttributes(
+    svg
+      .replace(/\swidth="[^"]*"/, '')
+      .replace(/\sheight="[^"]*"/, '')
+      .replace(
+        /<svg\b/,
+        '<svg style="width:100%;height:100%;display:block"',
+      ),
+  )
 }
 
 const monoSvg = normalise(rawMono)

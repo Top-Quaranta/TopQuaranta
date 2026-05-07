@@ -31,7 +31,7 @@ from social.captions import TERRITORI_NOM, utm_url
 
 logger = logging.getLogger(__name__)
 
-UNSUB_BASE = "https://www.topquaranta.cat/api/v1/compte/baixa-newsletter/"
+UNSUB_BASE = f"{settings.SITE_URL}/api/v1/compte/baixa-newsletter/"
 FROM_EMAIL = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@topquaranta.cat")
 
 
@@ -70,7 +70,7 @@ def send_top_newsletter(
         "newsletter",
         tipus,
         setmana,
-        base="https://www.topquaranta.cat/top",
+        base=f"{settings.SITE_URL}/top",
         territori=territori,
     )
     qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")

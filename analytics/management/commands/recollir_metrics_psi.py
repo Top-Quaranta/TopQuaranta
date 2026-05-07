@@ -45,13 +45,15 @@ def _representative_urls() -> list[str]:
     most search traffic, so its detail page is the highest-leverage
     target for CWV regressions. Same for the most recent verified
     cançó (likely the one being indexed today)."""
+    from django.conf import settings
     from django.db.models import Count, Q
 
+    base = settings.SITE_URL
     urls = [
-        "https://www.topquaranta.cat/",
-        "https://www.topquaranta.cat/top",
-        "https://www.topquaranta.cat/artistes",
-        "https://www.topquaranta.cat/mapa",
+        f"{base}/",
+        f"{base}/top",
+        f"{base}/artistes",
+        f"{base}/mapa",
     ]
     a = (
         Artista.objects.public()
@@ -66,14 +68,14 @@ def _representative_urls() -> list[str]:
         .first()
     )
     if a:
-        urls.append(f"https://www.topquaranta.cat/artista/{a.slug}")
+        urls.append(f"{base}/artista/{a.slug}")
     c = (
         Canco.objects.filter(verificada=True, activa=True)
         .order_by("-data_llancament")
         .first()
     )
     if c:
-        urls.append(f"https://www.topquaranta.cat/canco/{c.slug}")
+        urls.append(f"{base}/canco/{c.slug}")
     return urls
 
 

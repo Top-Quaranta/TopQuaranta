@@ -26,6 +26,26 @@ INSTALLED_APPS = [
     "analytics",
 ]
 
+# Public-facing canonical URL for the SPA + API. Single source of
+# truth for code that needs to build absolute URLs (newsletter
+# unsubscribe links, JSON-LD `sameAs`, PSI URL probes, OG image
+# defaults, etc.). May-2026 audit: was hardcoded across 12+ Python
+# callsites — see web/seo/jsonld.py, comptes/newsletter.py,
+# analytics/.../recollir_metrics_psi.py.
+SITE_URL = "https://www.topquaranta.cat"
+
+# Brand-owned profiles on third-party platforms. Consumed by the
+# JSON-LD `Organization.sameAs` block (web/seo/jsonld.py) and any
+# future "About / Contact" page that needs to surface them.
+# Keep order stable: it determines the JSON output order (and any
+# downstream caches that key on it).
+SOCIAL_PROFILES = (
+    "https://mastodont.cat/@topquaranta",
+    "https://bsky.app/profile/topquaranta.bsky.social",
+    "https://www.instagram.com/topquaranta/",
+    "https://t.me/topquaranta",
+)
+
 # Sprint I — Instagram + cache directory for generated social
 # assets. Persistent (survives reboots, unlike /tmp); falls back
 # automatically to /tmp/tq_social if the path is unwriteable.

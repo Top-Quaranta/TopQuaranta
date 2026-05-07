@@ -16,7 +16,7 @@ from django.conf import settings
 
 from music.models import Album, Artista, Canco
 
-CANONICAL_HOST = "https://www.topquaranta.cat"
+CANONICAL_HOST = settings.SITE_URL  # → "https://www.topquaranta.cat"
 SITE_NAME = "TopQuaranta"
 DEFAULT_OG_IMAGE = f"{CANONICAL_HOST}/og/default.png"
 LOCALE = "ca_ES"

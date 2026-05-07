@@ -20,6 +20,8 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
+from django.conf import settings
+
 from music.models import Album, Artista, Canco
 
 from .meta import CANONICAL_HOST, SITE_NAME, TERRITORI_NOMS
@@ -97,12 +99,7 @@ def website_jsonld() -> dict[str, Any]:
                 "name": SITE_NAME,
                 "url": CANONICAL_HOST + "/",
                 "logo": f"{CANONICAL_HOST}/static/brand/logo-topquaranta.png",
-                "sameAs": [
-                    "https://mastodont.cat/@topquaranta",
-                    "https://bsky.app/profile/topquaranta.bsky.social",
-                    "https://www.instagram.com/topquaranta/",
-                    "https://t.me/topquaranta",
-                ],
+                "sameAs": list(settings.SOCIAL_PROFILES),
             },
         ],
     }

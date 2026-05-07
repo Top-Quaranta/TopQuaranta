@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -12,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import Publicacio
+from web.api.utils import paginate
 
 from ._common import (
     _enviar_notificacio_comentari,
@@ -75,21 +75,9 @@ def publicacions(request: Request) -> Response:
         qs = qs.filter(public_published)
 
     qs = qs.order_by("-publicat_at", "-created_at")
-    try:
-        per_page = min(int(request.GET.get("per_page") or 20), 100)
-    except ValueError:
-        per_page = 20
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
+    page, meta = paginate(qs, request, default=20, cap=100)
     return Response(
-        {
-            "results": [_serialize_publicacio(p) for p in page.object_list],
-            "page": page.number,
-            "num_pages": paginator.num_pages,
-            "total": paginator.count,
-            "has_next": page.has_next(),
-            "has_previous": page.has_previous(),
-        }
+        {"results": [_serialize_publicacio(p) for p in page.object_list], **meta}
     )
 
 
@@ -155,21 +143,9 @@ def publicacions_publiques(request: Request) -> Response:
         .select_related("autor", "autor__perfil")
         .order_by("-publicat_at")
     )
-    try:
-        per_page = min(int(request.GET.get("per_page") or 20), 100)
-    except ValueError:
-        per_page = 20
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
+    page, meta = paginate(qs, request, default=20, cap=100)
     return Response(
-        {
-            "results": [_serialize_publicacio(p) for p in page.object_list],
-            "page": page.number,
-            "num_pages": paginator.num_pages,
-            "total": paginator.count,
-            "has_next": page.has_next(),
-            "has_previous": page.has_previous(),
-        }
+        {"results": [_serialize_publicacio(p) for p in page.object_list], **meta}
     )
 
 

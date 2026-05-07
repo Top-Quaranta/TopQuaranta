@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -13,6 +12,7 @@ from rest_framework.response import Response
 from comptes.models import PerfilUsuari, Publicacio
 from web.api.search_utils import normalize_search_term, unaccent_field
 from web.api.staff_views import IsStaff
+from web.api.utils import paginate
 
 from ._common import _serialize_publicacio
 
@@ -39,22 +39,13 @@ def staff_publicacions(request: Request) -> Response:
             | Q(_email_norm__contains=nq)
         )
     qs = qs.order_by("-created_at")
-    try:
-        per_page = min(int(request.GET.get("per_page") or 25), 100)
-    except ValueError:
-        per_page = 25
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
+    page, meta = paginate(qs, request, default=25, cap=100)
     return Response(
         {
             "results": [
                 _serialize_publicacio(p, for_staff=True) for p in page.object_list
             ],
-            "page": page.number,
-            "num_pages": paginator.num_pages,
-            "total": paginator.count,
-            "has_next": page.has_next(),
-            "has_previous": page.has_previous(),
+            **meta,
             "estat_choices": list(Publicacio.ESTAT_CHOICES),
         }
     )
@@ -116,12 +107,7 @@ def staff_directori_usuaris(request: Request) -> Response:
     elif visible == "0":
         qs = qs.filter(visible_directori=False)
 
-    try:
-        per_page = min(int(request.GET.get("per_page") or 30), 100)
-    except ValueError:
-        per_page = 30
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
+    page, meta = paginate(qs, request, default=30, cap=100)
     rows = []
     for p in page.object_list:
         loc = p.localitat
@@ -143,16 +129,7 @@ def staff_directori_usuaris(request: Request) -> Response:
                 "is_active": p.usuari.is_active,
             }
         )
-    return Response(
-        {
-            "results": rows,
-            "page": page.number,
-            "num_pages": paginator.num_pages,
-            "total": paginator.count,
-            "has_next": page.has_next(),
-            "has_previous": page.has_previous(),
-        }
-    )
+    return Response({"results": rows, **meta})
 
 
 @api_view(["POST"])

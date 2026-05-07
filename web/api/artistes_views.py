@@ -6,7 +6,6 @@ GET /api/v1/artistes/<slug>/     — artist profile (info + territories + recent
 
 import datetime
 
-from django.core.paginator import Paginator
 from django.db.models import Exists, Max, OuterRef
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import condition
@@ -18,7 +17,7 @@ from rest_framework.response import Response
 from music.models import Album, Artista, Canco
 from ranking.models import TopSetmanal
 from web.api.search_utils import normalize_search_term, unaccent_field
-from web.api.utils import cache_for_anon
+from web.api.utils import cache_for_anon, paginate
 
 
 def _artistes_last_modified(request, *args, **kwargs):
@@ -181,24 +180,8 @@ def artistes_list(request: Request) -> Response:
     else:
         qs = qs.distinct().order_by("nom")
 
-    try:
-        per_page = min(int(request.GET.get("per_page") or 40), 100)
-    except ValueError:
-        per_page = 40
-
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
-
-    return Response(
-        {
-            "results": [_artista_row(a) for a in page.object_list],
-            "page": page.number,
-            "num_pages": paginator.num_pages,
-            "total": paginator.count,
-            "has_next": page.has_next(),
-            "has_previous": page.has_previous(),
-        }
-    )
+    page, meta = paginate(qs, request, default=40, cap=100)
+    return Response({"results": [_artista_row(a) for a in page.object_list], **meta})
 
 
 @api_view(["GET"])

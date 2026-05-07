@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.core.paginator import Paginator
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +11,7 @@ from rest_framework.response import Response
 from comptes.models import PerfilUsuari, UserArtista
 from music.models import Municipi
 from web.api.search_utils import normalize_search_term, unaccent_field
+from web.api.utils import paginate
 
 from ._common import _clean_url, _serialize_perfil
 
@@ -137,12 +137,7 @@ def directori(request: Request) -> Response:
 
     qs = qs.order_by("nom_public", "usuari__username")
 
-    try:
-        per_page = min(int(request.GET.get("per_page") or 30), 100)
-    except ValueError:
-        per_page = 30
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
+    page, meta = paginate(qs, request, default=30, cap=100)
 
     rows = []
     for p in page.object_list:
@@ -170,15 +165,7 @@ def directori(request: Request) -> Response:
         )
 
     return Response(
-        {
-            "results": rows,
-            "page": page.number,
-            "num_pages": paginator.num_pages,
-            "total": paginator.count,
-            "has_next": page.has_next(),
-            "has_previous": page.has_previous(),
-            "rol_choices": list(PerfilUsuari.ROL_CHOICES),
-        }
+        {"results": rows, **meta, "rol_choices": list(PerfilUsuari.ROL_CHOICES)}
     )
 
 

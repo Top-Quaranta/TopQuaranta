@@ -1,8 +1,9 @@
 """Shared utilities for the public REST surface.
 
-Currently houses the page-cache helper for anonymous reads. Use it
-on hot, mostly-static read endpoints (ranking, directory, map) so a
-public traffic spike doesn't translate 1:1 into Postgres queries.
+Houses the page-cache helper for anonymous reads (`cache_for_anon`)
+and the pagination helper (`paginate`). Use the cache helper on hot,
+mostly-static read endpoints (ranking, directory, map) so a public
+traffic spike doesn't translate 1:1 into Postgres queries.
 
 Why "for anonymous": staff and logged-in users may be acting on the
 same data (approving an artist, editing a song); they MUST see their
@@ -21,7 +22,56 @@ import hashlib
 from functools import wraps
 
 from django.core.cache import caches
+from django.core.paginator import Paginator
 from django.http import HttpResponse
+
+
+def paginate(qs, request, *, default: int = 20, cap: int = 100):
+    """Return ``(page, meta)`` for a paginated queryset.
+
+    Centralised May-2026 audit follow-up — the inline
+    `min(int(request.GET.get("per_page") or N), MAX)` was duplicated
+    across 6+ public endpoints (artistes, publicacions, perfil,
+    moderació) and once again in the staff `_paginate`. One helper,
+    one place to evolve the contract.
+
+    Parameters
+    ----------
+    qs : QuerySet
+        Queryset to paginate.
+    request : DRF Request or HttpRequest
+        Reads ``per_page`` and ``page`` from ``request.GET``.
+    default : int
+        Default page size when the client doesn't request one.
+    cap : int
+        Hard upper bound on ``per_page``. Public endpoints typically
+        use 100; staff (which sees high-density admin tables) uses 200.
+
+    Returns
+    -------
+    page : Page
+        The requested page object — iterate to get its rows.
+    meta : dict
+        Pagination metadata ready to drop into the JSON response:
+        ``page``, ``num_pages``, ``total``, ``per_page``,
+        ``has_next``, ``has_previous``.
+    """
+    try:
+        per_page = min(int(request.GET.get("per_page") or default), cap)
+    except (TypeError, ValueError):
+        per_page = default
+    if per_page < 1:
+        per_page = default
+    paginator = Paginator(qs, per_page)
+    page = paginator.get_page(request.GET.get("page") or 1)
+    return page, {
+        "page": page.number,
+        "num_pages": paginator.num_pages,
+        "total": paginator.count,
+        "per_page": per_page,
+        "has_next": page.has_next(),
+        "has_previous": page.has_previous(),
+    }
 
 
 def cache_for_anon(timeout: int, *, key_prefix: str = "anon"):

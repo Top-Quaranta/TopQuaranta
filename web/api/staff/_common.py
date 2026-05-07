@@ -12,7 +12,6 @@ import datetime
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import (
     Avg,
@@ -94,18 +93,14 @@ class IsStaff(BasePermission):
 
 
 def _paginate(qs, request: Request, default_per_page: int = 50):
-    """Return (page_obj, metadata dict) tuple for a queryset."""
-    try:
-        per_page = min(int(request.GET.get("per_page") or default_per_page), 200)
-    except ValueError:
-        per_page = default_per_page
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page") or 1)
-    return page, {
-        "page": page.number,
-        "num_pages": paginator.num_pages,
-        "total": paginator.count,
-        "per_page": per_page,
-        "has_next": page.has_next(),
-        "has_previous": page.has_previous(),
-    }
+    """Staff variant of :func:`web.api.utils.paginate` with a 200-cap.
+
+    Kept as a thin wrapper because staff endpoints surface high-density
+    tables where 100 rows can feel cramped; bumping the cap to 200
+    lets power users self-serve without a code change. The wrapper
+    preserves the existing call signature (positional default) so
+    callers don't churn.
+    """
+    from web.api.utils import paginate
+
+    return paginate(qs, request, default=default_per_page, cap=200)

@@ -186,11 +186,26 @@ def comentari_esborrar(request: Request, pk: int) -> Response:
 
     c = get_object_or_404(Comentari, pk=pk)
     # Author, post owner or staff can delete.
-    if not (
-        request.user.is_staff
-        or request.user.pk == c.autor_id
-        or request.user.pk == c.publicacio.autor_id
-    ):
+    is_author = request.user.pk == c.autor_id
+    is_post_owner = request.user.pk == c.publicacio.autor_id
+    if not (request.user.is_staff or is_author or is_post_owner):
         return Response({"error": "No autoritzat."}, status=403)
+
+    # Audit moderation deletes (anyone who's NOT the author). Routine
+    # author-self-deletes stay unlogged. Capture context BEFORE delete()
+    # so the metadata survives the row going away.
+    if not is_author:
+        from music.audit import log_staff_action
+
+        log_staff_action(
+            request,
+            "comentari_esborrar",
+            target=c,
+            publicacio_pk=c.publicacio_id,
+            autor_pk=c.autor_id,
+            cos_excerpt=(c.cos or "")[:200],
+            via=("staff" if request.user.is_staff else "post_owner"),
+        )
+
     c.delete()
     return Response(status=204)

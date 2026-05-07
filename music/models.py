@@ -1154,6 +1154,9 @@ class StaffAuditLog(models.Model):
         ),
         # Feedback
         ("feedback_resolt", "Feedback: marcat com a resolt"),
+        # Community moderation — deletes by someone who isn't the author.
+        # Author-deletes-own are routine and not logged.
+        ("comentari_esborrar", "Comentari: esborrar (moderació)"),
         # Edits performed by a verified artist manager (UserArtista.verificat)
         # via the public /compte/artista/<pk>/editar endpoint. Distinct from
         # `artista_edit` so the audit page can filter staff vs. self-service.

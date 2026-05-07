@@ -115,6 +115,11 @@ CRON_META: dict[str, dict] = {
         "max_age_hours": 26,
         "skip_concern": 1,
     },
+    "detectar_anomalies_senyal": {
+        "frequency_label": "Cada nit 06:45",
+        "max_age_hours": 26,
+        "skip_concern": 1,
+    },
     "netejar_caducades": {
         "frequency_label": "Cada nit 04:00",
         "max_age_hours": 26,

@@ -88,6 +88,16 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # weekly delta of playcount directly).
 0 6 * * *   topquaranta   /home/topquaranta/bin/tq-run obtenir_senyal >> /var/log/topquaranta/senyal.log 2>&1
 
+# 06:45 → Anomaly detector. Reads today's SenyalDiari and flags
+# `corregit=True` on any row whose day-over-day delta is wildly
+# outside the cançó's recent baseline (default: floor=100 plays,
+# multiplier=20× median). Catches Last.fm autocorrect/fallback
+# changes that produce phantom playcount spikes (caught 2026-05-08:
+# 53 live/remix/remasteritzada cançons spiked overnight when
+# Last.fm collapsed variant queries onto the main recording).
+# Runs before calcular_top so the ranking sees a clean signal set.
+45 6 * * *  topquaranta   /home/topquaranta/bin/tq-run detectar_anomalies_senyal >> /var/log/topquaranta/senyal.log 2>&1
+
 # 07:00 → Daily provisional ranking. Uses today's freshly-ingested signal.
 0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run calcular_top --provisional >> /var/log/topquaranta/top-provisional.log 2>&1
 

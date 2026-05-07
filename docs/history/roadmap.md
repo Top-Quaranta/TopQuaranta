@@ -100,11 +100,16 @@ secció _completats_ amb la data i el detall.
       target. Cap 500/run; cron Mon 02:15. Acció: `pendent_review=False`
       (descartat) + audit `pendent_descartar` amb `motiu=auto_no_ppcc`.
       Backlog inicial detectat: ~1830; drena en 4 setmanes.
-- [ ] A `_upsert_track` (i `obtenir_novetats._create_track`):
-      saltar la creació automàtica de pendents col·lab quan
-      l'artista origen té un Deezer profile mixt (heurística:
-      `nb_album > 30` + diversos labels al primer mostreig). Així
-      no inundem la cua MB amb soroll com el cas Àlex Pérez 1479910.
+- [x] **Diferir creació de col·laboradors fins a verificació**
+      (lliurat 2026-05-07, commit `bfa594a`). En lloc d'una heurística
+      sobre profile mixt, atac directe al símptoma: cap pendent
+      `Artista` es crea durant la ingesta. Tots els contributors
+      desconeguts (que no es troben per `ArtistaDeezer.deezer_id`)
+      s'aparquen a `Canco.contributors_raw` (JSONField). Quan staff
+      o ML auto-ML aproven la cançó, `processar_collaboradors_pendents`
+      els materialitza com a `Artista(pendent_review=True)`. Cançons
+      rebutjades mai arriben aquí — elimina ~76 % del soroll de la
+      cua (és la quota d'`album_incorrecte` als rebuigs).
 
 **Refinaments del renderer** (post-feedback usuari):
 - [x] **Slides de novetats** (lliurat 2026-05-06): aplicada
@@ -322,6 +327,57 @@ Items petits per fer en sessions curtes:
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
+
+### Sprint — Distribució v2 lot A + lot D + Album.label ✅ (2026-05-07)
+
+Refinaments multi-canal i atac al gran problema de la cua staff.
+
+* **Alt-text ric per slide compartit** (`captions.slide_alts`):
+  IG/Mastodon/Bluesky/Telegram tots reben labels descriptives
+  ("Top setmanal de cançons en català de Catalunya. Posicions 1 a
+  10: 1 Tutu Turú de Siderland, 2 Estrelles de Max Navarro, ...")
+  en lloc del genèric "Top CAT, posicions 1-10". Handle complet de
+  novetats (albums + singles) que abans no es cobria. 5 helpers nous
+  + 5 tests de cobertura.
+
+* **Tags IG disperses pel canvas**: el patró (0.5, 0.5)-cluster que
+  Meta colapsava en una bombolla central s'ha substituït per Y per
+  fila (0.18-0.88) + zigzag X de 3 columnes (0.30/0.50/0.70). Album
+  slides ancoren a (0.50, 0.55) sobre la zona del nom de l'artista.
+  4 tests.
+
+* **`alt_text` IG**: `upload_carousel_item` + `upload_image` accepten
+  ara el camp `alt_text` de Meta (cap 1000ch). Paritat amb Mastodon
+  i Bluesky.
+
+* **Story CTA** font 56 → 64 pt per balancejar amb el títol cançó
+  redissenyat (80 pt, redesign 2026-05-03).
+
+* **Verificat**: `_feed_novetats_portada` ja tenia +54 px left margin;
+  story footer sempre sobre `COLOR_BG` (no toca territoris clars).
+
+* **Lot D — Diferir creació de col·laboradors fins a verificació**
+  (atac directe al 76 % de rebuigs `album_incorrecte`):
+
+  - `Canco.contributors_raw` (JSONField) — contributors desconeguts
+    de Deezer s'aparquen aquí en lloc de crear Artistas pendents.
+  - `obtenir_novetats` + `obtenir_metadata` ara mai creen Artistas
+    durant ingesta. Reusen via lookup ArtistaDeezer immediat o
+    deferren via `_defer_contributor`.
+  - `aprovar_canco` + `aprovar_canco_auto_ml` criden a
+    `processar_collaboradors_pendents` que materialitza la llista.
+  - Cançons rebutjades mai arriben a aquest path → els seus
+    contributors mai es creen com a pendents.
+  - 7 tests nous (4 services + 3 ingest).
+
+* **`Album.label`**: Deezer ja ens donava `label` a cada album.get
+  i mai el llegíem. Camp afegit (CharField max=200, db_index) i
+  capturat tant a `obtenir_metadata._upsert_album` com a
+  `obtenir_novetats._create_album`. Útil com a senyal ML futur
+  (`same_label_as_approved`, `label_compartit_amb_PPCC`) i com a
+  cue de curació staff. ML reentrenament queda pendent.
+
+Migració 0070. Tests: 16 nous, 341 passing total.
 
 ### Sprint — Brand-logo robustesa + CI hardening + ops anti-stale-cron ✅ (2026-05-07)
 

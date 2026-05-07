@@ -15,6 +15,7 @@ from rest_framework.response import Response
 
 from music.models import Album, Canco
 from ranking.models import TopProvisional, TopSetmanal
+from web.api.serializers import album_card, artista_minimal, canco_card
 from web.api.utils import cache_for_anon
 
 
@@ -62,19 +63,9 @@ def album_list(request: Request) -> Response:
         {
             "results": [
                 {
-                    "pk": a.pk,
-                    "slug": a.slug,
-                    "nom": a.nom,
-                    "imatge_url": getattr(a, "imatge_url", None) or None,
-                    "data_llancament": (
-                        a.data_llancament.isoformat() if a.data_llancament else None
-                    ),
+                    **album_card(a),
                     "n_verificades": getattr(a, "n_verificades", 0) or 0,
-                    "artista": (
-                        {"nom": a.artista.nom, "slug": a.artista.slug}
-                        if a.artista
-                        else None
-                    ),
+                    "artista": artista_minimal(a.artista) if a.artista else None,
                 }
                 for a in qs
             ]
@@ -113,37 +104,9 @@ def album_detail(request: Request, slug: str) -> Response:
 
     return Response(
         {
-            "pk": album.pk,
-            "slug": album.slug,
-            "nom": album.nom,
-            "data_llancament": (
-                album.data_llancament.isoformat() if album.data_llancament else None
-            ),
-            "imatge_url": getattr(album, "imatge_url", None) or None,
+            **album_card(album),
             "deezer_id": album.deezer_id,
-            "artista": (
-                {
-                    "nom": album.artista.nom,
-                    "slug": album.artista.slug,
-                }
-                if album.artista
-                else None
-            ),
-            "cancons": [
-                {
-                    "pk": c.pk,
-                    "slug": c.slug,
-                    "nom": c.nom,
-                    "isrc": c.isrc or None,
-                    "durada_ms": c.durada_ms,
-                    "preview_url": c.preview_url or None,
-                    "deezer_id": c.deezer_id,
-                    "al_top": c.pk in ranked_ids,
-                    "artistes_col": [
-                        {"nom": a.nom, "slug": a.slug} for a in c.artistes_col.all()
-                    ],
-                }
-                for c in cancons
-            ],
+            "artista": artista_minimal(album.artista) if album.artista else None,
+            "cancons": [canco_card(c, ranked_ids=ranked_ids) for c in cancons],
         }
     )

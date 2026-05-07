@@ -28,6 +28,7 @@ from ranking.models import (
     TopProvisional,
     TopSetmanal,
 )
+from web.api.serializers import album_card, artista_minimal, canco_card
 
 
 @api_view(["GET"])
@@ -75,33 +76,12 @@ def canco_detail(request: Request, slug: str) -> Response:
 
     return Response(
         {
-            "pk": canco.pk,
-            "slug": canco.slug,
-            "nom": canco.nom,
-            "isrc": canco.isrc or None,
-            "durada_ms": canco.durada_ms,
-            "preview_url": canco.preview_url or None,
-            "deezer_id": canco.deezer_id,
+            **canco_card(canco),
             "data_llancament": (
                 canco.data_llancament.isoformat() if canco.data_llancament else None
             ),
-            "artista": (
-                {"slug": canco.artista.slug, "nom": canco.artista.nom}
-                if canco.artista
-                else None
-            ),
-            "album": (
-                {
-                    "slug": canco.album.slug,
-                    "nom": canco.album.nom,
-                    "imatge_url": canco.album.imatge_url or None,
-                }
-                if canco.album
-                else None
-            ),
-            "artistes_col": [
-                {"slug": a.slug, "nom": a.nom} for a in canco.artistes_col.all()
-            ],
+            "artista": artista_minimal(canco.artista) if canco.artista else None,
+            "album": ({**album_card(canco.album)} if canco.album else None),
             "ml_classe": canco.ml_classe or None,
             "whisper_lang": canco.whisper_lang or None,
             "whisper_p": canco.whisper_p,

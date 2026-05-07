@@ -30,6 +30,7 @@ from rest_framework.response import Response
 from comptes.models import UserArtista
 from music.models import Artista, Canco
 from ranking.models import TopSetmanal
+from web.api.serializers import artista_minimal
 from web.api.utils import cache_for_anon
 
 
@@ -113,7 +114,7 @@ def _serialize_top_entry(entry, posicio_anterior: int | None) -> dict:
             if canco
             else None
         ),
-        "artista": ({"nom": artista.nom, "slug": artista.slug} if artista else None),
+        "artista": (artista_minimal(artista) if artista else None),
         "album": (
             {
                 "slug": album.slug,

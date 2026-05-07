@@ -17,6 +17,7 @@ from rest_framework.response import Response
 
 from music.constants import MAX_POSICIONS_TOP, TERRITORI_NOMS
 from ranking.models import TopProvisional, TopSetmanal
+from web.api.serializers import artista_minimal
 from web.api.utils import cache_for_anon
 
 # Territories the public API accepts — the five ranking-eligible plus
@@ -41,9 +42,7 @@ def _serialize_entry(entry, is_provisional: bool, posicio_anterior=None) -> dict
     col_list = []
     if canco is not None:
         try:
-            col_list = [
-                {"nom": a.nom, "slug": a.slug} for a in canco.artistes_col.all()[:3]
-            ]
+            col_list = [artista_minimal(a) for a in canco.artistes_col.all()[:3]]
         except Exception:  # noqa: BLE001 — defensive; never block the ranking
             col_list = []
     return {

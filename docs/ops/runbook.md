@@ -185,6 +185,25 @@ sudo systemctl restart topquaranta-web
 
 **⚠ This overwrites current data.** Take a fresh `pg_dump` first.
 
+### Backup scope — single-host, accepted risk
+
+Backups land at `/home/topquaranta/backups/{daily,weekly,monthly}/`
+on the same Hetzner CX22. **There is no off-site copy.** If the disk
+fails or the host gets compromised, the backups go with it.
+
+This is an **accepted risk** (decision 2026-05-07): the project's
+data is recoverable conceptually — every signal is re-fetchable from
+Last.fm + Deezer + MusicBrainz, every artiste row is staff-curated
+and could be rebuilt from external sources, and the codebase lives
+in GitHub. What's irreplaceable is the curation history (which
+artiste is approved, which song is verified, the audit log) — for
+that, the on-host backup is the only line of defence.
+
+If the project's audience grows past hobbyist scale or the curation
+trail becomes legally relevant, revisit this decision: add a daily
+`restic` push to a Hetzner Storage Box (~3 €/mo, EU) or B2
+(~0.5 €/mo, off-EU). Encryption first, then push.
+
 ---
 
 ## 5. Disk is full
@@ -263,6 +282,49 @@ sudo -u postgres psql topquaranta -c \
 ```
 
 Then re-run `manage.py migrate music`.
+
+---
+
+## 9.5. CSP inline-style hash regeneration
+
+The Caddyfile `Content-Security-Policy` allows the single inline
+`<style>` block in `web-react/index.html` (critical above-the-fold
+paint) via a SHA-256 hash. **If you ever edit that `<style>` block,
+the deployed page will start failing CSP and refuse to paint with
+the splash colours.** Procedure:
+
+```bash
+cd /home/topquaranta/app/web-react
+npm run build  # regenerate dist/index.html
+
+# Hash the inline <style> body (whitespace-sensitive)
+python3 -c "
+import re, hashlib, base64
+html = open('dist/index.html').read()
+m = re.search(r'<style[^>]*>(.*?)</style>', html, re.S)
+print('sha256-' + base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode())
+"
+# → sha256-XYZ...
+```
+
+Replace the hash in `deploy/Caddyfile` (search for `sha256-` in the
+`Content-Security-Policy` line, swap), then:
+
+```bash
+sudo install -o root -g root -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+curl -sI https://www.topquaranta.cat/ | grep -i content-security
+```
+
+Verify the new hash is in the response and the homepage paints
+without console errors. If it doesn't, your hash is wrong (likely
+whitespace mismatch — be careful copy-pasting from the script
+output).
+
+The `<script>` directive uses `'self'` only; no inline scripts allowed.
+If you ever need to add an inline `<script>` to `index.html`, either
+move it to `public/<name>.js` (preferred — covered by `'self'`) or
+add another `'sha256-...'` to script-src using the same procedure.
 
 ---
 

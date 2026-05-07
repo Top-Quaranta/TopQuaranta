@@ -197,11 +197,12 @@ CRON_META: dict[str, dict] = {
         "frequency_label": "Cada nit 21:00",
         "max_age_hours": 26,
         "skip_concern": 1,
-        # Until the SA is added as a property user, this cron logs a
-        # warning and exits 0. Silenced so the watchdog doesn't email
-        # daily; remove `silenced` once the GSC permission lands.
-        "silenced": True,
-        "silenced_reason": "Pendent que el SA sigui afegit a GSC",
+        # 2026-05-07: OAuth user-delegation is configured (refresh
+        # token on the property owner's Google account). Cron runs
+        # cleanly and writes 0 rows when GSC has no impressions yet
+        # to report — that's the current state (Sprint S SEO landed
+        # 2026-05-06; impressions take 7-30 days to surface).
+        # No need to silence; "0 rows" is success, not failure.
     },
     "recollir_metrics_psi": {
         "frequency_label": "Cada nit 21:30",

@@ -129,15 +129,26 @@ www.topquaranta.cat {
 		# S6 CSP (directives):
 		#   default-src 'self'         — everything not listed below must
 		#                                come from the same origin.
-		#   script-src                 — SPA bundle is same-origin; the
-		#                                'unsafe-inline' fragment below
-		#                                covers the Vite prod inline
-		#                                runtime + any legacy Django
-		#                                template still behind the 2FA
-		#                                allow-list above.
-		#   style-src                  — Google Fonts stylesheet (imported
-		#                                by mm-design); 'unsafe-inline'
-		#                                for React inline style props.
+		#   script-src                 — SPA bundle is same-origin. As of
+		#                                2026-05-07 the SPA-redirect
+		#                                helper is also external (at
+		#                                /spa-redirect.js), so we no
+		#                                longer need 'unsafe-inline' for
+		#                                scripts. React style={{...}} is
+		#                                a DOM `style` attribute, NOT
+		#                                governed by style-src; safe.
+		#   style-src                  — same-origin CSS + Google Fonts
+		#                                stylesheet (imported by
+		#                                mm-design). The single inline
+		#                                <style> block in dist/index.html
+		#                                (critical above-the-fold paint)
+		#                                is allowed via SHA-256 hash so
+		#                                we can drop 'unsafe-inline' here
+		#                                too. **The hash must be
+		#                                regenerated whenever
+		#                                web-react/index.html changes
+		#                                its <style> block** — see
+		#                                docs/ops/runbook.md §10.
 		#   font-src                   — Google Fonts actual font files.
 		#   img-src                    — album art from Deezer CDN +
 		#                                arbitrary https; data: for the
@@ -156,7 +167,7 @@ www.topquaranta.cat {
 		# /api/v1/staff/analytics/goaccess/, which needs `data:` fonts
 		# and `'unsafe-eval'` for D3 to render. Every other response
 		# inherits the strict baseline below.
-		?Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-Wu+kU5EkXi0rgxBYNZgraQVbF2AN72hbhCSUJEGoGu8=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
 	}
 	log {
 		output file /var/log/caddy/topquaranta_access.log {

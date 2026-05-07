@@ -22,17 +22,11 @@
       #root { min-height: 100vh; }
       .tq-splash { display:flex; align-items:center; justify-content:center; min-height:100vh; color:#facc15; font-family: Georgia, serif; font-size:1.5rem; letter-spacing:.04em; }
     </style>
-    <script>
-      // Companion to public/404.html SPA redirect workaround.
-      // 404.html encodes the original path+search into ?p= so a deep
-      // link served as static falls back to / and JS routes from there.
-      (function () {
-        const p = new URLSearchParams(window.location.search).get('p')
-        if (p) {
-          window.history.replaceState(null, null, p + window.location.hash)
-        }
-      })()
-    </script>
+    <!-- SPA-redirect helper. External so the CSP can drop
+         `script-src 'unsafe-inline'`. Source at
+         `public/spa-redirect.js`. Synchronous (no `defer`/`async`)
+         because the URL fixup must run before React mounts. -->
+    <script src="/spa-redirect.js"></script>
   </head>
   <body>
     <div id="root">

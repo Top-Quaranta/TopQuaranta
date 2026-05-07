@@ -157,6 +157,39 @@ class ConfiguracioGlobal(models.Model):
         "casos d'emergència — habitualment està sempre actiu).",
     )
 
+    # ── Sprint Distribució v2 lot B: per-channel publish delay ──────
+    # Cron fires each channel at its base time (see deploy/cron.topquaranta).
+    # Each command sleeps `delay_<channel>_min` minutes before doing
+    # work, so staff can spread the schedule wider WITHOUT editing
+    # crontab. To compress below the cron base, the cron file itself
+    # has to be edited and reinstalled — these fields are additive.
+    # Capped at 180 min as a sanity guard (a worker holds a slot
+    # idle for the duration; longer than 3 h is almost certainly an
+    # operator typo).
+    delay_instagram_min = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Minuts de retard addicional per a publicar_social (IG). "
+            "0 = publica al moment cron. Tope 180."
+        ),
+    )
+    delay_mastodon_min = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Minuts de retard addicional per a Mastodon. Tope 180.",
+    )
+    delay_bluesky_min = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Minuts de retard addicional per a Bluesky. Tope 180.",
+    )
+    delay_telegram_min = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Minuts de retard addicional per a Telegram. Tope 180.",
+    )
+    delay_newsletter_min = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Minuts de retard addicional per a newsletter. Tope 180.",
+    )
+
     class Meta:
         verbose_name = "Configuració global"
         verbose_name_plural = "Configuració global"

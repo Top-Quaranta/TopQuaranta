@@ -373,6 +373,39 @@ export default function StaffSocialPage() {
     } finally { setBusy(false) }
   }
 
+  async function republicar(post) {
+    // Lot C — Sprint Distribució v2: one-click delete-remote +
+    // re-render + re-publish. Use case: a cançó from a published top
+    // is rejected after publication, the renderer now produces a
+    // corrected slide, but the live post still shows the wrong row.
+    // Manual workflow before this was Esborrar → Reset → Publicar
+    // (3 clicks across 3 endpoints).
+    const platLabel = post.platform.replace('instagram_', 'IG ')
+    if (!confirm(
+      `RE-PUBLICAR ${platLabel.toUpperCase()}: ${post.tipus} · ${post.territori_label || '—'}\n\n` +
+      `Això esborra la publicació remota actual (${post.instagram_media_id}) i en publica una de nova ` +
+      `amb el contingut actualitzat. És DESTRUCTIU.\n\n` +
+      `Confirmes?`
+    )) return
+    setBusy(true)
+    setOutput(`▶ Re-publicant ${platLabel}: esborrant remot + re-publicant…`)
+    try {
+      const res = await api.post('/staff/social/republicar/', { pk: post.pk })
+      const lines = []
+      lines.push(`✓ ${res.delete_msg || 'remot esborrat'}`)
+      if (res.args) lines.push(`$ manage.py ${res.args.join(' ')}`)
+      lines.push(res.publish_output || '(sense sortida)')
+      setOutput(lines.join('\n'))
+      requestAnimationFrame(() => {
+        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+      await reload()
+    } catch (e) {
+      const stepMsg = e.payload?.step ? ` (fallat al pas: ${e.payload.step})` : ''
+      setOutput(`✖ Error${stepMsg}: ${e.payload?.msg || e.payload?.error || e.message}`)
+    } finally { setBusy(false) }
+  }
+
   return (
     // The body of the SPA is `bg-tq-ink` (dark). Wrap the whole
     // staff page in an explicit white surface so all the
@@ -953,15 +986,26 @@ export default function StaffSocialPage() {
                     }
                     const label = labels[p.platform] || `Esborrar ${p.platform}`
                     return (
-                      <button
-                        type="button"
-                        onClick={() => eliminarRemot(p)}
-                        disabled={busy}
-                        title={`Esborra la publicació remota a ${p.platform} + reset local`}
-                        className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 hover:bg-red-200"
-                      >
-                        {label}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => republicar(p)}
+                          disabled={busy}
+                          title="Esborra el remot + re-publica amb el contingut actualitzat. Útil si una cançó del top va ser rebutjada després de publicar."
+                          className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900 hover:bg-amber-200"
+                        >
+                          Re-publicar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => eliminarRemot(p)}
+                          disabled={busy}
+                          title={`Esborra la publicació remota a ${p.platform} + reset local`}
+                          className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 hover:bg-red-200"
+                        >
+                          {label}
+                        </button>
+                      </>
                     )
                   })()}
                 </div>

@@ -278,12 +278,22 @@ urlpatterns = [
         staff_views.social_eliminar_remot,
         name="staff_social_eliminar_remot",
     ),
+    path(
+        "staff/social/republicar/",
+        staff_views.social_republicar,
+        name="staff_social_republicar",
+    ),
     path("staff/social/toggle/", staff_views.social_toggle, name="staff_social_toggle"),
     path("staff/social/fase/", staff_views.social_fase, name="staff_social_fase"),
     path(
         "staff/social/story-cap/",
         staff_views.social_story_cap,
         name="staff_social_story_cap",
+    ),
+    path(
+        "staff/social/delay/",
+        staff_views.social_delay,
+        name="staff_social_delay",
     ),
     path(
         "staff/social/credentials/",

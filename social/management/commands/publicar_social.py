@@ -98,6 +98,19 @@ class Command(BaseCommand):
             self.stdout.write("Kill switch actiu (instagram_actiu=False). Surt.")
             return
 
+        # Sprint Distribució v2 lot B: configurable per-channel delay.
+        # Cron fires this command at the slot's base time; sleeping
+        # here stretches the schedule wider without editing crontab.
+        # Skipped under --dry-run (used by staff preview + tests).
+        delay_min = max(0, min(180, int(cfg.delay_instagram_min or 0)))
+        if delay_min and not opts.get("dry_run") and not opts.get("force"):
+            import time as _time
+
+            self.stdout.write(
+                f"Sleep {delay_min} min (ConfiguracioGlobal.delay_instagram_min)…"
+            )
+            _time.sleep(delay_min * 60)
+
         slots = calendari.slots_for(target)
         if opts.get("tipus"):
             slots = [(s, t) for (s, t) in slots if s.tipus == opts["tipus"]]

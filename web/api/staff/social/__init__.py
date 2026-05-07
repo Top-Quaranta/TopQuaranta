@@ -34,7 +34,7 @@ from .accounts import (
     social_telegram_save,
     social_telegram_test,
 )
-from .controls import social_fase, social_story_cap, social_toggle
+from .controls import social_delay, social_fase, social_story_cap, social_toggle
 from .posts import (
     social_eliminar_instagram,
     social_eliminar_remot,
@@ -43,6 +43,7 @@ from .posts import (
     social_preview_all,
     social_publicar_ara,
     social_render_serve,
+    social_republicar,
     social_reset,
     social_slides_for,
 )
@@ -69,8 +70,10 @@ __all__ = [
     "social_reset",
     "social_eliminar_instagram",
     "social_eliminar_remot",
+    "social_republicar",
     "social_toggle",
     "social_fase",
     "social_story_cap",
+    "social_delay",
     "_serve_png",
 ]

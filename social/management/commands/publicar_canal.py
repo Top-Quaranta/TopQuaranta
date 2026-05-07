@@ -69,6 +69,21 @@ class Command(BaseCommand):
             self.stdout.write(f"Kill switch tancat ({channel}_actiu=False). Surt.")
             return
 
+        # Sprint Distribució v2 lot B: per-channel publish delay.
+        # Cron fires this command at the channel's base time; sleeping
+        # here stretches the schedule wider without editing crontab.
+        # Skipped under --dry-run (staff preview + tests) and --force
+        # (manual republicar — operator wants it published NOW).
+        delay_attr = f"delay_{channel}_min"
+        delay_min = max(0, min(180, int(getattr(cfg, delay_attr, 0) or 0)))
+        if delay_min and not opts["dry_run"] and not opts.get("force"):
+            import time as _time
+
+            self.stdout.write(
+                f"Sleep {delay_min} min (ConfiguracioGlobal.{delay_attr})…"
+            )
+            _time.sleep(delay_min * 60)
+
         slots = slots_for(target)
         if opts.get("tipus"):
             slots = [(s, t) for (s, t) in slots if s.tipus == opts["tipus"]]

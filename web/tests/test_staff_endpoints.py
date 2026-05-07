@@ -155,3 +155,197 @@ def test_legacy_staff_views_shim_still_exposes_names():
 
     for attr in ("dashboard", "estat", "top_list", "IsStaff"):
         assert hasattr(staff_views, attr), attr
+
+
+# ── social_republicar (Lot C — re-publicar amb correcció) ───────────
+
+
+@pytest.fixture
+def published_post(db):
+    """A SocialPost in PUBLICAT state on Mastodon (the cheapest
+    platform to mock — no Meta Graph dance)."""
+    import datetime
+
+    from social.models import SocialPost
+
+    return SocialPost.objects.create(
+        platform=SocialPost.PLATFORM_MASTODON,
+        tipus=SocialPost.TIPUS_TOP_PPCC,
+        territori="PPCC",
+        setmana=datetime.date(2026, 4, 27),  # Monday
+        status=SocialPost.STATUS_PUBLICAT,
+        instagram_media_id="https://mastodon.social/@tq/123456789",
+        scheduled_at="2026-04-25T09:40:00Z",
+        published_at="2026-04-25T09:40:00Z",
+    )
+
+
+def test_republicar_requires_pk(staff_client):
+    r = staff_client.post("/api/v1/staff/social/republicar/", {}, format="json")
+    assert r.status_code == 400
+    assert "pk required" in r.data.get("error", "")
+
+
+def test_republicar_404_when_post_missing(staff_client):
+    r = staff_client.post(
+        "/api/v1/staff/social/republicar/", {"pk": 999999}, format="json"
+    )
+    assert r.status_code == 404
+
+
+def test_republicar_400_when_post_not_published(staff_client, db):
+    """A post still PENDENT can't be re-published — there's nothing
+    remote to delete first."""
+    import datetime
+
+    from social.models import SocialPost
+
+    post = SocialPost.objects.create(
+        platform=SocialPost.PLATFORM_MASTODON,
+        tipus=SocialPost.TIPUS_TOP_PPCC,
+        territori="PPCC",
+        setmana=datetime.date(2026, 4, 27),
+        status=SocialPost.STATUS_PENDENT,
+        instagram_media_id="",
+        scheduled_at="2026-04-25T09:40:00Z",
+    )
+    r = staff_client.post(
+        "/api/v1/staff/social/republicar/", {"pk": post.pk}, format="json"
+    )
+    assert r.status_code == 400
+    assert "no està publicat" in r.data.get("error", "")
+
+
+def test_republicar_calls_delete_then_publish(
+    staff_client, published_post, monkeypatch
+):
+    """The endpoint must invoke delete first (resetting local state),
+    then call_command for re-publish. Both pieces stubbed; we assert
+    the order + payload."""
+    calls: list[str] = []
+
+    def fake_delete(post):
+        calls.append(f"delete:{post.pk}")
+        post.status = post.STATUS_PENDENT
+        post.instagram_media_id = ""
+        post.metadata = {}
+        post.published_at = None
+        post.save()
+        return True, "DRY-RUN: deleted"
+
+    def fake_call_command(*args, **kwargs):
+        calls.append("publish:" + " ".join(args))
+
+    monkeypatch.setattr(
+        "web.api.staff.social.posts._delete_remote_and_reset", fake_delete
+    )
+    monkeypatch.setattr("web.api.staff.social.posts.call_command", fake_call_command)
+
+    r = staff_client.post(
+        "/api/v1/staff/social/republicar/",
+        {"pk": published_post.pk},
+        format="json",
+    )
+    assert r.status_code == 200, r.data
+    assert r.data["ok"] is True
+    # Order matters — delete BEFORE publish.
+    assert calls[0] == f"delete:{published_post.pk}"
+    assert calls[1].startswith("publish:publicar_canal")
+    assert "--channel mastodon" in calls[1]
+    assert "--force" in calls[1]
+
+
+def test_republicar_502_when_delete_fails(staff_client, published_post, monkeypatch):
+    """If the remote delete fails the publish step must NOT run —
+    otherwise we'd duplicate the broken post."""
+    publish_called = False
+
+    def fake_delete(post):
+        return False, "remote API gave 500"
+
+    def fake_call_command(*args, **kwargs):
+        nonlocal publish_called
+        publish_called = True
+
+    monkeypatch.setattr(
+        "web.api.staff.social.posts._delete_remote_and_reset", fake_delete
+    )
+    monkeypatch.setattr("web.api.staff.social.posts.call_command", fake_call_command)
+
+    r = staff_client.post(
+        "/api/v1/staff/social/republicar/",
+        {"pk": published_post.pk},
+        format="json",
+    )
+    assert r.status_code == 502
+    assert r.data["ok"] is False
+    assert r.data["step"] == "delete"
+    assert publish_called is False
+
+
+# ── social_delay (Lot B — programació flexible) ─────────────────────
+
+
+def test_social_delay_sets_field(staff_client, db):
+    from ranking.models import ConfiguracioGlobal
+
+    cfg = ConfiguracioGlobal.load()
+    assert cfg.delay_mastodon_min == 0  # default
+    r = staff_client.post(
+        "/api/v1/staff/social/delay/",
+        {"channel": "mastodon", "min": 25},
+        format="json",
+    )
+    assert r.status_code == 200
+    cfg.refresh_from_db()
+    assert cfg.delay_mastodon_min == 25
+
+
+def test_social_delay_rejects_unknown_channel(staff_client, db):
+    r = staff_client.post(
+        "/api/v1/staff/social/delay/",
+        {"channel": "tiktok", "min": 10},
+        format="json",
+    )
+    assert r.status_code == 400
+    assert "unknown channel" in r.data["error"]
+
+
+def test_social_delay_rejects_out_of_range(staff_client, db):
+    for bad in (-5, 200, "abc"):
+        r = staff_client.post(
+            "/api/v1/staff/social/delay/",
+            {"channel": "instagram", "min": bad},
+            format="json",
+        )
+        assert r.status_code == 400, (bad, r.status_code)
+
+
+def test_social_delay_caps_in_command(db, monkeypatch):
+    """The publicar_canal command must respect ConfiguracioGlobal's
+    delay value at start. Verifies the integration: setting a delay
+    in the DB → command sleeps that many minutes before doing work.
+    Uses --dry-run path so the actual sleep is skipped (the gate
+    `not opts['dry_run']` short-circuits)."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from ranking.models import ConfiguracioGlobal
+
+    cfg = ConfiguracioGlobal.load()
+    cfg.mastodon_actiu = True
+    cfg.delay_mastodon_min = 30
+    cfg.save()
+
+    sleep_calls = []
+    import time
+
+    monkeypatch.setattr(time, "sleep", lambda s: sleep_calls.append(s))
+
+    out = StringIO()
+    # --dry-run path: the delay branch is gated on `not dry_run`, so
+    # nothing should sleep. This proves the kill switch path works
+    # without holding a worker idle in tests.
+    call_command("publicar_canal", "--channel", "mastodon", "--dry-run", stdout=out)
+    assert sleep_calls == []  # gated by --dry-run

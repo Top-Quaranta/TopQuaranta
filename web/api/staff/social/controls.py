@@ -68,3 +68,36 @@ def social_story_cap(request: Request) -> Response:
     cfg.story_max_cancons_ppcc = n
     cfg.save(update_fields=["story_max_cancons_ppcc"])
     return Response({"story_max_cancons_ppcc": cfg.story_max_cancons_ppcc})
+
+
+_DELAY_CHANNELS = ("instagram", "mastodon", "bluesky", "telegram", "newsletter")
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_delay(request: Request) -> Response:
+    """Set per-channel publish delay in minutes (Sprint Distribució v2
+    lot B). Cron fires the channel at its base time; each command
+    sleeps `delay_<channel>_min` before doing work, letting staff
+    spread the schedule wider without editing crontab. Capped at
+    180 min (a worker holds a slot idle for the duration).
+    """
+    channel = (request.data.get("channel") or "").strip()
+    if channel not in _DELAY_CHANNELS:
+        return Response(
+            {
+                "error": f"unknown channel '{channel}'; expected one of {_DELAY_CHANNELS}"
+            },
+            status=400,
+        )
+    try:
+        n = int(request.data.get("min"))
+    except (TypeError, ValueError):
+        return Response({"error": "min must be int 0-180"}, status=400)
+    if n < 0 or n > 180:
+        return Response({"error": "min must be in [0, 180]"}, status=400)
+    cfg = ConfiguracioGlobal.load()
+    field = f"delay_{channel}_min"
+    setattr(cfg, field, n)
+    cfg.save(update_fields=[field])
+    return Response({field: n})

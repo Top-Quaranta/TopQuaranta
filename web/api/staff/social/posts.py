@@ -56,6 +56,11 @@ def social_list(request: Request) -> Response:
                 "rss_actiu": cfg.rss_actiu,
                 "fase_distribucio": cfg.fase_distribucio,
                 "story_max_cancons_ppcc": cfg.story_max_cancons_ppcc,
+                "delay_instagram_min": cfg.delay_instagram_min,
+                "delay_mastodon_min": cfg.delay_mastodon_min,
+                "delay_bluesky_min": cfg.delay_bluesky_min,
+                "delay_telegram_min": cfg.delay_telegram_min,
+                "delay_newsletter_min": cfg.delay_newsletter_min,
                 "dry_run": is_dry_run(),
                 "token_days_left": days_until_expiry(),
             },
@@ -408,6 +413,104 @@ def social_eliminar_instagram(request: Request) -> Response:
     )
 
 
+def _delete_remote_and_reset(post: SocialPost) -> tuple[bool, str]:
+    """Platform-aware remote delete + local reset. Returns
+    (ok, msg). Extracted from `social_eliminar_remot` so
+    `social_republicar` can call it as the first step of the
+    delete → re-render → re-publish flow without HTTP-calling
+    itself.
+    """
+    ext_id = (post.instagram_media_id or "").strip()
+    if not ext_id:
+        return False, "el post no té id remota; no hi ha res a esborrar"
+
+    plat = post.platform
+    ok = False
+    msg = ""
+    if plat in ("instagram_feed", "instagram_story"):
+        if is_dry_run():
+            ok, msg = True, "DRY-RUN: no es crida l'API de Meta"
+        else:
+            import requests as _req
+
+            from social.instagram_client import GRAPH_BASE, _token
+
+            r = _req.delete(
+                f"{GRAPH_BASE}/{ext_id}",
+                params={"access_token": _token()},
+                timeout=30,
+            )
+            ok = r.ok
+            msg = (
+                f"DELETE /{ext_id} → {r.status_code}: {r.text[:300]}"
+                if not r.ok
+                else f"DELETE /{ext_id} → 200 OK"
+            )
+    elif plat == "mastodon":
+        from social import mastodon_client
+
+        ok, msg = mastodon_client.delete_status(ext_id)
+    elif plat == "bluesky":
+        from social import bluesky_client
+
+        ok, msg = bluesky_client.delete_post(ext_id)
+    elif plat == "telegram":
+        from social import telegram_client
+
+        mids = (post.metadata or {}).get("message_ids") or []
+        if not mids:
+            tail = ext_id.rstrip("/").rsplit("/", 1)[-1]
+            if tail.isdigit():
+                mids = [int(tail)]
+        ok, msg = telegram_client.delete_messages(mids)
+    else:
+        return False, f"plataforma no suportada per esborrat remot: {plat}"
+
+    if not ok:
+        return False, msg
+
+    # Remote delete succeeded → mirror the reset.
+    post.status = SocialPost.STATUS_PENDENT
+    post.instagram_media_id = ""
+    post.error_msg = ""
+    post.metadata = {}
+    post.published_at = None
+    post.save()
+    return True, msg
+
+
+def _publish_args_for(post: SocialPost) -> list[str]:
+    """Build the `call_command` args that re-publish a post in its
+    original platform + tipus + setmana slot. Used by
+    `social_republicar` after the remote delete + local reset.
+    """
+    publish_date = publication_date_for(post.tipus, post.setmana)
+    plat = post.platform
+    if plat in ("instagram_feed", "instagram_story"):
+        return [
+            "publicar_social",
+            "--data",
+            publish_date.isoformat(),
+            "--tipus",
+            post.tipus,
+            "--platform",
+            plat,
+            "--force",
+        ]
+    # Non-IG channels go through publicar_canal.
+    channel = plat  # mastodon | bluesky | telegram | newsletter
+    return [
+        "publicar_canal",
+        "--channel",
+        channel,
+        "--data",
+        publish_date.isoformat(),
+        "--tipus",
+        post.tipus,
+        "--force",
+    ]
+
+
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def social_eliminar_remot(request: Request) -> Response:
@@ -431,73 +534,89 @@ def social_eliminar_remot(request: Request) -> Response:
     except (SocialPost.DoesNotExist, ValueError):
         return Response({"error": "post not found"}, status=404)
 
-    ext_id = (post.instagram_media_id or "").strip()
-    if not ext_id:
-        return Response(
-            {"error": "el post no té id remota; no hi ha res a esborrar"},
-            status=400,
-        )
-
-    plat = post.platform
-    ok = False
-    msg = ""
     try:
-        if plat in ("instagram_feed", "instagram_story"):
-            if is_dry_run():
-                ok, msg = True, "DRY-RUN: no es crida l'API de Meta"
-            else:
-                import requests as _req
-
-                from social.instagram_client import GRAPH_BASE, _token
-
-                r = _req.delete(
-                    f"{GRAPH_BASE}/{ext_id}",
-                    params={"access_token": _token()},
-                    timeout=30,
-                )
-                ok = r.ok
-                msg = (
-                    f"DELETE /{ext_id} → {r.status_code}: {r.text[:300]}"
-                    if not r.ok
-                    else f"DELETE /{ext_id} → 200 OK"
-                )
-        elif plat == "mastodon":
-            from social import mastodon_client
-
-            ok, msg = mastodon_client.delete_status(ext_id)
-        elif plat == "bluesky":
-            from social import bluesky_client
-
-            ok, msg = bluesky_client.delete_post(ext_id)
-        elif plat == "telegram":
-            from social import telegram_client
-
-            mids = (post.metadata or {}).get("message_ids") or []
-            if not mids:
-                # Legacy posts (pre-message_ids capture) only have the
-                # first message URL — try to extract a single id.
-                tail = ext_id.rstrip("/").rsplit("/", 1)[-1]
-                if tail.isdigit():
-                    mids = [int(tail)]
-            ok, msg = telegram_client.delete_messages(mids)
-        else:
-            return Response(
-                {"error": f"plataforma no suportada per esborrat remot: {plat}"},
-                status=400,
-            )
+        ok, msg = _delete_remote_and_reset(post)
     except Exception as exc:  # noqa: BLE001
         return Response(
             {"ok": False, "msg": f"{type(exc).__name__}: {exc}"}, status=502
         )
-
     if not ok:
-        return Response({"ok": False, "msg": msg}, status=502)
-
-    # Remote delete succeeded → mirror the reset.
-    post.status = SocialPost.STATUS_PENDENT
-    post.instagram_media_id = ""
-    post.error_msg = ""
-    post.metadata = {}
-    post.published_at = None
-    post.save()
+        # 400 vs 502 keeps the previous semantics (no ext_id → 400;
+        # API failure → 502).
+        status_code = 400 if "id remota" in msg else 502
+        return Response({"ok": False, "msg": msg}, status=status_code)
     return Response({"ok": True, "msg": msg, "post": _serialize(post)})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_republicar(request: Request) -> Response:
+    """Re-publish a post with the latest top contents.
+
+    Use case: a cançó in a published top is rejected after publication
+    (e.g. staff finds the artist is a homonym mismatch). The on-screen
+    post still shows the wrong row. This endpoint:
+
+      1. Deletes the remote post via `_delete_remote_and_reset` (the
+         same dispatcher `social_eliminar_remot` uses).
+      2. Re-runs the appropriate publish command with `--force`. The
+         renderer now produces a corrected slide because TopSetmanal
+         has been recomputed since the rebuig.
+
+    Returns the captured stdout of both steps so the operator sees
+    what happened. Lot C of Sprint Distribució v2 — replaces the
+    manual three-click workflow (Esborrar → Reset → Publicar).
+    """
+    pk = request.data.get("pk")
+    if not pk:
+        return Response({"error": "pk required"}, status=400)
+    try:
+        post = SocialPost.objects.get(pk=int(pk))
+    except (SocialPost.DoesNotExist, ValueError):
+        return Response({"error": "post not found"}, status=404)
+
+    if not (post.instagram_media_id or "").strip():
+        return Response(
+            {"error": "el post no està publicat (no hi ha id remota)"},
+            status=400,
+        )
+
+    # Step 1: remote delete + local reset.
+    try:
+        ok, delete_msg = _delete_remote_and_reset(post)
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {"ok": False, "step": "delete", "msg": f"{type(exc).__name__}: {exc}"},
+            status=502,
+        )
+    if not ok:
+        return Response({"ok": False, "step": "delete", "msg": delete_msg}, status=502)
+
+    # Step 2: re-publish via the appropriate command.
+    args = _publish_args_for(post)
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            call_command(*args)
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {
+                "ok": False,
+                "step": "publish",
+                "msg": f"{type(exc).__name__}: {exc}",
+                "delete_msg": delete_msg,
+                "publish_output": buf.getvalue(),
+            },
+            status=500,
+        )
+
+    post.refresh_from_db()
+    return Response(
+        {
+            "ok": True,
+            "delete_msg": delete_msg,
+            "publish_output": buf.getvalue() or f"(sense sortida) Args: {args}",
+            "args": args,
+            "post": _serialize(post),
+        }
+    )

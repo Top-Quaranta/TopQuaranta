@@ -13,3 +13,21 @@ that belong inside their callsite.
 # Graph client uses a tighter 30 s timeout because the Graph API is
 # more responsive and aggressive retries are safer there.
 HTTP_TIMEOUT_S = 60
+
+
+# ── Renderer layout primitives ───────────────────────────────────────
+#
+# Numeric anchors shared across slide kinds so the visual rhythm stays
+# coherent. A bump to `LIST_ROW_HEIGHT` ripples to every list-style
+# slide (territorial top + novetats singles + future variants).
+#
+# Rationale for the chosen values is in the readability v2/v3 audit
+# trail at `_feed_list_slide` (May-2026 sprint).
+
+# Pixels between the start of two consecutive cards in a list slide.
+# 105 = 76 px card height + 29 px gap.
+LIST_ROW_HEIGHT = 105
+
+# Y-coordinate of the first row's top edge in a list slide.
+# Leaves room for the 60 px header + 8 px accent rule + 32 px gap.
+LIST_TOP_Y = 170

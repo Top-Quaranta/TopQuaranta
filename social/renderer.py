@@ -27,6 +27,7 @@ from django.conf import settings
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from . import colors, fonts, svg_assets
+from .constants import LIST_ROW_HEIGHT, LIST_TOP_Y
 from .cover_cache import fetch as fetch_cover
 
 logger = logging.getLogger(__name__)
@@ -464,20 +465,17 @@ def _feed_list_slide(
     d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill=accent)
 
     # Layout — May-2026 readability pass v2. The pills + cards stay
-    # the SAME size as the legacy spec (pos_w=76, row_h=105, list_top=170);
-    # the gain in apparent text size comes from larger fonts + tighter
-    # vertical padding inside the cell. v1 had bumped pos_w/row_h too,
-    # which pushed the last card past the page indicator (1/4 etc.)
-    # and clipped it.
-    row_h = 105
-    list_top = 170
+    # the SAME size as the legacy spec (pos_w=76, LIST_ROW_HEIGHT=105,
+    # LIST_TOP_Y=170 — both shared via social/constants.py with the
+    # singles-novetats slide); the gain in apparent text size comes
+    # from larger fonts + tighter vertical padding inside the cell.
     f_pos = fonts.display_bold(54)  # was 38 → 48 → 54
     f_song = fonts.display_bold(40)  # was 28 → 34 → 40
     f_artist = fonts.sans_regular(22)
     pos_w = 76
 
     for i, e in enumerate(entries[:10]):
-        y = list_top + i * row_h
+        y = LIST_TOP_Y + i * LIST_ROW_HEIGHT
         pos = e["posicio"]
 
         # Tinted card behind each row — alternating depth so the eye
@@ -776,15 +774,14 @@ def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image
     # row_h/list_top, but the song title gets bumped 28 → 40 pt and
     # both glyphs hug the top of the row (y+0 / y+54). Cover (80 px)
     # and territory icon (48 px) anchors are unchanged so the rest of
-    # the layout stays put.
-    row_h = 105
-    list_top = 170
+    # the layout stays put. Row geometry shared with `_feed_list_slide`
+    # via social/constants.py.
     f_song = fonts.display_bold(40)  # was 28
     f_artist = fonts.sans_regular(22)
     icon_size = 48
 
     for i, e in enumerate(items[:10]):
-        y = list_top + i * row_h
+        y = LIST_TOP_Y + i * LIST_ROW_HEIGHT
         ter = e.get("artista_territori") or "PPCC"
         ter_color = colors.terr_color(ter)
 

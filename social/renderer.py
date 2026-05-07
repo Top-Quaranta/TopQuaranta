@@ -1075,7 +1075,7 @@ def _story_cta() -> Image.Image:
         (cx, cy, cx + card_w, cy + card_h), radius=32, fill=colors.COLOR_CARD
     )
 
-    f1 = fonts.display_bold(56)
+    f1 = fonts.display_bold(64)
     line1 = "Top complet a"
     l1 = d.textlength(line1, font=f1)
     d.text((cx + (card_w - l1) // 2, cy + 180), line1, font=f1, fill=colors.COLOR_WHITE)

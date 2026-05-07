@@ -244,10 +244,15 @@ class Command(BaseCommand):
 
         # Per-slide auto-tags: the cover slide carries no tag; the
         # rest carry the artists whose entries appear on that slide.
-        # All tags are placed at (0.5, 0.5) — Meta clusters multiple
-        # tags at the same point into a tappable list, so we don't
-        # need to spread them across the canvas.
+        # Coordinates are spread across the canvas so the bubbles
+        # don't all clump at the centre — see `_slide_tags` docstring.
         tags_per_slide = self._slide_tags(slot.tipus, len(paths), data)
+        # Per-slide alt text — same chunking as _slide_tags so each
+        # alt describes the slide the screen-reader user is on.
+        entries_for_alts = data.get("entries") or data.get("items") or []
+        alts_per_slide = captions.slide_alts(
+            slot.tipus, territori, setmana, entries_for_alts, len(paths)
+        )
 
         # Real publish: upload each as carousel item, then carousel
         # parent + publish. Single-image fallback when only one
@@ -261,6 +266,7 @@ class Command(BaseCommand):
                 urls[0],
                 caption,
                 user_tags=tags_per_slide[0] or None,
+                alt_text=alts_per_slide[0] or None,
             )
         else:
             child_ids = []
@@ -268,6 +274,7 @@ class Command(BaseCommand):
                 cid = instagram_client.upload_carousel_item(
                     u,
                     user_tags=tags_per_slide[i] or None,
+                    alt_text=alts_per_slide[i] or None,
                 )
                 instagram_client.wait_until_finished(cid)
                 child_ids.append(cid)
@@ -371,30 +378,63 @@ class Command(BaseCommand):
           • nous_albums → 1 album per slide
           • nous_singles → bin-packed (≤10 per slide, even split)
 
-        All tags are placed at (0.5, 0.5) — Meta clusters multiple
-        same-coordinate tags into a single tappable list bubble. We
-        don't try to spread them across the canvas because there's
-        no meaningful visual position for an artist on a list slide.
+        Tag coordinates are spread across the canvas so Instagram's
+        tappable bubbles don't all clump at the centre (the previous
+        (0.5, 0.5)-for-all approach made the slide look like a single
+        crowded balloon). For list slides we anchor each tag to the
+        approximate row Y of the corresponding entry and zigzag the X
+        between three columns; for the album slide (one item) we sit
+        the tag over the artist label area.
         """
         out: list[list[dict]] = [[]]  # cover slide → no tags
 
-        def _tag(handle_url: str | None) -> dict | None:
+        def _tag(handle_url: str | None, *, x: float, y: float) -> dict | None:
             u = instagram_username(handle_url)
-            return {"username": u, "x": 0.5, "y": 0.5} if u else None
+            if not u:
+                return None
+            # Clamp to (0.05, 0.95) — Meta rejects tags outside that
+            # range silently. Bubbles render with an offset so we keep
+            # them well inside the canvas.
+            x = max(0.05, min(0.95, x))
+            y = max(0.05, min(0.95, y))
+            return {"username": u, "x": x, "y": y}
+
+        # Y range for list rows: leaves headroom (top pill area) and
+        # footer (page indicator + brand pill).
+        Y_TOP, Y_BOTTOM = 0.18, 0.88
+        # Three-column zigzag — keeps consecutive bubbles apart.
+        XS = (0.30, 0.50, 0.70)
+
+        def _row_xy(row_idx: int, n_rows: int) -> tuple[float, float]:
+            """Y-center for row `row_idx` of `n_rows` evenly-spaced
+            rows; X cycles through XS so adjacent bubbles don't
+            overlap vertically."""
+            if n_rows <= 0:
+                return 0.5, 0.5
+            step = (Y_BOTTOM - Y_TOP) / max(1, n_rows)
+            y = Y_TOP + step * (row_idx + 0.5)
+            return XS[row_idx % len(XS)], y
 
         TOP_TIPUS = (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL)
         if tipus in TOP_TIPUS:
             entries = data.get("entries") or []
             for page in range(1, n_slides):
                 chunk = entries[(page - 1) * 10 : page * 10]
-                tags = [t for e in chunk if (t := _tag(e.get("artista_instagram_url")))]
+                tags = []
+                for i, e in enumerate(chunk):
+                    x, y = _row_xy(i, len(chunk))
+                    t = _tag(e.get("artista_instagram_url"), x=x, y=y)
+                    if t:
+                        tags.append(t)
                 out.append(tags[:20])  # respect per-image cap
         elif tipus == SocialPost.TIPUS_NOUS_ALBUMS:
             items = data.get("items") or []
             # 1 slide per album (renderer caps at 9; n_slides may be
-            # smaller if there are fewer items).
+            # smaller if there are fewer items). Tag sits over the
+            # artist label area, which the renderer paints at roughly
+            # 55 % of the canvas height.
             for item in items[: n_slides - 1]:
-                t = _tag(item.get("artista_instagram_url"))
+                t = _tag(item.get("artista_instagram_url"), x=0.50, y=0.55)
                 out.append([t] if t else [])
         elif tipus == SocialPost.TIPUS_NOUS_SINGLES:
             # Mirror the bin-packing in `render_feed_novetats`:
@@ -410,9 +450,12 @@ class Command(BaseCommand):
                 if not chunk:
                     out.append([])
                 else:
-                    tags = [
-                        t for e in chunk if (t := _tag(e.get("artista_instagram_url")))
-                    ]
+                    tags = []
+                    for i, e in enumerate(chunk):
+                        x, y = _row_xy(i, len(chunk))
+                        t = _tag(e.get("artista_instagram_url"), x=x, y=y)
+                        if t:
+                            tags.append(t)
                     out.append(tags[:20])
                 offset += per_slide
         # Pad to exactly n_slides in case of any mismatch — the

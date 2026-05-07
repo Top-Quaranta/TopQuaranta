@@ -220,6 +220,114 @@ def caption_top(
     return text
 
 
+# ── Per-slide alt text (a11y) ───────────────────────────────────────
+#
+# A single function builds the per-slide alt-text list used by every
+# multi-image channel (IG carousel, Mastodon media, Bluesky embed.images,
+# Telegram media-group). Each slide gets its own alt — screen-reader
+# users hear something like "Top setmanal de cançons en català de
+# Catalunya. Posicions 1 a 10: 1 Tutu Turú de Siderland, 2 Estrelles
+# de Max Navarro, ..." instead of a generic "Top CAT, posicions 1-10".
+#
+# The renderer's slide chunking is mirrored here (same as
+# `_slide_tags` in publicar_social.py): for top, 10 entries per slide;
+# nous_albums, 1 album per slide; nous_singles, bin-packed.
+#
+# `n_slides` includes the cover slide. `slide_alts(...)[i]` corresponds
+# to `paths[i]`. Returns exactly `n_slides` items (caller indexes by
+# slide position).
+
+
+def _alt_top_portada(territori: str, setmana: datetime.date) -> str:
+    nom = TERRITORI_NOM.get(territori, territori or "")
+    return f"Portada del Top setmanal de {nom} · {_setmana_label(setmana)}"
+
+
+def _alt_novetats_portada(tipus: str, setmana: datetime.date) -> str:
+    title = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"
+    return f"Portada de {title} · {_setmana_label(setmana)}"
+
+
+def _alt_top_list(
+    territori: str, chunk: list[dict], start_pos: int, end_pos: int
+) -> str:
+    nom = TERRITORI_NOM.get(territori, territori or "")
+    head = (
+        f"Top setmanal de cançons en català de {nom}. "
+        f"Posicions {start_pos} a {end_pos}: "
+    )
+    rows = []
+    for e in chunk:
+        rows.append(
+            f"{e.get('posicio', '?')} {e.get('canco_nom', '—')} "
+            f"de {e.get('artista_nom', '—')}"
+        )
+    return head + ", ".join(rows) + "."
+
+
+def _alt_album_slide(item: dict) -> str:
+    return f"Nou àlbum: «{item.get('nom', '—')}» de {item.get('artista_nom', '—')}"
+
+
+def _alt_singles_slide(chunk: list[dict], start_idx: int, end_idx: int) -> str:
+    head = f"Nous singles {start_idx} a {end_idx}: "
+    rows = [f"«{e.get('nom', '—')}» de {e.get('artista_nom', '—')}" for e in chunk]
+    return head + ", ".join(rows) + "."
+
+
+def slide_alts(
+    tipus: str,
+    territori: str,
+    setmana: datetime.date,
+    entries: list[dict],
+    n_slides: int,
+) -> list[str]:
+    """Per-slide alt-text list, one entry per slide.
+
+    Mirrors the renderer's chunking exactly (same logic as
+    `_slide_tags` in publicar_social) so each alt describes the slide
+    the screen-reader user is actually on.
+
+    `entries` is `data["entries"]` for top tipus or `data["items"]` for
+    novetats. `n_slides` is the total number of slides including the
+    cover (index 0).
+    """
+    out: list[str] = []
+    if tipus in ("top_ppcc", "top_territorial"):
+        out.append(_alt_top_portada(territori, setmana))
+        for page in range(1, n_slides):
+            chunk = entries[(page - 1) * 10 : page * 10]
+            if not chunk:
+                out.append("")
+                continue
+            start = (page - 1) * 10 + 1
+            end = start + len(chunk) - 1
+            out.append(_alt_top_list(territori, chunk, start, end))
+    elif tipus == "nous_albums":
+        out.append(_alt_novetats_portada(tipus, setmana))
+        for item in entries[: n_slides - 1]:
+            out.append(_alt_album_slide(item))
+    elif tipus == "nous_singles":
+        out.append(_alt_novetats_portada(tipus, setmana))
+        # Mirror render_feed_novetats bin-packing.
+        n = len(entries)
+        slides = max(1, n_slides - 1)
+        per_slide = -(-n // slides) if n else 0
+        offset = 0
+        for _ in range(slides):
+            chunk = entries[offset : offset + per_slide]
+            if not chunk:
+                out.append("")
+            else:
+                out.append(_alt_singles_slide(chunk, offset + 1, offset + len(chunk)))
+            offset += per_slide
+    else:
+        out.append("")
+    while len(out) < n_slides:
+        out.append("")
+    return out[:n_slides]
+
+
 def caption_novetats(tipus: str, setmana: datetime.date, entries: list[dict]) -> str:
     label = _setmana_label(setmana)
     title = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"

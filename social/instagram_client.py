@@ -131,20 +131,31 @@ def wait_until_finished(
 # ── Public surface ──────────────────────────────────────────────────
 
 
-def upload_carousel_item(image_url: str, *, user_tags: list[dict] | None = None) -> str:
+def upload_carousel_item(
+    image_url: str,
+    *,
+    user_tags: list[dict] | None = None,
+    alt_text: str | None = None,
+) -> str:
     """Upload one image as a carousel child. Returns container ID.
 
     `user_tags` is the Meta `user_tags` payload — a list of
     `{"username": str, "x": float, "y": float}` (coordinates 0..1).
     Capped at 20 per image by Meta. We don't validate locally; the
     API will reject invalid handles silently (untagged) or raise.
+
+    `alt_text` is the per-image accessibility label (Meta's
+    `alt_text` field, capped at 1 000 chars). Surfaced to screen
+    readers on Instagram. We already do this for Mastodon/Bluesky
+    — IG was the last channel without it.
     """
     if is_dry_run():
         cid = f"dry-item-{int(time.time()*1000)}-{abs(hash(image_url)) & 0xffff:04x}"
         logger.info(
-            "[DRY] upload_carousel_item %s tags=%d → %s",
+            "[DRY] upload_carousel_item %s tags=%d alt=%dch → %s",
             image_url,
             len(user_tags or []),
+            len(alt_text or ""),
             cid,
         )
         return cid
@@ -156,6 +167,8 @@ def upload_carousel_item(image_url: str, *, user_tags: list[dict] | None = None)
         import json
 
         body["user_tags"] = json.dumps(user_tags[:20])
+    if alt_text:
+        body["alt_text"] = alt_text[:1000]
     return _post(f"{_user_id()}/media", body)["id"]
 
 
@@ -174,15 +187,24 @@ def create_carousel(child_ids: list[str], caption: str) -> str:
 
 
 def upload_image(
-    image_url: str, caption: str, *, user_tags: list[dict] | None = None
+    image_url: str,
+    caption: str,
+    *,
+    user_tags: list[dict] | None = None,
+    alt_text: str | None = None,
 ) -> str:
-    """Single-image feed post. Returns container ID."""
+    """Single-image feed post. Returns container ID.
+
+    `alt_text` is the per-image accessibility label (Meta's `alt_text`
+    field, capped at 1 000 chars).
+    """
     if is_dry_run():
         cid = f"dry-image-{int(time.time()*1000)}"
         logger.info(
-            "[DRY] upload_image %s tags=%d → %s",
+            "[DRY] upload_image %s tags=%d alt=%dch → %s",
             image_url,
             len(user_tags or []),
+            len(alt_text or ""),
             cid,
         )
         return cid
@@ -191,6 +213,8 @@ def upload_image(
         import json
 
         body["user_tags"] = json.dumps(user_tags[:20])
+    if alt_text:
+        body["alt_text"] = alt_text[:1000]
     return _post(f"{_user_id()}/media", body)["id"]
 
 

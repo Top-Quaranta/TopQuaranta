@@ -172,11 +172,11 @@ class Command(BaseCommand):
             extra_meta: dict = {}
             if channel == "mastodon":
                 ext_id, extra_meta = self._publish_mastodon(
-                    paths, text, slot, territori, entries
+                    paths, text, slot, territori, setmana, entries
                 )
             elif channel == "bluesky":
                 ext_id, extra_meta = self._publish_bluesky(
-                    paths, text, slot, territori, entries
+                    paths, text, slot, territori, setmana, entries
                 )
             elif channel == "telegram":
                 ext_id, extra_meta = self._publish_telegram(
@@ -223,28 +223,25 @@ class Command(BaseCommand):
         """
         return paths[:4]
 
-    def _carousel_alts(self, picked: list[Path], territori, entries) -> list[str]:
-        """Alt text per slide: portada labelled with the territory;
-        list slides labelled "Posicions N-M de Top — <territory>" so
-        screen-reader users get a sense of which chunk of the top
-        each image covers."""
-        terr_label = territori or "Global"
-        alts = [f"Portada Top — {terr_label}"]
-        # List slides hold up to 10 entries each starting at pos 1.
-        for i in range(1, len(picked)):
-            start = (i - 1) * 10 + 1
-            end = min(start + 9, len(entries) if entries else start + 9)
-            alts.append(f"Top {terr_label}, posicions {start}-{end}")
-        return alts
+    def _carousel_alts(
+        self, picked: list[Path], slot, territori, setmana, entries
+    ) -> list[str]:
+        """Alt text per slide. Delegates to `captions.slide_alts`,
+        which mirrors the renderer's chunking and produces a rich
+        a11y label per slide (e.g. "Top setmanal de cançons en
+        català de Catalunya. Posicions 1 a 10: 1 Tutu Turú de
+        Siderland, ..."). The previous version emitted a generic
+        "Posicions N-M" string and didn't handle novetats at all."""
+        return captions.slide_alts(slot.tipus, territori, setmana, entries, len(picked))
 
     def _publish_mastodon(
-        self, paths: list[Path], text, slot, territori, entries
+        self, paths: list[Path], text, slot, territori, setmana, entries
     ) -> tuple[str, dict]:
         # 4-image carousel: portada + first 3 list slides. Each image
         # uploads independently to /media; the media_ids attach to
         # one /statuses call.
         picked = self._carousel_paths(paths)
-        alts = self._carousel_alts(picked, territori, entries)
+        alts = self._carousel_alts(picked, slot, territori, setmana, entries)
         media_ids = [
             mastodon_client.upload_media(p, alt_text=alt)
             for p, alt in zip(picked, alts)
@@ -266,12 +263,12 @@ class Command(BaseCommand):
         return res["url"], {"message_ids": res["message_ids"]}
 
     def _publish_bluesky(
-        self, paths: list[Path], text, slot, territori, entries
+        self, paths: list[Path], text, slot, territori, setmana, entries
     ) -> tuple[str, dict]:
         # 4-image carousel: portada + first 3 list slides. Bluesky
         # `embed.images` accepts up to 4 blobs in a single record.
         picked = self._carousel_paths(paths)
-        alts = self._carousel_alts(picked, territori, entries)
+        alts = self._carousel_alts(picked, slot, territori, setmana, entries)
         blobs = [bluesky_client.upload_blob(p) for p in picked]
         at_uri = bluesky_client.create_post(text, image_blobs=blobs, alt_texts=alts)
         return at_uri, {"slides": [p.name for p in picked]}

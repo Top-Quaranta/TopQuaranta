@@ -267,3 +267,106 @@ def test_no_data_marks_omes(db, cfg_phase_1):
     ).first()
     assert p is not None
     assert p.status == SocialPost.STATUS_OMES
+
+
+# ── slide_alts (a11y) ──────────────────────────────────────────────
+
+
+def test_slide_alts_top_portada_mentions_territory_and_week():
+    setmana = datetime.date(2026, 4, 27)
+    alts = captions.slide_alts(
+        "top_territorial",
+        "CAT",
+        setmana,
+        [{"posicio": 1, "canco_nom": "X", "artista_nom": "Y"}],
+        n_slides=2,
+    )
+    assert "Catalunya" in alts[0]
+    assert "Portada" in alts[0]
+
+
+def test_slide_alts_top_list_lists_entries_with_positions():
+    setmana = datetime.date(2026, 4, 27)
+    entries = [
+        {"posicio": i, "canco_nom": f"Cançó {i}", "artista_nom": f"Artista {i}"}
+        for i in range(1, 11)
+    ]
+    alts = captions.slide_alts("top_territorial", "CAT", setmana, entries, n_slides=2)
+    assert "Posicions 1 a 10" in alts[1]
+    assert "Cançó 1 de Artista 1" in alts[1]
+    assert "Cançó 10 de Artista 10" in alts[1]
+
+
+def test_slide_alts_novetats_albums_one_per_slide():
+    setmana = datetime.date(2026, 4, 27)
+    items = [
+        {"nom": "Àlbum A", "artista_nom": "Artista A"},
+        {"nom": "Àlbum B", "artista_nom": "Artista B"},
+    ]
+    alts = captions.slide_alts("nous_albums", "", setmana, items, n_slides=3)
+    assert "Nous àlbums" in alts[0]
+    assert "Àlbum A" in alts[1] and "Artista A" in alts[1]
+    assert "Àlbum B" in alts[2] and "Artista B" in alts[2]
+
+
+def test_slide_alts_novetats_singles_bin_packs():
+    setmana = datetime.date(2026, 4, 27)
+    items = [{"nom": f"Single {i}", "artista_nom": f"Art {i}"} for i in range(1, 13)]
+    # 12 singles, 2 list slides + portada → 6 per slide
+    alts = captions.slide_alts("nous_singles", "", setmana, items, n_slides=3)
+    assert "Single 1" in alts[1]
+    assert "Single 12" in alts[2]
+
+
+def test_slide_alts_pads_to_n_slides():
+    setmana = datetime.date(2026, 4, 27)
+    out = captions.slide_alts("top_territorial", "CAT", setmana, [], n_slides=4)
+    assert len(out) == 4
+
+
+# ── _slide_tags coordinate dispersion ──────────────────────────────
+
+
+def test_slide_tags_top_spreads_y_per_row():
+    from social.management.commands.publicar_social import Command
+
+    entries = [
+        {"posicio": i, "artista_instagram_url": f"https://instagram.com/a{i}"}
+        for i in range(1, 11)
+    ]
+    out = Command._slide_tags("top_ppcc", n_slides=2, data={"entries": entries})
+    list_slide_tags = out[1]
+    ys = [t["y"] for t in list_slide_tags]
+    assert len(set(ys)) == len(ys), "every row should land at a different Y"
+    assert all(0.05 <= y <= 0.95 for y in ys), "Y must be within Meta's bounds"
+
+
+def test_slide_tags_top_alternates_x_columns():
+    from social.management.commands.publicar_social import Command
+
+    entries = [
+        {"posicio": i, "artista_instagram_url": f"https://instagram.com/a{i}"}
+        for i in range(1, 11)
+    ]
+    out = Command._slide_tags("top_ppcc", n_slides=2, data={"entries": entries})
+    xs = [t["x"] for t in out[1]]
+    # Three-column zigzag: at least 3 distinct X values across 10 rows.
+    assert len(set(xs)) >= 3
+
+
+def test_slide_tags_album_slide_anchors_on_artist_label():
+    from social.management.commands.publicar_social import Command
+
+    items = [{"artista_instagram_url": "https://instagram.com/banda"}]
+    out = Command._slide_tags("nous_albums", n_slides=2, data={"items": items})
+    assert out[1] == [{"username": "banda", "x": 0.50, "y": 0.55}]
+
+
+def test_slide_tags_cover_slide_has_no_tags():
+    from social.management.commands.publicar_social import Command
+
+    entries = [
+        {"posicio": 1, "artista_instagram_url": "https://instagram.com/a"},
+    ]
+    out = Command._slide_tags("top_ppcc", n_slides=2, data={"entries": entries})
+    assert out[0] == []

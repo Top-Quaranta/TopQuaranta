@@ -16,6 +16,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import ImageUploadButton from '../components/ImageUploadButton'
+import useApi from '../hooks/useApi'
 
 const inputClass =
   'mt-1 w-full px-3 py-2 rounded-md bg-white text-tq-ink text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-tq-yellow'
@@ -48,16 +49,21 @@ export default function ComunitatPublicarPage() {
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
 
+  // Edit mode: load existing post into the form once the fetch
+  // settles. On any error (typically 404 if the pk is bogus or the
+  // user no longer has access) bounce back to the index.
+  const { data: existingPub, error: pubErr } = useApi(
+    pk ? `/comunitat/publicacions/${pk}/` : null,
+  )
   useEffect(() => {
-    if (!pk) return
-    api.get(`/comunitat/publicacions/${pk}/`)
-      .then(p => {
-        setTitol(p.titol)
-        setCos(p.cos)
-        setVisibilitat(p.visibilitat)
-      })
-      .catch(() => navigate('/comunitat'))
-  }, [pk, navigate])
+    if (pubErr) navigate('/comunitat')
+  }, [pubErr, navigate])
+  useEffect(() => {
+    if (!existingPub) return
+    setTitol(existingPub.titol)
+    setCos(existingPub.cos)
+    setVisibilitat(existingPub.visibilitat)
+  }, [existingPub])
 
   if (loading) return null
   if (!profile) return <Navigate to="/compte/accedir?next=/comunitat/publicar" replace />

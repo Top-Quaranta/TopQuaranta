@@ -16,9 +16,9 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
 import { Section } from '../components/editorial'
 import { SeoHead } from '../lib/seoHead'
+import useApi from '../hooks/useApi'
 
 const TERRITORI_NOM = {
   CAT: 'Catalunya',
@@ -206,17 +206,19 @@ export default function MapaPage() {
 
   const gj = useGeoJSON(geoPath)
 
-  const [stats, setStats] = useState([])
+  // useApi-keyed path: stats refetch automatically when level /
+  // selTerritori / selComarca change, with cancellation on unmount
+  // and on path change.
+  const _statsP = new URLSearchParams({ level })
+  if (selTerritori && level !== 'territori') _statsP.set('parent', selTerritori)
+  if (selComarca && level === 'municipi') {
+    _statsP.set('parent', selComarca)
+    _statsP.set('territori', selTerritori)
+  }
+  const { data: statsRaw } = useApi(`/mapa/stats/?${_statsP}`)
+  const stats = statsRaw || []
+
   useEffect(() => {
-    const p = new URLSearchParams({ level })
-    if (selTerritori && level !== 'territori') p.set('parent', selTerritori)
-    if (selComarca && level === 'municipi') {
-      p.set('parent', selComarca)
-      p.set('territori', selTerritori)
-    }
-    api.get(`/mapa/stats/?${p}`)
-      .then(setStats)
-      .catch(() => setStats([]))
     // K1 analytics: count drill-downs per level so we can see if the
     // audience uses the comarca / municipi tiers or stays at the
     // territori overview. dim1 is the resulting level after the
@@ -319,24 +321,20 @@ export default function MapaPage() {
   // level (PPCC by default, drilled-down when the user clicks into a
   // territori / comarca / municipi). Sorted by cumulative Last.fm
   // plays on the backend.
-  const [artistes, setArtistes] = useState(null)
-  useEffect(() => {
-    const p = new URLSearchParams({ limit: '60' })
-    if (selMunicipi) {
-      p.set('territori', selMunicipi.codi)
-      p.set('comarca', selMunicipi.comarca)
-      p.set('municipi', selMunicipi.municipi)
-    } else if (selComarca && selTerritori) {
-      p.set('territori', selTerritori)
-      p.set('comarca', selComarca)
-    } else if (selTerritori) {
-      p.set('territori', selTerritori)
-    }
-    setArtistes(null)
-    api.get(`/mapa/artistes-top/?${p}`)
-      .then(setArtistes)
-      .catch(() => setArtistes([]))
-  }, [selTerritori, selComarca, selMunicipi])
+  // Artistes-top scoped to current selection. useApi handles
+  // refetch + cancellation on every selection change.
+  const _artP = new URLSearchParams({ limit: '60' })
+  if (selMunicipi) {
+    _artP.set('territori', selMunicipi.codi)
+    _artP.set('comarca', selMunicipi.comarca)
+    _artP.set('municipi', selMunicipi.municipi)
+  } else if (selComarca && selTerritori) {
+    _artP.set('territori', selTerritori)
+    _artP.set('comarca', selComarca)
+  } else if (selTerritori) {
+    _artP.set('territori', selTerritori)
+  }
+  const { data: artistes } = useApi(`/mapa/artistes-top/?${_artP}`)
 
   // Which KPIs does the panel show?
   let kpi

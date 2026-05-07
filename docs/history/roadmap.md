@@ -3,7 +3,7 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-05-04.
+> Last updated: 2026-05-07.
 
 ---
 
@@ -34,7 +34,12 @@
   auth staff. Email digest setmanal als admins. Cap PII; cap
   third-party JS. Detall a `docs/architecture/analytics.md`.
 - **Stack**: Python 3.12 + Django 6.0 + scikit-learn 1.8 (bumped
-  2026-05-04 amb venv-swap calent, sense downtime).
+  2026-05-04 amb venv-swap calent, sense downtime). Vite 8.0.11 +
+  postcss 8.5.14 (Dependabot 2026-05-07, 0 vulnerabilitats obertes).
+- **CI**: 5 jobs a `.github/workflows/ci.yml` — `tests` (pytest, 269+),
+  `lint` (black + isort), `frontend-tests` (vitest, 14), `migrations`
+  (makemigrations --check), `destructive-migrations` (soft warning a
+  PRs amb `RemoveField`/`DeleteModel`/`RenameField`/`RenameModel`).
 
 Si vols més detall del que es va lliurar a cada sprint, vés a la
 secció [Sprints — completats](#sprints--completats) més avall.
@@ -209,9 +214,10 @@ secció _completats_ amb la data i el detall.
 
 Items petits per fer en sessions curtes:
 
-- [ ] **Backups off-site** — `tq-backup` només a disc local del CX22.
-      Pèrdua de disc = mort. Triar destí (Hetzner Storage Box ~3€/mes
-      o B2 ~0,5€/mes) i pipe per `age` per encriptar. URGENT.
+- ~~**Backups off-site**~~ — risc acceptat (decisió 2026-05-07,
+      documentada a `docs/ops/runbook.md` §4). Reconsiderar només si
+      l'audiència creix més enllà de hobbyist scale o la curació
+      esdevé legalment rellevant.
 - [ ] Snapshot baseline del model RF abans del proper retrain (`cp
       ml_model.joblib ml_model.baseline-YYYY-MM-DD.joblib`) per A/B
       sobre el set de 48 clips si el nou retrain regredeix.
@@ -317,6 +323,84 @@ Items petits per fer en sessions curtes:
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al
 detall fi: `git log` per fitxer o pel rang de dates.
+
+### Sprint — Brand-logo robustesa + CI hardening + ops anti-stale-cron ✅ (2026-05-07)
+
+Una sessió curta caçant traps que podrien tornar a passar i ancorant-los
+amb tests + docs + CI perquè no es repetissin:
+
+* **Brand-logo: tres traps documentats**. El logo del header
+  renderitzava com un blob negre tot i tenir els colors de marca al
+  SVG. Causa: el parser HTML preserva l'atribut `style` literal als
+  `<path>` injectats via `dangerouslySetInnerHTML` però **no** populeix
+  el `.style` property — `getComputedStyle(path).fill` retornava negre
+  default. Fix a `TopQuarantaLogo.jsx::promoteStyleToAttributes()`:
+  extreu `fill:X` i `stroke:X` de cada style inline i els promociona a
+  atributs `fill="X"` / `stroke="X"` natius (que el parser **sí**
+  cablefica). Anchorat amb 14 vitest cases a `TopQuarantaLogo.test.js`
+  + doc nou `docs/architecture/brand-logo.md` cobrint els tres traps
+  (cairosvg missing, parser quirk, mono-substitució flatten). Commits
+  `5a29784` + `1c38766`.
+
+* **CI frontend-tests job**: nou job a `.github/workflows/ci.yml` que
+  corre `npm ci` + `npm test` (vitest) sobre `web-react/`. Ancora les
+  regressions del logo i creix amb la suite SPA. Va requerir
+  desacoblar `package-lock.json` del `.gitignore` i commit-lo (224 KB,
+  reproducibilitat per `npm ci`). Comentari al `.gitignore` perquè
+  ningú el torne a afegir. Commits `0e97be6` + `fcbd375`.
+
+* **Ops anti-stale-cron-migration**: dia 06 el cron MB seguia generant
+  `column does not exist` errors **post-migració** perquè un procés
+  worker quedava a memòria amb el model vell. Caçat a la sessió. Avui
+  he afegit (a) workflow `destructive-migrations` que detecta
+  `RemoveField`/`DeleteModel`/`RenameField`/`RenameModel` als nous
+  fitxers de migració d'una PR i avisa al GitHub Step Summary
+  (non-blocking, soft warning amb pointer a runbook §10); (b) script
+  `bin/tq-pre-migrate` per matar crons stale abans d'aplicar. Commit
+  `4591236`.
+
+* **`tq-health` email dedup signature-based**: abans enviava email
+  cada hora si `overall != 0`. Amb 15 errors històrics MB no resolts
+  al log d'errors, el correu sortia sempre. Ara el script hashea el
+  resum de la fallada i només mailea quan el hash CANVIA (estat-en-
+  state-file `/var/log/topquaranta/status/_health.alert_sig`). En
+  recovery (overall=0) esborra el state per reset al pròxim error
+  diferent. Vaig purgar també els 15 blocs d'error històric ja
+  resolts del log (script Python amb regex). Commit `fcbd375`.
+
+* **Dependabot tancat**: 4 vulnerabilitats GitHub. PR #11 vite
+  `8.0.3 → 8.0.11` (3 alerts: 2 high + 1 moderate, tots dev-server
+  only — no afecten producció), PR #12 postcss `8.5.8 → 8.5.14` (XSS
+  moderate). Squash-merged els dos amb tots els checks verds. `npm
+  ci` post-merge confirma `0 vulnerabilities`. Build clean en 2,4 s,
+  14/14 tests passing en 646 ms.
+
+* **`StaffAuditLog.ACTION_CHOICES`**: afegits 9 valors que ja
+  existien al codi però no a la llista canònica (`artista_sync_mb`,
+  `pendent_orphan_merged`, `feedback_resolt`, `usuari_esborrar`,
+  `usuari_reenviar_verificacio`, `usuari_enviar_reset_password`,
+  `<channel>_publicat` × 4). Migració 0067.
+
+* **Algorithm — extrapolation gate**: `algorisme.py` deixa de fer
+  "lifetime extrapolation" quan una Canco recent-verificada té dies
+  de senyal-buit; ara només compta senyal observat real. Decisió
+  Option A presa pel propietari. Commit `253faf2`.
+
+* **`Canco corregit=True` exclòs del ranking**: `algorisme.py` ara
+  filtra `error=False, corregit=False` al pull de senyal. Defensa
+  contra contaminació al path err=6 retry quan `_detect_drift`
+  flag-eja un artiste mismatched.
+
+* **`ArtistaQuerySet` managers + codi mort**: `.public()`,
+  `.pendents()`, `.with_ppcc()`, `.with_mbid()` (13 callsites
+  migrats, 6 tests). 9 fitxers buits/placeholder esborrats
+  (`ingesta/{pipeline,views,models,tests}.py`,
+  `music/{views,tests}.py`, `social/{views,admin}.py`,
+  `ranking/tests.py`).
+
+Tests: 0 nous Python (la feina era ops + frontend). 14 nous vitest.
+Build SPA verd. CI verd a tots tres últims pushes (frontend-tests +
+tests + lint + migrations + destructive-migrations).
 
 ### Sprint S — SEO complet (Bloc A + B + C) ✅ (2026-05-06)
 

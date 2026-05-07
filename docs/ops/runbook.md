@@ -407,6 +407,77 @@ deploy window.
 
 ---
 
+## 10. Applying destructive migrations safely
+
+A "destructive migration" is one that drops, renames, or narrows a
+column (or drops/renames a model). Concretely, any migration with an
+operation matching:
+
+  - `RemoveField`
+  - `DeleteModel`
+  - `RenameField`     — old name disappears
+  - `RenameModel`     — old table disappears
+  - `AlterField`      — when narrowing (CharField → smaller max_length,
+                        NULL → NOT NULL, etc.)
+
+### Why this section exists
+
+**Caught 2026-05-07**: I dropped `Album.cancons_obtingudes` via
+migration `0069`. A long-running `obtenir_metadata_musicbrainz` cron
+that started ~25 min before the migration kept the OLD model
+definition in memory. Every subsequent `Album.objects.filter(...)`
+query produced `psycopg2.errors.UndefinedColumn: column
+music_album.cancons_obtingudes does not exist`. **15 errors before
+the cron was killed manually**. The cron isn't restarted by
+`systemctl reload topquaranta-web` because it runs via cron, not
+gunicorn — so the standard reload doesn't catch it.
+
+### Pre-flight checklist
+
+Before `manage.py migrate`:
+
+```bash
+# 1. Identify long-running cron processes that might cache the old model.
+/home/topquaranta/bin/tq-pre-migrate
+```
+
+That script lists every `manage.py` process running for >5 minutes
+and tells you whether any of them have been alive longer than the
+migration is safe to apply. If anything is listed:
+
+```bash
+# 2. Kill the stale process(es). The next cron tick (≤15 min) will
+#    start a fresh python with the new code.
+sudo pkill -f 'manage.py obtenir_metadata_musicbrainz'
+# Confirm:
+ps aux | grep manage.py | grep -v grep
+```
+
+```bash
+# 3. Now apply the migration.
+sudo systemctl reload topquaranta-web    # gunicorn picks up new code
+DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
+    /home/topquaranta/app/.venv/bin/python /home/topquaranta/app/manage.py migrate
+```
+
+```bash
+# 4. Verify no errors in the next 5 minutes.
+tail -f /var/log/topquaranta/errors.log
+```
+
+### What if a cron is mid-flight when you realise
+
+Same fix retroactively: kill the stale process, then check that
+`/var/log/topquaranta/errors.log` stops accumulating new entries.
+
+### CI flag
+
+A GitHub Actions job (`destructive-migrations`) flags every PR that
+adds a migration with a destructive operation. It's a soft warning
+(doesn't block merge) — the checklist is the safety net, not the CI.
+
+---
+
 ## Phone numbers
 
 This is a single-operator project. The phone number is yours. In that

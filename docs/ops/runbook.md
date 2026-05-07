@@ -336,7 +336,7 @@ anyone noticed.
 `systemctl reload` on the production box. Always:
 
 ```bash
-sudo /home/topquaranta/bin/tq-deploy
+/home/topquaranta/bin/tq-deploy
 ```
 
 `tq-deploy` enforces the safe ordering:

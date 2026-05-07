@@ -317,7 +317,7 @@ At the end of each session, update `docs/history/roadmap.md` to reflect reality.
 
 **Deploy routine:**
 
-Always use `sudo /home/topquaranta/bin/tq-deploy` after editing code.
+Always use `/home/topquaranta/bin/tq-deploy` after editing code.
 Never run a bare `systemctl reload` after a code change.
 
 `tq-deploy` enforces the safe order: pull → check & apply migrations →

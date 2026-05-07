@@ -58,6 +58,15 @@ run() {
 
 cd "$APP_DIR"
 
+# Run as the `topquaranta` user — the SSH key for github + the .env
+# file + the venv all belong to that account. We sudo for the
+# reload at the end. Refuse to run under root or any other user so
+# the operator gets a clear error instead of a silent SSH failure.
+if [ "$(id -un)" != "topquaranta" ]; then
+    echo "Run as the topquaranta user (try: sudo -u topquaranta $0 $*)"
+    exit 64
+fi
+
 echo "→ git pull --ff-only"
 PRE_HEAD=$(git rev-parse HEAD)
 run git pull --ff-only
@@ -90,8 +99,8 @@ if [ "$SKIP_BUILD" = "0" ] && [ "$PRE_HEAD" != "$POST_HEAD" ]; then
 fi
 
 echo
-echo "→ systemctl reload topquaranta-web"
-if ! run systemctl reload topquaranta-web; then
+echo "→ systemctl reload topquaranta-web (via sudo)"
+if ! run sudo systemctl reload topquaranta-web; then
     echo "  ✗ reload failed"
     exit 3
 fi

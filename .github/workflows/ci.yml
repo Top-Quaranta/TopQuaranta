@@ -58,6 +58,26 @@ jobs:
       - name: isort --check
         run: isort --check-only --diff .
 
+  frontend-tests:
+    # Vitest suite for the React SPA. Currently anchors the brand-logo
+    # SVG transformation (see TopQuarantaLogo.test.js — 2026-05-07). As
+    # more SPA logic gets unit-tested the suite grows here.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-react
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-react/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: vitest
+        run: npm test
+
   migrations:
     runs-on: ubuntu-latest
     steps:

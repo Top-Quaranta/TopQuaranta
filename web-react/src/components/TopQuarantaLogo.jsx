@@ -37,7 +37,7 @@ const ASPECT_RATIO = 1876.9116 / 380.45602
 // keep the rest of the style intact (opacity, fill-rule,
 // stroke-width, …) — those work via the attribute path too but are
 // already harmless.
-function promoteStyleToAttributes(svg) {
+export function promoteStyleToAttributes(svg) {
   return svg.replace(/style="([^"]*)"/g, (match, css) => {
     const get = (prop) => {
       const m = css.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`))
@@ -55,7 +55,7 @@ function promoteStyleToAttributes(svg) {
 // The source SVG ships with hardcoded `width`/`height` attributes and
 // no explicit sizing class. Strip them so the <svg> fills its wrapper
 // <span> instead of rendering at native pixels.
-function normalise(svg) {
+export function normalise(svg) {
   return promoteStyleToAttributes(
     svg
       .replace(/\swidth="[^"]*"/, '')

@@ -646,59 +646,75 @@ def estat(request: Request) -> Response:
     sol_pend = UserArtista.objects.filter(estat=UserArtista.ESTAT_PENDENT).count()
 
     # ── Cron status ─────────────────────────────────────────────────────
+    # Iterate over the JSON-source CRON_META keys (not the *.status
+    # files) so brand-new crons that haven't run yet still surface as
+    # `WAITING` rows on the dashboard. Mirrors `bin/tq-health`'s
+    # behaviour. Status files that don't appear in the JSON also get
+    # picked up — they show up but without metadata, signalling the
+    # operator should add them to `deploy/cron-meta.json`.
     status_dir = Path("/var/log/topquaranta/status")
     crons = []
+    seen_stems: set[str] = set()
+    candidate_stems: list[str] = list(CRON_META.keys())
     if status_dir.exists():
-        for f in sorted(status_dir.glob("*.status")):
-            parsed = _read_status_file(f)
-            if not parsed:
-                continue
-            meta = CRON_META.get(f.stem, {})
-            # `_sort_key` is a temporary field popped before serialising;
-            # we sort by max_age (frequency proxy) then name so the
-            # dashboard reads top-down: hourly → daily → weekly →
-            # monthly → quarterly. Unknown commands sink to the end.
-            _sort_key = (meta.get("max_age_hours") or 10**9, f.stem)
-            crons.append(
-                {
-                    "name": f.stem,
-                    "command": parsed.get("command", ""),
-                    "args": parsed.get("args", ""),
-                    "last_run": parsed.get("last_run", ""),
-                    "last_skip": parsed.get("last_skip", ""),
-                    "status": parsed.get("status", ""),
-                    "exit_code": parsed.get("exit_code", ""),
-                    "attempts": parsed.get("attempts", ""),
-                    # `consecutive_skips` is the number of cron ticks
-                    # that have been blocked by an in-flight (and
-                    # potentially hung) instance — written by tq-run
-                    # whenever the wrapped command exits 75. A value
-                    # >0 paired with stale `last_run` is the signal
-                    # of a stuck process (caught 2026-05-01 with
-                    # `obtenir_novetats` hung ~12 days).
-                    "consecutive_skips": int(parsed.get("consecutive_skips") or 0),
-                    # WORK_DONE protocol (2026-05-07): commands that
-                    # opt in emit a final `WORK_DONE=N` line; tq-run
-                    # surfaces N here + `consecutive_zero_work`. Both
-                    # may be missing/None when the command doesn't
-                    # opt in, in which case the dashboard treats them
-                    # as "no signal".
-                    "work_done": (
-                        int(parsed["work_done"]) if parsed.get("work_done") else None
-                    ),
-                    "consecutive_zero_work": int(
-                        parsed.get("consecutive_zero_work") or 0
-                    ),
-                    "frequency_label": meta.get("frequency_label", ""),
-                    "max_age_hours": meta.get("max_age_hours"),
-                    "skip_concern": meta.get("skip_concern"),
-                    "silenced": meta.get("silenced", False),
-                    "silenced_reason": meta.get("silenced_reason", ""),
-                    "_sort_key": _sort_key,
-                }
-            )
+        for f in status_dir.glob("*.status"):
+            if f.stem not in CRON_META and not f.stem.startswith("_"):
+                candidate_stems.append(f.stem)
+    for stem in candidate_stems:
+        if stem in seen_stems:
+            continue
+        seen_stems.add(stem)
+        f = status_dir / f"{stem}.status"
+        if f.exists():
+            parsed = _read_status_file(f) or {}
+        else:
+            # Cron registered in CRON_META but never executed yet —
+            # surface as WAITING so the operator sees it's tracked.
+            parsed = {"status": "WAITING"}
+        meta = CRON_META.get(stem, {})
+        # `_sort_key` is a temporary field popped before serialising;
+        # we sort by max_age (frequency proxy) then name so the
+        # dashboard reads top-down: hourly → daily → weekly →
+        # monthly → quarterly. Unknown commands sink to the end.
+        _sort_key = (meta.get("max_age_hours") or 10**9, stem)
+        crons.append(
+            {
+                "name": stem,
+                "command": parsed.get("command", ""),
+                "args": parsed.get("args", ""),
+                "last_run": parsed.get("last_run", ""),
+                "last_skip": parsed.get("last_skip", ""),
+                "status": parsed.get("status", ""),
+                "exit_code": parsed.get("exit_code", ""),
+                "attempts": parsed.get("attempts", ""),
+                # `consecutive_skips` is the number of cron ticks
+                # that have been blocked by an in-flight (and
+                # potentially hung) instance — written by tq-run
+                # whenever the wrapped command exits 75. A value
+                # >0 paired with stale `last_run` is the signal
+                # of a stuck process (caught 2026-05-01 with
+                # `obtenir_novetats` hung ~12 days).
+                "consecutive_skips": int(parsed.get("consecutive_skips") or 0),
+                # WORK_DONE protocol (2026-05-07): commands that
+                # opt in emit a final `WORK_DONE=N` line; tq-run
+                # surfaces N here + `consecutive_zero_work`. Both
+                # may be missing/None when the command doesn't
+                # opt in, in which case the dashboard treats them
+                # as "no signal".
+                "work_done": (
+                    int(parsed["work_done"]) if parsed.get("work_done") else None
+                ),
+                "consecutive_zero_work": int(parsed.get("consecutive_zero_work") or 0),
+                "frequency_label": meta.get("frequency_label", ""),
+                "max_age_hours": meta.get("max_age_hours"),
+                "skip_concern": meta.get("skip_concern"),
+                "silenced": meta.get("silenced", False),
+                "silenced_reason": meta.get("silenced_reason", ""),
+                "_sort_key": _sort_key,
+            }
+        )
 
-        crons.sort(key=lambda c: c.pop("_sort_key"))
+    crons.sort(key=lambda c: c.pop("_sort_key"))
 
     # ── ML ──────────────────────────────────────────────────────────────
     ml = {

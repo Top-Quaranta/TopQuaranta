@@ -181,6 +181,38 @@ def test_cron_meta_json_consumed_by_tq_health():
         )
 
 
+@pytest.mark.django_db
+def test_every_cron_has_description():
+    """Every entry in `deploy/cron-meta.json` must resolve to a
+    description ≥ 30 chars when the staff/estat panel asks for it.
+
+    Resolution order is documented in
+    `web.api.staff.estat._resolve_cron_description`:
+      1. JSON `description` override (use this for non-Django scripts
+         like `tq-restore-test` or command variants like
+         `calcular_top_provisional`).
+      2. Django `Command.help` attribute on the management command of
+         the same name.
+      3. Empty string → this test fails, forcing the contributor to
+         pick one of the two sources above.
+
+    A 30-char floor catches placeholders ("TODO", "fix me", "(no
+    help)") that would otherwise render as a useless dashboard cell.
+    """
+    from web.api.staff.estat import CRON_META, _resolve_cron_description
+
+    bad = []
+    for name, meta in CRON_META.items():
+        desc = _resolve_cron_description(name, meta)
+        if len(desc) < 30:
+            bad.append((name, len(desc), desc))
+    assert not bad, "Crons without a usable description (≥30 chars):\n" + "\n".join(
+        f"  {n} ({chars}ch): {d!r} — add `description` to "
+        f"deploy/cron-meta.json or improve `Command.help`."
+        for n, chars, d in bad
+    )
+
+
 def test_tq_health_emits_migration_status_row():
     """Run tq-health in this environment and assert the output
     contains the migration-status line. If a future refactor drops

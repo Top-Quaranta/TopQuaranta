@@ -358,6 +358,17 @@ function CronStatus({ cron }) {
       <td className="py-1.5 pr-3 text-[11px] text-tq-ink/70">
         {worry || concernText}
       </td>
+      <td
+        className="py-1.5 pr-3 text-[11px] text-tq-ink/80 max-w-[28rem]"
+        title={cron.description || ''}
+      >
+        {cron.description || (
+          <span className="italic text-tq-ink/40">
+            (sense descripció — afegir-ne una a Command.help o a
+            deploy/cron-meta.json)
+          </span>
+        )}
+      </td>
     </tr>
   )
 }
@@ -922,6 +933,9 @@ export default function EstatPage() {
                   <th className="text-left pb-2 pr-3">Última execució</th>
                   <th className="text-left pb-2 pr-3" title="Quan preocupar-se">
                     Llindar / nota
+                  </th>
+                  <th className="text-left pb-2 pr-3" title="Resum del que fa el cron — extret de Command.help o de l'override a deploy/cron-meta.json">
+                    Què fa
                   </th>
                 </tr>
               </thead>

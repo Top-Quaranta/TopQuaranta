@@ -1,5 +1,5 @@
 {
-  "_doc": "Single source of truth for cron metadata. Read by `bin/tq-health` (via jq) and `web/api/staff/estat.py` (via json.load) so adding/removing/renaming a cron is one edit, not three. Keep in sync with `deploy/cron.topquaranta`. Fields: frequency_label = Catalan human label; max_age_hours = stale threshold; skip_concern = consecutive_skips before a still-running instance becomes suspicious; silenced + silenced_reason = swallow watchdog email but still red on dashboard.",
+  "_doc": "Single source of truth for cron metadata. Read by `bin/tq-health` (via jq) and `web/api/staff/estat.py` (via json.load) so adding/removing/renaming a cron is one edit, not three. Keep in sync with `deploy/cron.topquaranta`. Fields: frequency_label = Catalan human label; max_age_hours = stale threshold; skip_concern = consecutive_skips before a still-running instance becomes suspicious; silenced + silenced_reason = swallow watchdog email but still red on dashboard. Optional: description = override for the staff/estat panel one-liner (defaults to the Django Command.help; set this when the cron is a non-Django script or a command-line variant). Test `test_every_cron_has_description` enforces ≥30ch on every entry.",
   "obtenir_novetats": {
     "frequency_label": "Cada hora",
     "max_age_hours": 2,
@@ -38,7 +38,8 @@
   "calcular_top_provisional": {
     "frequency_label": "Cada dia 07:00",
     "max_age_hours": 26,
-    "skip_concern": 1
+    "skip_concern": 1,
+    "description": "Calcula el top provisional diari amb el senyal acumulat (alias de `calcular_top --provisional`)."
   },
   "calcular_top": {
     "frequency_label": "Cada dissabte 08:00",
@@ -55,7 +56,8 @@
   "tq-restore-test": {
     "frequency_label": "Mensual (dia 1, 04:30)",
     "max_age_hours": 840,
-    "skip_concern": 1
+    "skip_concern": 1,
+    "description": "Smoke-test mensual: restaura el darrer dump dins una BD temporal i verifica les fila-counts. No Django command (script bash a `/home/topquaranta/bin/`)."
   },
   "arxivar_senyal_vell": {
     "frequency_label": "Trimestral (1 jan/abr/jul/oct)",

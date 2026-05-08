@@ -114,6 +114,42 @@ def _load_cron_meta() -> dict[str, dict]:
 CRON_META: dict[str, dict] = _load_cron_meta()
 
 
+def _resolve_cron_description(cron_name: str, meta: dict) -> str:
+    """Return a one-line description for a cron entry.
+
+    Resolution order (most authoritative first):
+
+    1. `meta["description"]` — explicit override from the JSON. Use
+       this for non-Django commands (`tq-restore-test`) and for the
+       command-variant rows (`calcular_top_provisional` is
+       `calcular_top --provisional`; the bare `calcular_top` row
+       gets the Django help).
+    2. The Django management command's `Command.help` attribute.
+       Single source of truth for everything else: edit the help in
+       the command file and it propagates here automatically.
+    3. Empty string, which `test_every_cron_has_description` (in
+       `topquaranta/tests/test_deploy_safety.py`) refuses to let
+       merge — operator gets a CI failure instead of a silent
+       no-description row.
+    """
+    explicit = (meta or {}).get("description") or ""
+    if explicit:
+        return explicit.strip()
+    # Try to resolve a Django management command of the same name.
+    try:
+        from django.core.management import get_commands, load_command_class
+
+        commands = get_commands()
+        if cron_name in commands:
+            app_name = commands[cron_name]
+            cmd = load_command_class(app_name, cron_name)
+            return (cmd.help or "").strip()
+    except Exception:
+        # Never let a description lookup break the dashboard.
+        pass
+    return ""
+
+
 def _read_status_file(path):
     """Parse one of /var/log/topquaranta/status/<name>.status.
 
@@ -710,6 +746,11 @@ def estat(request: Request) -> Response:
                 "skip_concern": meta.get("skip_concern"),
                 "silenced": meta.get("silenced", False),
                 "silenced_reason": meta.get("silenced_reason", ""),
+                # Source-truth one-liner. Pulled from the Django
+                # Command's `help` attribute when there's no explicit
+                # `description` override in cron-meta.json. See
+                # `_resolve_cron_description` for resolution rules.
+                "description": _resolve_cron_description(stem, meta),
                 "_sort_key": _sort_key,
             }
         )

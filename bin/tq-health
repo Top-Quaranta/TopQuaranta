@@ -32,36 +32,43 @@ if (( EMAIL_ON_FAIL )); then
     exec 3>&1 1>"$REPORT"
 fi
 
-# Per-command max age in hours before we flag STALE.
-# Tune carefully: the cron is hourly for novetats, daily for the rest,
-# weekly for official ranking. We add a buffer for human-timed drift.
+# Per-command metadata — pulled from `deploy/cron-meta.json` so this
+# script and `web/api/staff/estat.py` share a single source of truth.
+# Caught 2026-05-08: `detectar_anomalies_senyal` was added to the
+# JSON + estat but missing from a hardcoded list here, so the
+# watchdog ignored it for one day. The JSON-source closes that drift.
 #
-# Names must match the management command's name (which `tq-run` uses
-# as the status filename). Keep this in sync with deploy/cron.topquaranta.
-# Last reviewed 2026-05-01 — the renames from `calcular_ranking*` to
-# `calcular_top*` (Sprint M) and the removal of `actualitzar_score_entrada`
-# (Sprint A) had not been propagated, so the watchdog was firing on
-# stale or never-existent names.
-declare -A MAX_AGE_HOURS=(
-    [obtenir_novetats]=2
-    [obtenir_senyal]=26
-    [netejar_caducades]=26
-    [calcular_top_provisional]=26
-    [calcular_top]=170         # weekly: 7 days + 2 h buffer
-    [tq-restore-test]=840      # monthly: 35 days + 4d buffer
-    [analitzar_whisper]=48     # nightly: 1 day + buffer
-    [actualitzar_playlists_spotify]=26  # daily; silenced (see below)
-    # `arxivar_senyal_vell` runs quarterly via cron but the first run
-    # post-deploy hasn't happened yet — leaving it out until a status
-    # file exists, otherwise it floods the watchdog with NO_STATUS
-    # noise. Re-add when we see the first run land.
-)
+# Names must match the management command's name (which `tq-run`
+# uses as the status filename). Keep `cron-meta.json` in sync with
+# `deploy/cron.topquaranta`.
+META_FILE=/home/topquaranta/app/deploy/cron-meta.json
+if [[ ! -f "$META_FILE" ]] || ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: $META_FILE missing or jq not installed."
+    echo "       Install jq (apt install jq) and ensure the JSON exists."
+    exit 2
+fi
 
-# Crons whose FAIL/STALE we accept temporarily — show red on the
-# dashboard but don't trigger watchdog emails. Reason logged so
-# whoever next inherits this knows why.
-declare -A SILENCED=(
-    [actualitzar_playlists_spotify]="Esperant Spotify Premium per re-OAuth"
+declare -A MAX_AGE_HOURS=()
+declare -A SILENCED=()
+# `_doc` is a leading-underscore key used for in-file documentation
+# (JSON has no comments) — skip it when iterating.
+while IFS=$'\t' read -r name max_age silenced_reason; do
+    [[ -z "$name" || "$name" == _* ]] && continue
+    MAX_AGE_HOURS[$name]=$max_age
+    if [[ -n "$silenced_reason" && "$silenced_reason" != "null" ]]; then
+        SILENCED[$name]="$silenced_reason"
+    fi
+done < <(
+    jq -r '
+        to_entries[]
+        | select(.key | startswith("_") | not)
+        | [
+            .key,
+            .value.max_age_hours,
+            (if .value.silenced then (.value.silenced_reason // "") else "" end)
+          ]
+        | @tsv
+    ' "$META_FILE"
 )
 
 overall=0
@@ -71,8 +78,13 @@ printf "%-32s  %-12s  %s\n" "-------" "------" "--------"
 for cmd in "${!MAX_AGE_HOURS[@]}"; do
     f="$STATUS_DIR/$cmd.status"
     if [[ ! -f "$f" ]]; then
-        printf "%-32s  %-12s  %s\n" "$cmd" "NO_STATUS" "(never run via tq-run)"
-        overall=1
+        # Treat "never ran" as informational, not a failure. The JSON
+        # source carries weekly/monthly/quarterly crons whose first
+        # execution may be days or months after registration; if we
+        # treated those as a hard fail we'd email every hour for a
+        # week. Once a cron has run once, the status file exists and
+        # the regular STALE path takes over.
+        printf "%-32s  %-12s  %s\n" "$cmd" "WAITING" "(awaiting first run)"
         continue
     fi
     status=$(grep '^status=' "$f" | cut -d= -f2)

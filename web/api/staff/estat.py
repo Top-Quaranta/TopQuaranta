@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
@@ -79,162 +80,38 @@ from web.api.staff._common import IsStaff, _paginate
 # ═════════════════════════════════════════════════════════════════════════
 
 
-# Cron metadata per command — single source of truth for the staff
-# dashboard. Keep in sync with `bin/tq-health` (max_age_hours) and
-# `deploy/cron.topquaranta` (frequency_label). Renames here surface
-# immediately as STALE if missed (caught 2026-05-01: the watchdog
-# was firing on the legacy `calcular_ranking_provisional` name long
-# after the Sprint M rename to `calcular_top_provisional`).
+# Cron metadata per command — single source of truth lives in
+# `deploy/cron-meta.json` so a new cron is added in ONE place and
+# both the staff dashboard (this module) and `bin/tq-health` pick it
+# up automatically. Caught 2026-05-08: `detectar_anomalies_senyal`
+# was added to `cron.topquaranta` + this module but missing from the
+# tq-health hardcoded list, so the watchdog ignored it. JSON-source
+# closes that drift.
 #
-# Fields:
-#   frequency_label    — Catalan, human-readable cron schedule
-#   max_age_hours      — when last_run > this, surface as STALE/STUCK
-#   skip_concern       — `consecutive_skips` value at which a still-
-#                        running instance becomes suspicious. Hourly
-#                        crons tolerate 1–2 long-runs; daily ones
-#                        shouldn't skip ever (the next tick is 24 h
-#                        away).
-CRON_META: dict[str, dict] = {
-    "obtenir_novetats": {
-        "frequency_label": "Cada hora",
-        "max_age_hours": 2,
-        "skip_concern": 3,
-    },
-    "obtenir_metadata_musicbrainz": {
-        "frequency_label": "Cada hora (xx:30)",
-        "max_age_hours": 2,
-        "skip_concern": 3,
-    },
-    "obtenir_metadata_lastfm": {
-        "frequency_label": "Cada nit 05:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "obtenir_senyal": {
-        "frequency_label": "Cada nit 06:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "detectar_anomalies_senyal": {
-        "frequency_label": "Cada nit 06:45",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "netejar_caducades": {
-        "frequency_label": "Cada nit 04:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "analitzar_whisper": {
-        "frequency_label": "Cada nit 05:00",
-        "max_age_hours": 48,
-        "skip_concern": 1,
-    },
-    "calcular_top_provisional": {
-        "frequency_label": "Cada dia 07:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "calcular_top": {
-        "frequency_label": "Cada dissabte 08:00",
-        "max_age_hours": 170,
-        "skip_concern": 1,
-    },
-    "actualitzar_playlists_spotify": {
-        "frequency_label": "Cada dia 07:15",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-        # Pre-Premium: Spotify OAuth requires the app owner to have
-        # Premium. While we're waiting for that, the cron fails
-        # daily with "No hi ha autorització Spotify". Marked silenced
-        # so the watchdog email doesn't spam — still shows red FAIL
-        # on the dashboard so we don't forget. Remove `silenced`
-        # once we re-authorise. (User decision 2026-05-01.)
-        "silenced": True,
-        "silenced_reason": "Esperant Spotify Premium per re-OAuth",
-    },
-    "tq-restore-test": {
-        "frequency_label": "Mensual (dia 1, 04:30)",
-        "max_age_hours": 840,
-        "skip_concern": 1,
-    },
-    "arxivar_senyal_vell": {
-        "frequency_label": "Trimestral (1 jan/abr/jul/oct)",
-        "max_age_hours": 2400,
-        "skip_concern": 1,
-    },
-    "publicar_social": {
-        "frequency_label": "5×setmana (Sat/Mon/Wed/Fri/Tue)",
-        "max_age_hours": 72,
-        "skip_concern": 1,
-    },
-    "publicar_canal": {
-        "frequency_label": "Multi-canal social (escalat)",
-        "max_age_hours": 72,
-        "skip_concern": 1,
-    },
-    "renovar_token_instagram": {
-        "frequency_label": "Mensual (dia 1, 03:00)",
-        "max_age_hours": 720 + 24,
-        "skip_concern": 1,
-    },
-    "snapshot_pipeline": {
-        "frequency_label": "Cada nit 23:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "recollir_metrics_social": {
-        "frequency_label": "Cada nit 22:30",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "enviar_digest_setmanal": {
-        "frequency_label": "Cada dilluns 08:00",
-        "max_age_hours": 170,
-        "skip_concern": 1,
-    },
-    "generar_goaccess": {
-        "frequency_label": "Cada nit 23:30",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "recollir_metrics_gsc": {
-        "frequency_label": "Cada nit 21:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-        # 2026-05-07: OAuth user-delegation is configured (refresh
-        # token on the property owner's Google account). Cron runs
-        # cleanly and writes 0 rows when GSC has no impressions yet
-        # to report — that's the current state (Sprint S SEO landed
-        # 2026-05-06; impressions take 7-30 days to surface).
-        # No need to silence; "0 rows" is success, not failure.
-    },
-    "recollir_metrics_psi": {
-        "frequency_label": "Cada nit 21:30",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "inferir_genere": {
-        "frequency_label": "Cada nit 02:00",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "inferir_percentatge_femeni": {
-        "frequency_label": "Cada nit 02:05",
-        "max_age_hours": 26,
-        "skip_concern": 1,
-    },
-    "netejar_pendents_orfes": {
-        "frequency_label": "Cada dilluns 02:00",
-        "max_age_hours": 170,
-        "skip_concern": 1,
-    },
-    "netejar_pendents_no_ppcc": {
-        "frequency_label": "Cada dilluns 02:15",
-        "max_age_hours": 170,
-        "skip_concern": 1,
-    },
-}
+# Fields per entry:
+#   frequency_label   — Catalan, human-readable cron schedule
+#   max_age_hours     — when last_run > this, surface as STALE/STUCK
+#   skip_concern      — `consecutive_skips` value at which a still-
+#                       running instance becomes suspicious. Hourly
+#                       crons tolerate 1–2 long-runs; daily ones
+#                       shouldn't skip ever (the next tick is 24 h
+#                       away).
+#   silenced (opt)    — True swallows watchdog email; still red on
+#                       dashboard.
+#   silenced_reason   — string shown next to the silenced row.
+def _load_cron_meta() -> dict[str, dict]:
+    import json
+    from pathlib import Path
+
+    meta_path = Path(settings.BASE_DIR) / "deploy" / "cron-meta.json"
+    with meta_path.open() as fh:
+        raw = json.load(fh)
+    # Strip the `_doc` annotation entry (JSON has no comments; we
+    # park documentation under a leading-underscore key by convention).
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
+
+
+CRON_META: dict[str, dict] = _load_cron_meta()
 
 
 def _read_status_file(path):

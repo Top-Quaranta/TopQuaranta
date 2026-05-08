@@ -1,0 +1,130 @@
+{
+  "_doc": "Single source of truth for cron metadata. Read by `bin/tq-health` (via jq) and `web/api/staff/estat.py` (via json.load) so adding/removing/renaming a cron is one edit, not three. Keep in sync with `deploy/cron.topquaranta`. Fields: frequency_label = Catalan human label; max_age_hours = stale threshold; skip_concern = consecutive_skips before a still-running instance becomes suspicious; silenced + silenced_reason = swallow watchdog email but still red on dashboard.",
+  "obtenir_novetats": {
+    "frequency_label": "Cada hora",
+    "max_age_hours": 2,
+    "skip_concern": 3
+  },
+  "obtenir_metadata_musicbrainz": {
+    "frequency_label": "Cada hora (xx:30)",
+    "max_age_hours": 2,
+    "skip_concern": 3
+  },
+  "obtenir_metadata_lastfm": {
+    "frequency_label": "Cada nit 05:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "obtenir_senyal": {
+    "frequency_label": "Cada nit 06:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "detectar_anomalies_senyal": {
+    "frequency_label": "Cada nit 06:45",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "netejar_caducades": {
+    "frequency_label": "Cada nit 04:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "analitzar_whisper": {
+    "frequency_label": "Cada nit 05:00",
+    "max_age_hours": 48,
+    "skip_concern": 1
+  },
+  "calcular_top_provisional": {
+    "frequency_label": "Cada dia 07:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "calcular_top": {
+    "frequency_label": "Cada dissabte 08:00",
+    "max_age_hours": 170,
+    "skip_concern": 1
+  },
+  "actualitzar_playlists_spotify": {
+    "frequency_label": "Cada dia 07:15",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "silenced": true,
+    "silenced_reason": "Esperant Spotify Premium per re-OAuth"
+  },
+  "tq-restore-test": {
+    "frequency_label": "Mensual (dia 1, 04:30)",
+    "max_age_hours": 840,
+    "skip_concern": 1
+  },
+  "arxivar_senyal_vell": {
+    "frequency_label": "Trimestral (1 jan/abr/jul/oct)",
+    "max_age_hours": 2400,
+    "skip_concern": 1
+  },
+  "publicar_social": {
+    "frequency_label": "5×setmana (Sat/Mon/Wed/Fri/Tue)",
+    "max_age_hours": 72,
+    "skip_concern": 1
+  },
+  "publicar_canal": {
+    "frequency_label": "Multi-canal social (escalat)",
+    "max_age_hours": 72,
+    "skip_concern": 1
+  },
+  "renovar_token_instagram": {
+    "frequency_label": "Mensual (dia 1, 03:00)",
+    "max_age_hours": 744,
+    "skip_concern": 1
+  },
+  "snapshot_pipeline": {
+    "frequency_label": "Cada nit 23:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "recollir_metrics_social": {
+    "frequency_label": "Cada nit 22:30",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "enviar_digest_setmanal": {
+    "frequency_label": "Cada dilluns 08:00",
+    "max_age_hours": 170,
+    "skip_concern": 1
+  },
+  "generar_goaccess": {
+    "frequency_label": "Cada nit 23:30",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "recollir_metrics_gsc": {
+    "frequency_label": "Cada nit 21:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "recollir_metrics_psi": {
+    "frequency_label": "Cada nit 21:30",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "inferir_genere": {
+    "frequency_label": "Cada nit 02:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "inferir_percentatge_femeni": {
+    "frequency_label": "Cada nit 02:05",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "netejar_pendents_orfes": {
+    "frequency_label": "Cada dilluns 02:00",
+    "max_age_hours": 170,
+    "skip_concern": 1
+  },
+  "netejar_pendents_no_ppcc": {
+    "frequency_label": "Cada dilluns 02:15",
+    "max_age_hours": 170,
+    "skip_concern": 1
+  }
+}

@@ -116,6 +116,71 @@ def test_tq_health_script_is_executable_and_well_formed():
     assert result.returncode == 0, f"bash -n failed for {script}:\n{result.stderr}"
 
 
+def test_cron_meta_json_loads_and_matches_estat():
+    """The single source of truth for cron metadata is
+    `deploy/cron-meta.json`. `web/api/staff/estat.py::CRON_META`
+    loads it. `bin/tq-health` parses the same JSON via jq. If the
+    JSON ever stops parsing, both consumers break in lockstep —
+    this test catches that at CI time, before the next push.
+    """
+    import json
+
+    meta_path = PROJECT_ROOT / "deploy" / "cron-meta.json"
+    assert meta_path.is_file(), f"{meta_path} missing"
+    with meta_path.open() as fh:
+        data = json.load(fh)
+    # Every entry (skipping `_doc`) must carry the three required keys.
+    for name, meta in data.items():
+        if name.startswith("_"):
+            continue
+        for required in ("frequency_label", "max_age_hours", "skip_concern"):
+            assert required in meta, f"{name} missing {required}"
+        # max_age_hours must be a positive int.
+        assert isinstance(meta["max_age_hours"], int)
+        assert meta["max_age_hours"] > 0
+
+
+def test_cron_meta_json_consumed_by_estat():
+    """estat.CRON_META must round-trip from the JSON source. Catches
+    a future regression where someone re-introduces a hardcoded
+    Python dict and silently drifts from the JSON."""
+    import json
+
+    from web.api.staff.estat import CRON_META
+
+    meta_path = PROJECT_ROOT / "deploy" / "cron-meta.json"
+    with meta_path.open() as fh:
+        raw = json.load(fh)
+    expected = {k: v for k, v in raw.items() if not k.startswith("_")}
+    assert CRON_META == expected
+
+
+def test_cron_meta_json_consumed_by_tq_health():
+    """`bin/tq-health` must derive its MAX_AGE_HOURS from the JSON.
+    We can't assert the bash array contents directly, but we can run
+    tq-health and assert it reports rows for every cron in the JSON
+    (using the COMMAND column of its output). Catches the failure
+    mode that prompted this refactor: a new cron added in JSON +
+    estat but missed from tq-health's hardcoded list."""
+    import json
+
+    script = Path("/home/topquaranta/bin/tq-health")
+    if not script.is_file():
+        pytest.skip("tq-health not deployed in this environment")
+    meta_path = PROJECT_ROOT / "deploy" / "cron-meta.json"
+    with meta_path.open() as fh:
+        raw = json.load(fh)
+    expected_names = {k for k in raw if not k.startswith("_")}
+
+    result = subprocess.run([str(script)], capture_output=True, text=True, timeout=30)
+    # Each cron name appears as a leading word on its row.
+    for name in expected_names:
+        assert name in result.stdout, (
+            f"tq-health output missing row for cron '{name}' — "
+            f"refactor must keep tq-health in sync with cron-meta.json"
+        )
+
+
 def test_tq_health_emits_migration_status_row():
     """Run tq-health in this environment and assert the output
     contains the migration-status line. If a future refactor drops

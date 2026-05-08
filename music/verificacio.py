@@ -7,7 +7,12 @@ def crear_historial(canco: Canco, decisio: str, motiu: str) -> HistorialRevisio:
     Must be called BEFORE deleting or modifying the canco.
     """
     artista = canco.artista
-    territoris = ",".join(artista.territoris.values_list("codi", flat=True))
+    # Cap at the column's max_length (100). Defensive truncation: if a
+    # future schema drift or unusually-wide territori list ever again
+    # exceeds the column, we lose a couple of trailing codes instead
+    # of dropping the whole row + emailing a 500. Caught 2026-05-08
+    # with "CAT,VAL,BAL" (11 chars) against the previous max_length=10.
+    territoris = ",".join(artista.territoris.values_list("codi", flat=True))[:100]
     isrc = canco.isrc or ""
 
     return HistorialRevisio.objects.create(

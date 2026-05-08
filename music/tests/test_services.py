@@ -179,6 +179,35 @@ class TestAprovarCanco:
         mock_indexnow.assert_called_once_with(c)
 
     @patch("web.seo.indexnow.notify_canco")
+    def test_multi_territori_artista_does_not_overflow_historial(self, _ix):
+        """Caught 2026-05-08: a manual `aprovar_canco` on a multi-
+        territori artista crashed with `value too long for type
+        character varying(10)`. `crear_historial` does
+        ",".join(territoris) and the column was max_length=10,
+        which only fits a single 4-char code. Bumped to 100 + the
+        join is truncated defensively. This test pins both — fails
+        if either side regresses (column shrinks, or someone drops
+        the slice in `crear_historial`)."""
+        from music.models import Territori
+
+        a = _mk_artista()
+        for codi, nom in (
+            ("CAT", "Catalunya"),
+            ("VAL", "País Valencià"),
+            ("BAL", "Illes Balears"),
+        ):
+            t, _ = Territori.objects.get_or_create(codi=codi, defaults={"nom": nom})
+            a.territoris.add(t)
+        c = _mk_canco(a, verificada=False)
+
+        aprovar_canco(c)  # must not raise
+
+        h = HistorialRevisio.objects.filter(artista_nom=a.nom).first()
+        assert h is not None
+        assert "CAT" in h.artista_territori
+        assert "," in h.artista_territori  # confirms it's the joined form
+
+    @patch("web.seo.indexnow.notify_canco")
     def test_auto_ml_uses_distinct_motiu(self, mock_indexnow):
         from music.constants import MOTIU_AUTO_ML
 

@@ -1061,7 +1061,14 @@ class HistorialRevisio(models.Model):
 
     canco_nom = models.CharField(max_length=500)
     artista_nom = models.CharField(max_length=255)
-    artista_territori = models.CharField(max_length=10, blank=True)
+    # Comma-joined list of territoris codes for the artista at decision
+    # time (`crear_historial` does ",".join). Bumped from 10 → 100 on
+    # 2026-05-08 after `aprovar_canco` failed with `value too long for
+    # type character varying(10)` on a multi-territori artista
+    # ("CAT,VAL,BAL" = 11 chars). 100 fits every PPCC artista (10
+    # codes × 4 chars + 9 commas = 49). `crear_historial` also
+    # truncates defensively as a belt-and-braces guard.
+    artista_territori = models.CharField(max_length=100, blank=True)
     album_nom = models.CharField(max_length=500, blank=True)
     data_llancament = models.DateField(null=True, blank=True)
     isrc_prefix = models.CharField(max_length=5, blank=True)

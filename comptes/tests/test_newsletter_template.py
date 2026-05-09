@@ -70,6 +70,33 @@ def test_renders_novetats_items_with_nom():
     assert "Banda X" in html
 
 
+def test_no_template_comment_leaks_into_render():
+    """Caught 2026-05-09 (recovery send): the multi-line comment
+    `{# ... #}` I'd added to explain the `{% if %}` workaround
+    leaked into the rendered output because Django's `{# #}`
+    syntax is SINGLE-LINE only — multi-line requires
+    `{% comment %}...{% endcomment %}`. Every recipient saw the
+    explanation rendered as plain text in front of each row.
+
+    This test pins the invariant: no `{#` or `#}` markers should
+    appear anywhere in the rendered HTML, period.
+    """
+    html = _render(
+        [
+            {"canco_nom": "Test", "artista_nom": "Test"},
+        ]
+    )
+    assert "{#" not in html
+    assert "#}" not in html
+    # The plaintext fallback (strip_tags) goes through the same
+    # template, so leaks would appear in the text body too.
+    from django.utils.html import strip_tags
+
+    text = strip_tags(html)
+    assert "{#" not in text
+    assert "Django's" not in text  # comment body must not show
+
+
 def test_renders_mixed_shape_entries():
     """Defensive: a list mixing both shapes (shouldn't happen in
     practice but proves neither path explodes)."""

@@ -10,7 +10,12 @@
 <ol style="padding:0 0 0 22px;margin:0 0 28px;color:#fff;">
   {% for e in entries %}
   <li style="margin:6px 0;">
-    <strong style="color:#facc15;">{{ e.canco_nom|default:e.nom }}</strong>
+    {# Top entries carry `canco_nom`; novetats items carry `nom`.
+       Django's `default` filter eagerly evaluates its argument, so
+       `e.canco_nom|default:e.nom` raises VariableDoesNotExist on a
+       top entry (no `nom` key) — caught 2026-05-09 when the
+       Saturday newsletter cron failed for every recipient. #}
+    <strong style="color:#facc15;">{% if e.canco_nom %}{{ e.canco_nom }}{% else %}{{ e.nom }}{% endif %}</strong>
     <span style="color:#9ca3af;"> — {{ e.artista_nom }}</span>
   </li>
   {% endfor %}

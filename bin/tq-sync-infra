@@ -88,3 +88,23 @@ fi
 if [ "$anything_changed" = 0 ]; then
     echo "  no infra drift"
 fi
+
+# Bootstrap log files for the cron lines that run as `postgres`. The
+# parent dir /var/log/topquaranta is owned by topquaranta:topquaranta 755,
+# so postgres cannot create new files inside it. The cron `>>` redirect
+# therefore fails silently the first time. We touch + chown each
+# expected log here so postgres can append on subsequent runs.
+# Idempotent: only chown when the current owner is wrong.
+POSTGRES_LOGS=(
+    /var/log/topquaranta/backup.log
+    /var/log/topquaranta/restore-test.log
+)
+for log in "${POSTGRES_LOGS[@]}"; do
+    if ! sudo test -f "$log"; then
+        sudo install -o postgres -g postgres -m 644 /dev/null "$log"
+        echo "  bootstrapped $log (postgres:postgres 644)"
+    elif [ "$(sudo stat -c %U "$log")" != "postgres" ]; then
+        sudo chown postgres:postgres "$log"
+        echo "  fixed owner on $log (postgres:postgres)"
+    fi
+done

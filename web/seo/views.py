@@ -59,13 +59,36 @@ def _last_modified(request, **kwargs):
 
 
 def _artista_lm(request, slug):
-    a = Artista.objects.filter(slug=slug, aprovat=True).only("updated_at").first()
+    # Indexability requires the artiste to have at least one verified
+    # active cançó; otherwise the SEO view returns 404. Mirror the same
+    # predicate here so Last-Modified is None for ghost profiles.
+    a = (
+        Artista.objects.filter(
+            slug=slug,
+            aprovat=True,
+            cancons__verificada=True,
+            cancons__activa=True,
+        )
+        .distinct()
+        .only("updated_at")
+        .first()
+    )
     return a.updated_at if a else None
 
 
 def _album_lm(request, slug):
+    # Same indexability rule as album_seo: at least one verified active
+    # cançó. Returning None here when the album is empty keeps
+    # If-Modified-Since negotiation consistent with the 404 path.
     al = (
-        Album.objects.filter(slug=slug, descartat=False, artista__aprovat=True)
+        Album.objects.filter(
+            slug=slug,
+            descartat=False,
+            artista__aprovat=True,
+            cancons__verificada=True,
+            cancons__activa=True,
+        )
+        .distinct()
         .only("updated_at")
         .first()
     )
@@ -186,6 +209,10 @@ def artistes_list_seo(request: HttpRequest) -> HttpResponse:
                 distinct=True,
             )
         )
+        # Skip ghost profiles (no verified active cançó). They are not
+        # linked from individual /artista/ pages either, since those
+        # now 404 in the SEO view.
+        .filter(n_cancons__gt=0)
         .order_by("-n_cancons", "nom")[:200]
     )
     return render(
@@ -205,13 +232,18 @@ def artistes_list_seo(request: HttpRequest) -> HttpResponse:
 @_vary_ua
 @condition(last_modified_func=_artista_lm)
 def artista_seo(request: HttpRequest, slug: str) -> HttpResponse:
-    """`/artista/<slug>` — full artiste page. 404 when un-approved
-    so de-indexing is automatic."""
+    """`/artista/<slug>` — full artiste page. 404 when un-approved or
+    when the artiste has no verified active cançó, so de-indexing is
+    automatic. The empty-discography case is a ghost page in Google's
+    eyes and matches what the public profile would render: nothing
+    indexable."""
     a = get_object_or_404(
         Artista.objects.prefetch_related(
             "localitats__municipi__territori",
             "deezer_ids",
-        ),
+        )
+        .filter(cancons__verificada=True, cancons__activa=True)
+        .distinct(),
         slug=slug,
         aprovat=True,
     )
@@ -261,9 +293,14 @@ def artista_seo(request: HttpRequest, slug: str) -> HttpResponse:
 @_vary_ua
 @condition(last_modified_func=_album_lm)
 def album_seo(request: HttpRequest, slug: str) -> HttpResponse:
-    """`/album/<slug>`. 404 if discarded or parent artiste un-approved."""
+    """`/album/<slug>`. 404 if discarded, parent artiste un-approved, or
+    no verified active cançó. Indexability requires at least one
+    verified song, consistent with the /artista/ profile filter — an
+    empty tracklist is a ghost page in Google's eyes."""
     al = get_object_or_404(
-        Album.objects.select_related("artista"),
+        Album.objects.select_related("artista")
+        .filter(cancons__verificada=True, cancons__activa=True)
+        .distinct(),
         slug=slug,
         descartat=False,
         artista__aprovat=True,

@@ -76,9 +76,17 @@ def album_list(request: Request) -> Response:
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def album_detail(request: Request, slug: str) -> Response:
+    # Same indexability gate as the SEO view (web/seo/views.py): parent
+    # artiste approved, album not discarded, and at least one verified
+    # active cançó. Staff editing flows hit /api/v1/staff/albums/*
+    # instead, so the public detail has no legitimate empty-album use.
     album = get_object_or_404(
-        Album.objects.select_related("artista"),
+        Album.objects.select_related("artista")
+        .filter(cancons__verificada=True, cancons__activa=True)
+        .distinct(),
         slug=slug,
+        descartat=False,
+        artista__aprovat=True,
     )
 
     # Only verified tracks surface publicly. Unverified/discarded tracks

@@ -49,6 +49,19 @@ write_status() {
 cleanup() {
     psql -d postgres -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null 2>&1 || true
 }
+
+# ERR trap so `set -e` exits still leave a FAIL status behind. Without
+# this, any unexpected non-zero (e.g. a renamed table breaking the
+# sanity queries) terminated the script before write_status was called,
+# leaving the stale OK status in place and silencing tq-health.
+on_error() {
+    local rc=$?
+    local line="$1"
+    write_status "$rc" "aborted at line $line (exit $rc)" || true
+    cleanup
+    exit "$rc"
+}
+trap 'on_error $LINENO' ERR
 trap cleanup EXIT
 
 # Find newest daily dump
@@ -89,7 +102,7 @@ fi
 # verify the restored DB has roughly the same shape.
 restored_artistes=$(psql -tAd "$TEST_DB" -c "SELECT COUNT(*) FROM music_artista;")
 restored_cancons=$(psql -tAd "$TEST_DB" -c "SELECT COUNT(*) FROM music_canco;")
-restored_setmanal=$(psql -tAd "$TEST_DB" -c "SELECT COUNT(*) FROM ranking_rankingsetmanal;")
+restored_setmanal=$(psql -tAd "$TEST_DB" -c "SELECT COUNT(*) FROM ranking_topsetmanal;")
 live_artistes=$(psql -tAd "$SOURCE_DB" -c "SELECT COUNT(*) FROM music_artista;")
 live_cancons=$(psql -tAd "$SOURCE_DB" -c "SELECT COUNT(*) FROM music_canco;")
 
@@ -102,15 +115,23 @@ within_pct() {
     [[ "$diff" -le "$thr" ]]
 }
 
+# Drift threshold: 20%. The backup is taken at 03:00 UTC and this test
+# runs at 04:30 on the 1st of the month, but staff-triggered or manual
+# runs land mid-day. During the 2026-05 PPCC backfill, obtenir_novetats
+# adds ~300 artistes/hour, so 14h after the dump the count can have
+# drifted >10%. The earlier 5% threshold was set before that backfill
+# and produced false FAILs. 20% still catches a corrupt or stale dump
+# (where one table is missing or empty) without alerting on normal
+# ingest velocity.
 problems=""
-if ! within_pct "$restored_artistes" "$live_artistes" 5; then
+if ! within_pct "$restored_artistes" "$live_artistes" 20; then
     problems+="artista count drift: $restored_artistes vs live $live_artistes; "
 fi
-if ! within_pct "$restored_cancons" "$live_cancons" 5; then
+if ! within_pct "$restored_cancons" "$live_cancons" 20; then
     problems+="canco count drift: $restored_cancons vs live $live_cancons; "
 fi
 if [[ "$restored_setmanal" -lt 1 ]]; then
-    problems+="ranking_rankingsetmanal is empty in restored DB; "
+    problems+="ranking_topsetmanal is empty in restored DB; "
 fi
 
 summary="backup=$latest size=$size artistes=$restored_artistes/$live_artistes cancons=$restored_cancons/$live_cancons rankings=$restored_setmanal"

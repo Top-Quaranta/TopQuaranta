@@ -27,6 +27,6 @@ faster-whisper==1.2.1        # large-v3 LID via detect_language(), int8 CPU
 soundfile==0.13.1            # WAV loader (no torchcodec dependency)
 
 # SEO monitoring (Sprint S Bloc D, 2026-05-06).
-google-api-python-client>=2.195.0
+google-api-python-client>=2.196.0
 google-auth>=2.50.0
 google-auth-httplib2>=0.3.1

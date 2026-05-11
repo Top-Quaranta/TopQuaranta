@@ -16,8 +16,9 @@ Per Google's docs:
     0064).
 
 Indexability rules — must match `web/seo/views.py`:
-  * Artista — `aprovat=True`.
-  * Album   — parent artista approved AND `descartat=False`.
+  * Artista — `aprovat=True` AND ≥1 verified active cançó.
+  * Album   — parent artista approved AND `descartat=False` AND
+              ≥1 verified active cançó.
   * Canco   — `verificada=True, activa=True`.
 """
 
@@ -63,14 +64,22 @@ class StaticSitemap(Sitemap):
 
 
 class ArtistesSitemap(Sitemap):
-    """One row per approved artiste."""
+    """One row per approved artiste that has at least one verified
+    active cançó. Profiles without indexable content 404 in the SEO
+    view, so listing them here would trip 'sitemap contains URLs
+    blocked' warnings in GSC."""
 
     changefreq = "weekly"
     priority = 0.7
     protocol = "https"
 
     def items(self):
-        return Artista.objects.public().only("slug", "updated_at")
+        return (
+            Artista.objects.public()
+            .filter(cancons__verificada=True, cancons__activa=True)
+            .distinct()
+            .only("slug", "updated_at")
+        )
 
     def location(self, obj):
         return f"/artista/{obj.slug}"
@@ -92,8 +101,15 @@ class AlbumsSitemap(Sitemap):
     limit = 50_000  # Django default; explicit so it's reviewable
 
     def items(self):
-        return Album.objects.filter(descartat=False, artista__aprovat=True).only(
-            "slug", "updated_at"
+        return (
+            Album.objects.filter(
+                descartat=False,
+                artista__aprovat=True,
+                cancons__verificada=True,
+                cancons__activa=True,
+            )
+            .distinct()
+            .only("slug", "updated_at")
         )
 
     def location(self, obj):

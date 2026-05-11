@@ -118,10 +118,19 @@ def artista_jsonld(a: Artista) -> dict[str, Any]:
         nicies = sorted({TERRITORI_NOMS.get(c, c) for c in codes})
         territori_nom = ", ".join(nicies)
 
+    # Only surface albums that carry at least one verified active cançó.
+    # An album with an empty tracklist is non-indexable (album_seo 404s
+    # it), so listing it under MusicGroup.album would point Google at a
+    # broken URL.
     albums = list(
-        Album.objects.filter(artista=a, descartat=False).order_by("-data_llancament")[
-            :10
-        ]
+        Album.objects.filter(
+            artista=a,
+            descartat=False,
+            cancons__verificada=True,
+            cancons__activa=True,
+        )
+        .distinct()
+        .order_by("-data_llancament")[:10]
     )
     tracks = list(
         Canco.objects.filter(artista=a, verificada=True, activa=True)

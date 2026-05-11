@@ -1,0 +1,39 @@
+name: Deploy
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    # Skip deploys for changes that don't affect the running service.
+    # CI still runs (it has no paths-ignore), so tests cover these too.
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE*'
+      - '.github/workflows/ci.yml'
+
+jobs:
+  deploy:
+    name: Pull and deploy to Hetzner
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to topquaranta@hetzner and run tq-deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_DEPLOY_KEY }}
+          port: 22
+          command_timeout: 10m
+          script_stop: true
+          # tq-deploy is the single entry point. It runs:
+          #   1. git pull --ff-only
+          #   2. bin/tq-sync-infra (Caddyfile, cron, systemd, logrotate)
+          #   3. manage.py migrate (when pending migrations are detected)
+          #   4. npm run build (only when web-react/ changed)
+          #   5. sudo systemctl reload topquaranta-web
+          #   6. smoke test against / and /api/v1/top/?territori=PPCC
+          # Any non-zero exit aborts the deploy and the workflow fails.
+          script: |
+            cd /home/topquaranta/app
+            bin/tq-deploy

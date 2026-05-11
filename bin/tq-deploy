@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ordered deploy: pull → check migrations → migrate → build SPA → reload → smoke.
+# Ordered deploy: pull → sync infra → check migrations → migrate → build SPA → reload → smoke.
 #
 # Why this exists (caught 2026-05-07): a `feat(ingest)` push landed
 # code that read `Album.label` *before* the migration adding that
@@ -31,6 +31,7 @@
 #   2 SPA build failed
 #   3 reload failed
 #   4 smoke test failed
+#   5 infra sync failed
 
 set -euo pipefail
 
@@ -71,6 +72,17 @@ echo "→ git pull --ff-only"
 PRE_HEAD=$(git rev-parse HEAD)
 run git pull --ff-only
 POST_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "$PRE_HEAD")
+
+echo
+echo "→ Sync infra files (Caddyfile, cron, systemd, logrotate)"
+# Detect drift between repo (deploy/*) and installed copies, then install
+# changed files with proper validation. Caddyfile validation prevents a
+# syntax error from taking the web tier down. Idempotent: no-op when
+# nothing changed.
+if ! run "$APP_DIR/bin/tq-sync-infra"; then
+    echo "  tq-sync-infra failed, aborting deploy"
+    exit 5
+fi
 
 echo
 echo "→ Check pending migrations"

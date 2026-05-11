@@ -1,0 +1,90 @@
+#!/bin/bash
+# tq-sync-infra: synchronise infrastructure files from repo to system locations.
+#
+# Compares each `deploy/*` file against its installed copy under `/etc/`.
+# When a file differs, validates it (Caddyfile only, currently), installs
+# it with root:root 644, and reloads or daemon-reloads the affected
+# service. Idempotent: no-op when nothing has drifted.
+#
+# Run order (called from tq-deploy right after `git pull`):
+#   1. Caddyfile: validate first, install, then `systemctl reload caddy`.
+#   2. systemd unit: install, then `systemctl daemon-reload`. The actual
+#      `reload topquaranta-web` runs later in tq-deploy's main flow.
+#   3. cron.d drop-in: install only. cron picks up changes automatically.
+#   4. logrotate.d drop-in: install only. logrotate is invoked daily.
+#
+# Exit codes:
+#   0  OK (whether or not anything changed)
+#   1  a source file is missing, or Caddyfile validation failed
+#  64  wrong user
+
+set -euo pipefail
+
+APP_DIR=/home/topquaranta/app
+
+if [ "$(id -un)" != "topquaranta" ]; then
+    echo "Run as the topquaranta user (try: sudo -u topquaranta $0)" >&2
+    exit 64
+fi
+
+declare -A FILES=(
+    ["$APP_DIR/deploy/Caddyfile"]="/etc/caddy/Caddyfile"
+    ["$APP_DIR/deploy/cron.topquaranta"]="/etc/cron.d/topquaranta"
+    ["$APP_DIR/deploy/logrotate.topquaranta"]="/etc/logrotate.d/topquaranta"
+    ["$APP_DIR/deploy/topquaranta-web.service"]="/etc/systemd/system/topquaranta-web.service"
+)
+
+caddy_changed=0
+systemd_unit_changed=0
+anything_changed=0
+
+for src in "${!FILES[@]}"; do
+    dst="${FILES[$src]}"
+    if [ ! -f "$src" ]; then
+        echo "  ! source missing: $src" >&2
+        exit 1
+    fi
+    if sudo cmp -s "$src" "$dst" 2>/dev/null; then
+        continue
+    fi
+    anything_changed=1
+    case "$dst" in
+        /etc/caddy/Caddyfile)
+            echo "  Caddyfile changed, validating before install"
+            if ! sudo caddy validate --config "$src" --adapter caddyfile >/dev/null 2>&1; then
+                echo "  Caddyfile validation failed:" >&2
+                sudo caddy validate --config "$src" --adapter caddyfile >&2 || true
+                exit 1
+            fi
+            sudo install -o root -g root -m 644 "$src" "$dst"
+            caddy_changed=1
+            ;;
+        /etc/systemd/system/topquaranta-web.service)
+            echo "  systemd unit changed, installing"
+            sudo install -o root -g root -m 644 "$src" "$dst"
+            systemd_unit_changed=1
+            ;;
+        /etc/cron.d/topquaranta)
+            echo "  cron config changed, installing"
+            sudo install -o root -g root -m 644 "$src" "$dst"
+            ;;
+        /etc/logrotate.d/topquaranta)
+            echo "  logrotate config changed, installing"
+            sudo install -o root -g root -m 644 "$src" "$dst"
+            ;;
+    esac
+done
+
+if [ "$caddy_changed" = 1 ]; then
+    echo "  reloading caddy"
+    sudo systemctl reload caddy
+fi
+
+if [ "$systemd_unit_changed" = 1 ]; then
+    echo "  daemon-reloading systemd"
+    sudo systemctl daemon-reload
+fi
+
+if [ "$anything_changed" = 0 ]; then
+    echo "  no infra drift"
+fi

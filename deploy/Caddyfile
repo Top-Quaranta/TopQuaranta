@@ -61,6 +61,18 @@ www.topquaranta.cat {
 		header Content-Type "image/svg+xml"
 	}
 
+	# Legacy URL pattern from before the React flip (pre-April 2026).
+	# Google still has thousands of these URLs in its index and re-crawls
+	# them weekly, generating bogus "URL duplicate without canonical" and
+	# 404 reports in GSC. Returning 410 Gone signals permanent removal,
+	# which Google honours faster than soft 404 (the SPA fallback's
+	# current behaviour). Matches the full subtree: /music/artists/...,
+	# /music/songs/..., /music/albums/..., /music/artists/?page=N.
+	@legacy_music path /music/*
+	handle @legacy_music {
+		respond "Gone. The /music/... URL pattern was retired in April 2026. See https://www.topquaranta.cat/sitemap.xml for the current catalog." 410
+	}
+
 	# ── Django passthrough: only explicit paths still served by the
 	# old HTML backend. Everything else falls through to the SPA. ──
 	@django {

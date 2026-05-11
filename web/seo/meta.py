@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from django.conf import settings
+from django.utils.html import strip_tags
 
 from music.models import Album, Artista, Canco
 
@@ -131,8 +132,18 @@ def for_artista(a: Artista) -> Meta:
 
     n_cancons = a.cancons.filter(verificada=True, activa=True).count()
 
+    # Bio fallback chain. As of 2026-05 every approved Artista row has
+    # `bio=""` (no editorial bios written yet), but 1948/1989 of them
+    # carry a non-empty `lastfm_bio_summary` from the Last.fm ingest.
+    # Use that as the description when our own bio is empty, so 98% of
+    # /artista/ SEO pages stop emitting the templated generic line that
+    # GSC was likely flagging as thin/duplicate content. strip_tags
+    # because Last.fm bios occasionally include <a> tags and we don't
+    # want raw HTML in <meta description>.
+    fallback_bio = strip_tags(a.lastfm_bio_summary or "").strip()
     desc = (
         a.bio
+        or fallback_bio
         or f"{a.nom} és un artista de música en català{territori_nom}. "
         + (f"Té {n_cancons} cançons verificades a TopQuaranta. " if n_cancons else "")
         + "Coneix-li la discografia, el top setmanal i els enllaços per escoltar-lo."

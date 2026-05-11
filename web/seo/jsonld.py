@@ -21,6 +21,7 @@ import datetime
 from typing import Any
 
 from django.conf import settings
+from django.utils.html import strip_tags
 
 from music.models import Album, Artista, Canco
 
@@ -136,8 +137,12 @@ def artista_jsonld(a: Artista) -> dict[str, Any]:
         "url": f"{CANONICAL_HOST}/artista/{a.slug}",
         "inLanguage": "ca",
     }
-    if a.bio:
-        data["description"] = a.bio[:600]
+    # Same bio fallback as meta.for_artista. Keeps schema.org description
+    # and meta description in sync (Rich Results Test complains when they
+    # diverge).
+    bio_for_schema = a.bio or strip_tags(a.lastfm_bio_summary or "").strip()
+    if bio_for_schema:
+        data["description"] = bio_for_schema[:600]
     if a.genere:
         data["genre"] = a.genere
     if territori_nom:

@@ -311,32 +311,59 @@ React SPA: Vitest not yet wired for runtime tests; builds validated via
 
 ## 11. Workflow
 
-Claude Code runs on the production server. GitHub is canonical:
-`git pull --rebase` before pushing. Never commit without explicit request.
-At the end of each session, update `docs/history/roadmap.md` to reflect reality.
+Edits happen **locally on the Mac** (via Claude Code in the worktree, or
+your editor). GitHub is canonical. Commits are authored by
+`Miquel Matoses <miquelmatoses@gmail.com>` — not by the server user.
+At the end of each session, update `docs/history/roadmap.md` to reflect
+reality.
 
-**Deploy routine:**
+**Deploy pipeline (GitHub Actions, since 2026-05-11):**
 
-Always use `/home/topquaranta/bin/tq-deploy` after editing code.
-Never run a bare `systemctl reload` after a code change.
+1. Edit at the Mac → `git commit` → `git push origin main`.
+2. GHA picks it up:
+   - `.github/workflows/ci.yml` — pytest, lint, migrations check,
+     `web-react` build. Runs on every push and PR.
+   - `.github/workflows/deploy.yml` — SSHes to the Hetzner box as
+     `topquaranta@` and runs `bin/tq-deploy`. Triggered only on push to
+     `main`. `paths-ignore`: `docs/**`, `*.md`, `LICENSE*`,
+     `.github/workflows/ci.yml` (doc-only pushes don't deploy).
+   - Secrets: `HETZNER_HOST`, `HETZNER_USER`, `HETZNER_DEPLOY_KEY`
+     (already configured in the repo).
+3. `bin/tq-deploy` (on the server) enforces the safe order:
+   `git pull` → **`bin/tq-sync-infra`** → `migrate` (if pending) →
+   `npm run build` (only if `web-react/` changed) → `systemctl reload
+   topquaranta-web` → smoke-test `/api/v1/auth/me/`. Exits 5 if
+   `tq-sync-infra` fails.
+4. `bin/tq-sync-infra` is the idempotent installer for files that live
+   outside the repo's working tree: `deploy/Caddyfile` →
+   `/etc/caddy/Caddyfile`, `deploy/cron.topquaranta` →
+   `/etc/cron.d/topquaranta`, `deploy/logrotate.topquaranta` →
+   `/etc/logrotate.d/topquaranta`, `deploy/topquaranta-web.service` →
+   `/etc/systemd/system/topquaranta-web.service`. It validates
+   `Caddyfile` with `caddy validate` before installing, and only
+   reloads caddy / runs `systemctl daemon-reload` when the file
+   actually changed.
 
-`tq-deploy` enforces the safe order: pull → check & apply migrations →
-build SPA if touched → reload gunicorn → smoke-test. Caught
-2026-05-07: a push that referenced a new `Album.label` column was
-reloaded by gunicorn `--reload` BEFORE the migration was applied;
-every `/album/<slug>` visitor hit a 500, generating 30 admin emails
-in 15 min. See `docs/ops/runbook.md §9.4 bis` for the post-mortem.
+**Never** SSH in to commit-and-deploy by hand. The 2026-05-07
+`Album.label` incident (gunicorn `--reload` picked up the new code
+before the migration was applied → 30 admin emails in 15 min) is the
+canonical reason the pipeline must run end-to-end.
 
-If `tq-deploy` doesn't fit (e.g. partial deploy, debugging), the
-manual safe order is:
-1. Edit code (Python and/or React).
-2. **`python manage.py migrate`** if any new migration was added.
-3. If SPA touched: `cd web-react && npm run build`.
-4. `sudo systemctl reload topquaranta-web` — graceful worker swap, no 502.
-5. Verify: `curl -sI https://www.topquaranta.cat/api/v1/auth/me/`.
+**When you DO still need to SSH to the Hetzner box** (these are
+operational, not deploy paths):
+- Tail live logs: `tail -f /var/log/caddy/access.log`,
+  `journalctl -u topquaranta-web -f`,
+  `tail -f /var/log/topquaranta/*.log`.
+- Debug a cron that failed: `sudo -u topquaranta tq-run <command>`
+  and inspect `CRON_META` / `tq-health`.
+- Ad-hoc DB inspection that doesn't belong in code:
+  `sudo -u topquaranta /home/topquaranta/app/.venv/bin/python
+  manage.py shell`.
+- Recovery / restore scripts: `tq-recover`, `tq-restore-test`,
+  `tq-backup`, `tq-health --email-on-fail`.
 
 Detection net: `tq-health` (hourly cron) emits a `DB migrations: …`
 row that flags pending migrations within an hour even when the
-wrapper is bypassed. Pytest gate at
+pipeline is bypassed. Pytest gate at
 `topquaranta/tests/test_deploy_safety.py` asserts the static
 invariants (no orphan model changes, scripts well-formed).

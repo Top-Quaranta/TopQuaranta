@@ -1,0 +1,140 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › Com funciona
+</nav>
+<h1>La música en català, viva i mesurable</h1>
+<p class="meta-line">
+  Una explicació honesta i directa de què és TopQuaranta, com decidim el top setmanal, i què no farem mai.
+</p>
+
+<h2>Què és TopQuaranta</h2>
+<p>
+  TopQuaranta és el top setmanal públic de música en llengua catalana per als
+  Països Catalans. Cada dissabte publiquem un top 40 per territori a partir
+  d'escoltes reals, amb el codi i les dades obertes perquè qualsevol pugui
+  revisar-ho.
+</p>
+<p>
+  Existim per provar, setmanalment, públicament i mesurablement, que la
+  música en català és viva i creix. No és una opinió: és una mesura.
+</p>
+
+<h2>Com funciona el top</h2>
+<p>
+  Cada nit baixem el nombre d'escoltes recents de cada cançó a Last.fm, els
+  acumulem durant la setmana i el dissabte tanquem el rànquing. Quatre factors
+  decideixen la posició:
+</p>
+<ol>
+  <li>
+    <strong>Quantes escoltes té aquesta setmana.</strong> La base. Si una cançó
+    té poques dades, l'extrapolem a partir de la seva mitjana de vida perquè
+    no quedi penalitzada.
+  </li>
+  <li>
+    <strong>Quants dies fa que es va publicar.</strong> Les cançons noves pugen
+    més fàcil; les que ja porten mesos al top van perdent pes lentament.
+  </li>
+  <li>
+    <strong>Quantes vegades ja ha estat al top.</strong> Penalitzem una mica
+    les cançons que ja han ocupat posicions altes per donar oportunitat a les
+    noves.
+  </li>
+  <li>
+    <strong>Quantes cançons del mateix àlbum o artista</strong> ja apareixen,
+    perquè un sol disc no monopolitzi el top de la setmana.
+  </li>
+</ol>
+<p>
+  Els coeficients exactes són públics i tenen historial: la fórmula d'una
+  setmana qualsevol es pot reproduir avui.
+</p>
+
+<h2>Què compta com a música en català</h2>
+<p>
+  La regla és curta: <strong>la veu principal de la cançó és en català</strong>.
+  Qualsevol variant val (oriental, occidental, balear, alguerès). Una paraula
+  o frase en una altra llengua no descalifica. Un vers complet en una altra
+  llengua, sí.
+</p>
+<ul>
+  <li>Les cançons instrumentals no compten, no hi ha veu a mesurar.</li>
+  <li>
+    Una versió bilingüe simultània entra només si la versió catalana és la
+    principal.
+  </li>
+  <li>
+    Una col·laboració entra si la majoria de la veu és en català i el crèdit
+    principal va a un artista en català.
+  </li>
+  <li>La cançó ha d'haver-se publicat en els últims 12 mesos.</li>
+</ul>
+
+<h2>Qui decideix</h2>
+<p>
+  Cada artista i cada cançó passa per <strong>revisió humana</strong> abans
+  d'entrar al rànquing. L'equip d'staff llegeix la proposta, escolta la mostra
+  i pren la decisió, que queda registrada al log d'auditoria.
+</p>
+<p>
+  Tenim un model de classificació automàtica que prioritza la cua de revisió
+  (què mirem primer), però <strong>mai decideix sol</strong>. Acelera el
+  treball, no el substitueix. Cada decisió té un humà al darrere.
+</p>
+
+<h2>El que no farem mai</h2>
+<ul>
+  <li>
+    <strong>Vendre les dades del rànquing</strong> a discogràfiques, plataformes
+    o tercers. Per això són CC BY: per evitar que ningú, incloent nosaltres,
+    pugui construir un peatge al voltant.
+  </li>
+  <li>
+    <strong>Acceptar diners per moure una cançó al top.</strong> La mesura és
+    el producte. Si la mesura es compromet, el projecte no val res.
+  </li>
+  <li>
+    <strong>Filtrar per qualitat artística.</strong> Si la cançó és en català,
+    hi entra; el judici sobre què és "bona música" no ens correspon.
+  </li>
+  <li>
+    <strong>Vigilància d'usuaris.</strong> No fem tracking, no hi ha píxels de
+    tercers, no compartim logs amb ningú llevat d'una obligació legal.
+  </li>
+  <li>
+    <strong>Canvis sobtats d'algorisme.</strong> Cada modificació queda
+    registrada amb data, motiu i actor; els tops antics es poden reproduir
+    amb la fórmula vigent en el moment.
+  </li>
+</ul>
+
+<h2>Com participar</h2>
+<ul>
+  <li>
+    <strong>Proposa un artista</strong> que falti des del teu compte.
+    <a href="/compte">Anar al compte</a>.
+  </li>
+  <li>
+    <strong>Demana la gestió</strong> del teu propi projecte si ja hi és, i
+    actualitza biografia, gènere i xarxes directament.
+  </li>
+  <li>
+    <strong>Activa el teu perfil al directori</strong> per connectar amb altres
+    músics i col·laboradors.
+  </li>
+  <li>
+    <strong>Corregeix una errada</strong> amb el botó "Corregir" present a
+    cada pàgina d'artista, àlbum i cançó.
+  </li>
+  <li>
+    <strong>Reporta un bug o proposa una millora</strong> al
+    <a href="https://github.com/Top-Quaranta/TopQuaranta" rel="nofollow noopener" target="_blank">repositori
+    de GitHub</a>.
+  </li>
+</ul>
+
+<p class="meta-line" style="text-align:center; font-style:italic; margin-top:32px;">
+  «La música en català, viva i mesurable.»
+</p>
+{% endblock %}

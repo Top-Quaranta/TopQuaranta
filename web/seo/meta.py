@@ -210,6 +210,25 @@ def for_canco(c: Canco) -> Meta:
     )
 
 
+def for_com_funciona() -> Meta:
+    return Meta(
+        title="Com funciona TopQuaranta · El rànquing de música en català",
+        description=_trim(
+            "Com mesurem el top setmanal de música en català: dades reals "
+            "d'escoltes a Last.fm, fórmula pública i revisió humana. Reproduïble."
+        ),
+        canonical_url=f"{CANONICAL_HOST}/com-funciona",
+        og_image=f"{CANONICAL_HOST}/og/home.png",
+        og_type="article",
+        keywords=[
+            "com funciona topquaranta",
+            "rànquing música català",
+            "metodologia",
+            "música en català",
+        ],
+    )
+
+
 def for_mapa() -> Meta:
     return Meta(
         title="Mapa de la música en català · TopQuaranta",

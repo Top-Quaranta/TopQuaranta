@@ -719,6 +719,30 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
 
 @require_safe
 @_vary_ua
+def com_funciona_seo(request: HttpRequest) -> HttpResponse:
+    """`/com-funciona` — methodology + governance page (bot path).
+
+    Mirrors the SPA's ComFuncionaPage so crawlers index the actual
+    content (mission, ranking method, what counts as Catalan music,
+    governance, what we'll never do, how to participate) instead of
+    the empty SPA shell.
+    """
+    return render(
+        request,
+        "seo/com_funciona.html",
+        {
+            "meta": meta.for_com_funciona(),
+            "jsonld_blocks": [
+                jsonld.breadcrumbs_jsonld(
+                    [("Inici", "/"), ("Com funciona", "/com-funciona")]
+                ),
+            ],
+        },
+    )
+
+
+@require_safe
+@_vary_ua
 def mapa_seo(request: HttpRequest) -> HttpResponse:
     """`/mapa` — basic SSR fallback. Doesn't render the SVG (heavy);
     instead lists territoris with their KPIs + links to the per-territori

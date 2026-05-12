@@ -266,3 +266,44 @@ def test_unique_constraint_source_target(db, manel, delen):
     ArtistaLastfmSimilar.objects.create(source=manel, target=delen)
     with pytest.raises(IntegrityError):
         ArtistaLastfmSimilar.objects.create(source=manel, target=delen)
+
+
+@pytest.mark.django_db
+def test_cron_skips_pendents_as_sources(db):
+    """Only approved artistes feed the discovery cron. A pendent with
+    a NULL `lastfm_last_sync` (max priority under the old _prio=1
+    tier) must be left untouched after a `--limit 10` run.
+
+    Cascade-cut decision 2026-05-12: pendent → pendent edges saturated
+    the backlog without adding signal."""
+    from unittest.mock import patch
+
+    from django.core.management import call_command
+
+    approved = Artista.objects.create(
+        nom="ApprovedSrc", lastfm_nom="ApprovedSrc", aprovat=True
+    )
+    pending = Artista.objects.create(
+        nom="PendingSrc",
+        lastfm_nom="PendingSrc",
+        aprovat=False,
+        pendent_review=True,
+    )
+
+    # Mock both Last.fm fetches so the test stays offline. info=truthy
+    # so the command's `if info` branch runs and lastfm_last_sync gets
+    # stamped.
+    info_stub = {"name": "ApprovedSrc", "stats": {}, "bio": {}, "tags": {"tag": []}}
+    with patch(
+        "ingesta.management.commands.obtenir_metadata_lastfm.get_artist_info",
+        return_value=info_stub,
+    ), patch(
+        "ingesta.management.commands.obtenir_metadata_lastfm.get_artist_similar",
+        return_value=[],
+    ):
+        call_command("obtenir_metadata_lastfm", "--limit", "10")
+
+    approved.refresh_from_db()
+    pending.refresh_from_db()
+    assert approved.lastfm_last_sync is not None, "approved source must be synced"
+    assert pending.lastfm_last_sync is None, "pendent must NOT be processed as source"

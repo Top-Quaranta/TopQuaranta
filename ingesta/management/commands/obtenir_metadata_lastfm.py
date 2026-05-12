@@ -36,7 +36,7 @@ import logging
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.db.models import Case, IntegerField, Q, Value, When
+from django.db.models import Q
 from django.utils import timezone
 
 from ingesta.clients.lastfm import get_artist_info, get_artist_similar
@@ -101,24 +101,23 @@ class Command(BaseCommand):
             return
 
         cutoff = timezone.now() - timedelta(days=refresh_days)
-        # Queue priority: aprovats first, oldest sync first (NULL = never
-        # synced → highest priority within a tier). Honours the staff
-        # lockout flag — homonym-collision artists who share their
-        # Last.fm name with another act stay out of the queue entirely.
+        # Only approved artistes act as discovery sources. Second-level
+        # discovery (pendent → pendent edges) used to be enabled via a
+        # _prio=1 tier but saturated the backlog without adding signal:
+        # the review queue is the bottleneck, not the recommendation
+        # graph (2026-05-12 empirical audit: 61 % of all edges came
+        # from pendent sources, mostly inheriting noise from the
+        # initial Crator-style genre cascades).
+        #
+        # Side-effect: pendents no longer get their lastfm_* metadata
+        # auto-enriched. Staff who need it can trigger a one-shot
+        # sync via `--artista-id <pk>` from the staff panel.
+        # Lockout flag still excludes homonym-collision artistes.
         qs = (
-            Artista.objects.filter(
-                Q(lastfm_last_sync__isnull=True) | Q(lastfm_last_sync__lt=cutoff)
-            )
+            Artista.objects.filter(aprovat=True)
+            .filter(Q(lastfm_last_sync__isnull=True) | Q(lastfm_last_sync__lt=cutoff))
             .exclude(lastfm_auto_match_disabled=True)
-            .annotate(
-                _prio=Case(
-                    When(aprovat=True, then=Value(0)),
-                    When(pendent_review=True, then=Value(1)),
-                    default=Value(2),
-                    output_field=IntegerField(),
-                )
-            )
-            .order_by("_prio", "lastfm_last_sync", "pk")[:limit]
+            .order_by("lastfm_last_sync", "pk")[:limit]
         )
 
         processed = 0

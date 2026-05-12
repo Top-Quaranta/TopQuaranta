@@ -294,12 +294,15 @@ def test_cron_skips_pendents_as_sources(db):
     # so the command's `if info` branch runs and lastfm_last_sync gets
     # stamped.
     info_stub = {"name": "ApprovedSrc", "stats": {}, "bio": {}, "tags": {"tag": []}}
-    with patch(
-        "ingesta.management.commands.obtenir_metadata_lastfm.get_artist_info",
-        return_value=info_stub,
-    ), patch(
-        "ingesta.management.commands.obtenir_metadata_lastfm.get_artist_similar",
-        return_value=[],
+    with (
+        patch(
+            "ingesta.management.commands.obtenir_metadata_lastfm.get_artist_info",
+            return_value=info_stub,
+        ),
+        patch(
+            "ingesta.management.commands.obtenir_metadata_lastfm.get_artist_similar",
+            return_value=[],
+        ),
     ):
         call_command("obtenir_metadata_lastfm", "--limit", "10")
 

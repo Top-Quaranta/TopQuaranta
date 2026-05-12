@@ -2,6 +2,8 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import URLValidator
 from django.db import models
 
+from music.constants import SOCIAL_LINK_FIELDS as _SOCIAL_LINK_FIELDS
+
 # S8: accept only http(s) in user-submitted URL fields. Django's default
 # URLValidator also allows ftp/ftps; restrict to web schemes explicitly
 # so a typo or malicious entry can't land with e.g. ftp:// data.
@@ -327,19 +329,10 @@ class PerfilUsuari(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    SOCIAL_FIELDS = [
-        ("spotify_url", "Spotify"),
-        ("viasona_url", "Viasona"),
-        ("web_url", "Web"),
-        ("bandcamp_url", "Bandcamp"),
-        ("youtube_url", "YouTube"),
-        ("viquipedia_url", "Viquipèdia"),
-        ("soundcloud_url", "SoundCloud"),
-        ("tiktok_url", "TikTok"),
-        ("facebook_url", "Facebook"),
-        ("instagram_url", "Instagram"),
-        ("twitter_url", "X"),
-    ]
+    # Canonical iteration tuple from music.constants. Attribute name
+    # kept for backward-compat with existing serializers and views
+    # (PerfilUsuari.SOCIAL_FIELDS is referenced from several places).
+    SOCIAL_FIELDS = _SOCIAL_LINK_FIELDS
 
     class Meta:
         verbose_name = "Perfil d'usuari"

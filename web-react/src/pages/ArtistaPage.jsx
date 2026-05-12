@@ -18,13 +18,7 @@ import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import { useAuth } from '../context/AuthContext'
 import useApi from '../hooks/useApi'
-
-const TERRITORI_NOM = {
-  CAT: 'Catalunya', VAL: 'País Valencià', BAL: 'Illes Balears',
-  PPCC: 'General',  ALT: 'Altres',        AND: 'Andorra',
-  CNO: 'Catalunya del Nord', FRA: 'Franja de Ponent',
-  ALG: "L'Alguer", CAR: 'Carxe',
-}
+import { TERRITORI_NOM } from '../components/editorial'
 
 export default function ArtistaPage() {
   const { slug } = useParams()

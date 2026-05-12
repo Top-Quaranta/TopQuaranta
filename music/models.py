@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
+from music.constants import SOCIAL_LINK_FIELDS as _SOCIAL_LINK_FIELDS
+
 
 class Territori(models.Model):
     """
@@ -471,20 +473,11 @@ class Artista(models.Model):
             territori_ids = {"ALT"}
         self.territoris.set(list(territori_ids))
 
-    SOCIAL_LINK_FIELDS = [
-        ("spotify_url", "Spotify"),
-        ("viasona_url", "Viasona"),
-        ("web_url", "Web"),
-        ("bandcamp_url", "Bandcamp"),
-        ("myspace_url", "Myspace"),
-        ("youtube_url", "YouTube"),
-        ("viquipedia_url", "Viquipèdia"),
-        ("soundcloud_url", "SoundCloud"),
-        ("tiktok_url", "TikTok"),
-        ("facebook_url", "Facebook"),
-        ("instagram_url", "Instagram"),
-        ("twitter_url", "X"),
-    ]
+    # Canonical iteration order lives in music.constants. The
+    # myspace_url URLField is kept on the model (legacy data may
+    # still be present) but no longer surfaces in UI/serializer
+    # iteration through this attribute.
+    SOCIAL_LINK_FIELDS = _SOCIAL_LINK_FIELDS
 
 
 class ArtistaDeezer(models.Model):

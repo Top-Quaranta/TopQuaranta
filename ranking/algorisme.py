@@ -42,16 +42,23 @@ from decimal import Decimal
 
 from django.db.models import Q
 
-from music.constants import DIES_CADUCITAT
+from music.constants import (
+    DIES_CADUCITAT,
+    TERRITORIS_AGREGATS as _TERRITORIS_AGREGATS_TUPLE,
+    TERRITORIS_FIXOS as _TERRITORIS_FIXOS_TUPLE,
+    TERRITORIS_OPCIONALS as _TERRITORIS_OPCIONALS_TUPLE,
+)
 from music.models import Canco
 from ranking.models import ConfiguracioGlobal, SenyalDiari, TopSetmanal
 
 logger = logging.getLogger(__name__)
 
-# Territori buckets.
-TERRITORIS_FIXOS = {"CAT", "VAL", "BAL"}
-TERRITORIS_AGREGATS = {"ALT", "PPCC"}
-TERRITORIS_OPCIONALS = {"CNO", "AND", "FRA", "ALG", "CAR"}
+# Canonical territori subsets live in music.constants as tuples;
+# the algorithm uses set semantics for union / difference, so we
+# wrap once here.
+TERRITORIS_FIXOS = set(_TERRITORIS_FIXOS_TUPLE)
+TERRITORIS_AGREGATS = set(_TERRITORIS_AGREGATS_TUPLE)
+TERRITORIS_OPCIONALS = set(_TERRITORIS_OPCIONALS_TUPLE)
 
 # When looking for a SenyalDiari "~ 7 days ago" we accept any row within
 # this many days on either side; closest wins. Keeps gaps in ingestion

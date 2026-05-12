@@ -9,17 +9,15 @@ import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import useApi from '../hooks/useApi'
+import { TERRITORI_NOM } from '../components/editorial'
 
+// Directory filter options. The explicit code list controls which
+// territoris appear in the picker (PPCC and CAR are intentionally
+// omitted: PPCC aggregates the rest, CAR has no community yet).
+// Labels come from the canonical map so a rename only happens once.
 const TERRITORIS = [
-  ['',      'Tots els territoris'],
-  ['CAT',   'Catalunya'],
-  ['VAL',   'País Valencià'],
-  ['BAL',   'Illes Balears'],
-  ['AND',   'Andorra'],
-  ['CNO',   'Catalunya del Nord'],
-  ['FRA',   'Franja de Ponent'],
-  ['ALG',   "L'Alguer"],
-  ['ALT',   'Altres'],
+  ['', 'Tots els territoris'],
+  ...['CAT', 'VAL', 'BAL', 'AND', 'CNO', 'FRA', 'ALG', 'ALT'].map(c => [c, TERRITORI_NOM[c]]),
 ]
 
 export default function ComunitatDirectoriPage() {

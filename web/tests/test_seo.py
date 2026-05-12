@@ -30,21 +30,54 @@ def client():
 
 @pytest.fixture
 def artista(db):
-    return Artista.objects.create(
+    # /artista/<slug> now requires at least one verified active cançó
+    # (web/seo/views.py::artista_seo). Build a minimal indexable
+    # artist by attaching a default album + canco. Tests that exercise
+    # the un-indexable case flip `aprovat=False`, which still trumps
+    # this gate.
+    a = Artista.objects.create(
         nom="Test Artist",
         slug="test-artist",
         aprovat=True,
     )
+    default_album = Album.objects.create(
+        nom="Default Album",
+        slug="test-artist-default-album",
+        artista=a,
+        descartat=False,
+    )
+    Canco.objects.create(
+        nom="Default Track",
+        slug="test-artist-default-track",
+        artista=a,
+        album=default_album,
+        verificada=True,
+        activa=True,
+    )
+    return a
 
 
 @pytest.fixture
 def album(db, artista):
-    return Album.objects.create(
+    # Same indexability gate: /album/<slug> now requires ≥1 verified
+    # active cançó on the album itself, not just on its artista.
+    # test_album_seo_404_when_descartat flips descartat after this
+    # setup, exercising the gate it actually intends to test.
+    al = Album.objects.create(
         nom="Test Album",
         slug="test-album",
         artista=artista,
         descartat=False,
     )
+    Canco.objects.create(
+        nom="Album Track",
+        slug="test-album-track",
+        artista=artista,
+        album=al,
+        verificada=True,
+        activa=True,
+    )
+    return al
 
 
 @pytest.fixture

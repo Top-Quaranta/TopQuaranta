@@ -47,9 +47,9 @@ class Command(BaseCommand):
 
         # Snapshot the "before" state: how many pendents currently
         # carry nb_similars_lastfm > 0?
-        pendents_with_signal_before = (
-            Artista.objects.filter(aprovat=False, nb_similars_lastfm__gt=0).count()
-        )
+        pendents_with_signal_before = Artista.objects.filter(
+            aprovat=False, nb_similars_lastfm__gt=0
+        ).count()
         total_edges_before = ArtistaLastfmSimilar.objects.count()
 
         self.stdout.write(
@@ -75,13 +75,17 @@ class Command(BaseCommand):
         self.stdout.write(f"Backup CSV path:                          {backup_path}")
 
         if dry_run:
-            self.stdout.write(self.style.NOTICE("--dry-run: no writes (CSV not created)."))
+            self.stdout.write(
+                self.style.NOTICE("--dry-run: no writes (CSV not created).")
+            )
             return
 
         backup_dir.mkdir(parents=True, exist_ok=True)
         with backup_path.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.writer(fh)
-            writer.writerow(["source_id", "source_nom", "target_id", "target_nom", "match"])
+            writer.writerow(
+                ["source_id", "source_nom", "target_id", "target_nom", "match"]
+            )
             rows_iter = (
                 to_delete.select_related("source", "target")
                 .values_list(
@@ -102,9 +106,9 @@ class Command(BaseCommand):
                 count = ArtistaLastfmSimilar.objects.filter(target_id=tid).count()
                 Artista.objects.filter(pk=tid).update(nb_similars_lastfm=count)
 
-        pendents_with_signal_after = (
-            Artista.objects.filter(aprovat=False, nb_similars_lastfm__gt=0).count()
-        )
+        pendents_with_signal_after = Artista.objects.filter(
+            aprovat=False, nb_similars_lastfm__gt=0
+        ).count()
         total_edges_after = ArtistaLastfmSimilar.objects.count()
 
         self.stdout.write(self.style.SUCCESS(f"Deleted edges: {deleted}"))

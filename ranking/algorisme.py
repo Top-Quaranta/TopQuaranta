@@ -42,12 +42,10 @@ from decimal import Decimal
 
 from django.db.models import Q
 
-from music.constants import (
-    DIES_CADUCITAT,
-    TERRITORIS_AGREGATS as _TERRITORIS_AGREGATS_TUPLE,
-    TERRITORIS_FIXOS as _TERRITORIS_FIXOS_TUPLE,
-    TERRITORIS_OPCIONALS as _TERRITORIS_OPCIONALS_TUPLE,
-)
+from music.constants import DIES_CADUCITAT
+from music.constants import TERRITORIS_AGREGATS as _TERRITORIS_AGREGATS_TUPLE
+from music.constants import TERRITORIS_FIXOS as _TERRITORIS_FIXOS_TUPLE
+from music.constants import TERRITORIS_OPCIONALS as _TERRITORIS_OPCIONALS_TUPLE
 from music.models import Canco
 from ranking.models import ConfiguracioGlobal, SenyalDiari, TopSetmanal
 

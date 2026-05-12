@@ -22,17 +22,15 @@ import ExternalListenLinks from '../components/ExternalListenLinks'
 import TopBreakdownPanel from '../components/TopBreakdownPanel'
 import { SeoHead } from '../lib/seoHead'
 import useApi from '../hooks/useApi'
+import { TERRITORI_NOM } from '../components/editorial'
 
+// Chart-only territori palette. Frontend palette centralisation
+// (TopQuaranta audit 2026-05-11, item C3 deferred) is tracked
+// separately in roadmap.md.
 const TERRITORI_COLORS = {
   PPCC: '#427c42', CAT: '#c99b0c', VAL: '#cf3339', BAL: '#0047ba',
   AND:  '#7c3aed', CNO: '#0891b2', FRA: '#ea580c', ALG: '#db2777',
   ALT:  '#6b7280',
-}
-const TERRITORI_NOM = {
-  CAT: 'Catalunya', VAL: 'País Valencià', BAL: 'Illes Balears',
-  PPCC: 'General',  ALT: 'Altres',        AND: 'Andorra',
-  CNO: 'Catalunya del Nord', FRA: 'Franja de Ponent',
-  ALG: "L'Alguer",  CAR: 'Carxe',
 }
 
 function formatDuration(ms) {

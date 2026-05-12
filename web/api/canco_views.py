@@ -14,7 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import UserArtista
-from music.constants import DIES_CADUCITAT, TERRITORI_NOMS
+from music.constants import DIES_CADUCITAT, TERRITORI_NOMS, TERRITORIS_PPCC_SOURCES
 from music.models import Canco
 from ranking.algorisme import (
     _age_factor,
@@ -264,7 +264,7 @@ def _eligible_territoris_for(canco) -> list[str]:
     # PPCC is always shown if the artist belongs to any PPCC territori;
     # ALT only if they're literally tagged ALT.
     keep = own & eligible
-    if "PPCC" in eligible and own & {"CAT", "VAL", "BAL", "AND", "CNO", "FRA", "ALG"}:
+    if "PPCC" in eligible and own & set(TERRITORIS_PPCC_SOURCES):
         keep.add("PPCC")
     return sorted(keep)
 

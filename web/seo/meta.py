@@ -15,6 +15,7 @@ from typing import Any
 from django.conf import settings
 from django.utils.html import strip_tags
 
+from music.constants import TERRITORI_NOMS as _TERRITORI_NOMS_BASE
 from music.models import Album, Artista, Canco
 
 CANONICAL_HOST = settings.SITE_URL  # → "https://www.topquaranta.cat"
@@ -22,17 +23,13 @@ SITE_NAME = "TopQuaranta"
 DEFAULT_OG_IMAGE = f"{CANONICAL_HOST}/og/default.png"
 LOCALE = "ca_ES"
 
-TERRITORI_NOMS = {
-    "PPCC": "Global",
-    "CAT": "Catalunya",
-    "VAL": "País Valencià",
-    "BAL": "Illes Balears",
-    "AND": "Andorra",
-    "CNO": "Catalunya del Nord",
-    "FRA": "Franja de Ponent",
-    "ALG": "L'Alguer",
-    "ALT": "Altres",
-}
+# Visitor-facing labels override the canonical map for two codes:
+#   - "PPCC" is rendered as "Global" on public surfaces (Sprint I bis,
+#     also enforced in editorial.jsx::TERRITORI_NOM). The DB code and
+#     API query params keep using "PPCC".
+#   - "ALT" trims the trailing " territoris" so it reads cleaner in
+#     short meta strings.
+TERRITORI_NOMS = {**_TERRITORI_NOMS_BASE, "PPCC": "Global", "ALT": "Altres"}
 
 
 @dataclass

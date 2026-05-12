@@ -3,7 +3,7 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-05-07.
+> Last updated: 2026-05-12.
 
 ---
 
@@ -117,12 +117,10 @@ secció _completats_ amb la data i el detall.
       cover gutter de 50 px → 20 px) i `_feed_singles_slide`
       (f_song 28 → 40, top padding y+12 → y+0). Mateixes
       proporcions de cover/icon/row_h que el feed_list_slide.
-- [ ] **Stories CTA** (`_story_cta`): veure si la mida del títol
-      «Top complet a» queda balancejat amb el nou volum del títol
-      cançó (80 pt). Possiblement bumpar de 56 → 64.
-- [ ] **Portada novetats**: aplicar el +54 px de marge esquerre
-      també a `_feed_novetats_portada` *si* es decideix mantenir
-      el patró (ara mateix ja està aplicat — verificar visualment).
+- [x] **Stories CTA** (`_story_cta`) bumpada 56 → 64 (shipped
+      2026-05-07, commit `2b5ca0d`).
+- [x] **Portada novetats**: +54 px marge esquerre ja aplicat a
+      `_feed_novetats_portada` (verificat 2026-05-07, commit `2b5ca0d`).
 - [ ] Mode dark/light per al story footer: ara mateix
       «topquaranta.cat» va sempre en `COLOR_TEXT_MUTED`. Verificar
       contrast sobre territoris de color clar (amber/yellow) si
@@ -136,26 +134,20 @@ secció _completats_ amb la data i el detall.
       (a) novetats també envien 4 imatges (portada + 3 album/single
           slides); o
       (b) novetats només envien la portada (singletons).
-- [ ] **Plantilla d'alt-text** més rica: ara «Top CAT, posicions
-      1-10» — a11y guidelines diuen que cal donar context. Provar
-      «Top setmanal de cançons en català de Catalunya — posicions
-      1 a 10: 1 Tutu Turú de Siderland, 2 Estrelles de Max
-      Navarro…». Fa l'alt-text més útil per a screen-readers.
-- [ ] **Programació flexible**: avui el calendari és fix (Sat
-      09:30 IG → 09:40 Mastodon → …). Posar el delay configurable
-      a `ConfiguracioGlobal` perquè staff pugui escampar més o
-      condensar segons el comportament observat (Insights diuen
-      "publica al matí" o "no agrupes" segons cas).
-- [ ] **Re-publicar amb correcció**: si una cançó del top resulta
-      ser rebutjada *després* de publicar el post, hauríem de
-      tenir un botó "Re-publicar" que (a) esborra el post remot,
-      (b) re-genera amb el top corregit, (c) re-publica. Avui
-      això és un seguit manual de Esborrar + Reset + Publicar.
+- [x] **Plantilla d'alt-text rica** (shipped 2026-05-07, commit
+      `2b5ca0d`): alt-text per slide amb context i posicions
+      explícites, alineat amb a11y guidelines.
+- [x] **Programació flexible** (lot B, shipped 2026-05-07, commit
+      `3df1b6a`): delay per canal configurable a
+      `ConfiguracioGlobal`.
+- [x] **Re-publicar amb correcció** (lot C, shipped 2026-05-07,
+      commit `3df1b6a`): botó al panell social que esborra el
+      post remot + regenera + republica en un sol pas.
 
 **A11y + i18n**:
-- [ ] Text alternatiu de les imatges al carrusel IG (l'API ho
-      permet via `alt_text` al moment d'`upload_carousel_item`).
-      Avui només Mastodon i Bluesky tenen alt-text.
+- [x] Text alternatiu al carrusel IG (shipped 2026-05-07, commit
+      `2b5ca0d`): alt-text propagat via `upload_carousel_item` ara
+      també a Instagram, alineat amb Mastodon i Bluesky.
 - [ ] Verificar contrast de tots els colors de territori sobre
       les pastilles del slide list (alguna fila tinta vs
       `COLOR_TEXT_MUTED` pot quedar baix-contrast).
@@ -194,9 +186,10 @@ secció _completats_ amb la data i el detall.
       `Artista.genere_canonical` data-driven.
 
 **Bloc D pendent**:
-- [ ] **Core Web Vitals**: WebP, font preload, JS chunk splitting
-      més agressiu (manualChunks per recharts), critical CSS inline.
-      Target: LCP/INP/CLS verds a Mòbil + Desktop al PageSpeed Insights.
+- [ ] **Core Web Vitals**: parcialment fet (shipped 2026-05-07,
+      commit `f29d06b`): JS chunk splitting (manualChunks per
+      recharts) + preconnect + critical CSS inline. Pendent: WebP +
+      LCP/INP/CLS verds confirmats al PageSpeed Insights.
 - [ ] **Wikidata enrichment**: afegir `P5826` (TopQuaranta artist ID)
       property a Wikidata (procés manual via tutorial wikidata.org).
 - [ ] **MusicBrainz outreach**: afegir el nostre URL com a `urls` a
@@ -322,7 +315,99 @@ Items petits per fer en sessions curtes:
 
 ---
 
+### 5. Backlog: deute tècnic detectat 2026-05-11
+
+Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
+ítem o agrupats per àrea quan se'n decideixi atacar.
+
+- [ ] **Frontend palette literals** (auditoria C2.3): hex codes
+      hardcoded en lloc de `var(--color-tq-*)` a
+      `StaffAnalyticsPage.jsx`, `MapaPage.jsx`,
+      `TopBreakdownPanel.jsx`, `FilterPanel.jsx`, `Alert.jsx`,
+      `CancoPage.jsx::TERRITORI_COLORS`. Recharts no admet `var()`
+      directament; cal un `palette.js` central que exporti els
+      tokens com a JS strings.
+- [ ] **Business-policy `timedelta(days=…)` windows** (auditoria
+      C1.1): 11+ punts amb significat semàntic (cooldowns album,
+      finestres novetat/senyal/sitemap) escampats per
+      `obtenir_novetats.py`, `algorisme.py`, `calcular_top.py`,
+      `canco_views.py`, `sitemaps.py`. Centralitzar com
+      `ALBUM_RECHECK_*`, `SENYAL_WINDOW_DAYS`, `NOVETAT_DAYS` a
+      `music/constants.py`.
+- [ ] **MusicBrainz rate constants** (auditoria C1.3):
+      `RATE_LIMIT_SLEEP = 1.05` i `MAX_RETRIES = 3` viuen a
+      `ingesta/clients/musicbrainz.py:27-28`; Deezer i Last.fm ja
+      consumeixen les constants compartides. Afegir
+      `MUSICBRAINZ_RATE_LIMIT` a `music/constants.py`.
+- [ ] **Mòduls >900 LOC candidats a split** (auditoria C3):
+      `music/models.py` (1311), `social/renderer.py` (1122),
+      `web/api/staff/artistes.py` (961), `web/api/staff/estat.py`
+      (920), `ingesta/management/commands/obtenir_novetats.py`
+      (601). Cap és urgent; el split és ergonòmic, no funcional.
+
+---
+
 ## Sprints — completats
+
+### Sprint — Higiene de constants + ghost pages 404 + ops sweep ✅ (2026-05-11)
+
+Sessió combinada de hardcodes, ghost pages SEO i pipeline GHA.
+
+* **Centralització de territoris**: `TERRITORIS_FIXOS`,
+  `TERRITORIS_AGREGATS`, `TERRITORIS_OPCIONALS`,
+  `TERRITORIS_SITEMAP`, `TERRITORIS_PPCC_SOURCES` viuen a
+  `music/constants.py`. `ranking/algorisme.py`, `web/sitemaps.py`,
+  `web/api/staff/top.py`, `web/api/canco_views.py` consumeixen.
+  `web/seo/meta.py` importa el `TERRITORI_NOMS` canònic amb
+  override visitor-facing (`PPCC` → "Global"). SPA: `ArtistaPage`,
+  `CancoPage`, `ComunitatDirectoriPage` importen
+  `TERRITORI_NOM` d'`editorial.jsx`.
+
+* **`SOCIAL_LINK_FIELDS`**: tupla canònica a `music/constants.py`
+  (11 networks, sense Myspace). `Artista.SOCIAL_LINK_FIELDS` i
+  `PerfilUsuari.SOCIAL_FIELDS` apunten ara a la mateixa font; les
+  `URLField` individuals als models queden intactes.
+
+* **Ghost pages SEO** (PR #18): `/album/<slug>` i `/artista/<slug>`
+  retornen 404 quan no hi ha cap cançó verificada activa. Mateix
+  filtre als sitemaps (`AlbumsSitemap`, `ArtistesSitemap`) i al
+  JSON-LD de `artista_jsonld`. API `album_detail` també alineada.
+  410 Gone per a la subdir legacy `/music/*`.
+
+* **GHA deploy pipeline**: commits `64eaefe`, `bcf8a81`. Mac edit
+  → push → CI + Deploy SSH a Hetzner que invoca `bin/tq-deploy`.
+  `bin/tq-sync-infra` empeny `deploy/*` cap a `/etc/*` de forma
+  idempotent (Caddyfile, cron, logrotate, systemd unit).
+
+* **`tq-restore-test` silent-fail** (`e99c369`): SQL stale
+  (`ranking_rankingsetmanal` → `ranking_topsetmanal`), ERR trap
+  per a deixar status FAIL quan `set -e` aborta, bootstrap del log
+  postgres-owned via `tq-sync-infra`. Drift threshold 5 % → 20 %
+  perquè el backfill PPCC afegeix ~300 artistes/h.
+
+* **SEO P3 `/com-funciona`** (`d3cf19c`): vista SSR + template +
+  meta dedicat. **Last.fm bio fallback** per a `<meta description>`
+  i schema.org quan `Artista.bio` és buida (98 % dels artistes
+  aprovats afectats).
+
+* **RFC 8058 unsubscribe + rate-limit** (`6940c0e`): header
+  `List-Unsubscribe-Post` per a Gmail/Outlook one-click; rate-limit
+  als 4 vectors d'abús (auth login, data export, newsletter
+  unsubscribe, comunitat publicar).
+
+* **Cron metadata JSON + `/staff/estat` redesign** (`8a52391`,
+  `ecde209`, `ada1dbc`): `deploy/cron-meta.json` com a font única
+  de descripció humana de cada cron, llegit per la pàgina
+  d'estat amb threshold de freqüència i `silenced` flag per
+  fallades acceptades.
+
+* **Dependabot sweep**: 4 PRs mergeats (Django 6.0.5 + tres
+  google-api libs). 0 vulnerabilitats obertes a Dependabot
+  Security.
+
+* **Roadmap drift**: marcats com a `[x]` els ítems Distrib v2
+  Lot B/C, Stories CTA 56 → 64, portada novetats +54 px, alt-text
+  ric, IG alt; CWV parcial.
 
 Resum d'una pantalla per sprint. Per ordre alfabètic per facilitar
 la cerca; les dates al títol indiquen la cronologia real. Per al

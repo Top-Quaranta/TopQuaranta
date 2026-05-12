@@ -28,6 +28,7 @@ import datetime
 
 from django.contrib.sitemaps import Sitemap
 
+from music.constants import TERRITORIS_SITEMAP
 from music.models import Album, Artista, Canco
 from ranking.models import TopSetmanal
 
@@ -147,10 +148,8 @@ class TerritorisSitemap(Sitemap):
     priority = 0.7
     protocol = "https"
 
-    TERRITORIS = ["PPCC", "CAT", "VAL", "BAL", "AND", "CNO", "FRA", "ALG"]
-
     def items(self):
-        return self.TERRITORIS
+        return list(TERRITORIS_SITEMAP)
 
     def location(self, codi):
         return f"/top?territori={codi}"
@@ -196,10 +195,8 @@ class TerritorisLandingSitemap(Sitemap):
     priority = 0.6
     protocol = "https"
 
-    TERRITORIS = ["PPCC", "CAT", "VAL", "BAL", "AND", "CNO", "FRA", "ALG"]
-
     def items(self):
-        return self.TERRITORIS
+        return list(TERRITORIS_SITEMAP)
 
     def location(self, codi):
         return f"/territori/{codi}"

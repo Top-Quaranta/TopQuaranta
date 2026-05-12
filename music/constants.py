@@ -23,6 +23,38 @@ TERRITORI_NOMS = {
 # Territories that have a ranking visible on the public site.
 TERRITORIS_VALIDS = ("CAT", "VAL", "BAL", "PPCC", "ALT")
 
+# ─── Territori subsets ──────────────────────────────────────────────
+# Single source of truth for the partition of TERRITORI_NOMS used by
+# the ranking algorithm, sitemaps, top-page picker and PPCC source
+# computations. Defined as tuples (immutable, ordered, hashable);
+# call sites that need set semantics wrap with set(...) locally.
+#
+# Drift target: until 2026-05 these literals lived in
+# ranking/algorisme.py and were duplicated in web/sitemaps.py and
+# elsewhere. Adding a territory now means editing this file only.
+
+# Territoris that always render a public top (CAT/VAL/BAL).
+TERRITORIS_FIXOS = ("CAT", "VAL", "BAL")
+
+# Aggregated buckets (not real territoris of music origin). PPCC
+# combines the seven PPCC sources below; ALT is the umbrella for
+# below-threshold optionals plus artists outside PPCC.
+TERRITORIS_AGREGATS = ("ALT", "PPCC")
+
+# Smaller PPCC territoris that get a dedicated top only when they
+# have enough verified content (gated by ConfiguracioGlobal
+# .min_cancons_ranking_propi).
+TERRITORIS_OPCIONALS = ("CNO", "AND", "FRA", "ALG", "CAR")
+
+# Sitemap and `<select territori>` display order. Excludes CAR (not
+# viable yet) and ALT (catch-all bucket, not a discovery surface).
+TERRITORIS_SITEMAP = ("PPCC", "CAT", "VAL", "BAL", "AND", "CNO", "FRA", "ALG")
+TERRITORIS_TOP_ORDER = TERRITORIS_SITEMAP  # same ordering, different intent
+
+# Codes whose artistes feed the aggregated PPCC top. Excludes ALT,
+# PPCC itself and CAR.
+TERRITORIS_PPCC_SOURCES = ("CAT", "VAL", "BAL", "AND", "CNO", "FRA", "ALG")
+
 # ML classifier thresholds
 ML_CLASSE_A_THRESHOLD = 0.7  # confidence >= this → class A
 ML_CLASSE_B_THRESHOLD = 0.4  # confidence >= this → class B (below → class C)
@@ -160,3 +192,23 @@ MOTIUS_REBUIG = [
     ("no_musica", "No és música"),
 ]
 MOTIUS_VALIDS = {m[0] for m in MOTIUS_REBUIG}
+
+# Canonical iteration order for an artist/profile's outbound social
+# links. The SCHEMA (individual URLField definitions on Artista,
+# PerfilUsuari, PropostaArtista) is unchanged; this tuple drives only
+# the UI/serializer iteration order and labelling. Adding a network
+# means appending here and adding the matching URLField to each
+# consumer model.
+SOCIAL_LINK_FIELDS = (
+    ("spotify_url", "Spotify"),
+    ("viasona_url", "Viasona"),
+    ("web_url", "Web"),
+    ("bandcamp_url", "Bandcamp"),
+    ("youtube_url", "YouTube"),
+    ("viquipedia_url", "Viquipèdia"),
+    ("soundcloud_url", "SoundCloud"),
+    ("tiktok_url", "TikTok"),
+    ("facebook_url", "Facebook"),
+    ("instagram_url", "Instagram"),
+    ("twitter_url", "X"),
+)

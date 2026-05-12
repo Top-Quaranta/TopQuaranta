@@ -40,7 +40,14 @@ from rest_framework.response import Response
 
 from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
 from music.audit import log_staff_action
-from music.constants import MOTIUS_REBUIG, MOTIUS_VALIDS, TERRITORI_NOMS
+from music.constants import (
+    MOTIUS_REBUIG,
+    MOTIUS_VALIDS,
+    TERRITORI_NOMS,
+    TERRITORIS_AGREGATS,
+    TERRITORIS_FIXOS,
+    TERRITORIS_OPCIONALS,
+)
 from music.ml import recalcular_ml_si_cal
 from music.models import (
     Album,
@@ -114,9 +121,12 @@ def canco_top_breakdown(request: Request, pk: int) -> Response:
     )
 
 
+# Staff top picker: fixed PPCC origins first, then optionals (incl.
+# CAR), then aggregated buckets (ALT, PPCC). Built from the canonical
+# subsets so a new territori only needs adding to music/constants.
 TOP_TERRITORIS = [
     (c, TERRITORI_NOMS[c])
-    for c in ("CAT", "VAL", "BAL", "CNO", "AND", "FRA", "ALG", "CAR", "ALT", "PPCC")
+    for c in (*TERRITORIS_FIXOS, *TERRITORIS_OPCIONALS, *TERRITORIS_AGREGATS)
 ]
 
 

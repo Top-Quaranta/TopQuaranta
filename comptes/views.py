@@ -175,7 +175,10 @@ def activar(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
     if user and email_verification_token.check_token(user, token):
         user.is_active = True
         user.save(update_fields=["is_active"])
-        login(request, user)
+        # Explicit backend: with django-axes also in AUTHENTICATION_BACKENDS,
+        # Django can't infer which backend to use when login() runs without
+        # a prior authenticate() call (token activation skips it).
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
         return redirect(SPA_DASHBOARD_URL)
 
     return render(request, "comptes/activar_error.html")

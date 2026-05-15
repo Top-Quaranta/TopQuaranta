@@ -347,6 +347,20 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ---
 
+### 6. Backlog: deute tècnic detectat 2026-05-15
+
+- [ ] **Sweep d'exception swallowing als management commands**:
+      revisar tots els commands a `*/management/commands/*.py` per
+      a patrons `try/except + return` que swallowen errors. Casos
+      detectats fins ara: `tq-restore-test` (PR #17, fixat),
+      `recollir_metrics_gsc` (PR següent, fixat). Hipòtesi: hi ha
+      més. `tq-health` no els detecta perquè `tq-run` veu exit 0.
+      Fer: `grep -rn "except Exception" --include="*.py"
+      management/commands/` i revisar cada match per veure si el
+      bloc fa `return` (swallow) o `raise` (propaga).
+
+---
+
 ## Sprints — completats
 
 ### Sprint — Higiene de constants + ghost pages 404 + ops sweep ✅ (2026-05-11)

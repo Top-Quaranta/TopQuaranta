@@ -135,12 +135,18 @@ class Command(BaseCommand):
         try:
             resp = svc.searchanalytics().query(siteUrl=site_url, body=body).execute()
         except Exception as exc:  # noqa: BLE001
-            # Most common: SA not yet added as a property user.
+            # Most common: SA not yet added as a property user, or
+            # OAuth refresh token revoked/expired. Log for humans
+            # (stdout + logger) and re-raise so tq-run sees a
+            # non-zero exit and tq-health flags the cron as failing.
+            # Previous `return` here swallowed the error and left
+            # status=OK on tq-run even when no data was fetched
+            # (caught 2026-05-15 after the OAuth token expired).
             self.stdout.write(
                 self.style.ERROR(f"GSC searchanalytics call failed: {exc}")
             )
             logger.exception("GSC fetch failed")
-            return
+            raise
 
         rows = resp.get("rows") or []
         ok = 0

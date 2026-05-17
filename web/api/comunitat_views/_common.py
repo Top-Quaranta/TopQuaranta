@@ -226,9 +226,7 @@ def _enviar_notificacio_missatge(request, msg) -> None:
     try:
         send_mail(ctx["subject"], text, None, recipients, html_message=html)
     except Exception:
-        logger.exception(
-            "Failed to send message notification to %s", recipients
-        )
+        logger.exception("Failed to send message notification to %s", recipients)
 
 
 # ─── Comentaris ──────────────────────────────────────────────────────────

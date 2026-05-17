@@ -1,0 +1,26 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Proposta acceptada{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Gràcies! {{ artista_nom }} ja és al catàleg
+</h1>
+<p style="margin:0 0 16px;">
+  Hem afegit <strong style="color:#facc15;">{{ artista_nom }}</strong>
+  a TopQuaranta. La cançó verificada més recent ja entra al rànquing si
+  cau dins de la finestra dels últims 365 dies.
+</p>
+<p style="margin:0 0 16px;color:#d1d5db;font-size:14px;line-height:1.5;">
+  Si ets l'artista o el representant directe i vols mantenir-ne el
+  perfil tu mateix (biografia, gènere, xarxes socials), pots
+  sol·licitar-ne la gestió. Et verificarem i podràs editar-lo des
+  del teu compte.
+</p>
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ gestio_request_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Sol·licitar la gestió
+  </a>
+</p>
+<p style="margin:0 0 0;color:#9ca3af;font-size:12px;text-align:center;">
+  Gràcies per ajudar-nos a fer créixer el catàleg de música en català.
+</p>
+{% endblock %}

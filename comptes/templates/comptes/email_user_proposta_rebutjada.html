@@ -1,0 +1,28 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Proposta no acceptada{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Proposta no acceptada
+</h1>
+<p style="margin:0 0 16px;">
+  Hem revisat la teva proposta per afegir
+  <strong style="color:#facc15;">{{ artista_nom }}</strong>
+  al catàleg i no l'hem pogut acceptar aquesta vegada.
+</p>
+<p style="margin:0 0 16px;color:#d1d5db;font-size:14px;line-height:1.5;">
+  Les raons habituals per a no acceptar una proposta són: l'artista
+  no canta en català com a llengua principal, el perfil Deezer
+  enllaçat no és el que correspon, l'artista ja existia al catàleg
+  amb un altre nom, o no és música (podcast, monòleg, audio-llibre…).
+</p>
+<p style="margin:0 0 16px;color:#d1d5db;font-size:14px;line-height:1.5;">
+  Si penses que l'hem de reconsiderar amb més context, respon
+  aquest correu o torna a proposar amb info addicional (enllaços
+  a la discografia, prova que canta en català, etc.).
+</p>
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ compte_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Anar al meu compte
+  </a>
+</p>
+{% endblock %}

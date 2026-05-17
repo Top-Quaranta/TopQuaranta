@@ -1,0 +1,87 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Sol·licitud de gestió verificada{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Ja gestiones {{ artista_nom }}
+</h1>
+<p style="margin:0 0 16px;">
+  La teva sol·licitud per gestionar
+  <strong style="color:#facc15;">{{ artista_nom }}</strong>
+  ha estat verificada. Et donem la benvinguda i et passem una breu
+  guia del que pots fer ara.
+</p>
+
+<h2 style="font-family:'Playfair Display',Georgia,serif;font-size:18px;font-weight:700;color:#facc15;margin:24px 0 8px;">
+  Què pots editar al perfil de l'artista
+</h2>
+<p style="margin:0 0 8px;">
+  Des de la pàgina de gestió pots actualitzar:
+</p>
+<ul style="margin:0 0 16px;padding-left:20px;color:#d1d5db;font-size:14px;line-height:1.6;">
+  <li>Biografia (text lliure).</li>
+  <li>Gènere musical principal.</li>
+  <li>Representació femenina del projecte (categòrica).</li>
+  <li>
+    Fins a 12 URLs socials: Instagram, YouTube, Spotify, Bandcamp, TikTok,
+    web pròpia, Facebook, X, SoundCloud, Viquipèdia, Viasona i Twitter.
+  </li>
+</ul>
+<p style="margin:0 0 16px;color:#9ca3af;font-size:13px;">
+  Per canviar el nom de l'artista, IDs Deezer, MBID o localitat, escriu-nos
+  (camí al peu).
+</p>
+<p style="margin:16px 0 24px;text-align:center;">
+  <a href="{{ gestio_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Anar a la gestió de l'artista
+  </a>
+</p>
+
+<h2 style="font-family:'Playfair Display',Georgia,serif;font-size:18px;font-weight:700;color:#facc15;margin:24px 0 8px;">
+  Què pots fer a la comunitat
+</h2>
+<ul style="margin:0 0 16px;padding-left:20px;color:#d1d5db;font-size:14px;line-height:1.6;">
+  <li>
+    Publicar a la <a href="{{ comunitat_url }}" style="color:#facc15;">comunitat</a>.
+    Les publicacions internes són immediates; les públiques passen per moderació.
+  </li>
+  <li>Rebre i enviar missatges directes amb altres usuaris.</li>
+  <li>
+    Consultar estadístiques agregades del teu artista al teu
+    <a href="{{ compte_url }}" style="color:#facc15;">compte</a>
+    (setmanes al top, millor posició, cançons presents).
+  </li>
+  <li>
+    Contactar amb nosaltres directament: al
+    <a href="{{ directori_url }}" style="color:#facc15;">directori</a>
+    busca «Admin TopQuaranta» i envia'ns un DM. Ens arriba a tot l'equip.
+  </li>
+</ul>
+
+<h2 style="font-family:'Playfair Display',Georgia,serif;font-size:18px;font-weight:700;color:#facc15;margin:24px 0 8px;">
+  Preguntes freqüents
+</h2>
+<p style="margin:0 0 6px;color:#facc15;font-weight:700;font-size:14px;">
+  Per què no veig totes les meves cançons?
+</p>
+<p style="margin:0 0 14px;color:#d1d5db;font-size:14px;line-height:1.5;">
+  Mostrem només cançons amb data de llançament dels últims 365 dies.
+  És un rànquing del present, no un catàleg històric. Les cançons més
+  antigues no apareixen al top, però el perfil de l'artista continua
+  reflectint la trajectòria via les xarxes que enllaces.
+</p>
+<p style="margin:0 0 6px;color:#facc15;font-weight:700;font-size:14px;">
+  Em sembla que falta material recent.
+</p>
+<p style="margin:0 0 14px;color:#d1d5db;font-size:14px;line-height:1.5;">
+  La nostra font de catàleg és Deezer (per limitacions d'accés a
+  l'API de Spotify). Si veus cançons recents que no apareixen, val
+  la pena revisar que el teu perfil de Deezer estigui ben curat:
+  cançons assignades al perfil correcte, àlbums sense duplicats,
+  metadades correctes. Quan Deezer ho té net, el nostre cron ho recull.
+</p>
+
+<p style="margin:24px 0 0;color:#9ca3af;font-size:12px;text-align:center;">
+  Si tens qualsevol dubte, respon aquest correu o envia'ns DM al
+  compte Admin TopQuaranta.
+</p>
+{% endblock %}

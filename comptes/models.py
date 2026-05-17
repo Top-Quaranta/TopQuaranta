@@ -72,6 +72,13 @@ class UserArtista(models.Model):
     )
     motiu_rebuig = models.TextField(blank=True)
 
+    # Fase 1.5.C (2026-05-18). Stamp when the "you're verified" email
+    # has been dispatched, so the retroactive notifier
+    # (`notificar_gestors_retroactiu`) can pick up users approved
+    # before the notification layer existed without double-sending to
+    # anyone whose approval was processed under the new flow.
+    email_aprovacio_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = "Vinculació usuari-artista"
         verbose_name_plural = "Vinculacions usuari-artista"

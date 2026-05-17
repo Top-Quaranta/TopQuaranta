@@ -363,6 +363,39 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Sprint — Fase 1.5.C: contingut definitiu dels mails + retroactiu ✅ (2026-05-18)
+
+Substitució dels 6 templates placeholder de Fase 1.5.A per contingut
+definitiu, més script one-shot per a notificar retroactivament
+gestors aprovats abans de l'existència del layer.
+
+* **Templates user-side**:
+  - `email_user_solicitud_aprovada.html` — walkthrough complet:
+    què pot editar (bio/gènere/percentatge_femení/12 URLs socials),
+    què pot fer a la comunitat (publicar, DMs, dashboard,
+    contactar staff via «Admin TopQuaranta» al directori), 2 FAQs
+    (finestra de 365 dies, Deezer com a font del catàleg).
+  - `email_user_solicitud_rebutjada.html` — motiu + convit a
+    re-sol·licitar amb més context.
+  - Anàleg per a `proposta_aprovada` / `proposta_rebutjada`.
+  - `feedback_resolt` — text més calorós.
+
+* **Templates admin-side**: mantinguts minimalistes. Inclouen
+  el missatge de l'usuari (`sollicitud_text`, `justificacio`, cos
+  del feedback) per a triatge ràpid.
+
+* **`UserArtista.email_aprovacio_at`** (migration 0016): timestamp
+  del moment que es dispatch del email d'aprovació. `notify_user_
+  solicitud_resolta` el seteja a `aprovada`-send-success.
+
+* **`notificar_gestors_retroactiu`** command: itera UserArtistes
+  verificats sense `email_aprovacio_at` i envia el walkthrough.
+  Flags `--dry-run` i `--exclude-user-id` (repetible). Idempotent.
+
+* **Tests**: `test_notificar_gestors_retroactiu.py` (7 tests)
+  cobreix idempotència, dry-run, exclude, edge cases (no email,
+  ja notificat) i render real del template amb dades.
+
 ### Sprint — Fase 1.5.A: notification layer + UserArtista audit ✅ (2026-05-17)
 
 Després de l'auditoria del 2026-05-17 sobre què pot fer un gestor

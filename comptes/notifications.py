@@ -139,37 +139,73 @@ def notify_admins_nou_feedback(feedback) -> None:
 
 
 def notify_user_solicitud_resolta(user_artista, accio: str) -> None:
-    """Staff resolved a gestió request. `accio` is 'aprovada' or
-    'rebutjada'. Placeholder template; Fase 1.5.C will replace it
-    with the walkthrough + FAQ."""
+    """Staff resolved a gestió request. Picks the right template
+    based on `accio` ('aprovada' → full walkthrough + FAQ; 'rebutjada'
+    → motiu + invite to re-apply).
+
+    On `aprovada`, stamps `user_artista.email_aprovacio_at` after a
+    successful send so the retroactive notifier
+    (`notificar_gestors_retroactiu`) can skip already-emailed users.
+    """
     if accio not in ("aprovada", "rebutjada"):
         raise ValueError(f"accio must be 'aprovada' or 'rebutjada', got {accio!r}")
+    template_map = {
+        "aprovada": "comptes/email_user_solicitud_aprovada.html",
+        "rebutjada": "comptes/email_user_solicitud_rebutjada.html",
+    }
     suffix = "verificada" if accio == "aprovada" else "no acceptada"
     _send(
         subject=f"TopQuaranta · sol·licitud de gestió {suffix}: {user_artista.artista.nom}",
-        template="comptes/email_user_solicitud_resolta.html",
+        template=template_map[accio],
         context={
             "accio": accio,
             "artista_nom": user_artista.artista.nom,
+            "artista_slug": user_artista.artista.slug,
+            "artista_pk": user_artista.artista.pk,
             "motiu_rebuig": user_artista.motiu_rebuig,
             "compte_url": f"{_site_url()}/compte",
+            "gestio_url": f"{_site_url()}/compte/artista/{user_artista.artista.pk}/editar",
+            "comunitat_url": f"{_site_url()}/comunitat",
+            "directori_url": f"{_site_url()}/comunitat/directori",
         },
         to=[user_artista.usuari.email],
     )
+    if accio == "aprovada":
+        from django.utils import timezone
+
+        # Best-effort: if `_send` swallowed an error the user didn't
+        # actually receive the email; stamping anyway would hide it
+        # from the retroactive sweep. We accept the risk because the
+        # alternative (don't stamp on swallowed error) is impossible
+        # to distinguish from the success path with the current
+        # `_send` signature. Future: refactor `_send` to return bool.
+        user_artista.email_aprovacio_at = timezone.now()
+        user_artista.save(update_fields=["email_aprovacio_at"])
 
 
 def notify_user_proposta_resolta(proposta, accio: str) -> None:
     """Staff resolved a new-artist proposal."""
     if accio not in ("aprovada", "rebutjada"):
         raise ValueError(f"accio must be 'aprovada' or 'rebutjada', got {accio!r}")
+    template_map = {
+        "aprovada": "comptes/email_user_proposta_aprovada.html",
+        "rebutjada": "comptes/email_user_proposta_rebutjada.html",
+    }
     suffix = "acceptada" if accio == "aprovada" else "no acceptada"
+    artista_slug = (
+        getattr(proposta.artista_creat, "slug", "")
+        if getattr(proposta, "artista_creat_id", None)
+        else ""
+    )
     _send(
         subject=f"TopQuaranta · proposta d'artista {suffix}: {proposta.nom}",
-        template="comptes/email_user_proposta_resolta.html",
+        template=template_map[accio],
         context={
             "accio": accio,
             "artista_nom": proposta.nom,
+            "artista_slug": artista_slug,
             "compte_url": f"{_site_url()}/compte",
+            "gestio_request_url": f"{_site_url()}/compte/artista/gestio",
         },
         to=[proposta.usuari.email],
     )

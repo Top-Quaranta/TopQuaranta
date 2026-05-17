@@ -1,0 +1,29 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Sol·licitud de gestió{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Sol·licitud no acceptada
+</h1>
+<p style="margin:0 0 16px;">
+  Hem revisat la teva sol·licitud per gestionar
+  <strong style="color:#facc15;">{{ artista_nom }}</strong>
+  i no l'hem pogut acceptar aquesta vegada.
+</p>
+{% if motiu_rebuig %}
+<p style="margin:0 0 8px;color:#facc15;font-weight:700;font-size:14px;">
+  Motiu:
+</p>
+<div style="border-left:3px solid #facc15;padding:10px 14px;background:#0a0a0a;color:#d1d5db;font-size:14px;line-height:1.5;margin-bottom:18px;white-space:pre-wrap;">{{ motiu_rebuig }}</div>
+{% endif %}
+<p style="margin:0 0 16px;color:#d1d5db;font-size:14px;line-height:1.5;">
+  Si creus que és una errada o pots aportar més context (enllaços
+  a la teva presència oficial, prova de ser l'artista o el seu
+  representant), torna a sol·licitar-la i hi tornarem a donar
+  una ullada. També pots respondre directament aquest correu.
+</p>
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ compte_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Anar al meu compte
+  </a>
+</p>
+{% endblock %}

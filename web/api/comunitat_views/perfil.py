@@ -106,12 +106,22 @@ def directori(request: Request) -> Response:
 
     Filters: q (name/username/instruments), rol, obert_colaboracions,
     territori (by localitat.municipi.territori). Page size 30.
+
+    Staff users see EVERY active profile, including those with
+    `visible_directori=False`. This is so admins can reach users for
+    one-on-one moderation correspondence without forcing the user to
+    self-publish (Fase 1.5.B partial, 2026-05-17). The user's privacy
+    preference is preserved: non-staff viewers still only see
+    `visible_directori=True` rows, and the response surfaces
+    `visible_directori` per row so the SPA can flag non-public
+    profiles distinctly in the staff view.
     """
-    qs = (
-        PerfilUsuari.objects.filter(visible_directori=True, usuari__is_active=True)
-        .select_related("usuari", "localitat", "localitat__territori")
-        .prefetch_related("usuari__artistes_vinculats__artista")
-    )
+    base = PerfilUsuari.objects.filter(usuari__is_active=True)
+    if not request.user.is_staff:
+        base = base.filter(visible_directori=True)
+    qs = base.select_related(
+        "usuari", "localitat", "localitat__territori"
+    ).prefetch_related("usuari__artistes_vinculats__artista")
     q = (request.GET.get("q") or "").strip()
     if q:
         nq = normalize_search_term(q)
@@ -161,6 +171,10 @@ def directori(request: Request) -> Response:
                 ),
                 "territori": loc.territori_id if loc else None,
                 "artistes_gestionats": artistes_gestionats,
+                # Surfaced unconditionally so the SPA can render a
+                # "perfil no públic" badge in the staff view; for
+                # non-staff viewers it's always True (filtered above).
+                "visible_directori": p.visible_directori,
             }
         )
 

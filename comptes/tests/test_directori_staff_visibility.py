@@ -12,10 +12,12 @@ carries the `visible_directori` flag so the SPA can render a clear
 from __future__ import annotations
 
 import pytest
-from django.urls import reverse
 from rest_framework.test import APIClient
 
 from comptes.models import PerfilUsuari, Usuari
+
+DIRECTORI_URL = "/api/v1/comunitat/directori/"
+MISSATGE_CREAR_URL = "/api/v1/missatges/nou/"
 
 
 @pytest.fixture
@@ -65,7 +67,7 @@ def test_regular_user_sees_only_public_profiles(public_user, private_user):
     `visible_directori=True` show up."""
     client = APIClient()
     client.force_authenticate(public_user)
-    resp = client.get(reverse("comunitat_directori"))
+    resp = client.get(DIRECTORI_URL)
     assert resp.status_code == 200
     usernames = _usernames(resp.data)
     assert "publicuser" in usernames
@@ -81,7 +83,7 @@ def test_staff_sees_private_profiles_with_visibility_flag(
     'perfil no públic' badge."""
     client = APIClient()
     client.force_authenticate(staff)
-    resp = client.get(reverse("comunitat_directori"))
+    resp = client.get(DIRECTORI_URL)
     assert resp.status_code == 200
     rows = {row["username"]: row for row in resp.data["results"]}
     assert "publicuser" in rows
@@ -98,15 +100,13 @@ def test_inactive_users_excluded_even_for_staff(staff, public_user):
     public_user.save(update_fields=["is_active"])
     client = APIClient()
     client.force_authenticate(staff)
-    resp = client.get(reverse("comunitat_directori"))
+    resp = client.get(DIRECTORI_URL)
     assert resp.status_code == 200
     assert "publicuser" not in _usernames(resp.data)
 
 
 @pytest.mark.django_db
-def test_regular_user_cannot_dm_private_user_via_directory(
-    public_user, private_user
-):
+def test_regular_user_cannot_dm_private_user_via_directory(public_user, private_user):
     """The implicit gate is discoverability: a non-staff user cannot
     see `private_user` in the directory and therefore has no UI path
     to obtain their pk for the DM endpoint. This test locks that
@@ -115,7 +115,7 @@ def test_regular_user_cannot_dm_private_user_via_directory(
     discoverability, not validation.)"""
     client = APIClient()
     client.force_authenticate(public_user)
-    resp = client.get(reverse("comunitat_directori"))
+    resp = client.get(DIRECTORI_URL)
     assert resp.status_code == 200
     assert "privateuser" not in _usernames(resp.data)
 
@@ -126,12 +126,12 @@ def test_staff_can_dm_private_user(staff, private_user):
     posts to `missatge_crear` with their pk and it succeeds."""
     client = APIClient()
     client.force_authenticate(staff)
-    directori = client.get(reverse("comunitat_directori"))
+    directori = client.get(DIRECTORI_URL)
     target_row = next(
         r for r in directori.data["results"] if r["username"] == "privateuser"
     )
     resp = client.post(
-        reverse("missatge_crear"),
+        MISSATGE_CREAR_URL,
         {
             "destinatari_pk": target_row["usuari_id"],
             "cos": "Hola, tinc una pregunta sobre el teu perfil.",

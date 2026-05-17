@@ -24,24 +24,30 @@ MISSATGE_CREAR_URL = "/api/v1/missatges/nou/"
 
 @pytest.fixture
 def admin_inbox(db):
-    """Pseudo-user that fronts the staff inbox. Mirrors the seed
-    migration: is_staff=False (proxy, not real admin), is_active=True,
-    PerfilUsuari with visible_directori=True."""
-    user = Usuari.objects.create_user(
+    """Pseudo-user that fronts the staff inbox. The seed migration
+    0016_admin_pseudouser already creates the row during test setup;
+    we fetch it (or fall back to create_user when the migration
+    didn't run, e.g. in an unmigrated test DB) and ensure the
+    PerfilUsuari is in a deterministic state. The `notificar_missatges_email
+    =False` setting exercises the branch where the staff fan-out
+    bypasses the pseudo-user's opt-out."""
+    user, _ = Usuari.objects.get_or_create(
         username="admin",
-        email="admin@topquaranta.cat",
-        password="x",
-        first_name="Admin",
-        last_name="TopQuaranta",
-        is_active=True,
-        is_staff=False,
+        defaults={
+            "email": "admin@topquaranta.cat",
+            "first_name": "Admin",
+            "last_name": "TopQuaranta",
+            "is_active": True,
+            "is_staff": False,
+        },
     )
-    PerfilUsuari.objects.filter(usuari=user).update(
-        nom_public="Admin TopQuaranta",
-        visible_directori=True,
-        # Even with opt-out, the fan-out must still hit staff. This
-        # exercises that branch.
-        notificar_missatges_email=False,
+    PerfilUsuari.objects.update_or_create(
+        usuari=user,
+        defaults={
+            "nom_public": "Admin TopQuaranta",
+            "visible_directori": True,
+            "notificar_missatges_email": False,
+        },
     )
     return user
 
@@ -152,9 +158,7 @@ def test_dm_to_regular_user_keeps_existing_behaviour(
 
 
 @pytest.mark.django_db
-def test_staff_reply_keeps_staff_as_sender(
-    regular_user, admin_inbox, staff_a
-):
+def test_staff_reply_keeps_staff_as_sender(regular_user, admin_inbox, staff_a):
     """When staff responds, the Missatge.remitent is the staff user
     themselves, NOT the admin pseudo-user. The user sees who actually
     replied (preserves accountability)."""

@@ -154,6 +154,10 @@ def proposta_crear(request: Request) -> Response:
     from analytics.events import register as _register_event
 
     _register_event("proposta_crear")
+    # Notify staff via the central transactional layer (best-effort).
+    from comptes.notifications import notify_admins_nova_proposta
+
+    notify_admins_nova_proposta(p)
     return Response({"ok": True, "pk": p.pk, "estat": p.estat}, status=201)
 
 
@@ -215,6 +219,10 @@ def solicitud_crear(request: Request) -> Response:
     from analytics.events import register as _register_event
 
     _register_event("solicitud_gestor_crear")
+    # Notify staff via the central transactional layer (best-effort).
+    from comptes.notifications import notify_admins_nova_solicitud_gestio
+
+    notify_admins_nova_solicitud_gestio(ua)
     return Response({"ok": True, "pk": ua.pk, "estat": ua.estat}, status=201)
 
 
@@ -256,8 +264,16 @@ def _gestor_check(request, pk: int) -> Artista | Response:
         artista = Artista.objects.get(pk=pk)
     except Artista.DoesNotExist:
         return Response({"error": "Artista no trobat."}, status=404)
+    # Fase 1.5.A: require BOTH `verificat=True` and `estat="aprovat"`.
+    # Before this, only `verificat` was checked, which left a user
+    # who had been verificat-toggled-off through `solicitud_rebutjar`
+    # silently still authorised (the old reject path forgot to flip
+    # `verificat`). Belt and braces.
     has_verified = UserArtista.objects.filter(
-        usuari=request.user, artista=artista, verificat=True
+        usuari=request.user,
+        artista=artista,
+        verificat=True,
+        estat=UserArtista.ESTAT_APROVAT,
     ).exists()
     if not has_verified:
         return Response(

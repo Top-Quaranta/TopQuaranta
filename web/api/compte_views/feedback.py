@@ -74,4 +74,8 @@ def feedback_crear(request: Request) -> Response:
     from analytics.events import register as _register_event
 
     _register_event("feedback_crear", dim1=target_type)
+    # Notify staff via the central transactional layer (best-effort).
+    from comptes.notifications import notify_admins_nou_feedback
+
+    notify_admins_nou_feedback(fb)
     return Response({"ok": True, "pk": fb.pk}, status=201)

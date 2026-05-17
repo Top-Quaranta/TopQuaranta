@@ -363,6 +363,41 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Sprint — Fase 1.5.A: notification layer + UserArtista audit ✅ (2026-05-17)
+
+Després de l'auditoria del 2026-05-17 sobre què pot fer un gestor
+d'artista verificat al lloc. Aquest sprint tanca els bugs estructurals
+i posa la base d'email transaccional; el contingut definitiu del
+walkthrough arriba a 1.5.C.
+
+* **Bugs estructurals tancats**:
+  - `_gestor_check` (i el seu bessó a `auth_views`) ara requereixen
+    `verificat=True AND estat='aprovat'`. Abans només mirava
+    `verificat`, deixant un foradet quan `solicitud_rebutjar` flipava
+    `estat` però no `verificat`.
+  - `solicitud_rebutjar` ara també seteja `verificat=False`, accepta
+    un `motiu` opcional al body i el desa a `motiu_rebuig`.
+
+* **Camps d'auditoria a `UserArtista`** (migration 0015):
+  `aprovat_at`, `aprovat_per`, `motiu_rebuig`. Backfill best-effort
+  des de `StaffAuditLog` per als ja-aprovats.
+
+* **`comptes/notifications.py` (nou)**: 6 funcions pairades
+  (admin↔user) per als esdeveniments de moderació (sol·licitud
+  gestió, proposta artista, feedback). Implementació best-effort:
+  errors al sendmail no propaguen. 6 templates placeholder extenent
+  `email_base.html` — el contingut definitiu (walkthrough + FAQ) ve
+  a Fase 1.5.C.
+
+* **Wire**: 6 call sites existents passen a invocar les funcions
+  (`solicitud_crear`, `proposta_crear`, `feedback_crear`,
+  `solicitud_toggle`, `solicitud_rebutjar`, `proposta_aprovar`,
+  `proposta_rebutjar`, `feedback_resolve`).
+
+* **Tests**: `comptes/tests/test_notifications.py` (10 tests)
+  cobreix subject + recipient + validació d'argument + edge case
+  "no staff configurat".
+
 ### Sprint — Distribució Fase 1: mencions per canal ✅ (2026-05-16)
 
 Investigació del 2026-05-16 va revelar que `caption_short` (Mastodon,

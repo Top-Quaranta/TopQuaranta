@@ -1,0 +1,20 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Feedback resolt{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Gràcies pel teu feedback
+</h1>
+<p style="margin:0 0 16px;">
+  Hem revisat el teu report sobre <strong>{{ target_label }}</strong>
+  i l'hem marcat com a resolt.
+</p>
+{% if notes_staff %}
+<p style="margin:0 0 8px;color:#facc15;font-size:13px;">Resposta de l'equip:</p>
+<div style="border-left:3px solid #facc15;padding:10px 14px;background:#0a0a0a;color:#d1d5db;font-size:14px;line-height:1.5;margin-bottom:18px;white-space:pre-wrap;">{{ notes_staff }}</div>
+{% endif %}
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ site_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Tornar a TopQuaranta
+  </a>
+</p>
+{% endblock %}

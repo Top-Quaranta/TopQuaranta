@@ -229,13 +229,16 @@ def proposta_aprovar(request: Request, pk: int) -> Response:
         artista_nom=artista.nom,
         usuari_proposant=p.usuari.email,
     )
+    from comptes.notifications import notify_user_proposta_resolta
+
+    notify_user_proposta_resolta(p, "aprovada")
     return Response({"ok": True, "artista_pk": artista.pk, "slug": artista.slug})
 
 
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def proposta_rebutjar(request: Request, pk: int) -> Response:
-    p = get_object_or_404(PropostaArtista, pk=pk)
+    p = get_object_or_404(PropostaArtista.objects.select_related("usuari"), pk=pk)
     p.estat = PropostaArtista.ESTAT_REBUTJAT
     p.save(update_fields=["estat"])
     log_staff_action(
@@ -245,6 +248,10 @@ def proposta_rebutjar(request: Request, pk: int) -> Response:
         artista_nom=p.nom,
         usuari_proposant=p.usuari.email if p.usuari_id else "",
     )
+    if p.usuari_id:
+        from comptes.notifications import notify_user_proposta_resolta
+
+        notify_user_proposta_resolta(p, "rebutjada")
     return Response({"ok": True})
 
 

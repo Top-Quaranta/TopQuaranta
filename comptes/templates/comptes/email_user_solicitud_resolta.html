@@ -1,0 +1,38 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Sol·licitud de gestió · {{ accio }}{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  {% if accio == "aprovada" %}
+    Sol·licitud verificada
+  {% else %}
+    Sol·licitud no acceptada
+  {% endif %}
+</h1>
+{% if accio == "aprovada" %}
+<p style="margin:0 0 16px;">
+  La teva sol·licitud per gestionar <strong>{{ artista_nom }}</strong>
+  ha estat verificada. Ja pots editar el perfil des del teu compte.
+</p>
+<p style="margin:0 0 16px;color:#9ca3af;font-size:13px;">
+  T'enviarem aviat un correu amb el detall de tot el que pots fer com a
+  gestor (placeholder Fase 1.5.A — el walkthrough complet arriba a 1.5.C).
+</p>
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ compte_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Anar al meu compte
+  </a>
+</p>
+{% else %}
+<p style="margin:0 0 16px;">
+  La teva sol·licitud per gestionar <strong>{{ artista_nom }}</strong>
+  no ha estat acceptada en aquesta ocasió.
+</p>
+{% if motiu_rebuig %}
+<div style="border-left:3px solid #facc15;padding:10px 14px;background:#0a0a0a;color:#d1d5db;font-size:14px;line-height:1.5;margin-bottom:18px;white-space:pre-wrap;">{{ motiu_rebuig }}</div>
+{% endif %}
+<p style="margin:0 0 16px;color:#9ca3af;font-size:13px;">
+  Si creus que és un error, pots respondre a aquest correu o tornar a
+  sol·licitar-ho amb més context.
+</p>
+{% endif %}
+{% endblock %}

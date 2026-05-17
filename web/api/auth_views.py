@@ -70,10 +70,13 @@ def _profile(request_or_user) -> dict:
     # without a second round-trip. Cheap query — small per-user N.
     from comptes.models import UserArtista
 
+    # Same predicate as `_gestor_check`: verificat AND estat=aprovat
+    # (Fase 1.5.A). Prevents a rejected user who's still verificat=True
+    # from seeing the artist among their managed list.
     verified_artist_pks = list(
-        UserArtista.objects.filter(usuari=user, verificat=True).values_list(
-            "artista_id", flat=True
-        )
+        UserArtista.objects.filter(
+            usuari=user, verificat=True, estat=UserArtista.ESTAT_APROVAT
+        ).values_list("artista_id", flat=True)
     )
 
     return {

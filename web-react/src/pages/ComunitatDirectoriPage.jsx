@@ -107,7 +107,21 @@ export default function ComunitatDirectoriPage() {
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="font-bold truncate">{u.nom_public}</p>
+                <p className="font-bold truncate">
+                  {u.nom_public}
+                  {/* Surfaced only to staff (the listing already
+                      filters non-public profiles out for regular
+                      users via PR #25). Discreet style so the badge
+                      doesn't dominate the row. */}
+                  {u.visible_directori === false && (
+                    <span
+                      className="inline-block ml-2 text-[10px] font-semibold uppercase bg-white/10 text-white/60 px-1.5 py-0.5 rounded align-middle"
+                      title="Aquest perfil no és visible al directori per a la resta d'usuaris"
+                    >
+                      Perfil no públic
+                    </span>
+                  )}
+                </p>
                 <p className="text-[11px] opacity-70">
                   {u.rol_musical}
                   {u.instruments && ` · ${u.instruments}`}

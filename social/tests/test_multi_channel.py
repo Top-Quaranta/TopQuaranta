@@ -38,7 +38,12 @@ def test_caption_short_top_fits_under_500_chars():
     assert "Setmana" in text
 
 
-def test_caption_short_uses_handle_when_present():
+def test_caption_short_uses_plain_name_not_handle():
+    """Per the 2026-05-16 decision, caption_short emits the plain
+    artist name on Mastodon/Bluesky/Telegram/Newsletter. The IG
+    `@handle` only autolinks on Instagram; on the other networks it
+    rendered as broken-looking literal text. caption_top keeps the
+    handle (covered separately in test_captions.py)."""
     setmana = datetime.date(2026, 4, 20)
     entries = [
         {
@@ -49,8 +54,8 @@ def test_caption_short_uses_handle_when_present():
         }
     ]
     text = captions.caption_short("top_ppcc", "PPCC", setmana, entries)
-    assert "@yhandle" in text
-    assert "Y" not in text.split("@yhandle")[0].split("·")[-1]  # name not before handle
+    assert "@yhandle" not in text
+    assert "Y" in text
 
 
 def test_caption_short_bluesky_300_char_cap():

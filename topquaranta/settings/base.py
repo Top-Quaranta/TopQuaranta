@@ -59,6 +59,16 @@ INSTAGRAM_TOKEN_EXPIRES_AT = ""
 
 AUTH_USER_MODEL = "comptes.Usuari"
 
+# Pseudo-user that fronts the staff inbox for community DMs. Any
+# logged-in user can DM this account to reach the moderation team
+# without having to find a specific staff user in the directory.
+# Messages addressed to this username are fanned out by email to
+# every active staff user (see `_enviar_notificacio_missatge`).
+# The user itself is seeded by migration `comptes.0016_admin_pseudouser`
+# with `is_staff=False` (a proxy, not a real admin), `is_active=True`,
+# and a `PerfilUsuari` visible to the directory.
+ADMIN_INBOX_USERNAME = "admin"
+
 # S10: Argon2 is preferred; PBKDF2 variants retained so existing hashes
 # continue to verify. Django rehashes to Argon2 on next successful login.
 PASSWORD_HASHERS = [

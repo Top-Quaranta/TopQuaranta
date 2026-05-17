@@ -363,6 +363,28 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Sprint — Distribució Fase 1: mencions per canal ✅ (2026-05-16)
+
+Investigació del 2026-05-16 va revelar que `caption_short` (Mastodon,
+Bluesky, Telegram, Newsletter) renderitzava `@instagram_handle`
+literal igual que `caption_top` (Instagram). Només IG autolinka el
+handle; als altres canals la sintaxi de menció és diferent
+(`@user@instance`, `@user.bsky.social`, ...) i el text apareixia com
+una menció trencada.
+
+* **Refactor `social/captions.py`**: `_mention(handle)` →
+  `_artist_label(entry, *, use_handle)`. El call site `caption_top` i
+  `caption_novetats` passa `use_handle=True` (mode Instagram amb
+  `@handle`); `caption_short` passa `use_handle=False` (mode pla,
+  només `artista_nom`). Cap canvi a `publicar_canal.py` ni
+  `publicar_social.py`.
+* **Tests**: `social/tests/test_captions.py` nou amb 4 tests que
+  bloquegen la regressió en ambdues direccions.
+* **No s'han afegit camps de handle per xarxa al model** (Mastodon /
+  Bluesky / Telegram URLs). Decisió: `instagram_url` ja cobreix només
+  8.2 % dels aprovats; ampliar a 4 xarxes amb taxa de cobertura
+  menor no aporta valor per ara.
+
 ### Sprint — Higiene de constants + ghost pages 404 + ops sweep ✅ (2026-05-11)
 
 Sessió combinada de hardcodes, ghost pages SEO i pipeline GHA.

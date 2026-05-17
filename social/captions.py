@@ -81,11 +81,24 @@ def instagram_username(handle: str | None) -> str:
     return h
 
 
-def _mention(handle: str | None) -> str:
-    """Same extraction as `instagram_username` but prefixed with `@`
-    for caption use. Returns "" on malformed input."""
-    u = instagram_username(handle)
-    return f"@{u}" if u else ""
+def _artist_label(entry: dict, *, use_handle: bool) -> str:
+    """Pick the in-caption label for a top/novetats entry.
+
+    `use_handle=True` (Instagram path): try the artist's Instagram
+    handle so the caption autolinks and notifies them. Falls back to
+    the plain name if no handle is stored.
+
+    `use_handle=False` (Mastodon, Bluesky, Telegram, Newsletter): use
+    the plain name. The `@handle` is Instagram-specific and would
+    show up as broken-looking literal text on every other network
+    (mention syntax differs by platform, and we don't store handles
+    per network). Decision 2026-05-16.
+    """
+    if use_handle:
+        u = instagram_username(entry.get("artista_instagram_url"))
+        if u:
+            return f"@{u}"
+    return entry.get("artista_nom") or "—"
 
 
 def _hashtags(territori: str) -> str:
@@ -163,20 +176,20 @@ def caption_short(
     """
     nom = TERRITORI_NOM.get(territori, territori or "")
     label = _setmana_label(setmana)
+    # Non-Instagram channels: plain name only. @handle would render
+    # as broken-looking literal text on Mastodon/Bluesky/Telegram.
     if tipus in ("nous_albums", "nous_singles"):
         title = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"
         header = f"{title} · {label}\n"
         rows = []
         for e in entries[:n]:
-            mention = _mention(e.get("artista_instagram_url"))
-            artist_label = mention if mention else e.get("artista_nom", "—")
+            artist_label = _artist_label(e, use_handle=False)
             rows.append(f"· {e.get('nom', '—')} — {artist_label}")
     else:
         header = f"Top {nom} · {label}\n"
         rows = []
         for e in entries[:n]:
-            mention = _mention(e.get("artista_instagram_url"))
-            artist_label = mention if mention else e.get("artista_nom", "—")
+            artist_label = _artist_label(e, use_handle=False)
             rows.append(
                 f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {artist_label}"
             )
@@ -204,11 +217,9 @@ def caption_top(
     header = f"Top — {nom}\n{label}\n\n"
     body_lines = []
     for e in entries:
-        # Prefer the @handle when we have one — it both
-        # autolinks in the IG caption and notifies the artist.
-        # Fall back to the display name when no handle is stored.
-        mention = _mention(e.get("artista_instagram_url"))
-        artist_label = mention if mention else e["artista_nom"]
+        # Instagram-only caption: prefer @handle so the post both
+        # autolinks and notifies the artist. Plain name fallback.
+        artist_label = _artist_label(e, use_handle=True)
         body_lines.append(f"{e['posicio']}. {e['canco_nom']} · {artist_label}")
     body = "\n".join(body_lines)
     footer = "\n\n" + _hashtags(territori)
@@ -334,8 +345,8 @@ def caption_novetats(tipus: str, setmana: datetime.date, entries: list[dict]) ->
     header = f"{title} · {label}\n\n"
     body_lines = []
     for e in entries:
-        mention = _mention(e.get("artista_instagram_url"))
-        artist_label = mention if mention else e["artista_nom"]
+        # Instagram-only caption: see caption_top for the rationale.
+        artist_label = _artist_label(e, use_handle=True)
         body_lines.append(f"· {e['nom']} — {artist_label}")
     body = "\n".join(body_lines)
     footer = "\n\n" + " ".join(f"#{t}" for t in HASHTAGS_BASE + ["novetats"])

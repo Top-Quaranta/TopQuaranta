@@ -161,14 +161,44 @@ def _enviar_notificacio_missatge(request, msg) -> None:
 
     Skipped silently if the recipient opted out or doesn't have an
     email configured. Failures never block the message itself.
+
+    Special case: when the destinatari is the `admin` pseudo-user
+    (settings.ADMIN_INBOX_USERNAME), the notification is fanned out
+    to every active staff member in addition to the admin mailbox.
+    This lets any logged-in user reach the moderation team with a DM
+    without having to identify a specific staff user in the directory.
+    The pseudo-user's own `notificar_missatges_email` opt-out is
+    ignored in this case — the staff alert is the whole point.
     """
+    from django.conf import settings as _settings
+    from django.contrib.auth import get_user_model
+
     logger = logging.getLogger(__name__)
     dest = msg.destinatari
-    if not dest.email:
-        return
-    perfil = getattr(dest, "perfil", None)
-    if perfil and not perfil.notificar_missatges_email:
-        return
+    admin_username = getattr(_settings, "ADMIN_INBOX_USERNAME", "admin")
+    is_admin_inbox = dest.username == admin_username
+
+    if is_admin_inbox:
+        # Fan out to admin mailbox + every active staff member.
+        User = get_user_model()
+        recipients = set()
+        if dest.email:
+            recipients.add(dest.email)
+        recipients.update(
+            User.objects.filter(is_staff=True, is_active=True)
+            .exclude(email="")
+            .values_list("email", flat=True)
+        )
+        recipients = sorted(recipients)
+        if not recipients:
+            return
+    else:
+        if not dest.email:
+            return
+        perfil = getattr(dest, "perfil", None)
+        if perfil and not perfil.notificar_missatges_email:
+            return
+        recipients = [dest.email]
 
     remitent_nom = (
         (getattr(getattr(msg.remitent, "perfil", None), "nom_public", None) or "")
@@ -194,9 +224,11 @@ def _enviar_notificacio_missatge(request, msg) -> None:
         f"Llegeix-lo aquí:\n{link}\n"
     )
     try:
-        send_mail(ctx["subject"], text, None, [dest.email], html_message=html)
+        send_mail(ctx["subject"], text, None, recipients, html_message=html)
     except Exception:
-        logger.exception("Failed to send message notification to %s", dest.email)
+        logger.exception(
+            "Failed to send message notification to %s", recipients
+        )
 
 
 # ─── Comentaris ──────────────────────────────────────────────────────────

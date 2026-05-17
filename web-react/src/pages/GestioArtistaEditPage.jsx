@@ -178,7 +178,7 @@ export default function GestioArtistaEditPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <fieldset className="bg-white text-tq-ink rounded-lg p-5 space-y-4">
-          <legend className="font-semibold">Sobre l'artista</legend>
+          <legend className="font-semibold bg-white px-2">Sobre l'artista</legend>
 
           <label className="block text-xs font-semibold">
             Biografia
@@ -221,7 +221,7 @@ export default function GestioArtistaEditPage() {
         </fieldset>
 
         <fieldset className="bg-white text-tq-ink rounded-lg p-5">
-          <legend className="font-semibold">Xarxes i enllaços</legend>
+          <legend className="font-semibold bg-white px-2">Xarxes i enllaços</legend>
           <p className="text-xs text-gray-500 mt-1 mb-3">
             URLs completes (https://…). Deixa-ho buit per esborrar.
           </p>

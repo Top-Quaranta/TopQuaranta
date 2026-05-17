@@ -18,7 +18,6 @@ from rest_framework.test import APIClient
 
 from comptes.models import Missatge, PerfilUsuari, Usuari
 
-
 MISSATGE_CREAR_URL = "/api/v1/missatges/nou/"
 
 

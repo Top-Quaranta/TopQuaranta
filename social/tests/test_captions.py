@@ -15,7 +15,6 @@ import pytest
 
 from social.captions import caption_novetats, caption_short, caption_top
 
-
 SETMANA = datetime.date(2026, 5, 11)  # Monday of TQ-week 37
 
 TOP_ENTRIES = [

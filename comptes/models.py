@@ -58,6 +58,20 @@ class UserArtista(models.Model):
     sollicitud_text = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Audit trail (Fase 1.5.A, 2026-05-17). Until now, approval date
+    # and approver were only recoverable via StaffAuditLog. These
+    # explicit fields make the model self-describing and remove the
+    # dependency on an audit table for first-order queries.
+    aprovat_at = models.DateTimeField(null=True, blank=True)
+    aprovat_per = models.ForeignKey(
+        Usuari,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    motiu_rebuig = models.TextField(blank=True)
+
     class Meta:
         verbose_name = "Vinculació usuari-artista"
         verbose_name_plural = "Vinculacions usuari-artista"

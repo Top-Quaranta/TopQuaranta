@@ -155,4 +155,11 @@ def feedback_resolve(request: Request, pk: int) -> Response:
         target=fb,
         missatge_snippet=fb.missatge[:120],
     )
+    # Only notify the reporter on the OPEN→RESOLT transition. The
+    # reverse direction (un-resolving) is a staff bookkeeping action
+    # the user shouldn't see.
+    if fb.resolt and "resolt" in data and bool(data["resolt"]):
+        from comptes.notifications import notify_user_feedback_resolt
+
+        notify_user_feedback_resolt(fb)
     return Response(_feedback_row(fb))

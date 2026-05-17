@@ -118,12 +118,22 @@ def solicituds_list(request: Request) -> Response:
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def solicitud_toggle(request: Request, pk: int) -> Response:
+    from django.utils import timezone
+
+    from comptes.notifications import notify_user_solicitud_resolta
+
     ua = get_object_or_404(
         UserArtista.objects.select_related("usuari", "artista"), pk=pk
     )
     ua.verificat = not ua.verificat
-    ua.estat = "aprovat" if ua.verificat else "pendent"
-    ua.save(update_fields=["verificat", "estat"])
+    ua.estat = UserArtista.ESTAT_APROVAT if ua.verificat else UserArtista.ESTAT_PENDENT
+    update_fields = ["verificat", "estat"]
+    if ua.verificat:
+        ua.aprovat_at = timezone.now()
+        ua.aprovat_per = request.user
+        ua.motiu_rebuig = ""
+        update_fields += ["aprovat_at", "aprovat_per", "motiu_rebuig"]
+    ua.save(update_fields=update_fields)
     log_staff_action(
         request,
         "sollicitud_aprovar" if ua.verificat else "sollicitud_rebutjar",
@@ -132,22 +142,35 @@ def solicitud_toggle(request: Request, pk: int) -> Response:
         artista=ua.artista.nom,
         usuari=ua.usuari.email,
     )
+    if ua.verificat:
+        notify_user_solicitud_resolta(ua, "aprovada")
     return Response({"ok": True, "estat": ua.estat, "verificat": ua.verificat})
 
 
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def solicitud_rebutjar(request: Request, pk: int) -> Response:
+    from comptes.notifications import notify_user_solicitud_resolta
+
     ua = get_object_or_404(
         UserArtista.objects.select_related("usuari", "artista"), pk=pk
     )
-    ua.estat = "rebutjat"
-    ua.save(update_fields=["estat"])
+    motiu = (request.data.get("motiu") or "").strip() if request.data else ""
+    # Fase 1.5.A bug fix: also flip verificat=False so a previously
+    # approved-then-rejected user actually loses edit rights. The old
+    # path only set estat='rebutjat' but left verificat untouched,
+    # leaking auth (the `_gestor_check` predicate keyed on verificat).
+    ua.verificat = False
+    ua.estat = UserArtista.ESTAT_REBUTJAT
+    ua.motiu_rebuig = motiu
+    ua.save(update_fields=["verificat", "estat", "motiu_rebuig"])
     log_staff_action(
         request,
         "sollicitud_rebutjar",
         target=ua,
         artista=ua.artista.nom,
         usuari=ua.usuari.email,
+        motiu=motiu,
     )
+    notify_user_solicitud_resolta(ua, "rebutjada")
     return Response({"ok": True})

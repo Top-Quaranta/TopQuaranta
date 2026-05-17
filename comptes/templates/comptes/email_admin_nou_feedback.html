@@ -1,0 +1,24 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Nou feedback{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Nou feedback
+</h1>
+<p style="margin:0 0 16px;">
+  <strong style="color:#facc15;">{{ usuari_email }}</strong> reporta una
+  errada a <strong>{{ target_label }}</strong> ({{ target_type }}).
+</p>
+{% if missatge %}
+<div style="border-left:3px solid #facc15;padding:10px 14px;background:#0a0a0a;color:#d1d5db;font-size:14px;line-height:1.5;margin-bottom:18px;white-space:pre-wrap;">{{ missatge }}</div>
+{% endif %}
+{% if url %}
+<p style="margin:0 0 16px;color:#9ca3af;font-size:13px;">
+  Origen: <a href="{{ url }}" style="color:#facc15;">{{ url }}</a>
+</p>
+{% endif %}
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ staff_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Revisar al panel staff
+  </a>
+</p>
+{% endblock %}

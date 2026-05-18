@@ -1,16 +1,42 @@
-"""Caption (text body) generator for Instagram posts.
+"""Caption (text body) generator for social posts.
+
+Two paths live here:
+
+1. **Top-of-the-week captions** (`top_ppcc` / `top_territorial`) go
+   through the narrative engine via `compose_for_channel`. Each
+   channel has its own composer that picks a hero scenario + the
+   right length tier + the right mention style for that network.
+   `caption_top` and `caption_short` are kept as thin string-only
+   wrappers around `compose_for_channel` so existing call sites
+   don't break.
+
+2. **Novetats captions** (`nous_albums` / `nous_singles`) keep the
+   legacy plain-list format — there are no narrative scenarios for
+   weekly release roundups. `caption_novetats` is untouched and
+   used directly by `publicar_social.py`; the short-form variant is
+   handled by the `_caption_short_legacy` path inside
+   `compose_for_channel`.
+
+Robustness: every engine call sits inside a try/except. If the
+narrative pipeline fails for ANY reason (DB hiccup, registry
+crash, template bug, …) the channel falls back to the legacy
+caption format and logs the exception. A publication never goes
+out empty because of an engine bug.
 
 Instagram caps captions at 2 200 chars and doesn't make links
-clickable in the feed, so the body is intentionally compact: a
-title + the listing + hashtags + handle.
+clickable in the feed, so the IG body is intentionally compact:
+a title + the listing + hashtags + handle.
 """
 
 from __future__ import annotations
 
 import datetime
+import logging
 from urllib.parse import urlparse
 
 from music.dates import project_week_number
+
+logger = logging.getLogger(__name__)
 
 TERRITORI_NOM = {
     "PPCC": "Global",
@@ -151,7 +177,7 @@ def utm_url(
     return f"{base.rstrip('/')}{sep}{qs}"
 
 
-def caption_short(
+def _caption_short_legacy(
     tipus: str,
     territori: str,
     setmana: datetime.date,
@@ -161,18 +187,19 @@ def caption_short(
     n: int = 5,
     channel: str = "",
 ) -> str:
-    """Compact caption for Mastodon (500 char default) and Bluesky
-    (300 char) — list the top-N + a link to the public site.
+    """Legacy plain-list short caption (pre-narrative-engine).
+
+    Kept as the fallback path inside `compose_for_channel` when the
+    engine raises, and as the direct path for novetats (which have
+    no narrative scenarios). Also still used by callers that omit
+    `channel` (no UTM, no engine — bare-bones safe default).
 
     `entries` may be either top entries (with `posicio`/`canco_nom`)
     or novetats items (with `nom`). We sniff the keys.
 
     `channel`, when given, switches the footer link to a UTM-tagged
     URL via `utm_url()` so the analytics dashboard can attribute
-    landings per channel × campaign. Falls back to the plain
-    `https://topquaranta.cat` when omitted (safe default, doesn't
-    break callers that don't know about channels — e.g. the IG
-    flow, where captions are non-clickable anyway).
+    landings per channel × campaign.
     """
     nom = TERRITORI_NOM.get(territori, territori or "")
     label = _setmana_label(setmana)
@@ -207,10 +234,15 @@ def caption_short(
     return text
 
 
-def caption_top(
+def _caption_top_legacy(
     tipus: str, territori: str, setmana: datetime.date, entries: list[dict]
 ) -> str:
-    """`entries` is a list of {posicio, canco_nom, artista_nom,
+    """Legacy IG-feed top caption (pre-narrative-engine). Same shape
+    as before: title + numbered list + always-on hashtags. Kept as
+    the fallback path when `compose_for_channel` can't run the
+    engine.
+
+    `entries` is a list of {posicio, canco_nom, artista_nom,
     artista_instagram_url?} for the rows being featured."""
     nom = TERRITORI_NOM.get(territori, territori)
     label = _setmana_label(setmana)
@@ -229,6 +261,195 @@ def caption_top(
         max_body = 2200 - len(header) - len(footer) - 10
         text = header + body[:max_body] + "…" + footer
     return text
+
+
+# ── Narrative-engine dispatcher ─────────────────────────────────────
+#
+# `compose_for_channel` is the single entrypoint for top captions
+# across every publishing channel. It runs the scenario detector,
+# delegates to the channel-specific composer, and returns the
+# assembled text along with the `phrase_ids` that were actually
+# used (so the caller can mark them post-publication).
+#
+# Every step is wrapped in a try/except: if anything inside the
+# engine raises, we log and fall back to the legacy caption shape.
+# Phrase ids are returned empty in that case, so `mark_used` is a
+# no-op and the bug doesn't poison the registry either.
+#
+# Novetats (`nous_albums` / `nous_singles`) don't go through the
+# engine at all — there are no narrative scenarios for weekly
+# release roundups. They route to the legacy caption straight.
+
+_NARRATIVE_TIPUS = ("top_ppcc", "top_territorial")
+
+_CHANNEL_MAX_CHARS = {
+    "mastodon": 480,
+    "bluesky": 280,
+    "telegram": 900,
+    "newsletter": 9999,
+}
+
+
+def _legacy_for(channel: str, tipus: str, territori: str, setmana, entries):
+    """Pick the right legacy function for (channel, tipus). Used as
+    fallback when the engine raises and as the primary path for
+    novetats. Returns a plain string."""
+    if channel == "instagram_feed":
+        if tipus in ("nous_albums", "nous_singles"):
+            return caption_novetats(tipus, setmana, entries)
+        return _caption_top_legacy(tipus, territori, setmana, entries)
+    # short channels
+    return _caption_short_legacy(
+        tipus,
+        territori,
+        setmana,
+        entries,
+        max_chars=_CHANNEL_MAX_CHARS.get(channel, 480),
+        channel=channel if channel != "newsletter" else channel,
+    )
+
+
+def compose_for_channel(
+    channel: str,
+    tipus: str,
+    territori: str,
+    setmana: datetime.date,
+    entries: list[dict],
+    *,
+    rng=None,
+) -> dict:
+    """Build the post body for `channel` via the narrative engine.
+
+    Returns a dict `{text, hashtags, cta, phrase_ids}`. `phrase_ids`
+    is the list of `phrase_id` strings actually emitted into the
+    body — the caller is expected to `registry.mark_used(...)` each
+    of them AFTER a successful publication (not at compose time —
+    a dry-run or a failed publish should not poison the registry).
+
+    `channel` ∈ {instagram_feed, instagram_story, mastodon, bluesky,
+    telegram, newsletter}.
+
+    Fallback contract: if anything inside the engine raises, log and
+    return the legacy caption shape with `phrase_ids=[]`. The
+    publication never goes out empty because of an engine bug.
+    """
+    # Novetats bypass the engine entirely.
+    if tipus not in _NARRATIVE_TIPUS:
+        return {
+            "text": _legacy_for(channel, tipus, territori, setmana, entries),
+            "hashtags": [],
+            "cta": "",
+            "phrase_ids": [],
+        }
+
+    try:
+        # Imports are local: keeps captions.py importable in
+        # contexts without Django ready (e.g. some unit tests that
+        # don't load the full app) — only the engine path needs the
+        # DB. Also avoids a circular import at module load
+        # (composers import _artist_label / _setmana_label from
+        # here).
+        from social.narrative import scenarios as scen
+        from social.narrative.composers import (
+            bluesky,
+            instagram_feed,
+            instagram_story,
+            mastodon,
+            newsletter,
+            telegram,
+        )
+
+        composer = {
+            "instagram_feed": instagram_feed,
+            "instagram_story": instagram_story,
+            "mastodon": mastodon,
+            "bluesky": bluesky,
+            "telegram": telegram,
+            "newsletter": newsletter,
+        }[channel]
+
+        scenarios = scen.detect_all(territori, setmana)
+        result = composer.compose(
+            scenarios,
+            entries,
+            territori=territori,
+            setmana=setmana,
+            rng=rng,
+        )
+        # Normalise: every composer must surface phrase_ids; default
+        # to [] if a composer was updated lazily.
+        result.setdefault("phrase_ids", [])
+        result.setdefault("hashtags", [])
+        result.setdefault("cta", "")
+        return result
+    except Exception:
+        # Engine path failed. Log with full context and fall back to
+        # the legacy caption — the post must go out.
+        logger.exception(
+            "narrative engine failed; falling back to legacy caption "
+            "(channel=%s tipus=%s territori=%s setmana=%s)",
+            channel,
+            tipus,
+            territori,
+            setmana,
+        )
+        return {
+            "text": _legacy_for(channel, tipus, territori, setmana, entries),
+            "hashtags": [],
+            "cta": "",
+            "phrase_ids": [],
+        }
+
+
+# ── Public string-only wrappers (signature-stable) ──────────────────
+#
+# These are the entrypoints the rest of the codebase already calls.
+# They keep their original (text-returning) signature so existing
+# callers — and tests — continue to work unchanged. New callers
+# that also need phrase_ids should use `compose_for_channel`
+# directly.
+
+
+def caption_top(
+    tipus: str, territori: str, setmana: datetime.date, entries: list[dict]
+) -> str:
+    """Instagram-feed top caption. Now backed by the narrative
+    engine for top types; falls back to the legacy plain-list
+    shape on engine failure or for novetats."""
+    return compose_for_channel("instagram_feed", tipus, territori, setmana, entries)[
+        "text"
+    ]
+
+
+def caption_short(
+    tipus: str,
+    territori: str,
+    setmana: datetime.date,
+    entries: list[dict],
+    *,
+    max_chars: int = 480,
+    n: int = 5,
+    channel: str = "",
+) -> str:
+    """Compact caption for Mastodon / Bluesky / Telegram / Newsletter.
+
+    When `channel` is one of those four AND `tipus` is a top type,
+    we route through the narrative engine. Otherwise (no channel,
+    or novetats) we keep the legacy plain-list shape exactly as
+    before — including `max_chars` and `n`, which the engine
+    ignores in favour of per-channel composer budgets.
+    """
+    if channel in _CHANNEL_MAX_CHARS and tipus in _NARRATIVE_TIPUS:
+        return compose_for_channel(channel, tipus, territori, setmana, entries)["text"]
+    return _caption_short_legacy(
+        tipus,
+        territori,
+        setmana,
+        entries,
+        max_chars=max_chars,
+        n=n,
+        channel=channel,
+    )
 
 
 # ── Per-slide alt text (a11y) ───────────────────────────────────────

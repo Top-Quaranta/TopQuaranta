@@ -1,67 +1,84 @@
-"""Bluesky composer.
+"""Bluesky composer (Fase 4 reset).
 
-Tight 300-char budget. We use the `short` length tier and trim
-aggressively. Plain-name mentions; 1–2 hashtags max because at
-300 chars every space counts.
-"""
+300-char hard ceiling, 280-char soft target. The tightest budget:
+hero (short) + optional top5 + CTA + 1-2 hashtags. Truncation
+order — drop top5 → drop hashtags → fall back to a bare hero +
+CTA. The hero is sacred only as long as the soft target is met;
+if even the bare hero+CTA blows past 300 we replace it with a
+generic sentinel."""
 
 from __future__ import annotations
 
-from social.captions import _artist_label, _setmana_label, utm_url
-from social.narrative.phrases import TERRITORY_HASHTAGS
+import random
+
+from social.captions import utm_url
+from social.narrative import scenarios as scen
+from social.narrative.banks import cta as cta_bank
+from social.narrative.banks import hashtags as hashtags_bank
+from social.narrative.banks import top5 as top5_bank
 from social.narrative.registry import pick_phrase
 
 CHANNEL = "bluesky"
-MAX_CHARS = 300
-N_ROWS = 3
+SOFT_TARGET = 280  # Fase 4 ajust 2: leave margin under the 300 ceiling
+HARD_CEILING = 300
 
 
-def compose(
-    scenarios: list,
-    entries: list[dict],
-    *,
-    territori: str,
-    setmana,
-    rng=None,
-) -> dict:
-    territori_label = (
-        scenarios[0].data.get("territori_label", territori) if scenarios else territori
+def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
+    rng = rng or random.Random()
+
+    hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
+    pid, hero_text = pick_phrase(hero, "short", territori, CHANNEL, rng=rng)
+    if not hero_text:
+        hero_text = "Top setmanal: ja és aquí."
+
+    hero_canco = hero.data.get("canco") or ""
+    top5 = entries[:5]
+    remaining = [e for e in top5 if e.get("canco_nom") != hero_canco]
+    leader = next((e for e in remaining if e.get("posicio") == 1), None)
+    others = (
+        [e for e in remaining if e.get("posicio") != 1][:3] if leader else remaining[:3]
     )
-    label = _setmana_label(setmana)
+    top5_text = top5_bank.pick_short(others, leader=leader, rng=rng)
 
-    hero_text = ""
-    if scenarios:
-        _, hero_text = pick_phrase(scenarios[0], "short", territori, CHANNEL, rng=rng)
-    rows: list[str] = []
-    for e in entries[:N_ROWS]:
-        name = _artist_label(e, use_handle=False)
-        rows.append(f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {name}")
     link = utm_url(CHANNEL, "top_ppcc", setmana, territori=territori)
-    hashtags = TERRITORY_HASHTAGS.get(territori, ["#TopQuaranta"])[:2]
+    cta = cta_bank.pick_cta(CHANNEL, url=link, rng=rng)
+    hashtags = hashtags_bank.build_hashtags(territori, CHANNEL, rng=rng)
 
-    def _assemble() -> str:
-        parts: list[str] = []
-        if hero_text:
-            parts.append(hero_text)
-        parts.append(f"Top {territori_label} · {label}")
-        parts.extend(rows)
-        parts.append(link)
-        parts.append(" ".join(hashtags))
+    def assemble(h_text, t5_text, hts):
+        parts = [h_text]
+        if t5_text:
+            parts += ["", t5_text]
+        parts += ["", cta]
+        if hts:
+            parts += [" ".join(hts)]
         return "\n".join(parts)
 
-    text = _assemble()
-    # Drop rows until we fit. The hero + link + hashtags are
-    # non-negotiable; the row list is the elastic part.
-    while len(text) > MAX_CHARS and rows:
-        rows.pop()
-        text = _assemble()
-    # If even the elastic-less form still overflows, drop hashtags,
-    # then hero. Worst case we ship just the title + link.
-    if len(text) > MAX_CHARS and hashtags:
-        hashtags = []
-        text = _assemble()
-    if len(text) > MAX_CHARS and hero_text:
-        hero_text = ""
-        text = _assemble()
+    text = assemble(hero_text, top5_text, hashtags)
+    # Step 1 — soft target. Drop top5 as soon as we'd exceed 280.
+    if len(text) > SOFT_TARGET and top5_text:
+        top5_text = ""
+        text = assemble(hero_text, top5_text, hashtags)
+    # Step 2 — drop hashtags one by one to stay under soft target.
+    while len(text) > SOFT_TARGET and hashtags:
+        hashtags = hashtags[:-1]
+        text = assemble(hero_text, top5_text, hashtags)
+    # Step 3 — last resort. If even the bare hero+CTA blows past
+    # the HARD ceiling (a hero with a really long artist name +
+    # cançó title), replace the hero with a generic sentinel and
+    # surrender the pid (it didn't ship). This guarantees the
+    # text always fits.
+    if len(text) > HARD_CEILING:
+        hero_text = "Top setmanal: ja és aquí."
+        pid = ""
+        text = assemble(hero_text, "", hashtags)
+        while len(text) > HARD_CEILING and hashtags:
+            hashtags = hashtags[:-1]
+            text = assemble(hero_text, "", hashtags)
 
-    return {"text": text, "hashtags": hashtags, "cta": link}
+    phrase_ids = [pid] if pid else []
+    return {
+        "text": text,
+        "hashtags": hashtags,
+        "cta": cta,
+        "phrase_ids": phrase_ids,
+    }

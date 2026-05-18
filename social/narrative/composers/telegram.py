@@ -1,63 +1,98 @@
-"""Telegram composer.
+"""Telegram composer (Fase 4 reset).
 
-Telegram caption limit is 1024 chars when attached to a media-group
-(our case). Plain-name mentions, abundant emojis, link at the end
-(Telegram parses URLs and shows a rich preview automatically).
-"""
+1024-char ceiling. Mid budget: header pill + hero (medium) +
+optional secondary beat (medium) + top5 mention (long, with cançó
+detail) + CTA + 3-5 hashtags. Telegram auto-previews the URL so
+the CTA can be a bare link."""
 
 from __future__ import annotations
 
-from social.captions import _artist_label, _setmana_label, utm_url
-from social.narrative.phrases import TERRITORY_HASHTAGS
+import random
+
+from social.captions import _setmana_label, utm_url
+from social.narrative import scenarios as scen
+from social.narrative.banks import connectors as connectors_bank
+from social.narrative.banks import cta as cta_bank
+from social.narrative.banks import hashtags as hashtags_bank
+from social.narrative.banks import top5 as top5_bank
 from social.narrative.registry import pick_phrase
+from social.narrative.utils import territori_label
 
 CHANNEL = "telegram"
 MAX_CHARS = 1024
-N_ROWS = 10
 
 
-def compose(
-    scenarios: list,
-    entries: list[dict],
-    *,
-    territori: str,
-    setmana,
-    rng=None,
-) -> dict:
-    territori_label = (
-        scenarios[0].data.get("territori_label", territori) if scenarios else territori
+def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
+    rng = rng or random.Random()
+    label_setmana = _setmana_label(setmana)
+    label_terr = territori_label(territori)
+
+    hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
+    pid_hero, hero_text = pick_phrase(hero, "medium", territori, CHANNEL, rng=rng)
+
+    secondary_text = ""
+    pid_secondary = ""
+    secondary_canco = ""
+    if len(scenarios) >= 2:
+        pid_secondary, secondary_text = pick_phrase(
+            scenarios[1], "medium", territori, CHANNEL, rng=rng
+        )
+        secondary_canco = scenarios[1].data.get("canco") or ""
+    connector = connectors_bank.pick_connector(rng=rng) if secondary_text else ""
+    if connector.endswith(","):
+        secondary_text = connectors_bank.lowercase_first(secondary_text)
+
+    hero_canco = hero.data.get("canco") or ""
+    top5 = entries[:5]
+    skip_cancons = {c for c in (hero_canco, secondary_canco) if c}
+    remaining = [e for e in top5 if e.get("canco_nom") not in skip_cancons]
+    leader = next((e for e in remaining if e.get("posicio") == 1), None)
+    others = (
+        [e for e in remaining if e.get("posicio") != 1][:3] if leader else remaining[:3]
     )
-    label = _setmana_label(setmana)
+    top5_text = top5_bank.pick_long(others, leader=leader, rng=rng)
 
-    hero_text = ""
-    if scenarios:
-        _, hero_text = pick_phrase(scenarios[0], "medium", territori, CHANNEL, rng=rng)
-
-    rows: list[str] = []
-    for e in entries[:N_ROWS]:
-        name = _artist_label(e, use_handle=False)
-        rows.append(f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {name}")
     link = utm_url(CHANNEL, "top_ppcc", setmana, territori=territori)
-    hashtags = TERRITORY_HASHTAGS.get(territori, ["#TopQuaranta", "#MúsicaEnCatalà"])[
-        :3
-    ]
+    cta = cta_bank.pick_cta(CHANNEL, url=link, rng=rng)
+    hashtags = hashtags_bank.build_hashtags(territori, CHANNEL, rng=rng)
 
-    def _assemble() -> str:
+    def assemble(h_text, sec_text, t5_text, hts):
+        # Fase 4 esmena 1: no robotic header. The hero phrase already
+        # contains the territori label; the Telegram media-group
+        # cover image carries the week branding visually.
         parts: list[str] = []
-        parts.append(f"🎵 Top {territori_label} · {label}")
-        if hero_text:
-            parts.append("")
-            parts.append(hero_text)
-        parts.append("")
-        parts.extend(rows)
-        parts.append("")
-        parts.append(f"👉 {link}")
-        parts.append(" ".join(hashtags))
+        if h_text:
+            parts.append(h_text)
+        if sec_text:
+            parts += ["", f"{connector} {sec_text}"]
+        if t5_text:
+            parts += ["", t5_text]
+        parts += ["", cta]
+        if hts:
+            parts.append(" ".join(hts))
         return "\n".join(parts)
 
-    text = _assemble()
-    while len(text) > MAX_CHARS and rows:
-        rows.pop()
-        text = _assemble()
+    text = assemble(hero_text, secondary_text, top5_text, hashtags)
+    # Truncate: drop secondary first, then top5, then hashtags.
+    if len(text) > MAX_CHARS and secondary_text:
+        secondary_text = ""
+        pid_secondary = ""
+        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+    if len(text) > MAX_CHARS and top5_text:
+        top5_text = ""
+        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+    while len(text) > MAX_CHARS and hashtags:
+        hashtags = hashtags[:-1]
+        text = assemble(hero_text, secondary_text, top5_text, hashtags)
 
-    return {"text": text, "hashtags": hashtags, "cta": link}
+    phrase_ids: list[str] = []
+    if pid_hero:
+        phrase_ids.append(pid_hero)
+    if pid_secondary:
+        phrase_ids.append(pid_secondary)
+    return {
+        "text": text,
+        "hashtags": hashtags,
+        "cta": cta,
+        "phrase_ids": phrase_ids,
+    }

@@ -1,76 +1,101 @@
-"""Instagram feed composer.
+"""Instagram-feed composer (Fase 4 reset).
 
-IG caption hard limit is 2 200 chars. The body lists the full top
-with `@handle` mentions (autolink + notify) and 5–8 hashtags. We
-pick the hero scenario with `long` length and append a secondary
-beat at `medium` when a second scenario fires. The "Cap a la bio"
-CTA is plain text because IG strips clickable URLs from feed
-captions anyway.
-"""
+2200-char ceiling. Generous budget: hero (long) + optional
+secondary (medium) + top5 mention (long with cançó detail) +
+CTA + 8-12 hashtags. NO enumerated list at the body — the listing
+slides ARE the bullet list."""
 
 from __future__ import annotations
 
-from typing import Optional
+import random
 
-from social.captions import _artist_label, _setmana_label
-from social.narrative.phrases import TERRITORY_HASHTAGS
+from social.captions import _setmana_label
+from social.narrative import scenarios as scen
+from social.narrative.banks import connectors as connectors_bank
+from social.narrative.banks import cta as cta_bank
+from social.narrative.banks import hashtags as hashtags_bank
+from social.narrative.banks import top5 as top5_bank
 from social.narrative.registry import pick_phrase
+from social.narrative.utils import territori_label
 
 CHANNEL = "instagram_feed"
 MAX_CHARS = 2200
 
 
-def compose(
-    scenarios: list,
-    entries: list[dict],
-    *,
-    territori: str,
-    setmana,
-    rng=None,
-) -> dict:
-    territori_label = (
-        scenarios[0].data.get("territori_label", territori) if scenarios else territori
-    )
-    label = _setmana_label(setmana)
-    header_lines = [
-        f"Top {territori_label} · {label}",
-    ]
-    if scenarios:
-        hero = scenarios[0]
-        _, hero_text = pick_phrase(hero, "long", territori, CHANNEL, rng=rng)
-        if hero_text:
-            header_lines.append("")
-            header_lines.append(hero_text)
-        if len(scenarios) >= 2:
-            secondary = scenarios[1]
-            _, sec_text = pick_phrase(secondary, "medium", territori, CHANNEL, rng=rng)
-            if sec_text:
-                header_lines.append(sec_text)
-    header_lines.append("")
-    body_lines = []
-    for e in entries:
-        label_a = _artist_label(e, use_handle=True)
-        body_lines.append(
-            f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {label_a}"
+def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
+    rng = rng or random.Random()
+    label_setmana = _setmana_label(setmana)
+    label_terr = territori_label(territori)
+
+    hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
+    pid_hero, hero_text = pick_phrase(hero, "long", territori, CHANNEL, rng=rng)
+
+    secondary_text = ""
+    pid_secondary = ""
+    secondary_canco = ""
+    if len(scenarios) >= 2:
+        pid_secondary, secondary_text = pick_phrase(
+            scenarios[1], "medium", territori, CHANNEL, rng=rng
         )
-    hashtags = TERRITORY_HASHTAGS.get(territori, ["#TopQuaranta", "#MúsicaEnCatalà"])
-    # Pad with secondary discovery hashtags up to 5–8 total for IG.
-    extras = ["#TopSetmanal", "#PaísosCatalans", "#NovaMúsica"]
-    full_tags = list(hashtags) + [t for t in extras if t not in hashtags]
-    full_tags = full_tags[:8]
+        secondary_canco = scenarios[1].data.get("canco") or ""
+    connector = connectors_bank.pick_connector(rng=rng) if secondary_text else ""
+    if connector.endswith(","):
+        secondary_text = connectors_bank.lowercase_first(secondary_text)
 
-    text = "\n".join(header_lines + body_lines)
-    # IG strips clickable links from feed captions; surface the
-    # public URL as plain text for users who can copy-paste.
-    cta = "Cap a topquaranta.cat per al top complet."
-    footer = "\n\n" + cta + "\n\n" + " ".join(full_tags)
+    hero_canco = hero.data.get("canco") or ""
+    # Filter top-5 by cançó: drop hero + secondary referents.
+    top5 = entries[:5]
+    skip_cancons = {c for c in (hero_canco, secondary_canco) if c}
+    remaining = [e for e in top5 if e.get("canco_nom") not in skip_cancons]
+    # Case A vs Case B (Fase 4 esmena 4): if the hero referent is
+    # NOT at the cim, frame the #1 separately so we don't list it
+    # like a completing artist.
+    leader = next((e for e in remaining if e.get("posicio") == 1), None)
+    others = (
+        [e for e in remaining if e.get("posicio") != 1][:3] if leader else remaining[:3]
+    )
+    top5_text = top5_bank.pick_long(others, leader=leader, rng=rng)
 
-    full = text + footer
-    # Hard truncate trailing rows if we exceed 2 200 chars. The
-    # hero + top-N readability matters more than the long tail.
-    while len(full) > MAX_CHARS and body_lines:
-        body_lines.pop()
-        text = "\n".join(header_lines + body_lines)
-        full = text + footer
+    cta = cta_bank.pick_cta(CHANNEL, url="", rng=rng)
+    hashtags = hashtags_bank.build_hashtags(territori, CHANNEL, rng=rng)
 
-    return {"text": full, "hashtags": full_tags, "cta": cta}
+    def assemble(h_text, sec_text, t5_text, hts):
+        # Fase 4 esmena 1: no robotic header. The body starts with
+        # the hero directly; the territori_label and week context
+        # are inside the hero phrase itself.
+        parts: list[str] = []
+        if h_text:
+            parts.append(h_text)
+        if sec_text:
+            parts += ["", f"{connector} {sec_text}"]
+        if t5_text:
+            parts += ["", t5_text]
+        parts += ["", cta]
+        if hts:
+            parts += ["", " ".join(hts)]
+        return "\n".join(parts)
+
+    text = assemble(hero_text, secondary_text, top5_text, hashtags)
+    # Truncate priority: secondary → top5 detail → hashtags.
+    if len(text) > MAX_CHARS and secondary_text:
+        secondary_text = ""
+        pid_secondary = ""
+        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+    if len(text) > MAX_CHARS and top5_text:
+        top5_text = ""
+        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+    while len(text) > MAX_CHARS and hashtags:
+        hashtags = hashtags[:-1]
+        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+
+    phrase_ids: list[str] = []
+    if pid_hero:
+        phrase_ids.append(pid_hero)
+    if pid_secondary:
+        phrase_ids.append(pid_secondary)
+    return {
+        "text": text,
+        "hashtags": hashtags,
+        "cta": cta,
+        "phrase_ids": phrase_ids,
+    }

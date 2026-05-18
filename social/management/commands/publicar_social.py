@@ -222,20 +222,33 @@ class Command(BaseCommand):
     # ── feed flow ────────────────────────────────────────────────
 
     def _publish_feed(self, post, slot, territori, setmana, data, cfg, opts):
+        # `phrase_ids` is the list of narrative phrases the engine
+        # actually emitted (empty for novetats / engine fallback).
+        # We stash it on `post.metadata` after a successful publish
+        # via `registry.mark_used` so future weeks pick fresh copy.
+        phrase_ids: list[str] = []
         if slot.tipus == SocialPost.TIPUS_TOP_PPCC:
             paths = renderer.render_feed_top(
                 "top_ppcc", territori, setmana, data["entries"]
             )
-            caption = captions.caption_top(
-                "top_ppcc", territori, setmana, data["entries"]
+            result = captions.compose_for_channel(
+                "instagram_feed", "top_ppcc", territori, setmana, data["entries"]
             )
+            caption = result["text"]
+            phrase_ids = result.get("phrase_ids") or []
         elif slot.tipus == SocialPost.TIPUS_TOP_TERRITORIAL:
             paths = renderer.render_feed_top(
                 "top_territorial", territori, setmana, data["entries"]
             )
-            caption = captions.caption_top(
-                "top_territorial", territori, setmana, data["entries"]
+            result = captions.compose_for_channel(
+                "instagram_feed",
+                "top_territorial",
+                territori,
+                setmana,
+                data["entries"],
             )
+            caption = result["text"]
+            phrase_ids = result.get("phrase_ids") or []
         else:  # nous_*
             paths = renderer.render_feed_novetats(slot.tipus, setmana, data["items"])
             caption = captions.caption_novetats(slot.tipus, setmana, data["items"])
@@ -312,6 +325,20 @@ class Command(BaseCommand):
         from analytics.events import register as _register_event
 
         _register_event("social_publicat", dim1=slot.platform, dim2=slot.tipus)
+        # Narrative-engine ledger: record the phrase ids that
+        # actually shipped so the next picks for the same
+        # (channel, territori) avoid them within the rolling window.
+        # Best-effort: a registry write hiccup must not turn a
+        # successful publish into a logged failure.
+        for pid in phrase_ids:
+            try:
+                from social.narrative.registry import mark_used
+
+                mark_used(pid, territori, setmana, "instagram_feed")
+            except Exception:
+                logger.exception(
+                    "registry.mark_used failed for pid=%s (continuing)", pid
+                )
         self.stdout.write(f"  · publicat → media_id={media_id}")
 
     # ── story flow ───────────────────────────────────────────────

@@ -68,9 +68,25 @@ if [ "$(id -un)" != "topquaranta" ]; then
     exit 64
 fi
 
-echo "→ git pull --ff-only"
+echo "→ Cleaning worktree before pull (idempotent)"
+# Why: Claude-driven sessions occasionally land artefacts on the
+# server worktree (regenerated migrations, ad-hoc preview scripts,
+# black/isort reformat residue) when the Mac doesn't have a working
+# venv. Those untracked/modified files blocked `git pull --ff-only`
+# and the auto-deploy returned exit 1 with no recovery path. Two
+# incidents in 12h on 2026-05-18 (PRs #40 and #41) prompted this
+# hardening.
+#
+# All development happens on the Mac → push → deploy, so discarding
+# local state is safe: the only files we MUST preserve are under
+# `./data/` (cron output). The `-fd` flag of `git clean` only removes
+# untracked files and directories that are NOT in .gitignore — venvs,
+# caches and DBs stay untouched. `-e data/` is the extra exclusion for
+# the cron output directory, which is not gitignored.
 PRE_HEAD=$(git rev-parse HEAD)
-run git pull --ff-only
+run git fetch origin main
+run git reset --hard origin/main
+run git clean -fd -e data/
 POST_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "$PRE_HEAD")
 
 echo

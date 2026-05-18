@@ -370,3 +370,65 @@ def test_slide_tags_cover_slide_has_no_tags():
     ]
     out = Command._slide_tags("top_ppcc", n_slides=2, data={"entries": entries})
     assert out[0] == []
+
+
+def test_story_set_counts_as_one_publication(db, cfg_phase_1, setmana_with_top):
+    """Bug 2 of Fase 3 audit (2026-05-18): a story-set is ONE
+    publication conceptually, regardless of how many slides it
+    carries. Same treatment as an IG feed carousel (1 publication
+    with N images). The previous `n=len(story_ids)` over-counted by
+    42× for a top story-set."""
+    import pathlib
+    from unittest.mock import patch
+
+    register_calls = []
+
+    def _capture_register(clau, dim1="", dim2="", n=1, **kwargs):
+        register_calls.append({"clau": clau, "dim1": dim1, "dim2": dim2, "n": n})
+
+    fake_paths = [pathlib.Path(f"/tmp/story_{i}.png") for i in range(5)]
+
+    with (
+        patch(
+            "social.management.commands.publicar_social.renderer.render_stories_top",
+            return_value=fake_paths,
+        ),
+        patch(
+            "social.management.commands.publicar_social._public_url_for",
+            side_effect=lambda p: f"https://www.topquaranta.cat/static/social/{p.name}",
+        ),
+        patch(
+            "social.management.commands.publicar_social.instagram_client.upload_story",
+            return_value="container-xyz",
+        ),
+        patch(
+            "social.management.commands.publicar_social.instagram_client.wait_until_finished",
+            return_value=None,
+        ),
+        patch(
+            "social.management.commands.publicar_social.instagram_client.publish_container",
+            side_effect=[f"sid-{i}" for i in range(5)],
+        ),
+        patch("analytics.events.register", side_effect=_capture_register),
+    ):
+        call_command(
+            "publicar_social",
+            "--data",
+            "2026-04-25",  # Saturday: Saturday slots include instagram_story
+            "--platform",
+            "instagram_story",
+        )
+
+    # Among all register() calls, the social_publicat row for
+    # instagram_story must have n=1, not 5.
+    story_calls = [
+        c
+        for c in register_calls
+        if c["clau"] == "social_publicat" and c["dim1"] == "instagram_story"
+    ]
+    assert len(story_calls) >= 1, register_calls
+    for call in story_calls:
+        assert call["n"] == 1, (
+            f"Story-set incremented counter by {call['n']}, expected 1. "
+            "Bug 2 of Fase 3 reintroduced."
+        )

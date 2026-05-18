@@ -370,10 +370,16 @@ class Command(BaseCommand):
         )
         # K1 analytics: counter for IG stories. dim1 is the platform
         # (instagram_story) and dim2 is the slot tipus (top_ppcc, …).
+        # A story-set is ONE publication conceptually, regardless of
+        # how many slides it carries — same treatment as an IG feed
+        # carousel (1 publication with N images). The previous
+        # `n=len(story_ids)` over-counted by 42× for a top story-set,
+        # inflating the StaffAnalytics social tab (Bug 2 of Fase 3
+        # audit, 2026-05-18).
         from analytics.events import register as _register_event
 
         _register_event(
-            "social_publicat", dim1=slot.platform, dim2=slot.tipus, n=len(story_ids)
+            "social_publicat", dim1=slot.platform, dim2=slot.tipus, n=1
         )
         self.stdout.write(f"  · {len(story_ids)} stories publicades.")
 

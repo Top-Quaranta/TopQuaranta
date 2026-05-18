@@ -123,18 +123,12 @@ def analytics_summary(request: Request) -> Response:
     ]
 
     # ── social publications by channel ────────────────────────────
-    # Bug 1 of Fase 3 (2026-05-18): the counter used to derive from
-    # `MetricaEsdeveniment(clau="social_publicat")`, an append-only
-    # counter that depended on every publication path remembering to
-    # call `analytics.events.register()`. Two failure modes hit us:
-    # (a) publications predating the register() call were never
-    # counted; (b) story-sets over-counted N×slides (fixed at PR #31).
-    # SocialPost is the canonical idempotent source — one row per
-    # slot, `status=publicat` only when the publish actually went
-    # out. Counting from it gives the right answer by construction.
-    # We filter by `setmana` (the natural grouping unit) and convert
-    # the `days=N` window into "weeks whose Monday is within the
-    # window" by taking the Monday of `since`.
+    # Bug 1 of Fase 3 (2026-05-18): the counter now derives from
+    # `SocialPost.objects.filter(status=publicat)` instead of the
+    # append-only `MetricaEsdeveniment(clau="social_publicat")` row,
+    # which depended on every call site remembering to invoke
+    # `register()`. Filter by `setmana` because that's the natural
+    # grouping unit (one row per slot); we take the Monday of `since`.
     from django.db.models import Count
 
     from social.models import SocialPost
@@ -153,6 +147,35 @@ def analytics_summary(request: Request) -> Response:
         {"channel": r["platform"], "tipus": r["tipus"], "total": r["total"]}
         for r in social_rows
     ]
+
+    # ── Publicacions OMESES per canal (Fase 3 problem 6, 2026-05-18) ──
+    # Staff should see how much the `fase_distribucio` gate is filtering;
+    # otherwise the omès queue is invisible. Same shape as `social`.
+    social_omes_rows = list(
+        SocialPost.objects.filter(
+            status=SocialPost.STATUS_OMES,
+            setmana__gte=since_week,
+        )
+        .values("platform", "tipus")
+        .annotate(total=Count("id"))
+        .order_by("-total")
+    )
+    social_omes = [
+        {"channel": r["platform"], "tipus": r["tipus"], "total": r["total"]}
+        for r in social_omes_rows
+    ]
+
+    # ── Newsletter audience (Fase 3 problem 4, 2026-05-18) ────────
+    # Newsletter is a real channel with the most direct conversion,
+    # but it wasn't surfacing in the followers strip because it
+    # lacks a `MetricaSocialPlatform(metric=followers)` row. The
+    # canonical count is `Usuari.vol_newsletter=True, is_active=True`.
+    from django.contrib.auth import get_user_model
+
+    _User = get_user_model()
+    newsletter_audience = _User.objects.filter(
+        vol_newsletter=True, is_active=True
+    ).count()
 
     # ── feedback by target ────────────────────────────────────────
     feedback_rows = list(
@@ -288,6 +311,8 @@ def analytics_summary(request: Request) -> Response:
             "pageviews": pageviews,
             "utm": utm,
             "social": social,
+            "social_omes": social_omes,
+            "newsletter_audience": newsletter_audience,
             "feedback": feedback,
             "territoris": territoris,
             "social_metrics": {

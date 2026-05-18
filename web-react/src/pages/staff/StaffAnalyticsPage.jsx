@@ -362,8 +362,11 @@ function SocialTab({ data }) {
   const followersByPlatform = sm.followers_series || {}
   const top = sm.top_posts || []
   const latest = sm.latest_platform || []
+  const newsletterAudience = data.newsletter_audience || 0
 
-  // Latest follower count per platform — KPI strip.
+  // Latest follower count per platform — KPI strip. Includes a
+  // synthetic Newsletter entry (Fase 3 problem 4, 2026-05-18) so
+  // staff sees the email audience alongside the social platforms.
   const latestFollowers = useMemo(() => {
     const out = {}
     for (const r of latest) {
@@ -371,8 +374,33 @@ function SocialTab({ data }) {
         out[r.platform] = r.valor
       }
     }
+    if (newsletterAudience > 0) {
+      out.newsletter = newsletterAudience
+    }
     return out
-  }, [latest])
+  }, [latest, newsletterAudience])
+
+  // Per-platform delta vs ~7 days ago, picked from the followers
+  // series. We pick the closest point >= 6 days back; falls back to
+  // `null` (no delta shown) if the series doesn't reach that far.
+  // Fase 3 problem 3 (2026-05-18).
+  const deltaByPlatform = useMemo(() => {
+    const out = {}
+    for (const [platform, series] of Object.entries(followersByPlatform)) {
+      if (!series || series.length < 2) continue
+      const latestValue = series[series.length - 1].valor
+      // Walk backwards looking for a point ~7d before the last.
+      const latestDate = new Date(series[series.length - 1].data)
+      const cutoff = new Date(latestDate.getTime() - 6 * 24 * 3600 * 1000)
+      for (let i = series.length - 2; i >= 0; i--) {
+        if (new Date(series[i].data) <= cutoff) {
+          out[platform] = latestValue - series[i].valor
+          break
+        }
+      }
+    }
+    return out
+  }, [followersByPlatform])
 
   // Aggregate publication counts per channel from `data.social`.
   const publishedByChannel = useMemo(() => {
@@ -383,6 +411,17 @@ function SocialTab({ data }) {
     return Object.entries(out).map(([channel, total]) => ({ channel, total }))
   }, [data.social])
 
+  // Same shape for OMÈS publications (Fase 3 problem 6, 2026-05-18).
+  // Surfaced in a small separate panel so the staff can spot when
+  // `fase_distribucio` is filtering aggressively.
+  const omesByChannel = useMemo(() => {
+    const out = {}
+    for (const r of (data.social_omes || [])) {
+      out[r.channel] = (out[r.channel] || 0) + r.total
+    }
+    return Object.entries(out).map(([channel, total]) => ({ channel, total }))
+  }, [data.social_omes])
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -391,7 +430,14 @@ function SocialTab({ data }) {
             key={platform}
             label={platform}
             value={valor}
-            hint={platform === 'telegram' ? 'membres' : 'seguidors'}
+            delta={deltaByPlatform[platform]}
+            hint={
+              platform === 'telegram'
+                ? 'membres'
+                : platform === 'newsletter'
+                  ? 'subscriptors'
+                  : 'seguidors'
+            }
           />
         ))}
       </div>
@@ -421,6 +467,25 @@ function SocialTab({ data }) {
           </LineChart>
         </ResponsiveContainer>
       </Card>
+
+      {omesByChannel.length > 0 && (
+        <Card
+          title="Publicacions omeses"
+          hint="SocialPosts amb status=omès al període. Senyal que `fase_distribucio` està filtrant el slot abans de la publicació real."
+        >
+          <div className="flex flex-wrap gap-2 text-xs">
+            {omesByChannel.map((r) => (
+              <span
+                key={r.channel}
+                className="inline-flex items-center px-2 py-1 rounded bg-tq-ink/10 text-tq-ink"
+              >
+                <strong className="mr-1">{r.channel}:</strong>
+                {r.total}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card title="Publicacions per canal" hint="Comptador acumulat al període">

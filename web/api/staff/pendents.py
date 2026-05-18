@@ -156,6 +156,12 @@ def _artista_card(a) -> dict:
         # Surfaced when the caller sorted by `cancons_tops_desc` so
         # the UI can show the count next to each row. Otherwise None.
         "n_cancons_tops": getattr(a, "n_cancons_tops", None),
+        # Surfaced when the caller passed `?include_n_top=1`. Same
+        # metric as `n_cancons_tops` without the `posicio<=40` filter;
+        # in practice TopSetmanal only stores posicio<=40 rows so the
+        # two numbers match, but they're kept named per use case for
+        # clarity at the call site.
+        "n_top": getattr(a, "n_top", None),
         "instagram_url": a.instagram_url or "",
         # Last.fm artist metadata — surfaced everywhere the card is used
         # (artistes list, pendents, edit page) so staff can spot

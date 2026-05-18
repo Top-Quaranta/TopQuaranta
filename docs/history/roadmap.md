@@ -363,6 +363,40 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Sprint — Fase 2: vista d'artistes sense Instagram ✅ (2026-05-18)
+
+Pàgina staff dedicada per a omplir manualment `Artista.instagram_url`
+sense haver de navegar a la pàgina d'edició completa. Auditoria
+del 2026-05-18 va detectar 1836 / 2000 aprovats (91.8 %) sense
+Instagram, 75 d'ells amb almenys una aparició al top.
+
+* **Backend** (`web/api/staff/artistes.py::artistes_list`): nova
+  flag `?include_n_top=1` activa l'annotation
+  `Count("cancons__rankings", distinct=True)` AS `n_top` i la
+  retorna a `_artista_card`. Suport per `?sort=-n_top` (desc).
+  Cap canvi a `_artista_card` per al cas default — el camp
+  `n_top` només apareix quan la flag està activa.
+
+* **Frontend** (nou `StaffArtistesSenseInstagramPage.jsx`):
+  pattern clonat de `PendentsPage`. Row amb state local
+  `instagramUrl/busy/error`, validació mínima frontend (https +
+  instagram.com), submit via `PATCH /api/v1/staff/artistes/<pk>/`.
+  Optimistic remove on save. Link extern "Cercar a Google" amb
+  query `site:instagram.com "<nom>"` (l'`/explore/search/` de
+  IG requereix login el 2026 i no funciona consistentment).
+
+* **Routing + sidebar**: nova route `/staff/artistes/sense-instagram`
+  + entry al menú staff sota "Catàleg".
+
+* **Tests**: 2 tests nous a `test_staff_endpoints.py`:
+  `include_n_top` opt-in + `sort=-n_top` ordena correctament; el
+  filter `instagram=no` retorna només rows amb camp buit.
+
+* **Reutilització**: cap endpoint nou, cap migration. El filter
+  `instagram=no` ja existia (auditoria 2026-05-18); l'endpoint
+  PATCH `artista_detail` ja accepta `instagram_url` via
+  `SOCIAL_LINK_FIELDS`. Cap signal/hook que es trenqui.
+
 ### Sprint — Fase 1.5.C: contingut definitiu dels mails + retroactiu ✅ (2026-05-18)
 
 Substitució dels 6 templates placeholder de Fase 1.5.A per contingut

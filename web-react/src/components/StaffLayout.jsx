@@ -44,6 +44,7 @@ const GROUPS = [
     label: 'Catàleg',
     items: [
       { to: '/staff/artistes', label: 'Artistes' },
+      { to: '/staff/artistes/sense-instagram', label: 'Artistes sense Instagram' },
       { to: '/staff/cancons',  label: 'Cançons'  },
       { to: '/staff/albums',   label: 'Àlbums'   },
     ],

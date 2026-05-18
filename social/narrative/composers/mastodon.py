@@ -13,7 +13,6 @@ from social.captions import _artist_label, _setmana_label, utm_url
 from social.narrative.phrases import TERRITORY_HASHTAGS
 from social.narrative.registry import pick_phrase
 
-
 CHANNEL = "mastodon"
 MAX_CHARS = 500
 N_ROWS = 5
@@ -28,17 +27,13 @@ def compose(
     rng=None,
 ) -> dict:
     territori_label = (
-        scenarios[0].data.get("territori_label", territori)
-        if scenarios
-        else territori
+        scenarios[0].data.get("territori_label", territori) if scenarios else territori
     )
     label = _setmana_label(setmana)
 
     parts: list[str] = []
     if scenarios:
-        _, hero_text = pick_phrase(
-            scenarios[0], "medium", territori, CHANNEL, rng=rng
-        )
+        _, hero_text = pick_phrase(scenarios[0], "medium", territori, CHANNEL, rng=rng)
         if hero_text:
             parts.append(hero_text)
     parts.append(f"Top {territori_label} · {label}")
@@ -50,7 +45,9 @@ def compose(
 
     link = utm_url(CHANNEL, "top_ppcc", setmana, territori=territori)
     cta = f"Top complet a {link}"
-    hashtags = TERRITORY_HASHTAGS.get(territori, ["#TopQuaranta", "#MúsicaEnCatalà"])[:3]
+    hashtags = TERRITORY_HASHTAGS.get(territori, ["#TopQuaranta", "#MúsicaEnCatalà"])[
+        :3
+    ]
     parts.append(cta)
     parts.append(" ".join(hashtags))
 

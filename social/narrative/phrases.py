@@ -8,14 +8,35 @@ the chosen tier.
 
 Editorial guidelines for additions:
   * Catalan, colloquial register, no em-dashes.
-  * 1–2 emojis when they help; never decorative-only.
+  * 1–2 emojis when they help; never decorative-only. Keep the
+    emoji palette varied — no single emoji more than twice within
+    a single scenario bank.
   * Vary the opener: celebrate, observe, highlight a detail,
     address the reader. Avoid the dry "L'artista X aconsegueix la
-    posició Y" template — it reads like a press release.
-  * Interpolation variables per scenario:
-      a2_streak           — {artista} {canco} {streak} {territori_label}
-      a4_debut_alt        — {artista} {canco} {posicio} {territori_label}
-      a5_artista_multiple — {artista} {n_cancons} {territori_label}
+    posició Y" press-release template.
+
+**Grammatical-neutrality contract (Fase 4 PR 1.5, 2026-05-18):**
+the artist name is interpolated raw; it can be singular feminine
+(Maria Jaume), singular masculine (Lluís Llach), a band with a
+singular conventional name (Manel), a plural-marked band (Els
+Catarres) or an articled form (La Fúmiga). Therefore:
+  * Never let `{artista}` be the subject of a finite verb — the
+    verb agreement would break for at least one of those shapes.
+    Make the artist a complement instead (`amb {artista}`,
+    `per a {artista}`, `de {artista}`, `{artista}:`).
+  * Subjects allowed: invariant nouns (`el #1`, `el cim`, `la
+    setmana`, `el top`, `el rànquing`), or `«{canco}»` which is
+    always singular feminine and therefore safe with verbs in 3rd
+    singular and feminine adjectives.
+  * No elision on `de {artista}`. The rule is literal: never
+    `d'{artista}` even before vowels, and never write `del`/`dels`
+    around the variable — Catalan readers see `de Els Catarres`
+    or `de La Fúmiga` and it parses fine.
+
+Interpolation variables per scenario:
+    a2_streak           — {artista} {canco} {streak} {territori_label}
+    a4_debut_alt        — {artista} {canco} {posicio} {territori_label}
+    a5_artista_multiple — {artista} {n_cancons} {territori_label}
 
 Length budgets are nominal; the composer enforces hard channel
 limits with truncate-or-skip logic after assembly.
@@ -23,16 +44,15 @@ limits with truncate-or-skip logic after assembly.
 
 from __future__ import annotations
 
-
 # ── Per-territori hashtags ────────────────────────────────────────
 #
 # Three-level approach: an always-on duo + a territori-specific
 # accent. The composer mixes them per channel (IG abundant,
 # Mastodon/Bluesky moderate, Telegram moderate).
 #
-# AND/CNO/FRA/ALG/ALG are empty for now because the public charts
-# don't carry them yet (audit 2026-05-18 confirmed TopSetmanal has
-# no rows for these territoris). Add them when relevant.
+# AND/CNO/FRA/ALG are reserved for now — the public charts don't
+# carry rows for them yet (audit 2026-05-18 confirmed TopSetmanal
+# has no entries for these territoris). Add as soon as relevant.
 TERRITORY_HASHTAGS: dict[str, list[str]] = {
     "PPCC": ["#TopQuaranta", "#MúsicaEnCatalà"],
     "CAT": ["#TopQuaranta", "#MúsicaEnCatalà", "#Catalunya"],
@@ -56,79 +76,79 @@ def phrase_id(code: str, idx: int, length: str) -> str:
 # ── A2 streak — same canço at #1 N consecutive weeks ──────────────
 A2_STREAK = [
     {
-        "short": "{artista} segueix al #1 {territori_label} 🎯",
-        "medium": "{streak}a setmana consecutiva al #1 de {territori_label}: {artista} amb «{canco}». 🎯",
-        "long": "Ja en porten {streak}. {artista} no s'aparta del cim del Top {territori_label} amb «{canco}». 🎯",
+        "short": "{artista} al #1 de {territori_label} · {streak}a setmana 🎯",
+        "medium": "{streak}a setmana al cim de {territori_label}: «{canco}», amb {artista}. 🎯",
+        "long": "Ja fa {streak} setmanes que «{canco}» encapçala el Top {territori_label}, signada per {artista}. 🎯",
     },
     {
-        "short": "{streak} setmanes seguides al cim ✨",
-        "medium": "«{canco}» de {artista} aguanta el #1 de {territori_label} per {streak}a setmana. ✨",
-        "long": "I van {streak}. «{canco}» de {artista} segueix manant al Top {territori_label} setmana rere setmana. ✨",
+        "short": "{streak} setmanes al cim per a {artista} ✨",
+        "medium": "Al #1 de {territori_label} segueix «{canco}», amb {artista}. {streak}a setmana consecutiva. ✨",
+        "long": "I van {streak}. «{canco}» continua manant el Top {territori_label}, amb {artista} al darrere. ✨",
     },
     {
-        "short": "No es mou: {artista} al #1 ({streak}a) 🔥",
-        "medium": "{artista} no afluixa: {streak}a setmana al #1 de {territori_label} amb «{canco}». 🔥",
-        "long": "«{canco}» de {artista} no es mou. {streak}a setmana liderant el Top {territori_label}, i pinta que encara n'hi haurà més. 🔥",
+        "short": "El #1 no es mou · {artista} ({streak}a) 🔥",
+        "medium": "Res no es belluga al cim de {territori_label}: {streak}a setmana per a {artista} amb «{canco}». 🔥",
+        "long": "Al cim del Top {territori_label} no s'hi mou res. {streak}a setmana amb «{canco}», amb signatura de {artista}. 🔥",
     },
     {
-        "short": "{artista} encara manen 👑",
-        "medium": "{streak} setmanes al #1 de {territori_label} per a {artista}. «{canco}» no es deixa pas. 👑",
-        "long": "{streak} setmanes ja. {artista} continuen al cim del Top {territori_label} amb «{canco}». Resistència pura. 👑",
+        "short": "Encara el #1 per a {artista} 👑",
+        "medium": "{streak} setmanes al #1 de {territori_label} per a {artista}. «{canco}» no afluixa. 👑",
+        "long": "Encara {streak} setmanes. El cim del Top {territori_label} segueix amb {artista}, gràcies a «{canco}». 👑",
     },
     {
-        "short": "{canco} resisteix al #1 ({streak}a) 💪",
-        "medium": "«{canco}» de {artista} encadena {streak} setmanes al cim de {territori_label}. 💪",
-        "long": "Resistència. «{canco}» de {artista} ja porta {streak} setmanes al #1 del Top {territori_label}, i el ritme no cau. 💪",
+        "short": "«{canco}» resisteix al #1 ({streak}a) 💪",
+        "medium": "«{canco}» encadena {streak} setmanes al cim de {territori_label}. Mèrit de {artista}. 💪",
+        "long": "Resistència. «{canco}» suma {streak} setmanes al #1 del Top {territori_label}, amb {artista} al timó. 💪",
     },
     {
-        "short": "{artista} no deixen anar {territori_label} 🎶",
-        "medium": "{streak}a vegada que {artista} obre el Top {territori_label} amb «{canco}». 🎶",
-        "long": "Una setmana més. {artista} obre el Top {territori_label} per {streak}a vegada consecutiva amb «{canco}». 🎶",
+        "short": "Una setmana més per a {artista} al cim 🎸",
+        "medium": "Una vegada més. {streak}a setmana al Top {territori_label} amb {artista} i «{canco}». 🎸",
+        "long": "Una setmana més. {streak}a vegada que el Top {territori_label} obre amb {artista} i «{canco}». 🎸",
     },
     {
-        "short": "Cims que aguanten: {streak}a setmana 🏔️",
-        "medium": "{artista} aguanten el cim de {territori_label} per {streak}a setmana amb «{canco}». 🏔️",
-        "long": "Cims que aguanten. {artista} viuen a dalt del Top {territori_label} des de fa {streak} setmanes amb «{canco}». 🏔️",
+        "short": "Cims que aguanten · {streak}a setmana 🏔️",
+        "medium": "El cim de {territori_label} segueix igual: {streak}a setmana amb {artista} i «{canco}». 🏔️",
+        "long": "Cims que aguanten. Ja fa {streak} setmanes que «{canco}», de {artista}, mana al Top {territori_label}. 🏔️",
     },
     {
-        "short": "Tornen al #1: {artista} ({streak}a) 🎵",
-        "medium": "{artista} tanquen {streak}a setmana al capdamunt de {territori_label} amb «{canco}». 🎵",
-        "long": "Mira-ho com vulguis. {streak} setmanes seguides per a «{canco}» de {artista} a dalt del Top {territori_label}. 🎵",
+        "short": "Torna al #1 · «{canco}» ({streak}a) 🎵",
+        "medium": "«{canco}» tanca {streak}a setmana al capdamunt de {territori_label}, amb {artista}. 🎵",
+        "long": "Mira-ho com vulguis: {streak} setmanes seguides al cim del Top {territori_label} per a «{canco}», amb {artista}. 🎵",
     },
     {
-        "short": "{canco} no cau · {streak} setmanes ⚓",
+        "short": "«{canco}» no cau · {streak} setmanes ⚓",
         "medium": "«{canco}» ancorada al #1 de {territori_label}. {streak} setmanes per a {artista}. ⚓",
-        "long": "Ancorats. «{canco}» de {artista} acumula {streak} setmanes al cim de {territori_label}. ⚓",
+        "long": "Àncora al cim. «{canco}», de {artista}, acumula {streak} setmanes al cim de {territori_label}. ⚓",
     },
     {
-        "short": "{artista} de nou al #1 🎙️",
-        "medium": "Una altra setmana per a {artista} al cim de {territori_label}. {streak}a consecutiva amb «{canco}». 🎙️",
-        "long": "Una altra. {artista} repeteixen al #1 del Top {territori_label}, ja són {streak} setmanes amb «{canco}». 🎙️",
+        "short": "Una altra setmana per a {artista} al #1 🎙️",
+        "medium": "Una altra setmana al cim de {territori_label} per a {artista}. {streak}a consecutiva amb «{canco}». 🎙️",
+        "long": "Repetició. El Top {territori_label} torna a obrir amb {artista} i «{canco}»: ja són {streak} setmanes. 🎙️",
     },
     {
         "short": "Lideratge ferm · {streak} setmanes 🚩",
-        "medium": "{artista} signen {streak}a setmana al #1 de {territori_label} amb «{canco}». 🚩",
-        "long": "Lideratge ferm. {artista} marquen {streak}a setmana al cim del Top {territori_label} amb «{canco}». 🚩",
+        "medium": "{streak}a setmana al #1 de {territori_label} per a {artista} amb «{canco}». 🚩",
+        "long": "Lideratge ferm al Top {territori_label}: {streak} setmanes per a {artista} amb «{canco}». 🚩",
     },
     {
-        "short": "{artista} repeteixen #1 a {territori_label} 🎼",
-        "medium": "Repetició al cim: {streak} setmanes de {artista} amb «{canco}» a {territori_label}. 🎼",
-        "long": "Repetició al cim. {artista} arriben a {streak} setmanes al #1 del Top {territori_label} amb «{canco}». 🎼",
+        "short": "Repetició al cim · {artista} 🎼",
+        "medium": "Repetició al cim de {territori_label}: {streak} setmanes amb {artista} i «{canco}». 🎼",
+        "long": "Repetició al cim. Al Top {territori_label} ja fa {streak} setmanes que mana «{canco}», cançó de {artista}. 🎼",
     },
     {
-        "short": "Setmana {streak}: encara {artista} 🌟",
-        "medium": "Setmana {streak} per a {artista} al #1 de {territori_label} amb «{canco}». 🌟",
-        "long": "Setmana {streak} i comptant. {artista} mantenen el #1 del Top {territori_label} amb «{canco}». 🌟",
+        "short": "Setmana {streak} · encara per a {artista} 🌟",
+        "medium": "Setmana {streak} al #1 de {territori_label} per a {artista} amb «{canco}». 🌟",
+        "long": "Setmana {streak} i comptant. Al cim del Top {territori_label} segueix «{canco}», cançó de {artista}. 🌟",
     },
     {
-        "short": "{canco} segueix manant 🎤",
-        "medium": "«{canco}» de {artista} segueix manant {territori_label}: {streak}a setmana al #1. 🎤",
-        "long": "Aquí no es mou res. «{canco}» de {artista} aguanta {streak} setmanes seguides al #1 del Top {territori_label}. 🎤",
+        "short": "«{canco}» segueix manant 🎤",
+        "medium": "«{canco}» segueix manant a {territori_label}: {streak}a setmana al #1 amb {artista}. 🎤",
+        "long": "Al Top {territori_label} no s'hi mou res. «{canco}» suma {streak} setmanes al #1, signada per {artista}. 🎤",
     },
     {
-        "short": "Cap on les escolten més? 👀",
-        "medium": "{streak} setmanes que {artista} guanyen {territori_label} amb «{canco}». On les escolten més? 👀",
-        "long": "{streak} setmanes seguides. {artista} dominen el Top {territori_label} amb «{canco}». La pregunta és: on les escolten més, aquí o als concerts? 👀",
+        "short": "Quina insistència · {streak}a setmana 👀",
+        "medium": "{streak} setmanes seguides al #1 de {territori_label} per a {artista} amb «{canco}». 👀",
+        "long": "Insistència. {streak} setmanes seguides al cim del Top {territori_label} amb «{canco}», cançó de {artista}. 👀",
     },
 ]
 
@@ -136,79 +156,79 @@ A2_STREAK = [
 # ── A4 strong debut — new entry at ≤ #3 ──────────────────────────
 A4_DEBUT_ALT = [
     {
-        "short": "Entrada forta de {artista} al #{posicio} 🚀",
-        "medium": "{artista} debuten directament al #{posicio} de {territori_label} amb «{canco}». 🚀",
-        "long": "Entrada per la porta gran. {artista} es planten al #{posicio} de {territori_label} amb «{canco}» a la primera setmana. 🚀",
+        "short": "Entrada forta al #{posicio} · {artista} 🚀",
+        "medium": "Nou al Top {territori_label}: «{canco}», de {artista}, directa al #{posicio}. 🚀",
+        "long": "Entrada per la porta gran. «{canco}», de {artista}, debuta directament al #{posicio} del Top {territori_label}. 🚀",
     },
     {
-        "short": "{canco} debuta al #{posicio} 🎯",
-        "medium": "«{canco}» de {artista} entra de cop al #{posicio} del Top {territori_label}. 🎯",
-        "long": "Què tal? «{canco}» de {artista} debuta al #{posicio} del Top {territori_label}. No s'ho ha pres de broma. 🎯",
+        "short": "«{canco}» debuta al #{posicio} 🎯",
+        "medium": "«{canco}», cançó de {artista}, entra de cop al #{posicio} del Top {territori_label}. 🎯",
+        "long": "Què tal? «{canco}» debuta al #{posicio} del Top {territori_label}. Material nou de {artista}. 🎯",
     },
     {
-        "short": "Sorpresa al #{posicio}: {artista} ✨",
-        "medium": "Sorpresa al Top {territori_label}: {artista} salten directament al #{posicio} amb «{canco}». ✨",
-        "long": "Sorpresa al Top {territori_label}. {artista} salten directament al #{posicio} amb «{canco}» sense passar per cap setmana de transició. ✨",
+        "short": "Sorpresa al #{posicio} amb {artista} ✨",
+        "medium": "Sorpresa al Top {territori_label}: «{canco}», de {artista}, salta directament al #{posicio}. ✨",
+        "long": "Sorpresa al Top {territori_label}. «{canco}», de {artista}, apareix de cop al #{posicio} sense setmana de transició. ✨",
     },
     {
-        "short": "{artista} ho fan a la primera 💥",
-        "medium": "Ho fan a la primera: {artista} entren al #{posicio} de {territori_label} amb «{canco}». 💥",
-        "long": "Ho fan a la primera. {artista} aterren al #{posicio} del Top {territori_label} amb «{canco}», sense rondalla prèvia. 💥",
+        "short": "A la primera al #{posicio} · {artista} 💥",
+        "medium": "A la primera. «{canco}», de {artista}, entra al #{posicio} de {territori_label}. 💥",
+        "long": "A la primera setmana, sense rondalla prèvia. «{canco}», de {artista}, aterra al #{posicio} del Top {territori_label}. 💥",
     },
     {
-        "short": "Directes al #{posicio}: {canco} 🔝",
-        "medium": "Directes al cim: «{canco}» de {artista} entra al #{posicio} de {territori_label}. 🔝",
-        "long": "Directes al cim. «{canco}» de {artista} debuta al #{posicio} del Top {territori_label} aquesta setmana. 🔝",
+        "short": "Directe al #{posicio} · «{canco}» 🔝",
+        "medium": "Directament al cim: «{canco}», de {artista}, entra al #{posicio} de {territori_label}. 🔝",
+        "long": "Directe al cim. «{canco}», de {artista}, debuta al #{posicio} del Top {territori_label} aquesta setmana. 🔝",
     },
     {
-        "short": "Top 3 de cop · {artista} 🎼",
-        "medium": "{artista} entren al Top 3 de {territori_label} a la primera amb «{canco}» (#{posicio}). 🎼",
-        "long": "Top 3 sense escala. {artista} debuten al #{posicio} del Top {territori_label} amb «{canco}». 🎼",
+        "short": "Top 3 a la primera · {artista} 🎼",
+        "medium": "Debut al Top 3 de {territori_label}: «{canco}», de {artista}, al #{posicio}. 🎼",
+        "long": "Top 3 sense escala. «{canco}», de {artista}, fa el debut al #{posicio} del Top {territori_label}. 🎼",
     },
     {
-        "short": "{canco} pica fort: #{posicio} 🥊",
-        "medium": "Cançó nova, picada forta: {artista} entren al #{posicio} de {territori_label} amb «{canco}». 🥊",
-        "long": "Cançó nova, picada forta. {artista} es planten al #{posicio} del Top {territori_label} amb «{canco}» a la primera. 🥊",
+        "short": "«{canco}» pica fort · #{posicio} 🥊",
+        "medium": "Cançó nova i picada forta: «{canco}», de {artista}, al #{posicio} de {territori_label}. 🥊",
+        "long": "Cançó nova, picada forta. «{canco}», de {artista}, es planta al #{posicio} del Top {territori_label} a la primera. 🥊",
     },
     {
-        "short": "Aquí venen: {artista} al #{posicio} 👋",
-        "medium": "Aquí venen. {artista} debuten al #{posicio} de {territori_label} amb «{canco}». 👋",
-        "long": "Aquí venen. {artista} es presenten al #{posicio} del Top {territori_label} amb «{canco}», ja sense gens de timidesa. 👋",
+        "short": "Estrena al #{posicio} · {artista} 👋",
+        "medium": "Estrena al Top {territori_label}. «{canco}», amb signatura de {artista}, al #{posicio}. 👋",
+        "long": "Estrena al Top {territori_label}. «{canco}», amb signatura de {artista}, surt al #{posicio} de bones a primeres. 👋",
     },
     {
-        "short": "{artista}: #{posicio} de bones a primeres 🎶",
-        "medium": "Cap d'asaig: {artista} entren al #{posicio} de {territori_label} amb «{canco}» de bones a primeres. 🎶",
-        "long": "Cap d'asaig. {artista} fan la primera al #{posicio} del Top {territori_label} amb «{canco}» de bones a primeres. 🎶",
+        "short": "Sense escalfar · #{posicio} · {artista} 🎬",
+        "medium": "Sense escalfar. «{canco}», de {artista}, al #{posicio} de {territori_label}. 🎬",
+        "long": "Sense escalfar prèviament. «{canco}», de {artista}, debuta al #{posicio} del Top {territori_label}. 🎬",
     },
     {
-        "short": "Bona setmana per a {artista} 🎉",
-        "medium": "Setmana per a celebrar: {artista} debuten al #{posicio} de {territori_label} amb «{canco}». 🎉",
-        "long": "Setmana per a celebrar. {artista} entren amb «{canco}» directament al #{posicio} del Top {territori_label}. 🎉",
+        "short": "Setmana per celebrar · {artista} 🎉",
+        "medium": "Setmana per celebrar: «{canco}», de {artista}, debuta al #{posicio} de {territori_label}. 🎉",
+        "long": "Setmana per celebrar. «{canco}», de {artista}, entra directament al #{posicio} del Top {territori_label}. 🎉",
     },
     {
-        "short": "{canco} ha sortit i ja és al #{posicio} 🆕",
-        "medium": "Cançó nova de {artista}: «{canco}» ja és al #{posicio} de {territori_label}. 🆕",
-        "long": "Recent recent. {artista} treuen «{canco}» i ja la trobem al #{posicio} del Top {territori_label}. 🆕",
+        "short": "Cançó nova al #{posicio} · {artista} 🆕",
+        "medium": "Cançó nova: «{canco}», de {artista}, ja és al #{posicio} de {territori_label}. 🆕",
+        "long": "Recent recent. «{canco}», material nou de {artista}, ja ocupa el #{posicio} del Top {territori_label}. 🆕",
     },
     {
-        "short": "Mira qui ha arribat al #{posicio} 👀",
-        "medium": "Mira qui ha arribat al Top {territori_label}: {artista} al #{posicio} amb «{canco}». 👀",
-        "long": "Mira qui ha arribat. {artista} debuten al #{posicio} del Top {territori_label} aquesta setmana amb «{canco}». 👀",
+        "short": "Atenció al #{posicio} · {artista} 👀",
+        "medium": "Atenció al Top {territori_label}: «{canco}», de {artista}, debuta al #{posicio}. 👀",
+        "long": "Atenció. «{canco}», de {artista}, fa la primera al #{posicio} del Top {territori_label} aquesta setmana. 👀",
     },
     {
-        "short": "{artista}, debut al cim · #{posicio} 🎬",
-        "medium": "Debut al cim: {artista} aterren al #{posicio} de {territori_label} amb «{canco}». 🎬",
-        "long": "Debut al cim. {artista} aterren al #{posicio} del Top {territori_label} sense avís previ, amb «{canco}». 🎬",
+        "short": "Debut al cim · #{posicio} · {artista} 🏆",
+        "medium": "Debut al cim: «{canco}», de {artista}, aterra al #{posicio} de {territori_label}. 🏆",
+        "long": "Debut al cim. «{canco}», de {artista}, aterra al #{posicio} del Top {territori_label} sense avís previ. 🏆",
     },
     {
-        "short": "Entrada solta de {canco} · #{posicio} 🎵",
-        "medium": "Entrada solta: «{canco}» de {artista} es planta al #{posicio} de {territori_label}. 🎵",
-        "long": "Entrada solta. «{canco}» de {artista} apareix de cop al #{posicio} del Top {territori_label} sense haver-hi passat abans. 🎵",
+        "short": "Aparició directa al #{posicio} 💫",
+        "medium": "Aparició directa: «{canco}», de {artista}, es planta al #{posicio} de {territori_label}. 💫",
+        "long": "Aparició directa. «{canco}», de {artista}, surt de cop al #{posicio} del Top {territori_label} sense haver-hi passat abans. 💫",
     },
     {
-        "short": "{artista} no es presenten poc · #{posicio} 💫",
-        "medium": "{artista} no es presenten poc: directament al #{posicio} de {territori_label} amb «{canco}». 💫",
-        "long": "{artista} no es presenten poc. La primera setmana al Top {territori_label} els deixa al #{posicio} amb «{canco}». 💫",
+        "short": "Quina entrada · {artista} al #{posicio} ⭐",
+        "medium": "Quina entrada al Top {territori_label}. «{canco}», de {artista}, directa al #{posicio}. ⭐",
+        "long": "Quina entrada. La primera setmana al Top {territori_label} arrenca amb «{canco}», de {artista}, al #{posicio}. ⭐",
     },
 ]
 
@@ -216,44 +236,44 @@ A4_DEBUT_ALT = [
 # ── A5 multiple cançons per artista (≥3) ─────────────────────────
 A5_ARTISTA_MULTIPLE = [
     {
-        "short": "{artista} copen {territori_label} · {n_cancons} cançons 🎶",
-        "medium": "{artista} signen {n_cancons} cançons al Top {territori_label} aquesta setmana. 🎶",
-        "long": "{artista} fan història al Top {territori_label}: {n_cancons} cançons seves a la llista d'aquesta setmana. 🎶",
+        "short": "{n_cancons} cançons de {artista} al top 🎶",
+        "medium": "{n_cancons} cançons de {artista} al Top {territori_label} aquesta setmana. 🎶",
+        "long": "Història al Top {territori_label}: {n_cancons} cançons de {artista} a la llista d'aquesta setmana. 🎶",
     },
     {
-        "short": "{n_cancons} cançons de {artista} al top 🔥",
-        "medium": "{n_cancons} cançons de {artista} simultàniament al Top {territori_label}. Domini total. 🔥",
-        "long": "Domini total. {artista} col·loquen {n_cancons} cançons al Top {territori_label} aquesta setmana. 🔥",
+        "short": "Domini total · {artista} x{n_cancons} 🔥",
+        "medium": "Domini total al Top {territori_label}: {n_cancons} cançons de {artista}. 🔥",
+        "long": "Domini total. Al Top {territori_label} hi caben {n_cancons} cançons de {artista} alhora aquesta setmana. 🔥",
     },
     {
-        "short": "{artista} prenen {territori_label} 🎤",
-        "medium": "Setmana d'{artista}: {n_cancons} cançons seves al Top {territori_label}. 🎤",
-        "long": "Setmana de {artista}. {n_cancons} cançons seves estan al Top {territori_label}. Una rere l'altra. 🎤",
+        "short": "Setmana per a {artista} · {n_cancons} cançons 🎤",
+        "medium": "Setmana per a {artista}: {n_cancons} cançons al Top {territori_label}. 🎤",
+        "long": "Setmana per a {artista}. {n_cancons} cançons seves passegen pel Top {territori_label}, una rere l'altra. 🎤",
     },
     {
-        "short": "Top monopolitzat: {artista} (x{n_cancons}) 🎯",
-        "medium": "Top monopolitzat. {artista} col·loquen {n_cancons} cançons al cim de {territori_label}. 🎯",
-        "long": "Top monopolitzat. {artista} arriben a {n_cancons} cançons al Top {territori_label} simultàniament. 🎯",
+        "short": "Top monopolitzat · {artista} x{n_cancons} 🎯",
+        "medium": "Top monopolitzat: {n_cancons} cançons de {artista} al cim de {territori_label}. 🎯",
+        "long": "Top monopolitzat. Al Top {territori_label} hi conviuen {n_cancons} cançons de {artista} alhora. 🎯",
     },
     {
-        "short": "{artista} per tot arreu · {n_cancons} 🌊",
+        "short": "{artista} per tot el top · {n_cancons} 🌊",
         "medium": "{artista} per tot arreu: {n_cancons} cançons al Top {territori_label}. 🌊",
         "long": "{artista} per tot arreu. {n_cancons} cançons seves circulen alhora pel Top {territori_label}. 🌊",
     },
     {
-        "short": "Pas a {artista}: {n_cancons} entrades 🚪",
-        "medium": "Feu pas. {artista} signen {n_cancons} entrades al Top {territori_label}. 🚪",
-        "long": "Feu pas. {artista} ocupen {n_cancons} llocs del Top {territori_label} aquesta setmana. 🚪",
+        "short": "Pas a {artista} · {n_cancons} entrades 🚪",
+        "medium": "Feu pas: {n_cancons} entrades de {artista} al Top {territori_label}. 🚪",
+        "long": "Feu pas. Al Top {territori_label} hi ha {n_cancons} entrades de {artista} aquesta setmana. 🚪",
     },
     {
         "short": "{n_cancons} vegades {artista} al top 🎼",
-        "medium": "{n_cancons} vegades {artista} al Top {territori_label}. Aquí no s'amaguen. 🎼",
-        "long": "{n_cancons} cops {artista} al Top {territori_label} aquesta setmana. Aquí no s'amaguen. 🎼",
+        "medium": "{n_cancons} cops {artista} al Top {territori_label}. Aquí no s'amaga ningú. 🎼",
+        "long": "{n_cancons} cops {artista} al Top {territori_label} aquesta setmana. Aquí no s'amaga ningú. 🎼",
     },
     {
-        "short": "{artista}, x{n_cancons} al top ⚡",
-        "medium": "{artista} multipliquen: {n_cancons} cançons al Top {territori_label}. ⚡",
-        "long": "{artista} multipliquen. {n_cancons} cançons seves comparteixen el Top {territori_label} aquesta setmana. ⚡",
+        "short": "x{n_cancons} per a {artista} al top ⚡",
+        "medium": "Multiplicació: {n_cancons} cançons de {artista} al Top {territori_label}. ⚡",
+        "long": "Multiplicació. {n_cancons} cançons de {artista} comparteixen el Top {territori_label} aquesta setmana. ⚡",
     },
     {
         "short": "Setmana de {artista} · {n_cancons} 🎙️",
@@ -261,34 +281,34 @@ A5_ARTISTA_MULTIPLE = [
         "long": "Setmana de {artista}. {n_cancons} cançons seves fan rotllo al Top {territori_label}. 🎙️",
     },
     {
-        "short": "{artista}, dominadors de {territori_label} 👑",
-        "medium": "{artista}, dominadors de {territori_label}: {n_cancons} cançons al top. 👑",
-        "long": "{artista}, dominadors de {territori_label}. {n_cancons} cançons seves al Top aquesta setmana. 👑",
+        "short": "Domini a {territori_label} · {artista} x{n_cancons} 👑",
+        "medium": "Domini de {artista} a {territori_label}: {n_cancons} cançons al top. 👑",
+        "long": "Domini clar a {territori_label}. {n_cancons} cançons de {artista} al Top aquesta setmana. 👑",
     },
     {
-        "short": "{n_cancons} cançons, un sol nom: {artista} ✨",
+        "short": "{n_cancons} cançons, un sol nom · {artista} ✨",
         "medium": "{n_cancons} cançons, un sol nom al Top {territori_label}: {artista}. ✨",
-        "long": "{n_cancons} cançons, un sol nom. {artista} marquen el Top {territori_label} aquesta setmana amb totes elles. ✨",
+        "long": "{n_cancons} cançons, un sol nom. Al Top {territori_label}, aquesta setmana, només hi ha {artista}. ✨",
     },
     {
-        "short": "Tot {artista}: {n_cancons} cançons 🎶",
-        "medium": "Tot {artista}. {n_cancons} cançons seves al Top {territori_label}. 🎶",
-        "long": "Tot {artista}, tot {artista}. {n_cancons} cançons seves al Top {territori_label} aquesta setmana. 🎶",
+        "short": "Pluja de {artista} · {n_cancons} cançons 🎸",
+        "medium": "Pluja de {artista}. {n_cancons} cançons seves al Top {territori_label}. 🎸",
+        "long": "Pluja de {artista}. {n_cancons} cançons diferents seves passen pel Top {territori_label} aquesta setmana. 🎸",
     },
     {
-        "short": "{artista} colpegen fort · x{n_cancons} 🥊",
-        "medium": "{artista} colpegen fort: {n_cancons} cançons al Top {territori_label}. 🥊",
-        "long": "{artista} colpegen fort. {n_cancons} cançons seves a la llista del Top {territori_label}. 🥊",
+        "short": "Cop fort de {artista} · x{n_cancons} 🥊",
+        "medium": "Cop fort: {n_cancons} cançons de {artista} al Top {territori_label}. 🥊",
+        "long": "Cop fort. {n_cancons} cançons de {artista} apareixen a la llista del Top {territori_label}. 🥊",
     },
     {
-        "short": "{n_cancons} entries de {artista} 📈",
-        "medium": "{artista} amb {n_cancons} entrades simultànies al Top {territori_label}. 📈",
-        "long": "{artista} ocupen {n_cancons} llocs simultanis del Top {territori_label}. Hi pots passejar amb la seva playlist. 📈",
+        "short": "x{n_cancons} entrades de {artista} 📈",
+        "medium": "{n_cancons} entrades simultànies de {artista} al Top {territori_label}. 📈",
+        "long": "{n_cancons} llocs simultanis del Top {territori_label} ocupats per {artista}. Hi pots passejar amb la seva playlist. 📈",
     },
     {
-        "short": "{artista} per tot el top ({n_cancons}) 🌟",
-        "medium": "{artista} apareixen {n_cancons} cops al Top {territori_label}. Setmana brutal. 🌟",
-        "long": "{artista} apareixen {n_cancons} cops al Top {territori_label}. Una setmana brutal per a ells. 🌟",
+        "short": "Setmana brutal per a {artista} · x{n_cancons} 🌟",
+        "medium": "{n_cancons} cops {artista} al Top {territori_label}. Setmana brutal. 🌟",
+        "long": "Setmana brutal per a {artista}. {n_cancons} cançons seves apareixen al Top {territori_label}. 🌟",
     },
 ]
 

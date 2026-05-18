@@ -11,7 +11,6 @@ from social.captions import _artist_label, _setmana_label, utm_url
 from social.narrative.phrases import TERRITORY_HASHTAGS
 from social.narrative.registry import pick_phrase
 
-
 CHANNEL = "bluesky"
 MAX_CHARS = 300
 N_ROWS = 3
@@ -26,17 +25,13 @@ def compose(
     rng=None,
 ) -> dict:
     territori_label = (
-        scenarios[0].data.get("territori_label", territori)
-        if scenarios
-        else territori
+        scenarios[0].data.get("territori_label", territori) if scenarios else territori
     )
     label = _setmana_label(setmana)
 
     hero_text = ""
     if scenarios:
-        _, hero_text = pick_phrase(
-            scenarios[0], "short", territori, CHANNEL, rng=rng
-        )
+        _, hero_text = pick_phrase(scenarios[0], "short", territori, CHANNEL, rng=rng)
     rows: list[str] = []
     for e in entries[:N_ROWS]:
         name = _artist_label(e, use_handle=False)

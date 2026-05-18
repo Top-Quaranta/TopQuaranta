@@ -16,7 +16,6 @@ from social.captions import _artist_label, _setmana_label
 from social.narrative.phrases import TERRITORY_HASHTAGS
 from social.narrative.registry import pick_phrase
 
-
 CHANNEL = "instagram_feed"
 MAX_CHARS = 2200
 
@@ -30,9 +29,7 @@ def compose(
     rng=None,
 ) -> dict:
     territori_label = (
-        scenarios[0].data.get("territori_label", territori)
-        if scenarios
-        else territori
+        scenarios[0].data.get("territori_label", territori) if scenarios else territori
     )
     label = _setmana_label(setmana)
     header_lines = [
@@ -46,9 +43,7 @@ def compose(
             header_lines.append(hero_text)
         if len(scenarios) >= 2:
             secondary = scenarios[1]
-            _, sec_text = pick_phrase(
-                secondary, "medium", territori, CHANNEL, rng=rng
-            )
+            _, sec_text = pick_phrase(secondary, "medium", territori, CHANNEL, rng=rng)
             if sec_text:
                 header_lines.append(sec_text)
     header_lines.append("")

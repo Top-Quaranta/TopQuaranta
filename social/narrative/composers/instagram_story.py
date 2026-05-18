@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from social.narrative.registry import pick_phrase
 
-
 CHANNEL = "instagram_story"
 
 

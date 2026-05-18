@@ -15,17 +15,14 @@ from music.models import Album, Artista, Canco
 from ranking.models import TopSetmanal
 from social.models import NarrativePhraseUsage
 from social.narrative import scenarios as scen
-from social.narrative.composers import (
-    bluesky as c_bluesky,
-    instagram_feed as c_ig_feed,
-    instagram_story as c_ig_story,
-    mastodon as c_mastodon,
-    newsletter as c_newsletter,
-    telegram as c_telegram,
-)
+from social.narrative.composers import bluesky as c_bluesky
+from social.narrative.composers import instagram_feed as c_ig_feed
+from social.narrative.composers import instagram_story as c_ig_story
+from social.narrative.composers import mastodon as c_mastodon
+from social.narrative.composers import newsletter as c_newsletter
+from social.narrative.composers import telegram as c_telegram
 from social.narrative.phrases import PHRASES, TERRITORY_HASHTAGS, phrase_id
 from social.narrative.registry import filter_unused, mark_used, pick_phrase
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -128,7 +125,9 @@ def test_detect_a5_artista_multiple_with_five_cancons():
     a = Artista.objects.create(nom="Maria Jaume", slug="mj", aprovat=True)
     al = Album.objects.create(nom="A", slug="mj-a", artista=a, descartat=False)
     other = Artista.objects.create(nom="Una Altra", slug="ua", aprovat=True)
-    other_al = Album.objects.create(nom="B", slug="ua-b", artista=other, descartat=False)
+    other_al = Album.objects.create(
+        nom="B", slug="ua-b", artista=other, descartat=False
+    )
     setmana = _monday(2026, 5, 11)
 
     for i in range(5):
@@ -162,7 +161,9 @@ def test_detect_all_sorts_by_severity_desc(territory):
     # different canco at #1 last week so a2_streak doesn't fire.
     # We'll seed an alternative #1 for both weeks to force A2.
     streak_artist = Artista.objects.create(nom="Streak Band", slug="sb", aprovat=True)
-    streak_al = Album.objects.create(nom="B", slug="sb-b", artista=streak_artist, descartat=False)
+    streak_al = Album.objects.create(
+        nom="B", slug="sb-b", artista=streak_artist, descartat=False
+    )
     streak_real = _make_canco("Persistent", streak_artist, streak_al, "sb-p")
     _seed_top_row(streak_real, territory, _monday(2026, 5, 4), 1)
     _seed_top_row(streak_real, territory, setmana, 1)
@@ -199,9 +200,9 @@ def test_phrases_short_under_80_chars():
     hard 300 limit downstream."""
     for code, bank in PHRASES.items():
         for i, entry in enumerate(bank):
-            assert len(entry["short"]) <= 80, (
-                f"{code}[{i}].short is {len(entry['short'])} chars"
-            )
+            assert (
+                len(entry["short"]) <= 80
+            ), f"{code}[{i}].short is {len(entry['short'])} chars"
 
 
 def test_phrases_interpolate_without_keyerror():
@@ -237,6 +238,50 @@ def test_phrases_interpolate_without_keyerror():
                     raise AssertionError(
                         f"{code}[{i}].{length} references unknown var: {exc}"
                     )
+
+
+def test_phrases_interpolate_with_diverse_artist_names():
+    """Grammatical-neutrality contract (Fase 4 PR 1.5):
+    every template must produce a clean, non-empty string for a
+    representative set of artist-name shapes — singular feminine,
+    singular masculine, singular-conventional band, plural-marked
+    band, articled band. We can't test grammar mechanically, but
+    we can guarantee that interpolation never leaves dangling
+    placeholders or empties for any of these shapes."""
+    artist_names = [
+        "Maria Jaume",  # singular feminine person
+        "Lluís Llach",  # singular masculine person
+        "Manel",  # singular-conventional band name
+        "Els Catarres",  # plural-marked band
+        "La Fúmiga",  # articled feminine band
+    ]
+    fake_data_by_code = {
+        "a2_streak": {"canco": "Cançó", "streak": 4, "territori_label": "Global"},
+        "a4_debut_alt": {
+            "canco": "Cançó",
+            "posicio": 2,
+            "territori_label": "Catalunya",
+        },
+        "a5_artista_multiple": {
+            "n_cancons": 5,
+            "territori_label": "Illes Balears",
+            "posicions": [1, 2, 3, 4, 5],
+        },
+    }
+    for code, bank in PHRASES.items():
+        base = fake_data_by_code[code]
+        for i, entry in enumerate(bank):
+            for length in ("short", "medium", "long"):
+                for name in artist_names:
+                    out = entry[length].format(artista=name, **base)
+                    assert out.strip(), f"{code}[{i}].{length} empty for {name}"
+                    assert (
+                        "{" not in out
+                    ), f"{code}[{i}].{length} has unfilled var for {name}"
+                    # No accidental apostrophe-elision of `de`.
+                    assert (
+                        "d'" + name not in out
+                    ), f"{code}[{i}].{length} elided `de` before {name}"
 
 
 def test_territory_hashtags_exposed():

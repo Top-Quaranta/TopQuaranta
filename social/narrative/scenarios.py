@@ -67,9 +67,7 @@ def detect_a2_streak(territori: str, setmana: date) -> Optional[Scenario]:
     from ranking.models import TopSetmanal
 
     current = (
-        TopSetmanal.objects.filter(
-            territori=territori, setmana=setmana, posicio=1
-        )
+        TopSetmanal.objects.filter(territori=territori, setmana=setmana, posicio=1)
         .select_related("canco__artista")
         .first()
     )
@@ -118,9 +116,7 @@ def detect_a4_debut_alt(territori: str, setmana: date) -> Optional[Scenario]:
         .values_list("canco_id", flat=True)
     )
     debut = (
-        TopSetmanal.objects.filter(
-            territori=territori, setmana=setmana, posicio__lte=3
-        )
+        TopSetmanal.objects.filter(territori=territori, setmana=setmana, posicio__lte=3)
         .exclude(canco_id__in=last_week_cancos)
         .exclude(canco_id__isnull=True)
         .select_related("canco__artista")
@@ -142,9 +138,7 @@ def detect_a4_debut_alt(territori: str, setmana: date) -> Optional[Scenario]:
     )
 
 
-def detect_a5_artista_multiple(
-    territori: str, setmana: date
-) -> Optional[Scenario]:
+def detect_a5_artista_multiple(territori: str, setmana: date) -> Optional[Scenario]:
     """A5 — An artista has 3+ cançons in this week's top.
 
     Picks the most prolific artista that week (ties broken by

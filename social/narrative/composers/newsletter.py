@@ -13,7 +13,6 @@ from social.captions import _artist_label, _setmana_label, utm_url
 from social.narrative.phrases import TERRITORY_HASHTAGS
 from social.narrative.registry import pick_phrase
 
-
 CHANNEL = "newsletter"
 
 
@@ -26,17 +25,13 @@ def compose(
     rng=None,
 ) -> dict:
     territori_label = (
-        scenarios[0].data.get("territori_label", territori)
-        if scenarios
-        else territori
+        scenarios[0].data.get("territori_label", territori) if scenarios else territori
     )
     label = _setmana_label(setmana)
 
     parts: list[str] = [f"Top {territori_label} · {label}"]
     if scenarios:
-        _, hero_text = pick_phrase(
-            scenarios[0], "long", territori, CHANNEL, rng=rng
-        )
+        _, hero_text = pick_phrase(scenarios[0], "long", territori, CHANNEL, rng=rng)
         if hero_text:
             parts.append("")
             parts.append(hero_text)

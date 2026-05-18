@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from social.narrative.utils import _split_article, with_preposition
 
-
 # ── articles + de ─────────────────────────────────────────────────
 
 

@@ -40,11 +40,15 @@ Modes:
 
 from __future__ import annotations
 
+import logging
+
 from django.core.management.base import BaseCommand
 
 from music.audit import log_staff_action
 from music.mb_sync import _is_inconclusive_country, _looks_ppcc
 from music.models import Artista, StaffAuditLog
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -135,7 +139,17 @@ class Command(BaseCommand):
                         original_reason=area,
                     )
                 except Exception:
-                    pass
+                    # E2 (B-1): audit-log writes are subsidiary —
+                    # the restore itself already succeeded, but
+                    # silently swallowing made post-mortem hard.
+                    # Log + carry on; this is a one-shot manual
+                    # command, no need to propagate.
+                    logger.warning(
+                        "audit log_staff_action failed for artista pk=%s nom=%r",
+                        a.pk,
+                        a.nom,
+                        exc_info=True,
+                    )
             restored += 1
 
         self.stdout.write("")

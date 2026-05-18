@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import time
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 
 from ingesta.clients import deezer
@@ -119,3 +119,14 @@ class Command(BaseCommand):
                 f"Done. {verb}={ok}, unmatched={unmatched}, errors={errors}"
             )
         )
+
+        # E2 (C-5, 2026-05-19): one-shot command, no cron, but the
+        # same 50% threshold protects against running this against
+        # a broken Deezer integration silently. The `errors` counter
+        # is incremented on every Deezer HTTP failure above.
+        processed = ok + unmatched + errors
+        if processed > 0 and errors / processed > 0.5:
+            raise CommandError(
+                f"Backfill: {errors}/{processed} albums failed "
+                f"(>50% threshold). See logs for per-album errors."
+            )

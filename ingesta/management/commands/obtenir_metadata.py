@@ -153,6 +153,19 @@ class Command(BaseCommand):
             )
         )
 
+        # E2 (C-4, 2026-05-19): if more than 50% of the iteration
+        # failed the cron is in real trouble (Deezer API outage,
+        # schema change, auth revoked). Propagate so `tq-run` sees a
+        # non-zero exit and `tq-health` flags the cron as failing.
+        # Below the threshold the per-artist `logger.error` plus the
+        # counter in the summary above are the visible signal.
+        processed = artists_ok + artists_not_found + artists_err
+        if processed > 0 and artists_err / processed > 0.5:
+            raise CommandError(
+                f"Metadata sync: {artists_err}/{processed} artists failed "
+                f"(>50% threshold). See logs for per-artist errors."
+            )
+
     def _process_artist(
         self,
         artista: Artista,

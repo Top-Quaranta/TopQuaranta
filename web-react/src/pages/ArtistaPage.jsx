@@ -13,6 +13,7 @@ import { Link, useParams } from 'react-router-dom'
 import { SeoHead } from '../lib/seoHead'
 import Alert from '../components/ui/Alert'
 import { albumUrl, cancoUrl } from '../lib/urls'
+import { deezerImg } from '../lib/img'
 import FeedbackButton from '../components/FeedbackButton'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
@@ -74,7 +75,7 @@ export default function ArtistaPage() {
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.imatge_url ? (
           <img
-            src={data.imatge_url}
+            src={deezerImg(data.imatge_url, 500)}
             alt=""
             className="w-full sm:w-48 h-48 object-cover rounded-md shrink-0"
           />
@@ -193,7 +194,7 @@ export default function ArtistaPage() {
                 >
                   {a.imatge_url ? (
                     <img
-                      src={a.imatge_url}
+                      src={deezerImg(a.imatge_url, 500)}
                       alt=""
                       className="aspect-square w-full object-cover rounded-md"
                     />
@@ -228,7 +229,7 @@ export default function ArtistaPage() {
                 >
                   {c.imatge_url ? (
                     <img
-                      src={c.imatge_url}
+                      src={deezerImg(c.imatge_url, 500)}
                       alt=""
                       loading="lazy"
                       className="aspect-square w-full object-cover rounded-md"

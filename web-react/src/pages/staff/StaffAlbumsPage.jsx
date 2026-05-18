@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { deezerImg } from '../../lib/img'
 import {
   EmptyState,
   Input,
@@ -117,7 +118,7 @@ export default function StaffAlbumsPage() {
                 <Td className="w-16">
                   {a.imatge_url ? (
                     <img
-                      src={a.imatge_url}
+                      src={deezerImg(a.imatge_url, 120)}
                       alt=""
                       className="w-12 h-12 rounded object-cover"
                     />

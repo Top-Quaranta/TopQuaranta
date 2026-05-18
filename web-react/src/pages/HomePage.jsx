@@ -30,6 +30,7 @@ import {
   TERR_COLORS, TERRITORI_NOM, FOCUS_TERRITORIS,
 } from '../components/editorial'
 import { albumUrl, artistaUrl, cancoUrl } from '../lib/urls'
+import { deezerImg } from '../lib/img'
 import { SeoHead } from '../lib/seoHead'
 
 /* ── Section 1 · Hero ──────────────────────────────────────────────── */
@@ -162,7 +163,7 @@ function TopRow({ e }) {
         </span>
         {e.album?.imatge_url ? (
           <img
-            src={e.album.imatge_url}
+            src={deezerImg(e.album.imatge_url, 120)}
             alt=""
             loading="lazy"
             className="w-10 h-10 rounded object-cover shrink-0"
@@ -226,7 +227,7 @@ function CancoDestacadaCard() {
       </p>
       {e.album?.imatge_url ? (
         <img
-          src={e.album.imatge_url}
+          src={deezerImg(e.album.imatge_url, 500)}
           alt=""
           className="w-full aspect-square object-cover rounded-md"
         />
@@ -291,7 +292,7 @@ function LlancamentsGrid() {
           >
             {a.imatge_url ? (
               <img
-                src={a.imatge_url}
+                src={deezerImg(a.imatge_url, 500)}
                 alt=""
                 loading="lazy"
                 className="aspect-square w-full object-cover rounded-md group-hover:scale-[1.02] transition-transform"
@@ -332,7 +333,7 @@ function DescobertaColumn() {
               className="block group"
             >
               <img
-                src={a.imatge_url}
+                src={deezerImg(a.imatge_url, 500)}
                 alt=""
                 loading="lazy"
                 className="aspect-square w-full object-cover rounded-md group-hover:scale-[1.02] transition-transform"

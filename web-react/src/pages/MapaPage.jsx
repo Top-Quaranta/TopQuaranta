@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Section } from '../components/editorial'
 import { SeoHead } from '../lib/seoHead'
+import { deezerImg } from '../lib/img'
 import useApi from '../hooks/useApi'
 
 const TERRITORI_NOM = {
@@ -522,7 +523,7 @@ export default function MapaPage() {
                       <div className="aspect-square rounded overflow-hidden bg-tq-ink/5 relative">
                         {a.imatge_url ? (
                           <img
-                            src={a.imatge_url}
+                            src={deezerImg(a.imatge_url, 250)}
                             alt=""
                             loading="lazy"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"

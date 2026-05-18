@@ -21,6 +21,7 @@ import {
 import FilterPanel from '../components/staff/FilterPanel'
 import { Field, Select } from '../components/staff/StaffTable'
 import { SeoHead } from '../lib/seoHead'
+import { deezerImg } from '../lib/img'
 
 const TERRITORIS = [
   ['',    'Tots els territoris'],
@@ -61,7 +62,7 @@ function ArtistaCard({ a }) {
     >
       <div className="aspect-square relative" style={{ backgroundColor: 'var(--mm-color-gray-100)' }}>
         {a.imatge_url ? (
-          <img src={a.imatge_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+          <img src={deezerImg(a.imatge_url, 500)} alt="" className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <div
             className="w-full h-full flex items-center justify-center font-display font-bold text-4xl text-white"

@@ -363,6 +363,41 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Sprint — Fase 4 PR 1: motor narratiu social (library) ✅ (2026-05-18)
+
+Auditoria narrativa del 2026-05-18 va detectar el core 5-patrons
+"sempre fires" als tops setmanals (A1/A2, A4, A5, A6, A7) i el banc
+mínim per a copy variat sense repetir-se.
+
+Aquest PR és **library work, sense integració**: el paquet és
+consumit per tests unitaris, no per `publicar_social.py` ni
+`captions.py` encara.
+
+* **`social/narrative/scenarios.py`**: 3 detectors universals sobre
+  `TopSetmanal` — A2 (streak al #1), A4 (debut a ≤#3), A5 (artista
+  amb 3+ cançons). Retornen `Scenario(code, severity, data)`.
+
+* **`social/narrative/phrases.py`**: 45 plantilles (15 per escenari)
+  × 3 longituds (short/medium/long). En català, colloquial, 1-2
+  emojis. Plus `TERRITORY_HASHTAGS` per territori.
+
+* **`social/narrative/registry.py`**: anti-repetició backed by
+  nou model `social.NarrativePhraseUsage` (migration 0006). Filter
+  per channel + territori en finestra de N setmanes. Fallback a la
+  llista completa si tot exhaurit (post mai bloquejat).
+
+* **`social/narrative/composers/`**: un fitxer per xarxa amb la
+  signature comuna `compose(scenarios, entries, *, territori,
+  setmana, rng=None) -> {text, hashtags, cta}`. Cada un aplica el
+  seu pressupost de chars i la convenció de menció (`@handle` només
+  a Instagram).
+
+* **17 tests** a `social/tests/test_narrative.py` cobrint: detectors
+  amb fixtures realistes (La Fúmiga 4 setmanes, Maria Jaume 5
+  cançons), invariants del banc (3 longituds, interpolació sense
+  KeyError), pressupostos de chars per composer, registry cycle
+  (mark/filter/exhaustion/aïllament).
+
 ### Sprint — Quick Win: Deezer image sizing per slot ✅ (2026-05-18)
 
 Resposta al PSI report del 2026-05-16: LCP 5.4 s amb 4.2 MiB

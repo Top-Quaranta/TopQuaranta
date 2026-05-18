@@ -167,19 +167,23 @@ def analytics_summary(request: Request) -> Response:
     ]
 
     # ── territoris: latest snapshot only (gauge, not series) ──────
-    territoris_rows = (
+    # Python-side dedup because `DISTINCT ON` is Postgres-only and
+    # the test backend is SQLite. Same pattern as `latest_per_pm`
+    # below. N is small (≤ 10 territoris) so the full scan is fine.
+    latest_per_codi: dict[str, dict] = {}
+    for r in (
         MetricaPipeline.objects.filter(clau="cancons_per_territori")
-        .order_by("dimensio_1", "-data")
-        .distinct("dimensio_1")
+        .order_by("-data")
         .values("dimensio_1", "valor_int", "data")
-    )
+    ):
+        latest_per_codi.setdefault(r["dimensio_1"], r)
     territoris = [
         {
             "codi": r["dimensio_1"],
             "valor": r["valor_int"],
             "data": r["data"].isoformat(),
         }
-        for r in territoris_rows
+        for r in latest_per_codi.values()
     ]
 
     # ── social engagement ── (K2) ─────────────────────────────────

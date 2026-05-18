@@ -112,19 +112,54 @@ def _artist_label(entry: dict, *, use_handle: bool) -> str:
 
     `use_handle=True` (Instagram path): try the artist's Instagram
     handle so the caption autolinks and notifies them. Falls back to
-    the plain name if no handle is stored.
+    the plain name if no handle is stored. We only autolink the
+    main artist — collaborators don't have their handles stored.
 
-    `use_handle=False` (Mastodon, Bluesky, Telegram, Newsletter): use
-    the plain name. The `@handle` is Instagram-specific and would
-    show up as broken-looking literal text on every other network
-    (mention syntax differs by platform, and we don't store handles
-    per network). Decision 2026-05-16.
+    `use_handle=False` (Mastodon, Bluesky, Telegram, Newsletter): the
+    plain comma-joined list of the main artist + collaborators. The
+    `@handle` is Instagram-specific and would show up as broken-looking
+    literal text on every other network (mention syntax differs by
+    platform, and we don't store handles per network). Decision
+    2026-05-16 + Tasca B2 2026-05-18: collaborators added to the
+    plain-name surfaces via `artistes_noms`.
     """
     if use_handle:
         u = instagram_username(entry.get("artista_instagram_url"))
         if u:
             return f"@{u}"
-    return entry.get("artista_nom") or "—"
+    names = entry.get("artistes_noms") or [entry.get("artista_nom") or "—"]
+    return _join_artists_text(names, max_chars=80)
+
+
+def _join_artists_text(names: list[str], *, max_chars: int = 80) -> str:
+    """Comma-join a list of artist names for plain-text surfaces.
+
+    Same shape semantics as the renderer's `_join_artists` but
+    measured in characters rather than pixels — used by Mastodon /
+    Bluesky / Telegram / Newsletter row listings where the constraint
+    is the channel char budget, not a pixel slot. Drops trailing
+    names one at a time and appends `…` after the last fitting name;
+    falls back to char-level truncation of the first name only as a
+    last resort.
+    """
+    if not names:
+        return "—"
+    full = ", ".join(names)
+    if len(full) <= max_chars:
+        return full
+    for i in range(len(names) - 1, 0, -1):
+        candidate = ", ".join(names[:i]) + "…"
+        if len(candidate) <= max_chars:
+            return candidate
+    # Only the main artist still doesn't fit — char-truncate the
+    # main name itself with an ellipsis. Take max_chars-1 chars of
+    # the name + 1 char for the ellipsis. If max_chars < 2 we can't
+    # even fit the ellipsis; return a bare prefix as a degenerate
+    # safety net.
+    first = names[0]
+    if max_chars >= 2:
+        return first[: max_chars - 1] + "…"
+    return first[:max_chars]
 
 
 def _hashtags(territori: str) -> str:
@@ -490,9 +525,14 @@ def _alt_top_list(
     )
     rows = []
     for e in chunk:
+        # Tasca B2: include collaborators in alt-text so a screen-
+        # reader user hears the same artist list a sighted user sees
+        # on the painted slide. 100-char budget per row is generous
+        # — alt-text isn't pixel-bounded.
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artists = _join_artists_text(names, max_chars=100)
         rows.append(
-            f"{e.get('posicio', '?')} {e.get('canco_nom', '—')} "
-            f"de {e.get('artista_nom', '—')}"
+            f"{e.get('posicio', '?')} {e.get('canco_nom', '—')} " f"de {artists}"
         )
     return head + ", ".join(rows) + "."
 

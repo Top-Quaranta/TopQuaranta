@@ -30,7 +30,17 @@
       visible in every row).
     {% endcomment %}
     <strong style="color:#facc15;">{% if e.canco_nom %}{{ e.canco_nom }}{% else %}{{ e.nom }}{% endif %}</strong>
-    <span style="color:#9ca3af;"> — {{ e.artista_nom }}</span>
+    {% comment %}
+      Tasca B2: show collaborators alongside the main artist when
+      present. `e.artistes_display` is precomputed by the sender
+      (`comptes/newsletter.py`) so the template doesn't truncate
+      or comma-join itself. Falls back to the legacy single-artist
+      string for callers that haven't been updated. Multi-line
+      template comments MUST use `{% comment %}` — `{# #}` is
+      single-line only and leaks into the rendered output (caught
+      2026-05-09).
+    {% endcomment %}
+    <span style="color:#9ca3af;"> — {{ e.artistes_display|default:e.artista_nom }}</span>
   </li>
   {% endfor %}
 </ol>

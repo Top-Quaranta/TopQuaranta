@@ -93,6 +93,39 @@ class SocialPost(models.Model):
         return f"{self.platform} · {self.tipus}{ter} · {self.setmana} ({self.status})"
 
 
+class NarrativePhraseUsage(models.Model):
+    """Anti-repetition ledger for the narrative engine (Fase 4 PR 1).
+
+    Each row records that a given templated phrase was used on a
+    given (channel, territori, setmana). The composer queries this
+    table to filter out phrases used in the last N weeks for the
+    same channel + territori, so the same opener doesn't appear two
+    Saturdays in a row on Mastodon CAT, for example.
+
+    `phrase_id` is the deterministic key built by `phrases.phrase_id()`
+    from (scenario_code, index, length) — short string, no FK.
+    Keeping it as a plain CharField (rather than a FK to a Phrase
+    table) lets us edit the phrase bank freely without DB migrations.
+    """
+
+    phrase_id = models.CharField(max_length=80, db_index=True)
+    territori = models.CharField(max_length=4)
+    setmana = models.DateField()
+    channel = models.CharField(max_length=20)
+    used_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ús de frase narrativa"
+        verbose_name_plural = "Usos de frases narratives"
+        indexes = [
+            models.Index(fields=["channel", "territori", "-setmana"]),
+        ]
+        ordering = ["-used_at"]
+
+    def __str__(self) -> str:
+        return f"{self.phrase_id} · {self.channel} · {self.territori} · {self.setmana}"
+
+
 class InstagramAuth(models.Model):
     """Singleton holding the live Instagram credentials.
 

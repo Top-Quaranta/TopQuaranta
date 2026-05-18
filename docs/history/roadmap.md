@@ -363,6 +363,33 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Sprint — Quick Win: Deezer image sizing per slot ✅ (2026-05-18)
+
+Resposta al PSI report del 2026-05-16: LCP 5.4 s amb 4.2 MiB
+d'imatges Deezer 1000×1000 servides a slots de 40×40 i 176×176.
+
+* **`web-react/src/lib/img.js::deezerImg(url, size)`**: utility
+  pura que reescriu el segment `WxH` de l'URL del CDN Deezer al
+  moment de consum. Pass-through per a URLs no-Deezer, null, o
+  empty. Cap canvi al backend ni al model — `Album.imatge_url`
+  segueix sent l'URL canònica 1000×1000.
+
+* **Verificació empírica del CDN**: Deezer accepta arbitrari
+  `WxH` fins a ~1400 (sizes 56, 80, 120, 250, 500, 1000, 1400
+  retornen 200; 2000 retorna 403). Decisió: usar 120 / 250 / 500
+  / 1000 segons slot.
+
+* **14 slots tocats** a HomePage, TopPage, ArtistaPage, AlbumPage,
+  CancoPage, ArtistesPage, MapaPage, StaffAlbumsPage,
+  AlbumEditPage. Renderer social (1080×1080 IG feed,
+  1080×1920 stories) **manté 1000** — té sentit a aquesta mida.
+
+* **Tests**: `web-react/src/lib/img.test.js` (5 tests vitest) bloca
+  el contracte: rewrite del segment, pass-through, defaults.
+
+* **Estalvi estimat**: ≈4 MiB per pàgina pública (LCP/payload
+  primer cop). PSI re-corregut post-deploy.
+
 ### Sprint — Fase 2: vista d'artistes sense Instagram ✅ (2026-05-18)
 
 Pàgina staff dedicada per a omplir manualment `Artista.instagram_url`

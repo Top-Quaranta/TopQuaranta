@@ -16,6 +16,7 @@ import { useSearchParams, Link } from 'react-router-dom'
 import Alert from '../components/ui/Alert'
 import useApi from '../hooks/useApi'
 import { cancoUrl } from '../lib/urls'
+import { deezerImg } from '../lib/img'
 import MmIcon from '../components/MmIcon'
 import { TrendCue, TERRITORI_NOM } from '../components/editorial'
 import { fmtDataLlarga } from '../lib/format'
@@ -68,7 +69,7 @@ function TopRow({ e }) {
         </span>
         {e.album?.imatge_url ? (
           <img
-            src={e.album.imatge_url}
+            src={deezerImg(e.album.imatge_url, 120)}
             alt=""
             loading="lazy"
             className="w-12 h-12 rounded object-cover shrink-0"

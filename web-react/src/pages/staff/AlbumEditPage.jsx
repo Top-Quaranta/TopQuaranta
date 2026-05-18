@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { deezerImg } from '../../lib/img'
 import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'
 import {
   Btn,
@@ -122,7 +123,7 @@ export default function AlbumEditPage() {
               Descartat
             </label>
             {a.imatge_url && (
-              <img src={a.imatge_url} alt="" className="mt-2 w-32 h-32 rounded object-cover" />
+              <img src={deezerImg(a.imatge_url, 250)} alt="" className="mt-2 w-32 h-32 rounded object-cover" />
             )}
           </div>
         </TableCard>

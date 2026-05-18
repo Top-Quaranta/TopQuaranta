@@ -538,12 +538,23 @@ def _alt_top_list(
 
 
 def _alt_album_slide(item: dict) -> str:
-    return f"Nou àlbum: «{item.get('nom', '—')}» de {item.get('artista_nom', '—')}"
+    # Tasca C (2026-05-18): article-stripping for Catalan
+    # contractions on artist names with leading articles
+    # ("Els Catarres" → "dels Catarres").
+    from social.narrative.utils import with_preposition
+
+    artist = item.get("artista_nom", "—")
+    return f"Nou àlbum: «{item.get('nom', '—')}» {with_preposition(artist, 'de')}"
 
 
 def _alt_singles_slide(chunk: list[dict], start_idx: int, end_idx: int) -> str:
+    from social.narrative.utils import with_preposition
+
     head = f"Nous singles {start_idx} a {end_idx}: "
-    rows = [f"«{e.get('nom', '—')}» de {e.get('artista_nom', '—')}" for e in chunk]
+    rows = [
+        f"«{e.get('nom', '—')}» {with_preposition(e.get('artista_nom', '—'), 'de')}"
+        for e in chunk
+    ]
     return head + ", ".join(rows) + "."
 
 

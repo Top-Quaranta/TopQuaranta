@@ -17,7 +17,7 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
-from social.narrative.utils import apostrof_de, territori_label
+from social.narrative.utils import apostrof_de, territori_label, with_preposition
 
 # ── Data class ─────────────────────────────────────────────────────
 
@@ -77,10 +77,18 @@ def _row_data(row, territori: str) -> tuple[str, str]:
 
 
 def _base_data(artista: str, canco: str, territori: str) -> dict:
-    """The four invariants every hero template can interpolate."""
+    """The four (now six) invariants every hero template can
+    interpolate. The pre-rendered preposition+artist variants
+    (`de_artista`, `per_a_artista`, `per_artista`) collapse the
+    Catalan contraction rules (article-stripping + apostrof
+    elision) at compose-time so templates can just write
+    `{de_artista}`, `{per_a_artista}` etc. without string
+    surgery. See `social/narrative/utils.with_preposition`."""
     return {
         "artista": artista,
-        "de_artista": apostrof_de(artista),
+        "de_artista": with_preposition(artista, "de"),
+        "per_a_artista": with_preposition(artista, "per_a"),
+        "per_artista": with_preposition(artista, "per"),
         "canco": canco,
         "territori_label": territori_label(territori),
     }

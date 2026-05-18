@@ -100,6 +100,33 @@ if ! run "$APP_DIR/bin/tq-sync-infra"; then
     exit 5
 fi
 
+# Sync the venv against requirements.txt when the file changed.
+# Caught 2026-05-18: Dependabot PRs (#32-#37) merged the version
+# bumps to the spec but `tq-deploy` never ran `pip install`, so the
+# venv stayed pinned at the old versions (gunicorn 25.3.0 vs 26.0.0,
+# torch 2.11 vs 2.12, google-auth 2.50 vs 2.53). Now we run pip on
+# any change to `requirements.txt` and force a `restart` (not just
+# `reload`) so native libs and gunicorn itself pick up the new
+# wheels. `--extra-index-url` is read from the file's directives.
+NEEDS_RESTART=0
+echo
+if [ "$PRE_HEAD" != "$POST_HEAD" ] \
+    && git diff --name-only "$PRE_HEAD" "$POST_HEAD" | grep -qE '^requirements\.txt$'; then
+    echo "→ requirements.txt changed — syncing venv"
+    if [ ! -x "$APP_DIR/.venv/bin/pip" ]; then
+        echo "  ✗ venv not found at $APP_DIR/.venv — aborting"
+        exit 6
+    fi
+    if ! run "$APP_DIR/.venv/bin/pip" install -r requirements.txt --quiet; then
+        echo "  ✗ pip install failed — aborting before restart"
+        exit 6
+    fi
+    echo "  ✓ venv up to date"
+    NEEDS_RESTART=1
+else
+    echo "→ requirements.txt untouched — skip pip install"
+fi
+
 echo
 echo "→ Check pending migrations"
 if "$PY" -m django migrate --check --settings=$SETTINGS >/dev/null 2>&1; then
@@ -127,10 +154,24 @@ if [ "$SKIP_BUILD" = "0" ] && [ "$PRE_HEAD" != "$POST_HEAD" ]; then
 fi
 
 echo
-echo "→ systemctl reload topquaranta-web (via sudo)"
-if ! run sudo systemctl reload topquaranta-web; then
-    echo "  ✗ reload failed"
-    exit 3
+# Use `restart` (full process bounce) when the venv changed, since
+# gunicorn keeps native libs loaded across HUP reloads. Otherwise
+# stick with the gentler `reload` (HUP — graceful worker swap, no
+# downtime window) for plain code changes.
+if [ "$NEEDS_RESTART" = "1" ]; then
+    echo "→ systemctl restart topquaranta-web (via sudo) — venv changed"
+    if ! run sudo systemctl restart topquaranta-web; then
+        echo "  ✗ restart failed"
+        exit 3
+    fi
+    # Give gunicorn a moment to bind before smoke-testing.
+    sleep 2
+else
+    echo "→ systemctl reload topquaranta-web (via sudo)"
+    if ! run sudo systemctl reload topquaranta-web; then
+        echo "  ✗ reload failed"
+        exit 3
+    fi
 fi
 
 echo

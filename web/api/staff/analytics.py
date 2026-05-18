@@ -123,14 +123,34 @@ def analytics_summary(request: Request) -> Response:
     ]
 
     # ── social publications by channel ────────────────────────────
+    # Bug 1 of Fase 3 (2026-05-18): the counter used to derive from
+    # `MetricaEsdeveniment(clau="social_publicat")`, an append-only
+    # counter that depended on every publication path remembering to
+    # call `analytics.events.register()`. Two failure modes hit us:
+    # (a) publications predating the register() call were never
+    # counted; (b) story-sets over-counted N×slides (fixed at PR #31).
+    # SocialPost is the canonical idempotent source — one row per
+    # slot, `status=publicat` only when the publish actually went
+    # out. Counting from it gives the right answer by construction.
+    # We filter by `setmana` (the natural grouping unit) and convert
+    # the `days=N` window into "weeks whose Monday is within the
+    # window" by taking the Monday of `since`.
+    from django.db.models import Count
+
+    from social.models import SocialPost
+
+    since_week = since - datetime.timedelta(days=since.weekday())
     social_rows = list(
-        MetricaEsdeveniment.objects.filter(data__gte=since, clau="social_publicat")
-        .values("dimensio_1", "dimensio_2")
-        .annotate(total=Sum("comptador"))
+        SocialPost.objects.filter(
+            status=SocialPost.STATUS_PUBLICAT,
+            setmana__gte=since_week,
+        )
+        .values("platform", "tipus")
+        .annotate(total=Count("id"))
         .order_by("-total")
     )
     social = [
-        {"channel": r["dimensio_1"], "tipus": r["dimensio_2"], "total": r["total"]}
+        {"channel": r["platform"], "tipus": r["tipus"], "total": r["total"]}
         for r in social_rows
     ]
 

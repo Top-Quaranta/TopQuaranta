@@ -40,11 +40,21 @@ CHANNEL = "newsletter"
 
 def _list_part(entries) -> str:
     """Plain-text numbered listing of all entries (fallback for the
-    text/plain MIME alternative)."""
+    text/plain MIME alternative).
+
+    Tasca B2: surface collaborators alongside the main artist via
+    `_join_artists_text` (whole-name drops, ellipsis at the last
+    fitting name). 80-char budget keeps the line readable in mono
+    text viewers while still fitting "Main, Col1, Col2" for the
+    common case."""
+    from social.captions import _join_artists_text
+
     rows = []
     for e in entries:
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist_text = _join_artists_text(names, max_chars=80)
         rows.append(
-            f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {e.get('artista_nom', '—')}"
+            f"{e.get('posicio', '?')}. {e.get('canco_nom', '—')} · {artist_text}"
         )
     return "\n".join(rows)
 

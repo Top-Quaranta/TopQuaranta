@@ -69,6 +69,181 @@ def _truncate(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str
     return text + "…" if text else "…"
 
 
+def _pack_greedy_line(
+    draw: ImageDraw.ImageDraw, names: list[str], font, max_width: int
+) -> tuple[list[str], list[str]]:
+    """Pack as many names as fit on a single line; return the
+    packed prefix and the remaining tail.
+
+    Incremental O(N): each candidate measure is one extra name
+    on top of the previous packed list. Returns whole names only;
+    callers handle ellipsis and pathological cases."""
+    packed: list[str] = []
+    remaining = list(names)
+    while remaining:
+        candidate = ", ".join(packed + [remaining[0]])
+        if draw.textlength(candidate, font=font) <= max_width:
+            packed.append(remaining.pop(0))
+        else:
+            break
+    return packed, remaining
+
+
+def _try_extend_line1_with_word_wrap(
+    draw: ImageDraw.ImageDraw,
+    line1_text: str,
+    first_rest_name: str,
+    font,
+    max_width: int,
+) -> tuple[str, str | None]:
+    """Try to extend `line1_text` with leading words of
+    `first_rest_name`. Returns `(extended_line1, line2_lead)` when
+    a non-trivial prefix fits, or `(line1_text, None)` when the
+    name is single-word or even its first word doesn't fit.
+
+    Greedy on words: tries the longest word-prefix first, drops one
+    word at a time. The remaining suffix becomes the lead of line 2
+    (without a comma — the suffix continues the broken name, the
+    comma comes after).
+
+    Tasca B5 (2026-05-18): introduced to make line 1 fuller when the
+    next whole name overflows by more than its first word costs.
+    Example: La Gent's "Arde Bogotá" (260 px including ", ") doesn't
+    fit line 1's 220-px tail, but ", Arde" (~115 px) does — we
+    break the name, line 2 then leads with "Bogotá, …"."""
+    words = first_rest_name.split(" ")
+    if len(words) < 2:
+        return line1_text, None
+    for k in range(len(words) - 1, 0, -1):
+        prefix = " ".join(words[:k])
+        candidate = line1_text + ", " + prefix
+        if draw.textlength(candidate, font=font) <= max_width:
+            line2_lead = " ".join(words[k:])
+            return candidate, line2_lead
+    return line1_text, None
+
+
+def _join_artists(
+    draw: ImageDraw.ImageDraw,
+    names: list[str],
+    font,
+    max_width: int,
+    *,
+    max_lines: int = 1,
+) -> str:
+    """Comma-join an artist list with whole-name truncation.
+
+    Single-line (`max_lines=1`, default): tries the full list first;
+    if it doesn't fit, drops names from the tail one at a time and
+    appends `…` after the last name that does fit. Falls back to
+    char-level truncation only when the main artist alone is wider
+    than the slot.
+
+    Multi-line (`max_lines=2`, story surface): same single-line
+    attempt first — if the full list fits on one line we keep it
+    that way (we don't force a split when there's room). Otherwise
+    two greedy passes via `_pack_greedy_line`: line 1 holds as
+    many names as fit, line 2 continues with the rest. If even
+    line 2's whole-name pack still leaves a tail, drop names from
+    line 2's tail and append `…`. Returns a string with one
+    embedded `\\n`; the caller paints each line separately.
+
+    The pathological "first name doesn't fit on any line" case
+    falls through to `_truncate` (single line with char-level
+    ellipsis) regardless of `max_lines` — splitting a single name
+    across two lines is uglier than truncating it.
+
+    Tasca B4 (2026-05-18): refactored to use `_pack_greedy_line`
+    for O(N) instead of the prior O(N²) repeated-join measure.
+    Visual behaviour is unchanged — the packing was already
+    greedy-maximal; the empirical asymmetry between La Gent
+    (31/30 chars) and Ai Mareta (43 chars on one line) comes from
+    per-character width variance, not from a balancing pass that
+    isn't there."""
+    if not names:
+        return "—"
+    full = ", ".join(names)
+    if draw.textlength(full, font=font) <= max_width:
+        return full
+
+    if max_lines <= 1:
+        # Drop one name at a time from the end; append "…" after the
+        # last fitting name. The ellipsis itself signals omission, so
+        # no comma between the last name and the "…".
+        for i in range(len(names) - 1, 0, -1):
+            candidate = ", ".join(names[:i]) + "…"
+            if draw.textlength(candidate, font=font) <= max_width:
+                return candidate
+        return _truncate(draw, names[0], font, max_width)
+
+    # Two-line greedy pack.
+    line1, rest = _pack_greedy_line(draw, names, font, max_width)
+    if not rest:
+        # All fit on line 1 — fast path. (We already covered the
+        # full-list-fits case above; this is the defensive return.)
+        return ", ".join(line1)
+    if not line1:
+        # First name alone is wider than the slot — single-line
+        # char-truncate.
+        return _truncate(draw, names[0], font, max_width)
+
+    # Tasca B5: opportunistic word-wrap. If line 1 has room for
+    # leading words of the first leftover name (multi-word names
+    # only — "Arde Bogotá" splits, "OBESES" doesn't), break the
+    # name so line 1 is fuller and line 2 leads with the remaining
+    # words (no leading comma — the suffix continues the broken
+    # name).
+    #
+    # Opportunistic, not forced: if the whole rest fits on line 2
+    # without splitting anyone, don't word-wrap — clean whole-name
+    # rendering is preferred when it's available.
+    line1_text = ", ".join(line1)
+    line2_lead = None
+    rest_fits_whole = (
+        draw.textlength(", ".join(rest), font=font) <= max_width if rest else True
+    )
+    if rest and not rest_fits_whole:
+        line1_text, line2_lead = _try_extend_line1_with_word_wrap(
+            draw, line1_text, rest[0], font, max_width
+        )
+        if line2_lead is not None:
+            # First rest name was consumed (partially); shift to next.
+            rest = rest[1:]
+
+    # Line 2 greedy on the remaining whole names. If we have a
+    # `line2_lead`, the available width for the rest of line 2 is
+    # reduced by the lead's pixel cost (plus a ", " for the next
+    # name's separator). We pack into the slot by pre-seeding
+    # `packed` with the lead.
+    if line2_lead is None:
+        line2, tail = _pack_greedy_line(draw, rest, font, max_width)
+        line2_joined = ", ".join(line2)
+    else:
+        # Pack greedily starting from `line2_lead`.
+        line2 = [line2_lead]
+        remaining = list(rest)
+        while remaining:
+            candidate = ", ".join(line2 + [remaining[0]])
+            if draw.textlength(candidate, font=font) <= max_width:
+                line2.append(remaining.pop(0))
+            else:
+                break
+        tail = remaining
+        line2_joined = ", ".join(line2)
+
+    if not tail:
+        return line1_text + "\n" + line2_joined
+    # Line 2 has a tail — drop names from line 2 and append "…".
+    for i in range(len(line2), 0, -1):
+        candidate = ", ".join(line2[:i]) + "…"
+        if draw.textlength(candidate, font=font) <= max_width:
+            return line1_text + "\n" + candidate
+    # Even line 2's first name doesn't fit with an ellipsis —
+    # char-truncate that name on its own line.
+    fallback_name = line2[0] if line2 else rest[0]
+    return line1_text + "\n" + _truncate(draw, fallback_name, font, max_width)
+
+
 def _wrap_two_lines(draw, text: str, font, max_width: int) -> list[str]:
     """Break into at most 2 lines; truncate the second with an ellipsis."""
     words = text.split()
@@ -516,7 +691,13 @@ def _feed_list_slide(
         text_x = 240
         text_w = (FEED_W - 60 - 80 - 20) - text_x
         song = _truncate(d, e["canco_nom"], f_song, text_w)
-        artist = _truncate(d, e["artista_nom"], f_artist, text_w)
+        # `artistes_noms` is the canonical list (main first +
+        # collabs in insertion order). Fall back to the legacy
+        # `artista_nom` single-string field for payload callers
+        # that still build the old shape — keeps tests using
+        # synthetic fixtures green.
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist = _join_artists(d, names, f_artist, text_w)
         # Tight top padding (y+0) for the 40-pt song title; artist
         # drops to y+54 so it doesn't kiss the title's descenders.
         d.text((text_x, y), song, font=f_song, fill=colors.COLOR_WHITE)
@@ -1011,43 +1192,90 @@ def _story_canco(territori: str, e: dict) -> Image.Image:
     cover_r = _rounded(cover, 24)
     img.paste(cover_r, (cx + (card_w - 750) // 2, cy + 60), cover_r)
 
-    # TOP N
-    pos_text = f"TOP {e['posicio']}"
+    # ── Text block layout (Tasca B3) ───────────────────────────────
+    # Pre-2026-05-18 the three text rows (TOP N, title, artist) were
+    # painted at fixed cy-offsets (850 / 920 / 1210), which left a
+    # ~210-px gap between the title and the artist for the common
+    # single-line cases — the lower third of the green card looked
+    # empty. Now the three rows are sized first, then the whole
+    # block is centered vertically in the area between the cover
+    # bottom (cy+810) and the card bottom (cy+1300), respecting
+    # ~40-px top and ~60-px bottom paddings.
+    #
+    # Artist may now wrap to two lines via `_join_artists(..,
+    # max_lines=2)` — applied only to stories, where vertical room
+    # is generous. Feed-list rows keep their one-line constraint.
+
     f_pos = fonts.sans_bold(48)
+    f_song = fonts.display_bold(80)
+    f_a = fonts.sans_regular(44)
+
+    # Resolve content for each row.
+    pos_text = f"TOP {e['posicio']}"
     pos_tw = d.textlength(pos_text, font=f_pos)
+    title_lines = _wrap_two_lines(d, e["canco_nom"], f_song, card_w - 80)[:2]
+    names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+    artist_raw = _join_artists(d, names, f_a, card_w - 80, max_lines=2)
+    artist_lines = artist_raw.split("\n")
+
+    # Vertical metrics.
+    TOPN_H = 48
+    TITLE_LINE_SPACING = 90  # tight kerning that matches the 80-pt body
+    TITLE_H = (len(title_lines) - 1) * TITLE_LINE_SPACING + 80
+    ARTIST_LINE_SPACING = int(44 * 1.15)  # ~51 px, comfortable for Roboto
+    ARTIST_H = (len(artist_lines) - 1) * ARTIST_LINE_SPACING + 44
+    GAP_TOPN_TITLE = 22  # preserved from the legacy layout
+    # Tasca B4: padding between the title's bottom and the artist
+    # block is proportional to the title font size, not a fixed
+    # number. With 1-line titles + 1-line artists the previous
+    # constant (90 px) read tight; with 2-line titles it read
+    # OK. 0.55 × 80 = 44 px puts both cases in the same visual
+    # ballpark. Empirically: feels close to one body-line.
+    GAP_TITLE_ARTIST = int(80 * 0.55)  # 44 px
+
+    block_h = TOPN_H + GAP_TOPN_TITLE + TITLE_H + GAP_TITLE_ARTIST + ARTIST_H
+
+    # Available area: cover bottom (cy + 60 + 750 = cy + 810) +
+    # 40-px gutter at the top, card bottom (cy + card_h) − 60-px
+    # padding at the bottom.
+    available_top = cy + 60 + 750 + 40
+    available_bottom = cy + card_h - 60
+    available_h = max(0, available_bottom - available_top)
+    # Clamp to the top of the available area if the block is taller
+    # than the available room (only happens in the 2-line title +
+    # 2-line artist case; still fits with ~35-px padding to the
+    # card bottom).
+    block_y0 = available_top + max(0, (available_h - block_h) // 2)
+
+    # Paint TOP N.
     d.text(
-        (cx + (card_w - pos_tw) // 2, cy + 850),
+        (cx + (card_w - pos_tw) // 2, block_y0),
         pos_text,
         font=f_pos,
         fill=colors.COLOR_WHITE,
     )
 
-    # Song title — white on the colour card, bold and large.
-    # Bumped 44 → 58 → 68 → 80 in the May-2026 readability pass;
-    # line-spacing 90 keeps the two-line layout from kissing.
-    # TOP N number above stays at 48 (titles + artists only on stories).
-    f_song = fonts.display_bold(80)
-    lines = _wrap_two_lines(d, e["canco_nom"], f_song, card_w - 80)
-    for i, line in enumerate(lines[:2]):
+    # Paint title (1 or 2 lines, each centered).
+    title_y0 = block_y0 + TOPN_H + GAP_TOPN_TITLE
+    for i, line in enumerate(title_lines):
         line_tw = d.textlength(line, font=f_song)
         d.text(
-            (cx + (card_w - line_tw) // 2, cy + 920 + i * 90),
+            (cx + (card_w - line_tw) // 2, title_y0 + i * TITLE_LINE_SPACING),
             line,
             font=f_song,
             fill=colors.COLOR_WHITE,
         )
 
-    # Artist — bumped 34 → 44; pushed down a bit so the wider
-    # title block doesn't crash into it.
-    f_a = fonts.sans_regular(44)
-    artist = _truncate(d, e["artista_nom"], f_a, card_w - 80)
-    a_tw = d.textlength(artist, font=f_a)
-    d.text(
-        (cx + (card_w - a_tw) // 2, cy + 1210),
-        artist,
-        font=f_a,
-        fill=colors.COLOR_WHITE,
-    )
+    # Paint artist (1 or 2 lines, each centered).
+    artist_y0 = title_y0 + TITLE_H + GAP_TITLE_ARTIST
+    for i, line in enumerate(artist_lines):
+        line_tw = d.textlength(line, font=f_a)
+        d.text(
+            (cx + (card_w - line_tw) // 2, artist_y0 + i * ARTIST_LINE_SPACING),
+            line,
+            font=f_a,
+            fill=colors.COLOR_WHITE,
+        )
 
     # Footer "topquaranta.cat" on every cançó slide. Sits on the
     # ink background outside the card, so we use COLOR_TEXT_MUTED

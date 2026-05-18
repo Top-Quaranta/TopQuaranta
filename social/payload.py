@@ -64,13 +64,26 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
         canco = r.canco
         artista = canco.artista if canco else None
         album = canco.album if canco else None
+        # `artistes_noms` is the canonical list: main artist first,
+        # then collaborators in the order they were attached to the
+        # cançó (M2M through-table PK ASC; see
+        # `Canco.artistes_col_ordered`). `artista_nom` is kept for
+        # backwards compatibility with any caller that still reads
+        # a single string (DEPRECATED — new code should use
+        # `artistes_noms` and join via `_join_artists` / `_join_artists_text`).
+        if canco and artista:
+            cols = [a.nom for a in canco.artistes_col_ordered()]
+            artistes_noms = [artista.nom, *cols]
+        else:
+            artistes_noms = ["—"]
         entries.append(
             {
                 "posicio": r.posicio,
                 "posicio_anterior": prev_pos.get(r.canco_id),
                 "canco_nom": canco.nom if canco else "—",
                 "canco_slug": canco.slug if canco else None,
-                "artista_nom": artista.nom if artista else "—",
+                "artistes_noms": artistes_noms,
+                "artista_nom": artista.nom if artista else "—",  # DEPRECATED
                 "artista_slug": artista.slug if artista else None,
                 "artista_instagram_url": _instagram_url(artista),
                 "cover_url": getattr(album, "imatge_url", None) or None,

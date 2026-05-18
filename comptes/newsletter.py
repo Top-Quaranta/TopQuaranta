@@ -115,6 +115,19 @@ def send_top_newsletter(
             )
             narrative_html = ""
 
+    # Tasca B2: precompute `artistes_display` per entry so the
+    # template doesn't need string surgery. `_join_artists_text`
+    # owns the truncation rule (80 chars, whole-name drops, ellipsis
+    # at the last fitting name).
+    from social.captions import _join_artists_text
+
+    entries_with_display = []
+    for e in entries[:10]:
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        entries_with_display.append(
+            {**e, "artistes_display": _join_artists_text(names, max_chars=80)}
+        )
+
     qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")
     sent = 0
     failed = 0
@@ -129,7 +142,7 @@ def send_top_newsletter(
                     "heading": heading,
                     "territori_nom": territori_nom or "Global",
                     "project_week": project_week,
-                    "entries": entries[:10],
+                    "entries": entries_with_display,
                     "narrative_html": narrative_html,
                     "unsub_url": _unsub_url(user),
                     "top_url": top_url,

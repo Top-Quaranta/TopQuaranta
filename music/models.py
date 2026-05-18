@@ -1021,6 +1021,39 @@ class Canco(models.Model):
         """Return the best name for Last.fm API calls."""
         return self.lastfm_nom if self.lastfm_nom else self.nom
 
+    def artistes_col_ordered(self):
+        """Collaborators ordered by their insertion order in the M2M
+        through table (`canco_artistes_col`'s autoincremented PK).
+
+        The M2M was declared without an explicit `through`, so the
+        default through table exposes its own `id` column — that's the
+        insertion order. The naive `self.artistes_col.all()` queryset
+        is ordered by Artista's own Meta.ordering (alphabetical by
+        `nom`), which gives unstable visual ordering on the social
+        renderer week-to-week.
+
+        Approach: hit the through-table directly to fetch the artista
+        PKs in insertion order, then materialise via `Artista.objects`
+        with a `Case/When` that re-applies that exact order — Django's
+        `WHERE pk IN (...)` doesn't preserve order on its own, even
+        when the IN list is sorted (Postgres returns rows in physical
+        table order).
+        """
+        from django.db.models import Case, IntegerField, Value, When
+
+        through = self.artistes_col.through
+        ordered_ids = list(
+            through.objects.filter(canco_id=self.pk)
+            .order_by("id")
+            .values_list("artista_id", flat=True)
+        )
+        if not ordered_ids:
+            return Artista.objects.none()
+        when_clauses = [When(pk=pk, then=Value(i)) for i, pk in enumerate(ordered_ids)]
+        return Artista.objects.filter(pk__in=ordered_ids).order_by(
+            Case(*when_clauses, output_field=IntegerField())
+        )
+
     def get_territoris(self) -> set[str]:
         """
         Return all territories this track should appear in.

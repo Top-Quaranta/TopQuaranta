@@ -22,7 +22,7 @@ qrcode[pil]==8.2             # S11: render enrollment QR (pulls Pillow)
 cairosvg==2.9.0
 # Language identification (Whisper LID as a staff signal on Canco)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.11.0+cpu            # CPU-only PyTorch for faster-whisper backbone
+torch==2.12.0+cpu            # CPU-only PyTorch for faster-whisper backbone
 faster-whisper==1.2.1        # large-v3 LID via detect_language(), int8 CPU
 soundfile==0.13.1            # WAV loader (no torchcodec dependency)
 

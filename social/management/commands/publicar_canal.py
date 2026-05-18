@@ -148,26 +148,20 @@ class Command(BaseCommand):
             entries = data["items"]
 
         cover = paths[0]  # the portada slide
-        # Channel-specific caption length cap. Telegram allows 1024
-        # chars on a media caption; we leave headroom by capping
-        # `caption_short` lower so future link/utm additions fit.
-        max_chars = {
-            "mastodon": 480,
-            "bluesky": 280,
-            "telegram": 900,
-            "newsletter": 9999,
-        }[channel]
-        text = captions.caption_short(
-            slot.tipus,
-            territori,
-            setmana,
-            entries,
-            max_chars=max_chars,
-            # K1+ analytics: UTM-tag the footer link so the staff
-            # dashboard can attribute landings per channel × campaign
-            # instead of dumping everything into the bare-URL bucket.
-            channel=channel,
+        # Channel-specific caption: routes through the narrative
+        # engine for top types (channel-specific composer with
+        # hero + budget) and through the legacy plain-list for
+        # novetats. `phrase_ids` is the list of narrative phrases
+        # the engine actually shipped — we mark them as used in
+        # the registry AFTER a successful publish, never at compose
+        # time (dry-runs and failures must not poison selections).
+        # `compose_for_channel` swallows any engine bug and returns
+        # the legacy caption shape with phrase_ids=[].
+        result = captions.compose_for_channel(
+            channel, slot.tipus, territori, setmana, entries
         )
+        text = result["text"]
+        phrase_ids = result.get("phrase_ids") or []
 
         if opts["dry_run"]:
             self._mark(
@@ -225,6 +219,20 @@ class Command(BaseCommand):
         from analytics.events import register as _register_event
 
         _register_event("social_publicat", dim1=channel, dim2=slot.tipus)
+        # Narrative-engine ledger: record the phrase ids that
+        # actually shipped so future picks for the same
+        # (channel, territori) avoid them within the rolling
+        # window. Best-effort: a registry write hiccup must not
+        # turn a successful publish into a logged failure.
+        for pid in phrase_ids:
+            try:
+                from social.narrative.registry import mark_used
+
+                mark_used(pid, territori, setmana, channel)
+            except Exception:
+                logger.exception(
+                    "registry.mark_used failed for pid=%s (continuing)", pid
+                )
         self.stdout.write(f"  · publicat → {ext_id}")
 
     # ── per-channel publish ──────────────────────────────────────

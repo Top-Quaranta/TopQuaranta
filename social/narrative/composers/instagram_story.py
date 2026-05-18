@@ -1,29 +1,27 @@
-"""Instagram story composer.
+"""Instagram-story composer (Fase 4 reset).
 
-A story-set is a sequence of vertical PNG frames rendered by
-`social/renderer.py`. The text this composer returns is the
-overlay copy that the renderer paints on the intro frame (and
-possibly on closing frames in future iterations). Hashtags are
-not used inside story media; the channel is non-linkable for IG.
-"""
+The story-set is image-only at IG; this composer returns the overlay
+text the renderer will paint on the intro frame. Single short phrase,
+no CTA / hashtags / top5 (the story is non-linkable and tiny)."""
 
 from __future__ import annotations
 
+import random
+
+from social.narrative import scenarios as scen
 from social.narrative.registry import pick_phrase
 
 CHANNEL = "instagram_story"
 
 
-def compose(
-    scenarios: list,
-    entries: list[dict],
-    *,
-    territori: str,
-    setmana,
-    rng=None,
-) -> dict:
-    overlay = ""
-    if scenarios:
-        hero = scenarios[0]
-        _, overlay = pick_phrase(hero, "short", territori, CHANNEL, rng=rng)
-    return {"text": overlay, "hashtags": [], "cta": ""}
+def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
+    rng = rng or random.Random()
+    hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
+    pid, overlay = pick_phrase(hero, "short", territori, CHANNEL, rng=rng)
+    phrase_ids = [pid] if pid else []
+    return {
+        "text": overlay,
+        "hashtags": [],
+        "cta": "",
+        "phrase_ids": phrase_ids,
+    }

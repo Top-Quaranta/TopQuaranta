@@ -151,9 +151,10 @@ def test_staff_artistes_list_n_top_opt_in(staff_client, db):
     """Fase 2 (2026-05-18): the `n_top` annotation is gated by
     `?include_n_top=1`. By default the field stays None; opting in
     exposes the integer + supports `?sort=-n_top`."""
-    from music.models import Artista, Canco, Album
-    from ranking.models import TopSetmanal
     import datetime
+
+    from music.models import Album, Artista, Canco
+    from ranking.models import TopSetmanal
 
     a_low = Artista.objects.create(nom="LowTop", slug="lowtop", aprovat=True)
     a_high = Artista.objects.create(nom="HighTop", slug="hightop", aprovat=True)

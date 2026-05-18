@@ -169,6 +169,17 @@ def artistes_list(request: Request) -> Response:
     # setmana) — distinct on the canço so a track appearing 10 weeks
     # in the CAT top doesn't outweigh a track in 9 distinct top tracks.
     sort_raw = (request.GET.get("sort") or "").strip()
+    # Opt-in `n_top` annotation: distinct count of every TopSetmanal
+    # row across the artist's cançons. Used by the "artistes sense
+    # Instagram" workflow (Fase 2, 2026-05-18) to prioritise by
+    # historical chart presence. Gated by `?include_n_top=1` so the
+    # general list endpoint stays cheap.
+    include_n_top = request.GET.get("include_n_top") == "1"
+    if include_n_top or sort_raw == "-n_top":
+        qs = qs.annotate(
+            n_top=Count("cancons__rankings", distinct=True),
+        )
+
     if sort_raw == "cancons_tops_desc":
         qs = (
             qs.annotate(
@@ -181,6 +192,8 @@ def artistes_list(request: Request) -> Response:
             .distinct()
             .order_by("-n_cancons_tops", Lower("nom"))
         )
+    elif sort_raw == "-n_top":
+        qs = qs.distinct().order_by("-n_top", Lower("nom"))
     else:
         qs = qs.distinct().order_by(Lower("nom"))
 

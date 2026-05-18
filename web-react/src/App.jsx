@@ -50,6 +50,7 @@ import StaffLayout from './components/StaffLayout'
 const StaffDashboardPage = lazy(() => import('./pages/staff/StaffDashboardPage'))
 const PendentsPage = lazy(() => import('./pages/staff/PendentsPage'))
 const StaffArtistesPage = lazy(() => import('./pages/staff/StaffArtistesPage'))
+const StaffArtistesSenseInstagramPage = lazy(() => import('./pages/staff/StaffArtistesSenseInstagramPage'))
 const ArtistaCrearPage = lazy(() => import('./pages/staff/ArtistaCrearPage'))
 const ArtistaEditPage = lazy(() => import('./pages/staff/ArtistaEditPage'))
 const StaffCanconsPage = lazy(() => import('./pages/staff/StaffCanconsPage'))
@@ -201,6 +202,7 @@ function AppContent() {
                   <Route path="/" element={<StaffDashboardPage />} />
                   <Route path="/pendents" element={<PendentsPage />} />
                   <Route path="/artistes" element={<StaffArtistesPage />} />
+                  <Route path="/artistes/sense-instagram" element={<StaffArtistesSenseInstagramPage />} />
                   <Route path="/artistes/crear" element={<ArtistaCrearPage />} />
                   <Route path="/artistes/:pk" element={<ArtistaEditPage />} />
                   <Route path="/cancons" element={<StaffCanconsPage />} />

@@ -147,6 +147,75 @@ def test_staff_artistes_list_responds(staff_client):
     assert "results" in data
 
 
+def test_staff_artistes_list_n_top_opt_in(staff_client, db):
+    """Fase 2 (2026-05-18): the `n_top` annotation is gated by
+    `?include_n_top=1`. By default the field stays None; opting in
+    exposes the integer + supports `?sort=-n_top`."""
+    from music.models import Artista, Canco, Album
+    from ranking.models import TopSetmanal
+    import datetime
+
+    a_low = Artista.objects.create(nom="LowTop", slug="lowtop", aprovat=True)
+    a_high = Artista.objects.create(nom="HighTop", slug="hightop", aprovat=True)
+    al = Album.objects.create(nom="A", slug="a", artista=a_high, descartat=False)
+    c1 = Canco.objects.create(
+        nom="C1", slug="c1", artista=a_high, album=al,
+        verificada=True, activa=True,
+    )
+    c2 = Canco.objects.create(
+        nom="C2", slug="c2", artista=a_high, album=al,
+        verificada=True, activa=True,
+    )
+    monday = datetime.date(2026, 5, 11)
+    for i, canco in enumerate((c1, c2), start=1):
+        TopSetmanal.objects.create(
+            canco=canco, territori="CAT", setmana=monday, posicio=i,
+            score_setmanal=100.0,
+        )
+
+    # Default: no n_top exposed.
+    r = staff_client.get("/api/v1/staff/artistes/?q=Top")
+    assert r.status_code == 200, r.content
+    rows = r.json()["results"]
+    for row in rows:
+        assert row.get("n_top") is None, row
+
+    # Opt in: n_top exposed.
+    r = staff_client.get(
+        "/api/v1/staff/artistes/?q=Top&include_n_top=1&sort=-n_top"
+    )
+    assert r.status_code == 200, r.content
+    rows = r.json()["results"]
+    by_name = {row["nom"]: row for row in rows}
+    assert by_name["HighTop"]["n_top"] == 2
+    assert by_name["LowTop"]["n_top"] == 0
+    # Sort: HighTop (n_top=2) must come before LowTop (n_top=0).
+    high_idx = next(i for i, row in enumerate(rows) if row["nom"] == "HighTop")
+    low_idx = next(i for i, row in enumerate(rows) if row["nom"] == "LowTop")
+    assert high_idx < low_idx, [row["nom"] for row in rows]
+
+
+def test_staff_artistes_list_instagram_no_filter(staff_client, db):
+    """The `instagram=no` filter (Fase 2 prerequisite) only returns
+    rows with empty `instagram_url`. Smoke test that the filter wires
+    together with `include_n_top=1` for the new workflow page."""
+    from music.models import Artista
+
+    Artista.objects.create(
+        nom="WithIG", slug="with-ig", aprovat=True,
+        instagram_url="https://www.instagram.com/foo/",
+    )
+    Artista.objects.create(nom="WithoutIG", slug="without-ig", aprovat=True)
+
+    r = staff_client.get(
+        "/api/v1/staff/artistes/?aprovat=1&instagram=no&include_n_top=1"
+    )
+    assert r.status_code == 200, r.content
+    noms = {row["nom"] for row in r.json()["results"]}
+    assert "WithoutIG" in noms
+    assert "WithIG" not in noms
+
+
 def test_legacy_staff_views_shim_still_exposes_names():
     """Anything that did `from web.api import staff_views` must keep
     finding the old names. Guards against a future cleanup that

@@ -23,7 +23,7 @@ import logging
 import time
 from datetime import timedelta
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 
@@ -87,6 +87,7 @@ class Command(BaseCommand):
             return
 
         processed = 0
+        n_fails = 0
         cutoff = timezone.now() - timedelta(days=refresh_days)
 
         while True:
@@ -108,11 +109,26 @@ class Command(BaseCommand):
             if not a:
                 self.stdout.write(self.style.SUCCESS("Cua buida — tot fresc. Sortint."))
                 break
-            self._process(a)
+            if not self._process(a):
+                n_fails += 1
             processed += 1
             if limit and processed >= limit:
                 self.stdout.write(f"Límit de {limit} artistes aconseguit. Sortint.")
                 break
+
+        # E2 (C-14, 2026-05-19): the cron runs every 15 min. Before
+        # this guard, a per-iteration `except Exception` swallow +
+        # `mb_last_sync=now` write meant a full broken-API run would
+        # silently mark every artista as "synced" and `tq-health`
+        # never noticed. Now we count failures and propagate via
+        # CommandError when >50% of the batch flipped the swallow.
+        if processed > 0 and n_fails / processed > 0.5:
+            raise CommandError(
+                f"MB sync: {n_fails}/{processed} artistes failed "
+                f"(>50% threshold). MB API outage or schema change? "
+                f"See logs for per-artista errors."
+            )
+        self.stdout.write(f"MB sync summary: processed={processed} fails={n_fails}")
 
     def _unassign_wrong_mbid(
         self, artista: Artista, bad_mbid: str, reason: str
@@ -198,7 +214,10 @@ class Command(BaseCommand):
         except Exception:
             logger.exception("Audit log failed for auto-unassign")
 
-    def _process(self, artista: Artista) -> None:
+    def _process(self, artista: Artista) -> bool:
+        """Return True on success, False if the iteration swallowed
+        an exception. The outer loop counts failures and raises if
+        more than 50% of the batch fails (E2 C-14, 2026-05-19)."""
         try:
             # Step 1: validate the existing MBID against our own
             # location data. If MB says "United States" and we have
@@ -258,7 +277,8 @@ class Command(BaseCommand):
                             f"  [collision] {artista.nom} → {mbid} blocked "
                             f"(taken by pk={other.pk} {other.nom!r})"
                         )
-                        return
+                        time.sleep(0.2)
+                        return True
                     artista.musicbrainz_id = mbid
                     artista.save(update_fields=["musicbrainz_id"])
                     self.stdout.write(f"  [name] {artista.nom} → MBID {mbid}")
@@ -267,7 +287,8 @@ class Command(BaseCommand):
                     artista.mb_last_sync = timezone.now()
                     artista.save(update_fields=["mb_last_sync"])
                     self.stdout.write(f"  [no-match] {artista.nom} (pk={artista.pk})")
-                    return
+                    time.sleep(0.2)
+                    return True
             counters = sync_from_mbid(artista)
             self.stdout.write(
                 "  [sync] {nom} → urls={u} albums={am}/{rgs} "
@@ -286,5 +307,8 @@ class Command(BaseCommand):
             logger.exception("MB sync failed for %s (pk=%s)", artista.nom, artista.pk)
             artista.mb_last_sync = timezone.now()
             artista.save(update_fields=["mb_last_sync"])
+            time.sleep(0.2)
+            return False
         # Small extra pause between artistes to stay polite.
         time.sleep(0.2)
+        return True

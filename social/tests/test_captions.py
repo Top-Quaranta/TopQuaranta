@@ -137,7 +137,11 @@ def test_caption_top_uses_narrative_engine():
     # a hero block referencing the artist and streak count. We can't
     # pin one phrase (random pick), but every A2_STREAK template
     # mentions either "{streak}" expanded (→ "4") AND "La Fúmiga".
-    assert "La Fúmiga" in text
+    # Tasca C (2026-05-18): article-stripping lowercases the
+    # article in "de + La Fúmiga" → "de la Fúmiga". Accept either
+    # form so the test is robust against future engine reorderings
+    # of preposition choice per template.
+    assert "La Fúmiga" in text or "la Fúmiga" in text
     # The legacy plain caption never carries the word "setmana" (it
     # uses "Setmana N" in the header). The engine bank uses lower-case
     # "setmana"/"setmanes" inside the hero. Quick signal that we're

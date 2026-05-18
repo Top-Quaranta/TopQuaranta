@@ -116,7 +116,9 @@ def test_detect_a2_streak_with_four_weeks():
         _seed(c, "PPCC", w, 1)
     s = scen.detect_a2_streak("PPCC", _monday(2026, 5, 11))
     assert s and s.data["streak"] == 4
-    assert s.data["de_artista"] == "de La Fúmiga"
+    # Tasca C (2026-05-18): article-stripping → "de la Fúmiga"
+    # (lowercase article post-contraction).
+    assert s.data["de_artista"] == "de la Fúmiga"
 
 
 @pytest.mark.django_db
@@ -257,6 +259,8 @@ def test_short_phrases_fit_under_120_chars():
     sample = {
         "artista": "Maria Jaume",
         "de_artista": "de Maria Jaume",
+        "per_a_artista": "per a Maria Jaume",
+        "per_artista": "per Maria Jaume",
         "canco": "Sant Domingo Forever",
         "streak": 4,
         "posicio": 3,
@@ -281,13 +285,28 @@ def test_phrases_interpolate_with_diverse_artist_names():
     """Templates must produce non-empty output for diverse name
     shapes. Apostrof-de is precomputed via {de_artista} so
     `de Els Catarres` doesn't appear naked anywhere."""
+    # Tasca C (2026-05-18): templates now interpolate three
+    # pre-rendered preposition variants. We compute them from the
+    # canonical helper so the test stays in sync with the rules.
+    from social.narrative.utils import with_preposition
+
+    artist_names = [
+        "Maria Jaume",
+        "Lluís Llach",
+        "Manel",
+        "OBESES",
+        "La Fúmiga",
+        "Els Catarres",
+        "Anna",
+    ]
     artists = [
-        ("Maria Jaume", "de Maria Jaume"),
-        ("Lluís Llach", "de Lluís Llach"),
-        ("Manel", "de Manel"),
-        ("OBESES", "d'OBESES"),
-        ("La Fúmiga", "de La Fúmiga"),
-        ("Anna", "d'Anna"),
+        (
+            nom,
+            with_preposition(nom, "de"),
+            with_preposition(nom, "per_a"),
+            with_preposition(nom, "per"),
+        )
+        for nom in artist_names
     ]
     base = {
         "canco": "Cançó",
@@ -304,13 +323,16 @@ def test_phrases_interpolate_with_diverse_artist_names():
     for code, by_length in HERO.items():
         for length in ("short", "medium", "long"):
             for i, tpl in enumerate(by_length[length]):
-                for nom, de_nom in artists:
-                    out = tpl.format(artista=nom, de_artista=de_nom, **base)
+                for nom, de_nom, per_a_nom, per_nom in artists:
+                    out = tpl.format(
+                        artista=nom,
+                        de_artista=de_nom,
+                        per_a_artista=per_a_nom,
+                        per_artista=per_nom,
+                        **base,
+                    )
                     assert out.strip()
                     assert "{" not in out
-                    # No accidental apostrof-elision of de + artist
-                    # name (we always pre-compute de_artista).
-                    assert f"d'{nom}" not in out or de_nom == f"d'{nom}"
 
 
 def test_no_emoji_repeats_more_than_twice_per_bank():

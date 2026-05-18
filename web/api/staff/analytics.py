@@ -169,12 +169,14 @@ def analytics_summary(request: Request) -> Response:
     # Newsletter is a real channel with the most direct conversion,
     # but it wasn't surfacing in the followers strip because it
     # lacks a `MetricaSocialPlatform(metric=followers)` row. The
-    # canonical count is `Usuari.vol_newsletter=True, is_active=True`.
-    from django.contrib.auth import get_user_model
+    # canonical count is `PerfilUsuari.vol_newsletter=True` joined
+    # to an active `Usuari`. The flag lives on PerfilUsuari (created
+    # automatically per Usuari via post_save signal), not on the
+    # Usuari model itself.
+    from comptes.models import PerfilUsuari
 
-    _User = get_user_model()
-    newsletter_audience = _User.objects.filter(
-        vol_newsletter=True, is_active=True
+    newsletter_audience = PerfilUsuari.objects.filter(
+        vol_newsletter=True, usuari__is_active=True
     ).count()
 
     # ── feedback by target ────────────────────────────────────────

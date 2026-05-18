@@ -19,7 +19,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from comptes.models import Usuari
+from comptes.models import PerfilUsuari, Usuari
 from social.models import SocialPost
 
 
@@ -47,28 +47,26 @@ def _monday_of(date_):
 
 @pytest.mark.django_db
 def test_newsletter_audience_counts_active_subscribers(staff_client):
-    """Only `vol_newsletter=True AND is_active=True` users count."""
-    Usuari.objects.create_user(
-        username="sub_yes_active",
-        email="a@example.com",
-        password="x",
-        is_active=True,
-        vol_newsletter=True,
+    """Only `PerfilUsuari.vol_newsletter=True AND Usuari.is_active=True`
+    count. The flag lives on PerfilUsuari (created via post_save signal
+    on Usuari) and defaults to False, so we must explicitly opt-in
+    each test user."""
+
+    def _create_with_perfil(username, email, *, is_active, vol_newsletter):
+        u = Usuari.objects.create_user(
+            username=username, email=email, password="x", is_active=is_active
+        )
+        # PerfilUsuari is created by the post_save signal at this point.
+        PerfilUsuari.objects.filter(usuari=u).update(vol_newsletter=vol_newsletter)
+        return u
+
+    _create_with_perfil(
+        "sub_yes_active", "a@example.com", is_active=True, vol_newsletter=True
     )
-    Usuari.objects.create_user(
-        username="sub_yes_inactive",
-        email="b@example.com",
-        password="x",
-        is_active=False,
-        vol_newsletter=True,
+    _create_with_perfil(
+        "sub_yes_inactive", "b@example.com", is_active=False, vol_newsletter=True
     )
-    Usuari.objects.create_user(
-        username="sub_no",
-        email="c@example.com",
-        password="x",
-        is_active=True,
-        vol_newsletter=False,
-    )
+    _create_with_perfil("sub_no", "c@example.com", is_active=True, vol_newsletter=False)
 
     r = staff_client.get("/api/v1/staff/analytics/summary/?days=30")
     assert r.status_code == 200, r.content

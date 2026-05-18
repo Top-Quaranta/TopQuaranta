@@ -118,7 +118,7 @@ A2_STREAK = [
     {
         "short": "«{canco}» no cau · {streak} setmanes ⚓",
         "medium": "«{canco}» ancorada al #1 de {territori_label}. {streak} setmanes per a {artista}. ⚓",
-        "long": "Àncora al cim. «{canco}», de {artista}, acumula {streak} setmanes al cim de {territori_label}. ⚓",
+        "long": "Ancorada al cim. «{canco}», de {artista}, acumula {streak} setmanes al cim de {territori_label}. ⚓",
     },
     {
         "short": "Una altra setmana per a {artista} al #1 🎙️",

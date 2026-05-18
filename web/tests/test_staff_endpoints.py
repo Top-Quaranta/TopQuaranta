@@ -159,31 +159,40 @@ def test_staff_artistes_list_n_top_opt_in(staff_client, db):
     a_high = Artista.objects.create(nom="HighTop", slug="hightop", aprovat=True)
     al = Album.objects.create(nom="A", slug="a", artista=a_high, descartat=False)
     c1 = Canco.objects.create(
-        nom="C1", slug="c1", artista=a_high, album=al,
-        verificada=True, activa=True,
+        nom="C1",
+        slug="c1",
+        artista=a_high,
+        album=al,
+        verificada=True,
+        activa=True,
     )
     c2 = Canco.objects.create(
-        nom="C2", slug="c2", artista=a_high, album=al,
-        verificada=True, activa=True,
+        nom="C2",
+        slug="c2",
+        artista=a_high,
+        album=al,
+        verificada=True,
+        activa=True,
     )
     monday = datetime.date(2026, 5, 11)
     for i, canco in enumerate((c1, c2), start=1):
         TopSetmanal.objects.create(
-            canco=canco, territori="CAT", setmana=monday, posicio=i,
+            canco=canco,
+            territori="CAT",
+            setmana=monday,
+            posicio=i,
             score_setmanal=100.0,
         )
 
     # Default: no n_top exposed.
-    r = staff_client.get("/api/v1/staff/artistes/?q=Top")
+    r = staff_client.get("/api/v1/staff/artistes/")
     assert r.status_code == 200, r.content
     rows = r.json()["results"]
     for row in rows:
         assert row.get("n_top") is None, row
 
     # Opt in: n_top exposed.
-    r = staff_client.get(
-        "/api/v1/staff/artistes/?q=Top&include_n_top=1&sort=-n_top"
-    )
+    r = staff_client.get("/api/v1/staff/artistes/?include_n_top=1&sort=-n_top")
     assert r.status_code == 200, r.content
     rows = r.json()["results"]
     by_name = {row["nom"]: row for row in rows}
@@ -202,7 +211,9 @@ def test_staff_artistes_list_instagram_no_filter(staff_client, db):
     from music.models import Artista
 
     Artista.objects.create(
-        nom="WithIG", slug="with-ig", aprovat=True,
+        nom="WithIG",
+        slug="with-ig",
+        aprovat=True,
         instagram_url="https://www.instagram.com/foo/",
     )
     Artista.objects.create(nom="WithoutIG", slug="without-ig", aprovat=True)

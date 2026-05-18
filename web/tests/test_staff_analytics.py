@@ -95,9 +95,7 @@ def test_social_counter_derives_from_socialpost_publicat(staff_client):
     assert by_channel.get(SocialPost.PLATFORM_INSTAGRAM_FEED) == 4, by_channel
     assert by_channel.get(SocialPost.PLATFORM_MASTODON) == 2, by_channel
     extras = {
-        k: v
-        for k, v in by_channel.items()
-        if k not in {"instagram_feed", "mastodon"}
+        k: v for k, v in by_channel.items() if k not in {"instagram_feed", "mastodon"}
     }
     assert extras == {}, f"Unexpected channels in counter: {extras}"
 

@@ -378,9 +378,7 @@ class Command(BaseCommand):
         # audit, 2026-05-18).
         from analytics.events import register as _register_event
 
-        _register_event(
-            "social_publicat", dim1=slot.platform, dim2=slot.tipus, n=1
-        )
+        _register_event("social_publicat", dim1=slot.platform, dim2=slot.tipus, n=1)
         self.stdout.write(f"  · {len(story_ids)} stories publicades.")
 
     # ── helpers ──────────────────────────────────────────────────

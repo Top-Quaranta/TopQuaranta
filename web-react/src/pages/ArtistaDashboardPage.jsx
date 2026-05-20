@@ -136,7 +136,61 @@ function IndicatorRow({ ind, onCta }) {
   )
 }
 
-function EstatTab({ slug, onSwitchTab }) {
+const ESTAT_TONE_SR = { pendent: 'warning', revisada: 'default', resolta: 'success' }
+const ESTAT_LABEL_SR = {
+  pendent: 'Pendent',
+  revisada: 'En revisió',
+  resolta: 'Resolta',
+}
+
+function SollicitudResumCard({ slug, refreshKey }) {
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    api
+      .get(`/compte/artista/${slug}/sollicituds/`)
+      .then(setData)
+      .catch(() => setData(null))
+  }, [slug, refreshKey])
+
+  if (!data?.ultima) return null
+  const u = data.ultima
+  const fmt = iso => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+  }
+  return (
+    <Card>
+      <div className="p-4 space-y-2">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-semibold">Última sol·licitud de revisió:</span>
+          <span>{fmt(u.created_at)}</span>
+          <Badge variant={ESTAT_TONE_SR[u.estat] || 'default'}>
+            {ESTAT_LABEL_SR[u.estat] || u.estat}
+          </Badge>
+        </div>
+        <p className="text-xs text-tq-ink/70">
+          {u.n_pendents} pendent{u.n_pendents === 1 ? '' : 's'} +{' '}
+          {u.n_rebutjades} rebutjada{u.n_rebutjades === 1 ? '' : 's'}
+          {data.n_total > 1 && ` · ${data.n_total} sol·licituds en total`}
+        </p>
+        {u.estat === 'resolta' && (
+          <div className="text-xs text-tq-ink/70">
+            Resolta el {fmt(u.resolt_at)}.
+            {u.nota_resolucio && (
+              <span className="block mt-1 italic text-tq-ink/80">
+                «{u.nota_resolucio}»
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function EstatTab({ slug, onSwitchTab, sollicitudRefreshKey }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -235,6 +289,8 @@ function EstatTab({ slug, onSwitchTab }) {
           )}
         </div>
       )}
+
+      <SollicitudResumCard slug={slug} refreshKey={sollicitudRefreshKey} />
     </div>
   )
 }
@@ -897,21 +953,28 @@ const MOTIU_LABEL = {
   no_musica: 'No és música',
 }
 
-function CanconsTab({ slug }) {
+function CanconsTab({ slug, onSollicitudCreated }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  // `confirmPing` carries the *kind* the user is about to ping for —
-  // 'pendents' or 'rebutjades' — so the modal body and the POST body
-  // can both reflect the right section.
-  const [confirmPing, setConfirmPing] = useState(null)
+  // Sprint Workflow Sol·licituds E.1: multi-select with one global
+  // "Demanar revisió" button at the tab header. Each section keeps
+  // its own Set so the user can toggle independently, but a single
+  // POST bundles both lists in one SolicitudRevisio.
+  const [selectedPendents, setSelectedPendents] = useState(() => new Set())
+  const [selectedRebutjades, setSelectedRebutjades] = useState(() => new Set())
+  const [confirmPing, setConfirmPing] = useState(false)
   const [feedback, setFeedback] = useState(null)
 
   function reload() {
     setLoading(true)
     api
       .get(`/compte/artista/${slug}/cancons-pendents/`)
-      .then(setData)
+      .then(d => {
+        setData(d)
+        setSelectedPendents(new Set())
+        setSelectedRebutjades(new Set())
+      })
       .catch(e => setError(e.message || 'Error'))
       .finally(() => setLoading(false))
   }
@@ -925,8 +988,6 @@ function CanconsTab({ slug }) {
   if (error) return <Alert tone="danger">{error}</Alert>
   if (!data) return null
 
-  // Prefer the new `pendents` array; fall back to `results` for
-  // backwards-compat during the rollout window.
   const pendents = data.pendents || data.results || []
   const rebutjades = data.rebutjades || []
   const verificades = data.verificades || []
@@ -943,15 +1004,39 @@ function CanconsTab({ slug }) {
     ).padStart(2, '0')}/${d.getFullYear()}`
   }
 
-  async function handlePing(kind) {
+  const togglePendent = pk =>
+    setSelectedPendents(prev => {
+      const next = new Set(prev)
+      next.has(pk) ? next.delete(pk) : next.add(pk)
+      return next
+    })
+  const toggleRebutjada = pk =>
+    setSelectedRebutjades(prev => {
+      const next = new Set(prev)
+      next.has(pk) ? next.delete(pk) : next.add(pk)
+      return next
+    })
+  const allPendentsSelected =
+    pendents.length > 0 && selectedPendents.size === pendents.length
+  const allRebutjadesSelected =
+    rebutjades.length > 0 && selectedRebutjades.size === rebutjades.length
+  const toggleAllPendents = () =>
+    setSelectedPendents(
+      allPendentsSelected ? new Set() : new Set(pendents.map(c => c.pk))
+    )
+  const toggleAllRebutjades = () =>
+    setSelectedRebutjades(
+      allRebutjadesSelected ? new Set() : new Set(rebutjades.map(r => r.pk))
+    )
+
+  const totalSelected = selectedPendents.size + selectedRebutjades.size
+
+  async function handlePing() {
     setFeedback(null)
-    const body =
-      kind === 'rebutjades'
-        ? {
-            kind: 'rebutjades',
-            include_rebutjada_ids: rebutjades.map(r => r.pk),
-          }
-        : {}
+    const body = {
+      include_canco_ids: Array.from(selectedPendents),
+      include_rebutjada_historial_pks: Array.from(selectedRebutjades),
+    }
     try {
       const res = await api.post(
         `/compte/artista/${slug}/cancons-pendents/ping-staff/`,
@@ -960,11 +1045,13 @@ function CanconsTab({ slug }) {
       setFeedback({
         tone: 'success',
         msg:
-          `S'ha enviat la sol·licitud (${res.n_cancons} cançó/ns: ` +
-          `${res.n_pendents} pendent${res.n_pendents === 1 ? '' : 's'}, ` +
-          `${res.n_rebutjades} rebutjada${res.n_rebutjades === 1 ? '' : 's'}` +
-          `). Pròxim ping disponible el ${fmtDate(res.next_ping_at)}.`,
+          `S'ha enviat la sol·licitud #${res.sollicitud_pk} al staff. ` +
+          'Et notificarem per email quan algú l\'hagi processada. ' +
+          'Mentrestant, no cal que facis res; el staff revisarà les ' +
+          'cançons i decidirà quines s\'aproven o es tornen al pipeline. ' +
+          `Pròxima sol·licitud disponible el ${fmtDate(res.next_ping_at)}.`,
       })
+      onSollicitudCreated?.()
       reload()
     } catch (ex) {
       setFeedback({
@@ -972,7 +1059,7 @@ function CanconsTab({ slug }) {
         msg: ex.payload?.error || ex.message || 'Error',
       })
     } finally {
-      setConfirmPing(null)
+      setConfirmPing(false)
     }
   }
 
@@ -998,17 +1085,41 @@ function CanconsTab({ slug }) {
     <div className="space-y-6 mt-6">
       {feedback && <Alert tone={feedback.tone}>{feedback.msg}</Alert>}
 
-      {cooldownActive && (
-        <p className="text-xs text-white/70">
-          Cooldown actiu fins el {fmtDate(data.cooldown_until)} — només pots
-          demanar revisió un cop cada 7&nbsp;dies (val tant per a pendents
-          com per a rebutjades).
-        </p>
-      )}
+      {/* ── Global action bar ── */}
+      <Card>
+        <div className="p-4 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">
+              {totalSelected === 0
+                ? 'Selecciona cançons amb els checkboxes per a demanar revisió.'
+                : `${totalSelected} cançó/ns seleccionada${totalSelected === 1 ? '' : 'es'}: ` +
+                  `${selectedPendents.size} pendent${selectedPendents.size === 1 ? '' : 's'} + ` +
+                  `${selectedRebutjades.size} rebutjada${selectedRebutjades.size === 1 ? '' : 's'}`}
+            </p>
+            {cooldownActive && (
+              <p className="text-xs text-tq-ink/60 mt-1">
+                Cooldown actiu fins el {fmtDate(data.cooldown_until)} — pots
+                fer una nova sol·licitud cada 7&nbsp;dies.
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={totalSelected === 0 || cooldownActive}
+            onClick={() => setConfirmPing(true)}
+            title={
+              cooldownActive
+                ? `Pròxima sol·licitud disponible el ${fmtDate(data.cooldown_until)}`
+                : ''
+            }
+            className="px-4 py-2 bg-tq-yellow text-tq-ink rounded-md text-sm font-semibold disabled:opacity-50"
+          >
+            Demanar revisió ({selectedPendents.size} pendents + {selectedRebutjades.size} rebutjades)
+          </button>
+        </div>
+      </Card>
 
-      {/* ── Pendents de verificar ──
-          `<details open>`: el panell més actionable, visible per
-          defecte. La resta usen `<details>` (tancat). */}
+      {/* ── Pendents de verificar ── */}
       <details open className="group">
         <summary className="cursor-pointer list-none flex items-center gap-3 mb-2 select-none">
           <span className="text-white/60 text-xs transition-transform group-open:rotate-90">
@@ -1017,31 +1128,27 @@ function CanconsTab({ slug }) {
           <h3 className="text-sm font-semibold text-white">
             Pendents de verificar ({pendents.length})
           </h3>
-          <div className="ml-auto">
-            <button
-              type="button"
-              disabled={pendents.length === 0 || cooldownActive}
-              onClick={e => {
-                // Evita que el click al botó pleg/desplegui el <details>.
-                e.stopPropagation()
-                e.preventDefault()
-                setConfirmPing('pendents')
-              }}
-              title={
-                cooldownActive
-                  ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
-                  : ''
-              }
-              className="px-3 py-1.5 bg-tq-yellow text-tq-ink rounded-md text-xs font-semibold disabled:opacity-50"
+          {pendents.length > 0 && (
+            <label
+              className="ml-auto inline-flex items-center gap-2 text-xs text-white/70 cursor-pointer"
+              onClick={e => e.stopPropagation()}
             >
-              Demanar revisió
-            </button>
-          </div>
+              <input
+                type="checkbox"
+                checked={allPendentsSelected}
+                onChange={toggleAllPendents}
+              />
+              <span>
+                Totes ({selectedPendents.size}/{pendents.length})
+              </span>
+            </label>
+          )}
         </summary>
         <Card>
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-tq-ink/60">
               <tr>
+                <th className="p-3 w-8"></th>
                 <th className="p-3">Cançó</th>
                 <th className="p-3">Àlbum</th>
                 <th className="p-3">Data</th>
@@ -1051,13 +1158,21 @@ function CanconsTab({ slug }) {
             <tbody>
               {pendents.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-center text-tq-ink/60">
+                  <td colSpan={5} className="p-6 text-center text-tq-ink/60">
                     Cap cançó pendent.
                   </td>
                 </tr>
               ) : (
                 pendents.map(c => (
                   <tr key={c.pk} className="border-t border-gray-100">
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedPendents.has(c.pk)}
+                        onChange={() => togglePendent(c.pk)}
+                        aria-label={`Seleccionar ${c.nom}`}
+                      />
+                    </td>
                     <td className="p-3">{c.nom}</td>
                     <td className="p-3 text-tq-ink/70">{c.album_nom || '—'}</td>
                     <td className="p-3 text-tq-ink/70">
@@ -1083,30 +1198,27 @@ function CanconsTab({ slug }) {
           <h3 className="text-sm font-semibold text-white">
             Rebutjades recents ({rebutjades.length})
           </h3>
-          <div className="ml-auto">
-            <button
-              type="button"
-              disabled={rebutjades.length === 0 || cooldownActive}
-              onClick={e => {
-                e.stopPropagation()
-                e.preventDefault()
-                setConfirmPing('rebutjades')
-              }}
-              title={
-                cooldownActive
-                  ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
-                  : ''
-              }
-              className="px-3 py-1.5 bg-tq-yellow text-tq-ink rounded-md text-xs font-semibold disabled:opacity-50"
+          {rebutjades.length > 0 && (
+            <label
+              className="ml-auto inline-flex items-center gap-2 text-xs text-white/70 cursor-pointer"
+              onClick={e => e.stopPropagation()}
             >
-              Demanar reconsideració
-            </button>
-          </div>
+              <input
+                type="checkbox"
+                checked={allRebutjadesSelected}
+                onChange={toggleAllRebutjades}
+              />
+              <span>
+                Totes ({selectedRebutjades.size}/{rebutjades.length})
+              </span>
+            </label>
+          )}
         </summary>
         <Card>
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-tq-ink/60">
               <tr>
+                <th className="p-3 w-8"></th>
                 <th className="p-3">Cançó</th>
                 <th className="p-3">Àlbum</th>
                 <th className="p-3">Data rebuig</th>
@@ -1116,13 +1228,21 @@ function CanconsTab({ slug }) {
             <tbody>
               {rebutjades.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-center text-tq-ink/60">
+                  <td colSpan={5} className="p-6 text-center text-tq-ink/60">
                     Cap rebuig recent.
                   </td>
                 </tr>
               ) : (
                 rebutjades.map(r => (
                   <tr key={r.pk} className="border-t border-gray-100">
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedRebutjades.has(r.pk)}
+                        onChange={() => toggleRebutjada(r.pk)}
+                        aria-label={`Seleccionar ${r.canco_nom}`}
+                      />
+                    </td>
                     <td className="p-3">{r.canco_nom}</td>
                     <td className="p-3 text-tq-ink/70">{r.album_nom || '—'}</td>
                     <td className="p-3 text-tq-ink/70">
@@ -1197,32 +1317,21 @@ function CanconsTab({ slug }) {
       </details>
 
       <ConfirmDialog
-        open={!!confirmPing}
-        title={
-          confirmPing === 'rebutjades'
-            ? 'Demanar reconsideració de rebutjades'
-            : 'Demanar revisió a staff'
-        }
+        open={confirmPing}
+        title="Demanar revisió al staff"
         body={
-          confirmPing === 'rebutjades' ? (
-            <>
-              S'enviarà a Staff la llista de les{' '}
-              <strong>{rebutjades.length}</strong> cançons rebutjades amb el
-              motiu original de cadascuna perquè puguin reconsiderar-les.
-              Cooldown: 7&nbsp;dies entre pings.
-            </>
-          ) : (
-            <>
-              S'enviarà un missatge intern a Staff amb la llista de les{' '}
-              <strong>{pendents.length}</strong> cançons pendents.
-              Cooldown: 7&nbsp;dies entre pings.
-            </>
-          )
+          <>
+            S'enviarà una sol·licitud al staff per a revisar les cançons
+            seleccionades (<strong>{selectedPendents.size}</strong> pendents +{' '}
+            <strong>{selectedRebutjades.size}</strong> rebutjades). Rebràs un
+            email quan estigui resolta. Pots fer una nova sol·licitud cada
+            7&nbsp;dies.
+          </>
         }
         confirmLabel="Enviar"
         severity="warning"
-        onConfirm={() => handlePing(confirmPing)}
-        onCancel={() => setConfirmPing(null)}
+        onConfirm={handlePing}
+        onCancel={() => setConfirmPing(false)}
       />
     </div>
   )
@@ -1237,6 +1346,9 @@ export default function ArtistaDashboardPage() {
   const { profile, loading: authLoading } = useAuth()
   const { data, error, loading, reload } = useArtista(slug)
   const [tab, setTab] = useState('estat')
+  // Bump on every successful "demanar revisió" so the EstatTab card
+  // resum re-fetches /sollicituds/ and reflects the new pendent.
+  const [sollicitudRefreshKey, setSollicitudRefreshKey] = useState(0)
 
   // Hash → tab on mount and on hashchange.
   useEffect(() => {
@@ -1325,6 +1437,7 @@ export default function ArtistaDashboardPage() {
       {tab === 'estat' && (
         <EstatTab
           slug={slug}
+          sollicitudRefreshKey={sollicitudRefreshKey}
           onSwitchTab={(key, hash) => {
             window.history.replaceState(null, '', hash || `#${key}`)
             setTab(key)
@@ -1334,7 +1447,12 @@ export default function ArtistaDashboardPage() {
       {tab === 'editar' && (
         <EditarTab slug={slug} data={data} onReload={reload} />
       )}
-      {tab === 'cancons' && <CanconsTab slug={slug} />}
+      {tab === 'cancons' && (
+        <CanconsTab
+          slug={slug}
+          onSollicitudCreated={() => setSollicitudRefreshKey(k => k + 1)}
+        />
+      )}
     </section>
   )
 }

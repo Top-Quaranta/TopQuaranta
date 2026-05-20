@@ -15,6 +15,7 @@ from . import (
     staff_views,
     top_views,
 )
+from .staff import sollicituds_revisio as staff_sr
 
 app_name = "api"
 
@@ -107,6 +108,11 @@ urlpatterns = [
         "compte/artista/<slug:slug>/cancons-pendents/ping-staff/",
         compte_views.gestor_artista.cancons_pendents_ping_staff,
         name="compte_gestor_artista_cancons_pendents_ping_staff",
+    ),
+    path(
+        "compte/artista/<slug:slug>/sollicituds/",
+        compte_views.gestor_artista.sollicituds_gestor,
+        name="compte_gestor_artista_sollicituds",
     ),
     # Public feedback (authenticated, any user)
     path("feedback/", compte_views.feedback_crear, name="feedback_crear"),
@@ -282,6 +288,32 @@ urlpatterns = [
         "staff/solicituds/<int:pk>/rebutjar/",
         staff_views.solicitud_rebutjar,
         name="staff_solicitud_rebutjar",
+    ),
+    # Sprint Workflow Sol·licituds de revisió (2026-05-20)
+    path(
+        "staff/sollicituds-revisio/",
+        staff_sr.llistar,
+        name="staff_sollicituds_revisio_list",
+    ),
+    path(
+        "staff/sollicituds-revisio/<int:pk>/",
+        staff_sr.detall,
+        name="staff_sollicituds_revisio_detall",
+    ),
+    path(
+        "staff/sollicituds-revisio/<int:pk>/marcar-en-revisio/",
+        staff_sr.marcar_en_revisio,
+        name="staff_sollicituds_revisio_marcar_en_revisio",
+    ),
+    path(
+        "staff/sollicituds-revisio/<int:pk>/reconsiderar-rebutjada/",
+        staff_sr.reconsiderar_rebutjada,
+        name="staff_sollicituds_revisio_reconsiderar_rebutjada",
+    ),
+    path(
+        "staff/sollicituds-revisio/<int:pk>/resoldre/",
+        staff_sr.resoldre,
+        name="staff_sollicituds_revisio_resoldre",
     ),
     # Senyal diari
     path("staff/senyal/", staff_views.senyal_list, name="staff_senyal_list"),

@@ -20,7 +20,32 @@
  * labels are hidden there and a subtle vertical divider keeps the
  * groups distinguishable in a single line.
  */
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+
+import { api } from '../lib/api'
+
+// One light fetch on mount returns the count of pending
+// SolicitudRevisio rows; cached in module-level state so navigating
+// between staff pages reuses the value (until full page refresh).
+let _cachedBadges = null
+function useStaffBadges() {
+  const [badges, setBadges] = useState(_cachedBadges)
+  useEffect(() => {
+    if (_cachedBadges) return
+    api
+      .get('/staff/sollicituds-revisio/?estat=pendent&page=1')
+      .then(d => {
+        _cachedBadges = { sollicituds_revisio_pendents: d.n_pendents_total }
+        setBadges(_cachedBadges)
+      })
+      .catch(() => {
+        _cachedBadges = { sollicituds_revisio_pendents: 0 }
+        setBadges(_cachedBadges)
+      })
+  }, [])
+  return badges || {}
+}
 
 const GROUPS = [
   {
@@ -37,6 +62,11 @@ const GROUPS = [
       { to: '/staff/pendents',   label: 'Pendents'    },
       { to: '/staff/propostes',  label: 'Propostes'   },
       { to: '/staff/solicituds', label: 'Sol·licituds' },
+      {
+        to: '/staff/sollicituds-revisio',
+        label: 'Sol·licituds revisió',
+        badge: 'sollicituds_revisio_pendents',
+      },
       { to: '/staff/feedback',   label: 'Feedback'    },
     ],
   },
@@ -98,6 +128,7 @@ const linkClass = ({ isActive }) =>
     : 'text-white/70 hover:text-white hover:bg-white/10')
 
 export default function StaffLayout({ children }) {
+  const badges = useStaffBadges()
   return (
     <div className="-mx-6 lg:-mx-12 flex flex-col md:flex-row min-h-[70vh]">
       {/* ── Dark sidebar ── */}
@@ -132,11 +163,21 @@ export default function StaffLayout({ children }) {
               >
                 {group.label}
               </p>
-              {group.items.map(({ to, label, end }) => (
-                <NavLink key={to} to={to} end={end} className={linkClass}>
-                  {label}
-                </NavLink>
-              ))}
+              {group.items.map(({ to, label, end, badge }) => {
+                const n = badge ? badges[badge] : null
+                return (
+                  <NavLink key={to} to={to} end={end} className={linkClass}>
+                    <span className="inline-flex items-center gap-2">
+                      {label}
+                      {typeof n === 'number' && n > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-tq-yellow text-tq-ink">
+                          {n}
+                        </span>
+                      )}
+                    </span>
+                  </NavLink>
+                )
+              })}
             </div>
           ))}
         </nav>

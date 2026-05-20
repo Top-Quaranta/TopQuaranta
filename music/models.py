@@ -1186,6 +1186,20 @@ class HistorialRevisio(models.Model):
     motiu = models.CharField(max_length=50, choices=MOTIUS)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Sprint Workflow Sol·licituds (2026-05-20). When True, the
+    # ingestion cron may re-pick up the track this row rejected —
+    # i.e. it's been "reconsidered" by staff after a manager's
+    # SolicitudRevisio. Default False: every existing rejected row
+    # stays out of the pipeline unless explicitly re-opened.
+    reconsiderada = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Quan True, obtenir_novetats pot re-ingerir aquesta cançó "
+            "(sortida del filtre de rebuigs)."
+        ),
+    )
+
     class Meta:
         ordering = ["-created_at"]
         verbose_name = "Historial de revisió"
@@ -1280,6 +1294,10 @@ class StaffAuditLog(models.Model):
         # Manager-triggered request for staff to review the artist's
         # unverified songs. Sprint Portal Artista Ampliat (2026-05-20).
         ("gestor_ping_revisio", "Artista: ping de revisió de cançons (gestor)"),
+        # Sprint Workflow Sol·licituds (2026-05-20).
+        ("sollicitud_revisio_creada", "Sol·licitud de revisió: creada"),
+        ("sollicitud_revisio_resolta", "Sol·licitud de revisió: resolta"),
+        ("rebutjada_reconsiderada", "Historial: rebutjada reconsiderada"),
         # Sprint I — social distribution. `social_publicat` is the
         # legacy Instagram-only label; the multi-channel cron writes
         # one of `<channel>_publicat` per CHANNELS in publicar_canal.py.

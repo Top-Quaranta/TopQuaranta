@@ -62,6 +62,8 @@ const StaffRankingPage = lazy(() => import('./pages/staff/StaffRankingPage'))
 const PropostesPage = lazy(() => import('./pages/staff/PropostesPage'))
 const PropostaDetailPage = lazy(() => import('./pages/staff/PropostaDetailPage'))
 const SolicitudsPage = lazy(() => import('./pages/staff/SolicitudsPage'))
+const StaffSollicitudsRevisioPage = lazy(() => import('./pages/staff/StaffSollicitudsRevisioPage'))
+const StaffSollicitudRevisioDetailPage = lazy(() => import('./pages/staff/StaffSollicitudRevisioDetailPage'))
 const SenyalPage = lazy(() => import('./pages/staff/SenyalPage'))
 const HistorialPage = lazy(() => import('./pages/staff/HistorialPage'))
 const ConfiguracioPage = lazy(() => import('./pages/staff/ConfiguracioPage'))
@@ -221,6 +223,8 @@ function AppContent() {
                   <Route path="/propostes" element={<PropostesPage />} />
                   <Route path="/propostes/:pk" element={<PropostaDetailPage />} />
                   <Route path="/solicituds" element={<SolicitudsPage />} />
+                  <Route path="/sollicituds-revisio" element={<StaffSollicitudsRevisioPage />} />
+                  <Route path="/sollicituds-revisio/:pk" element={<StaffSollicitudRevisioDetailPage />} />
                   <Route path="/senyal" element={<SenyalPage />} />
                   <Route path="/historial" element={<HistorialPage />} />
                   <Route path="/configuracio" element={<ConfiguracioPage />} />

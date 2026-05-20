@@ -88,13 +88,35 @@ function StatsCard({ stats, artistaNom }) {
   )
 }
 
+// Sprint Portal Artista D.1: completeness pill on the verified card.
+// Score colour ramps with the same severity thresholds the qualitat
+// endpoint uses (green ≥100, yellow ≥60, red <60).
+function QualitatPill({ qualitat }) {
+  if (!qualitat) return null
+  const { score, n_alerts } = qualitat
+  const variant = score === 100 ? 'success' : score >= 60 ? 'warning' : 'danger'
+  const alertsTxt =
+    n_alerts === 0
+      ? 'cap alerta'
+      : `${n_alerts} alerta${n_alerts === 1 ? '' : 's'}`
+  return (
+    <Badge variant={variant} className="rounded-full">
+      {score}% complet · {alertsTxt}
+    </Badge>
+  )
+}
+
 function ArtistaCard({ u, millorPosicio }) {
   // Verified managers get the full toolbar (estat al top, editar perfil,
   // veure al mapa). Non-verified rows stay link-only — the underlying
   // card still navigates to the public artist page.
+  const portalUrl = `/compte/artista/${u.artista.slug}/`
   return (
     <div className="group bg-white text-tq-ink rounded-lg shadow-md p-4 flex flex-col gap-2 hover:shadow-lg transition-all hover:-translate-y-0.5 min-h-[6.5rem]">
-      <Link to={artistaUrl(u.artista.slug)} className="block">
+      <Link
+        to={u.verificat ? portalUrl : artistaUrl(u.artista.slug)}
+        className="block"
+      >
         <p className="font-semibold truncate">{u.artista.nom}</p>
       </Link>
       {u.verificat && (
@@ -109,6 +131,7 @@ function ArtistaCard({ u, millorPosicio }) {
         {u.verificat && (
           <Badge variant="success" className="rounded-full">Verificat</Badge>
         )}
+        {u.verificat && <QualitatPill qualitat={u.qualitat} />}
         <EstatBadge estat={u.estat} />
         {u.verificat && u.artista.pk && (
           <div className="ml-auto flex gap-1.5">
@@ -119,10 +142,10 @@ function ArtistaCard({ u, millorPosicio }) {
               Veure al mapa
             </Link>
             <Link
-              to={`/compte/artista/${u.artista.pk}/editar`}
+              to={portalUrl}
               className="text-xs px-2 py-1 rounded-md bg-tq-ink text-tq-yellow font-semibold hover:bg-tq-ink/90"
             >
-              Editar perfil
+              Gestionar
             </Link>
           </div>
         )}

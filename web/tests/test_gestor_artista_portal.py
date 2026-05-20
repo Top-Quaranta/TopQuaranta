@@ -381,6 +381,46 @@ def test_ping_staff_after_cooldown_passes(
     assert r.status_code == 200
 
 
+# ───────────────────────── D.1: dashboard surfaces qualitat ──────
+
+
+def test_dashboard_attaches_qualitat_to_verified_row(client_g, artista):
+    """Verified rows in `gestio_list` carry `qualitat: {score, n_alerts}`
+    so the ArtistaCard pill renders without a per-row round-trip."""
+    r = client_g.get("/api/v1/compte/dashboard/")
+    assert r.status_code == 200
+    body = r.json()
+    rows = body["gestio_list"]
+    assert rows, "expected one UA row for the gestor fixture"
+    row = rows[0]
+    assert row["verificat"] is True
+    assert "qualitat" in row
+    assert "score" in row["qualitat"] and 0 <= row["qualitat"]["score"] <= 100
+    assert "n_alerts" in row["qualitat"]
+    # The verified-spotlight key carries the same payload.
+    assert body["artista_verificat"]["qualitat"]["score"] == row["qualitat"]["score"]
+
+
+def test_dashboard_skips_qualitat_on_unverified_row(db, artista, other):
+    """A non-verified UA shouldn't pay the qualitat compute cost
+    (and there's no card to render the pill on)."""
+    UserArtista.objects.create(
+        usuari=other,
+        artista=artista,
+        sollicitud_text="x" * 25,
+        verificat=False,
+        estat=UserArtista.ESTAT_PENDENT,
+    )
+    c = APIClient()
+    c.force_authenticate(user=other)
+    r = c.get("/api/v1/compte/dashboard/")
+    assert r.status_code == 200
+    rows = r.json()["gestio_list"]
+    assert len(rows) == 1
+    assert rows[0]["verificat"] is False
+    assert "qualitat" not in rows[0]
+
+
 # ───────────────────────── Auth perimeter ────────────────────────
 
 

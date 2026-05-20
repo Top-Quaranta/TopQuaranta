@@ -23,9 +23,16 @@ class _DMSendThrottle(ScopedRateThrottle):
     scope = "dm_send"
 
 
-def _serialize_user_artista(ua) -> dict:
+def _serialize_user_artista(ua, *, include_qualitat: bool = False) -> dict:
+    """Snapshot of one `UserArtista` row for the SPA's compte dashboard.
+
+    `include_qualitat=True` (Sprint Portal Artista D.1) attaches the
+    on-the-fly `score` + `n_alerts` of the artist's qualitat dashboard,
+    so `ArtistaCard` can render the completeness pill without a second
+    round-trip per UA. Cost is one extra query bundle per UA; the
+    dashboard view caps it to verificat=True rows only."""
     a = ua.artista
-    return {
+    out = {
         "pk": ua.pk,
         "estat": ua.estat,
         "verificat": ua.verificat,
@@ -38,6 +45,12 @@ def _serialize_user_artista(ua) -> dict:
             "nom": a.nom,
         },
     }
+    if include_qualitat:
+        from web.api.compte_views.gestor_artista import _compute_qualitat
+
+        q = _compute_qualitat(a)
+        out["qualitat"] = {"score": q["score"], "n_alerts": q["n_alerts"]}
+    return out
 
 
 def _serialize_proposta(p) -> dict:

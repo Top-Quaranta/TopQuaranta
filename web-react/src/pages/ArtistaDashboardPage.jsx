@@ -1006,9 +1006,14 @@ function CanconsTab({ slug }) {
         </p>
       )}
 
-      {/* ── Pendents de verificar ── */}
-      <section>
-        <header className="flex items-center gap-3 mb-2">
+      {/* ── Pendents de verificar ──
+          `<details open>`: el panell més actionable, visible per
+          defecte. La resta usen `<details>` (tancat). */}
+      <details open className="group">
+        <summary className="cursor-pointer list-none flex items-center gap-3 mb-2 select-none">
+          <span className="text-white/60 text-xs transition-transform group-open:rotate-90">
+            ▸
+          </span>
           <h3 className="text-sm font-semibold text-white">
             Pendents de verificar ({pendents.length})
           </h3>
@@ -1016,7 +1021,12 @@ function CanconsTab({ slug }) {
             <button
               type="button"
               disabled={pendents.length === 0 || cooldownActive}
-              onClick={() => setConfirmPing('pendents')}
+              onClick={e => {
+                // Evita que el click al botó pleg/desplegui el <details>.
+                e.stopPropagation()
+                e.preventDefault()
+                setConfirmPing('pendents')
+              }}
               title={
                 cooldownActive
                   ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
@@ -1027,7 +1037,7 @@ function CanconsTab({ slug }) {
               Demanar revisió
             </button>
           </div>
-        </header>
+        </summary>
         <Card>
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-tq-ink/60">
@@ -1062,11 +1072,14 @@ function CanconsTab({ slug }) {
             </tbody>
           </table>
         </Card>
-      </section>
+      </details>
 
       {/* ── Rebutjades recents ── */}
-      <section>
-        <header className="flex items-center gap-3 mb-2">
+      <details className="group">
+        <summary className="cursor-pointer list-none flex items-center gap-3 mb-2 select-none">
+          <span className="text-white/60 text-xs transition-transform group-open:rotate-90">
+            ▸
+          </span>
           <h3 className="text-sm font-semibold text-white">
             Rebutjades recents ({rebutjades.length})
           </h3>
@@ -1074,7 +1087,11 @@ function CanconsTab({ slug }) {
             <button
               type="button"
               disabled={rebutjades.length === 0 || cooldownActive}
-              onClick={() => setConfirmPing('rebutjades')}
+              onClick={e => {
+                e.stopPropagation()
+                e.preventDefault()
+                setConfirmPing('rebutjades')
+              }}
               title={
                 cooldownActive
                   ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
@@ -1085,7 +1102,7 @@ function CanconsTab({ slug }) {
               Demanar reconsideració
             </button>
           </div>
-        </header>
+        </summary>
         <Card>
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-tq-ink/60">
@@ -1122,7 +1139,7 @@ function CanconsTab({ slug }) {
             </tbody>
           </table>
         </Card>
-      </section>
+      </details>
 
       {/* ── Verificades (informatiu, sense acció) ──
           Native `<details>` per consistència amb altres collapsibles

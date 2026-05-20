@@ -233,3 +233,43 @@ def test_tq_health_emits_migration_status_row():
         f"tq-health output missing migration row.\n"
         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
+
+
+# ── Multi-tenant Caddy: import contract + conf.d isolation ──────────
+
+
+def test_caddyfile_imports_confd():
+    """The repo Caddyfile must include an `import` directive that
+    pulls every `.caddy` snippet under /etc/caddy/conf.d/. Without
+    this line, snippets owned by other projects on the shared host
+    (e.g. cercol-api) are silently ignored by Caddy."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    body = (repo_root / "deploy" / "Caddyfile").read_text()
+    assert "import /etc/caddy/conf.d/*.caddy" in body, (
+        "deploy/Caddyfile must contain the line "
+        "`import /etc/caddy/conf.d/*.caddy` so per-project snippets "
+        "are loaded. See docs/ops/infra.md."
+    )
+
+
+def test_sync_infra_does_not_touch_confd():
+    """tq-sync-infra is the sole owner of /etc/caddy/Caddyfile and
+    must never read, write, or delete anything under
+    /etc/caddy/conf.d/. Asserting on the literal substring is a
+    cheap belt-and-braces guard: any future refactor that touches
+    the conf.d directory will trip this test.
+
+    The ownership-contract header comment intentionally names the
+    directory to document the prohibition; strip comment lines
+    before the substring check so the docstring itself isn't what
+    fails the test."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    body = (repo_root / "bin" / "tq-sync-infra").read_text()
+    code = "\n".join(
+        line for line in body.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "conf.d" not in code, (
+        "bin/tq-sync-infra must not reference /etc/caddy/conf.d/ in "
+        "executable code. That directory is reserved for snippets "
+        "owned by other repos. See docs/ops/infra.md."
+    )

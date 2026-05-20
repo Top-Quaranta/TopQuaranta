@@ -1,4 +1,18 @@
 #!/bin/bash
+#
+# OWNERSHIP CONTRACT (multi-tenant infra on the shared Hetzner box)
+#
+# This script is the SOLE OWNER of `/etc/caddy/Caddyfile`. The repo
+# file `deploy/Caddyfile` is the source of truth; on every deploy we
+# diff and re-install the entire file.
+#
+# This script MUST NOT read, write, or delete anything under
+# `/etc/caddy/conf.d/`. That directory is reserved for per-project
+# snippets owned by other repos deployed on the same server (e.g.
+# `cercol-api.caddy`). The main Caddyfile loads them via an
+# `import /etc/caddy/conf.d/*.caddy` directive — independent
+# lifecycle, independent reload triggers.
+#
 # tq-sync-infra: synchronise infrastructure files from repo to system locations.
 #
 # Compares each `deploy/*` file against its installed copy under `/etc/`.

@@ -30,6 +30,11 @@ const ESTAT_TONE = {
   revisada: 'blue',
   resolta: 'green',
 }
+const ESTAT_LABEL = {
+  pendent: 'Pendent',
+  revisada: 'En revisió',
+  resolta: 'Resolta',
+}
 
 const MOTIU_TONE = {
   no_catala: 'default',
@@ -78,7 +83,10 @@ export default function StaffSollicitudRevisioDetailPage() {
     setBusy(true)
     try {
       await api.post(`/staff/sollicituds-revisio/${pk}/marcar-en-revisio/`)
-      setFeedback({ tone: 'success', msg: 'Marcat com en revisió.' })
+      setFeedback({
+        tone: 'success',
+        msg: 'Has començat a revisar aquesta sol·licitud.',
+      })
       reload()
     } catch (e) {
       setFeedback({
@@ -120,7 +128,10 @@ export default function StaffSollicitudRevisioDetailPage() {
       )
       setFeedback({
         tone: 'success',
-        msg: 'Rebutjada reconsiderada. El cron la re-ingerirà al pròxim tick.',
+        msg:
+          'Cançó tornada al pipeline. El cron la re-ingerirà al pròxim tick i ' +
+          "apareixerà al panell habitual de cançons pendents per a la teva " +
+          'aprovació o rebuig.',
       })
       setConfirmReb(null)
       reload()
@@ -162,7 +173,7 @@ export default function StaffSollicitudRevisioDetailPage() {
           <>
             {pendent && (
               <Btn onClick={handleMarcarEnRevisio} disabled={busy}>
-                Marcar com en revisió
+                Començar a revisar
               </Btn>
             )}
             {!resolta && (
@@ -174,7 +185,9 @@ export default function StaffSollicitudRevisioDetailPage() {
                 Marcar com resolta
               </Btn>
             )}
-            <Pill tone={ESTAT_TONE[data.estat] || 'ink'}>{data.estat}</Pill>
+            <Pill tone={ESTAT_TONE[data.estat] || 'ink'}>
+              {ESTAT_LABEL[data.estat] || data.estat}
+            </Pill>
           </>
         }
       />
@@ -321,10 +334,10 @@ export default function StaffSollicitudRevisioDetailPage() {
                       Snapshot només
                     </span>
                   ) : r.reconsiderada ? (
-                    <Pill tone="green">Reconsiderada</Pill>
+                    <Pill tone="green">Tornada al pipeline</Pill>
                   ) : (
                     <Btn onClick={() => setConfirmReb(r)} disabled={busy}>
-                      Reconsiderar
+                      Tornar al pipeline
                     </Btn>
                   )}
                 </Td>
@@ -337,16 +350,22 @@ export default function StaffSollicitudRevisioDetailPage() {
       {/* ── Modals ── */}
       <ConfirmDialog
         open={!!confirmReb}
-        title="Reconsiderar rebutjada"
+        title="Tornar la cançó al pipeline?"
         body={
           <>
-            Aquesta cançó tornarà a aparèixer al pipeline al pròxim cron
-            d'<code>obtenir_novetats</code>. El gestor no en serà
-            notificat explícitament; quan torni, podràs verificar-la al
-            admin habitual.
+            <p>
+              La cançó tornarà a aparèixer al staff queue al pròxim cron
+              d'<code>obtenir_novetats</code> (normalment diari). Allà
+              podràs aprovar-la o tornar-la a rebutjar al panell habitual
+              de cançons pendents.
+            </p>
+            <p className="mt-2 text-tq-ink/70">
+              Aquesta acció <strong>NOMÉS</strong> treu la cançó de la
+              blacklist; no l'aprova ni la verifica.
+            </p>
           </>
         }
-        confirmLabel="Reconsiderar"
+        confirmLabel="Tornar al pipeline"
         severity="warning"
         onConfirm={() => handleReconsiderar(confirmReb.historial_pk)}
         onCancel={() => setConfirmReb(null)}
@@ -357,10 +376,6 @@ export default function StaffSollicitudRevisioDetailPage() {
         title="Marcar com resolta"
         body={
           <div className="space-y-2">
-            <p>
-              El gestor rebrà un email amb el resum + la teva nota.
-              Aquesta acció no es pot desfer.
-            </p>
             <textarea
               value={nota}
               onChange={e => setNota(e.target.value)}
@@ -368,6 +383,13 @@ export default function StaffSollicitudRevisioDetailPage() {
               rows={4}
               className="w-full px-3 py-2 rounded-md text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-tq-yellow"
             />
+            <p className="text-xs text-tq-ink/70">
+              Resoldre tanca aquesta sol·licitud i envia un email al
+              gestor amb la nota que escriguis. <strong>NO modifica
+              l'estat de verificació de les cançons</strong>; les
+              aprovacions o rebuigs es fan al panell habitual de cançons
+              pendents.
+            </p>
           </div>
         }
         confirmLabel="Marcar com resolta"

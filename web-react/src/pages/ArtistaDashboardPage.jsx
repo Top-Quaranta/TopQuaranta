@@ -137,6 +137,11 @@ function IndicatorRow({ ind, onCta }) {
 }
 
 const ESTAT_TONE_SR = { pendent: 'warning', revisada: 'default', resolta: 'success' }
+const ESTAT_LABEL_SR = {
+  pendent: 'Pendent',
+  revisada: 'En revisió',
+  resolta: 'Resolta',
+}
 
 function SollicitudResumCard({ slug, refreshKey }) {
   const [data, setData] = useState(null)
@@ -161,7 +166,9 @@ function SollicitudResumCard({ slug, refreshKey }) {
         <div className="flex items-center gap-2 text-sm">
           <span className="font-semibold">Última sol·licitud de revisió:</span>
           <span>{fmt(u.created_at)}</span>
-          <Badge variant={ESTAT_TONE_SR[u.estat] || 'default'}>{u.estat}</Badge>
+          <Badge variant={ESTAT_TONE_SR[u.estat] || 'default'}>
+            {ESTAT_LABEL_SR[u.estat] || u.estat}
+          </Badge>
         </div>
         <p className="text-xs text-tq-ink/70">
           {u.n_pendents} pendent{u.n_pendents === 1 ? '' : 's'} +{' '}
@@ -1038,8 +1045,10 @@ function CanconsTab({ slug, onSollicitudCreated }) {
       setFeedback({
         tone: 'success',
         msg:
-          `S'ha enviat la sol·licitud (#${res.sollicitud_pk}). ` +
-          `T'arribarà un email del staff quan estigui resolta. ` +
+          `S'ha enviat la sol·licitud #${res.sollicitud_pk} al staff. ` +
+          'Et notificarem per email quan algú l\'hagi processada. ' +
+          'Mentrestant, no cal que facis res; el staff revisarà les ' +
+          'cançons i decidirà quines s\'aproven o es tornen al pipeline. ' +
           `Pròxima sol·licitud disponible el ${fmtDate(res.next_ping_at)}.`,
       })
       onSollicitudCreated?.()

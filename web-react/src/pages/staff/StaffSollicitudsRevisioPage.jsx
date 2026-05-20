@@ -30,6 +30,11 @@ const ESTAT_TONE = {
   revisada: 'blue',
   resolta: 'green',
 }
+const ESTAT_LABEL = {
+  pendent: 'Pendent',
+  revisada: 'En revisió',
+  resolta: 'Resolta',
+}
 
 function fmtRelative(iso) {
   if (!iso) return ''
@@ -140,7 +145,9 @@ export default function StaffSollicitudsRevisioPage() {
                   {fmtRelative(s.created_at)}
                 </Td>
                 <Td>
-                  <Pill tone={ESTAT_TONE[s.estat] || 'ink'}>{s.estat}</Pill>
+                  <Pill tone={ESTAT_TONE[s.estat] || 'ink'}>
+                    {ESTAT_LABEL[s.estat] || s.estat}
+                  </Pill>
                 </Td>
                 <Td className="text-right">
                   <Link to={`/staff/sollicituds-revisio/${s.pk}/`}>

@@ -41,6 +41,13 @@ def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
     deezer_id, same ISRC) or under a re-uploaded track (new ISRC,
     same deezer_id — rare but possible). If either dimension flags
     a prior rejection, we skip.
+
+    Sprint Workflow Sol·licituds (2026-05-20): rows with
+    `reconsiderada=True` are treated as if they no longer block — the
+    staff has explicitly re-opened the track via the workbench, and
+    we want it back in the pipeline. If the track returns and gets
+    rejected again, the new rejection lands as a fresh row with
+    `reconsiderada=False`, and the filter blocks it once more.
     """
     if not isrc and not deezer_id:
         return False
@@ -49,7 +56,11 @@ def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
         q |= Q(canco_isrc=isrc)
     if deezer_id:
         q |= Q(canco_deezer_id=deezer_id)
-    return HistorialRevisio.objects.filter(decisio="rebutjada").filter(q).exists()
+    return (
+        HistorialRevisio.objects.filter(decisio="rebutjada", reconsiderada=False)
+        .filter(q)
+        .exists()
+    )
 
 
 def _lookup_artista_by_deezer(deezer_id: int) -> Artista | None:

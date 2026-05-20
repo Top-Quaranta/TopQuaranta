@@ -20,6 +20,12 @@ def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
     rejected by staff? See the equivalent helper in `obtenir_novetats`
     for the full rationale — both ingest paths share the rejection-
     memory check.
+
+    Sprint Workflow Sol·licituds (2026-05-20): `reconsiderada=True`
+    rows are treated as if they no longer block. The flag is set
+    explicitly by staff from the workbench; the historical record
+    stays for audit. See `obtenir_novetats._previously_rejected` for
+    the full semantics.
     """
     if not isrc and not deezer_id:
         return False
@@ -28,7 +34,11 @@ def _previously_rejected(isrc: str, deezer_id: int | None) -> bool:
         q |= Q(canco_isrc=isrc)
     if deezer_id:
         q |= Q(canco_deezer_id=deezer_id)
-    return HistorialRevisio.objects.filter(decisio="rebutjada").filter(q).exists()
+    return (
+        HistorialRevisio.objects.filter(decisio="rebutjada", reconsiderada=False)
+        .filter(q)
+        .exists()
+    )
 
 
 RECORD_TYPE_MAP = {

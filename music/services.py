@@ -63,9 +63,16 @@ def _try_auto_unlink_homonym_deezer(
     if Canco.objects.filter(artista=artista, activa=True).exists():
         return False
     # Look at every rejection ever recorded for this artist's name.
+    # Sprint Workflow Sol·licituds (2026-05-20): rows the staff has
+    # reconsiderat via the workbench shouldn't count as evidence
+    # against the artist-Deezer link any more — if the canço is
+    # being re-opened the link should stay live until the canço is
+    # rejected again with a fresh row (reconsiderada=False by default).
     motius = list(
         HistorialRevisio.objects.filter(
-            artista_nom=artista.nom, decisio="rebutjada"
+            artista_nom=artista.nom,
+            decisio="rebutjada",
+            reconsiderada=False,
         ).values_list("motiu", flat=True)
     )
     if not motius:

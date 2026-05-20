@@ -493,3 +493,108 @@ class Comentari(models.Model):
 
     def __str__(self) -> str:
         return f"comentari #{self.pk} de {self.autor} a {self.publicacio_id}"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Sol·licituds de revisió (gestor → staff)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+class SolicitudRevisio(models.Model):
+    """Workflow row for a gestor's "please review these songs" request.
+
+    Replaces the previous DM-based ping (a free-form `Missatge` to the
+    Admin pseudouser) with a structured workflow that staff can triage
+    at /staff/sollicituds-revisio/. Each row pairs:
+
+      * The Cançons pending verification the gestor wants reviewed
+        (snapshotted as `pendents_ids: list[int]` of `Canco.pk`). A
+        Canco can be deleted between submission and resolution; the
+        workbench queries by id and tolerates misses.
+      * The HistorialRevisio rejections the gestor wants reconsidered
+        (snapshotted as `rebutjades_snapshot: list[dict]` with the
+        Deezer/ISRC/motiu denormalised so the staff sees the original
+        context even if HistorialRevisio rows are merged or trimmed).
+
+    Cooldown of 7 days lives on `Artista.ultim_ping_revisio_at` (one
+    artist → one rolling window), independent from this row's state.
+
+    Lifecycle:
+      pendent   → staff hasn't started yet (default on create).
+      revisada  → staff acknowledged + is working on it.
+      resolta   → staff finished; the gestor receives a notification
+                  email with the optional `nota_resolucio`.
+    """
+
+    ESTAT_PENDENT = "pendent"
+    ESTAT_REVISADA = "revisada"
+    ESTAT_RESOLTA = "resolta"
+    ESTAT_CHOICES = [
+        (ESTAT_PENDENT, "Pendent"),
+        (ESTAT_REVISADA, "En revisió"),
+        (ESTAT_RESOLTA, "Resolta"),
+    ]
+
+    gestor = models.ForeignKey(
+        Usuari,
+        on_delete=models.PROTECT,
+        related_name="sollicituds_revisio",
+        help_text="Gestor que va crear la sol·licitud.",
+    )
+    artista = models.ForeignKey(
+        "music.Artista",
+        on_delete=models.CASCADE,
+        related_name="sollicituds_revisio",
+    )
+    pendents_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Llista de Canco.pk pendents de verificar incloses.",
+    )
+    rebutjades_snapshot = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Llista de dicts amb el snapshot de cada rebutjada inclosa: "
+            "{historial_pk, deezer_id, isrc, nom, album_nom, motiu}."
+        ),
+    )
+    estat = models.CharField(
+        max_length=20,
+        choices=ESTAT_CHOICES,
+        default=ESTAT_PENDENT,
+        db_index=True,
+    )
+    nota_resolucio = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolt_at = models.DateTimeField(null=True, blank=True)
+    resolt_per = models.ForeignKey(
+        Usuari,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sollicituds_revisio_resoltes",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Sol·licitud de revisió"
+        verbose_name_plural = "Sol·licituds de revisió"
+        indexes = [
+            # Workbench lists by `estat` filter + recency. Composite
+            # serves both `estat=pendent` and the unfiltered `-created`
+            # via leading-column lookup.
+            models.Index(fields=["estat", "-created_at"]),
+            models.Index(fields=["artista", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Sol·licitud #{self.pk} {self.artista.nom} ({self.estat})"
+
+    @property
+    def n_pendents(self) -> int:
+        return len(self.pendents_ids or [])
+
+    @property
+    def n_rebutjades(self) -> int:
+        return len(self.rebutjades_snapshot or [])

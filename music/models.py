@@ -1186,6 +1186,20 @@ class HistorialRevisio(models.Model):
     motiu = models.CharField(max_length=50, choices=MOTIUS)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Sprint Workflow Sol·licituds (2026-05-20). When True, the
+    # ingestion cron may re-pick up the track this row rejected —
+    # i.e. it's been "reconsidered" by staff after a manager's
+    # SolicitudRevisio. Default False: every existing rejected row
+    # stays out of the pipeline unless explicitly re-opened.
+    reconsiderada = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Quan True, obtenir_novetats pot re-ingerir aquesta cançó "
+            "(sortida del filtre de rebuigs)."
+        ),
+    )
+
     class Meta:
         ordering = ["-created_at"]
         verbose_name = "Historial de revisió"

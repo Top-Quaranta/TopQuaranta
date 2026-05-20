@@ -66,10 +66,19 @@ def dashboard(request: Request) -> Response:
                 "is_staff": bool(user.is_staff),
             },
             "perfil": perfil_payload,
-            "gestio_list": [_serialize_user_artista(u) for u in gestio_list],
+            # Sprint Portal Artista D.1: gestio_list rows carry an
+            # on-the-fly `qualitat: {score, n_alerts}` block so the
+            # ArtistaCard pill renders without a per-row round-trip.
+            # We compute qualitat only for verified rows (the pill
+            # only shows on the verified card anyway, and unverified
+            # rows haven't earned the qualitat surface yet).
+            "gestio_list": [
+                _serialize_user_artista(u, include_qualitat=u.verificat)
+                for u in gestio_list
+            ],
             "propostes_list": [_serialize_proposta(p) for p in propostes_list],
             "artista_verificat": (
-                _serialize_user_artista(artista_verificat)
+                _serialize_user_artista(artista_verificat, include_qualitat=True)
                 if artista_verificat
                 else None
             ),

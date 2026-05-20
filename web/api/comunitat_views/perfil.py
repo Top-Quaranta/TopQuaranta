@@ -193,10 +193,30 @@ _MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 # Per-user quota on `publicacions/` folder to keep disk bounded.
 _MAX_PER_USER_BYTES = 20 * 1024 * 1024
 
-_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
-
-# Max width after resize. Taller images keep their aspect ratio.
-_MAX_WIDTH = {"publicacio": 1600, "perfil": 600}
+# Per-kind config: (subdir under MEDIA_ROOT, max width, square_crop,
+# output_format). Profile + publication keep JPEG for backwards-compat
+# (existing stored URLs end in `.jpg`); the new `artista` kind ships
+# WebP, square-cropped at 800×800 per the Portal Artista sprint.
+_KIND_CONFIG = {
+    "publicacio": {
+        "subdir": "publicacions",
+        "max_width": 1600,
+        "square_crop": False,
+        "output_format": "JPEG",
+    },
+    "perfil": {
+        "subdir": "perfil",
+        "max_width": 600,
+        "square_crop": True,
+        "output_format": "JPEG",
+    },
+    "artista": {
+        "subdir": "artista",
+        "max_width": 800,
+        "square_crop": True,
+        "output_format": "WEBP",
+    },
+}
 
 
 @api_view(["POST"])
@@ -207,44 +227,35 @@ def upload_imatge(request: Request) -> Response:
     Form fields:
       * `fitxer` (required) — the image file.
       * `kind`   (optional, default "publicacio") — one of
-                 {"publicacio", "perfil"}; picks target dir and max width.
+                 {"publicacio", "perfil", "artista"}; picks target dir,
+                 max width and output format.
+      * `artista_pk` (required iff kind="artista") — int; the manager
+        check resolves the artist and verifies the request user is a
+        verified gestor.
 
     Returns `{"url": "/media/..."}` suitable for `imatge_url` fields or
     markdown `![](url)` inserts.
     """
-    import uuid
     from pathlib import Path
 
     from django.conf import settings
-    from PIL import Image, UnidentifiedImageError
+
+    from web.api._image_pipeline import (
+        ImagePipelineError,
+        process_and_save_image,
+    )
 
     f = request.FILES.get("fitxer")
-    if not f:
-        return Response({"error": "Falta el fitxer."}, status=400)
-    if f.size > _MAX_UPLOAD_BYTES:
-        return Response(
-            {"error": f"Màxim {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB per imatge."},
-            status=400,
-        )
-    # NB: `f.content_type` is the browser-supplied header; trivially
-    # spoofable. We use it as a fast rejection but the authoritative
-    # check is Pillow's `img.format` after load (below). May-2026
-    # audit fix.
-    if f.content_type not in _ALLOWED_CONTENT_TYPES:
-        return Response(
-            {"error": "Tipus no permès. Només JPEG, PNG o WebP."}, status=400
-        )
-
     kind = request.POST.get("kind", "publicacio")
-    if kind not in _MAX_WIDTH:
+    if kind not in _KIND_CONFIG:
         return Response({"error": "kind invàlid."}, status=400)
+    cfg = _KIND_CONFIG[kind]
 
-    # Per-user disk quota for publicacions (profile photos overwrite so
-    # they don't accumulate).
+    # ── Resolve destination dir + per-kind permission check ───────────
     if kind == "publicacio":
-        user_dir = Path(settings.MEDIA_ROOT) / "publicacions" / str(request.user.pk)
-        if user_dir.exists():
-            used = sum(p.stat().st_size for p in user_dir.rglob("*") if p.is_file())
+        dest_dir = Path(settings.MEDIA_ROOT) / cfg["subdir"] / str(request.user.pk)
+        if dest_dir.exists() and f is not None:
+            used = sum(p.stat().st_size for p in dest_dir.rglob("*") if p.is_file())
             if used + f.size > _MAX_PER_USER_BYTES:
                 return Response(
                     {
@@ -256,56 +267,33 @@ def upload_imatge(request: Request) -> Response:
                     },
                     status=400,
                 )
-    else:
-        user_dir = Path(settings.MEDIA_ROOT) / "perfil" / str(request.user.pk)
-    user_dir.mkdir(parents=True, exist_ok=True)
+    elif kind == "perfil":
+        dest_dir = Path(settings.MEDIA_ROOT) / cfg["subdir"] / str(request.user.pk)
+    else:  # artista
+        try:
+            artista_pk = int(request.POST.get("artista_pk") or 0)
+        except (TypeError, ValueError):
+            return Response({"error": "artista_pk invàlid."}, status=400)
+        if not artista_pk:
+            return Response({"error": "Falta artista_pk."}, status=400)
+        from web.api.compte_views.propostes import _gestor_check
+
+        result = _gestor_check(request, artista_pk)
+        if isinstance(result, Response):
+            return result
+        dest_dir = Path(settings.MEDIA_ROOT) / cfg["subdir"] / str(artista_pk)
 
     try:
-        img = Image.open(f)
-        img.load()  # force read so exceptions surface here, not later
-    except (UnidentifiedImageError, OSError):
-        return Response({"error": "El fitxer no és una imatge vàlida."}, status=400)
-
-    # Authoritative format check via Pillow's auto-detection.
-    # Defends against polyglot uploads where the client lies in
-    # `content_type` but the actual binary is e.g. an SVG with
-    # JS or a weaponised file disguised as an image.
-    if img.format not in {"JPEG", "PNG", "WEBP"}:
-        return Response(
-            {"error": f"Format detectat invàlid: {img.format}."}, status=400
+        filename = process_and_save_image(
+            f,
+            dest_dir=dest_dir,
+            max_width=cfg["max_width"],
+            square_crop=cfg["square_crop"],
+            output_format=cfg["output_format"],
         )
+    except ImagePipelineError as exc:
+        return Response({"error": exc.message}, status=exc.status_code)
 
-    # Normalize: convert to RGB for JPEG, strip EXIF, resize if wider
-    # than the target. Square-crop profile photos to a tidy 1:1.
-    max_w = _MAX_WIDTH[kind]
-    if kind == "perfil":
-        # Square-center-crop, then resize.
-        s = min(img.width, img.height)
-        left = (img.width - s) // 2
-        top = (img.height - s) // 2
-        img = img.crop((left, top, left + s, top + s))
-        if img.width > max_w:
-            img = img.resize((max_w, max_w), Image.Resampling.LANCZOS)
-    elif img.width > max_w:
-        ratio = max_w / img.width
-        img = img.resize((max_w, int(img.height * ratio)), Image.Resampling.LANCZOS)
-
-    # Always save as JPEG (smaller than PNG for photos, no transparency
-    # needed for either use case).
-    if img.mode in ("RGBA", "P"):
-        bg = Image.new("RGB", img.size, (255, 255, 255))
-        bg.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
-        img = bg
-    elif img.mode != "RGB":
-        img = img.convert("RGB")
-
-    filename = f"{uuid.uuid4().hex}.jpg"
-    dest = user_dir / filename
-    img.save(dest, format="JPEG", quality=85, optimize=True)
-
-    # Build a canonical absolute URL so it satisfies URLField validators
-    # (HTTP_ONLY_URL) when stored on PerfilUsuari.imatge_url. Caddy
-    # serves /media/* directly off disk.
-    rel = dest.relative_to(Path(settings.MEDIA_ROOT)).as_posix()
+    rel = (dest_dir / filename).relative_to(Path(settings.MEDIA_ROOT)).as_posix()
     url = request.build_absolute_uri(f"{settings.MEDIA_URL}{rel}")
     return Response({"url": url})

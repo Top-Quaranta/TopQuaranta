@@ -1,9 +1,16 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import models
 from django.utils.text import slugify
 
 from music.constants import SOCIAL_LINK_FIELDS as _SOCIAL_LINK_FIELDS
+
+# Same shape as `comptes.models.HTTP_ONLY_URL` — defined locally to
+# avoid a music→comptes cross-app import (`comptes` already depends
+# on `music` via the UserArtista FK). Used by the `imatge_url`
+# upload field added in Sprint Portal Artista (2026-05-19).
+HTTP_ONLY_URL = URLValidator(schemes=["http", "https"])
 
 
 class Territori(models.Model):
@@ -195,6 +202,39 @@ class Artista(models.Model):
     bio = models.TextField(
         blank=True,
         help_text="Short bio written by the artist's verified manager.",
+    )
+
+    # Manager-uploaded artist hero image (Sprint Portal Artista,
+    # 2026-05-19). Stored as a URL pointing to MEDIA_ROOT under
+    # `media/artista/<artista_pk>/<uuid>.webp` — the pipeline lives
+    # in `web/api/_image_pipeline.py`. URLField (not ImageField)
+    # mirrors the `PerfilUsuari.imatge_url` pattern: Caddy serves
+    # `/media/*` directly without Django, so storing the absolute
+    # URL keeps the model agnostic to the storage backend.
+    imatge_url = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        validators=[HTTP_ONLY_URL],
+        help_text=(
+            "Imatge custom de l'artista. Si està buida, s'usa la "
+            "del Last.fm o caratula d'album."
+        ),
+    )
+
+    # Cooldown anchor for the gestor's "demanar revisió de cançons"
+    # action (Sprint Portal Artista, 2026-05-19). Updated by the
+    # `cancons-pendents/ping-staff/` endpoint when the gestor sends
+    # a moderation ping to staff via DM. NULL = no ping ever sent;
+    # endpoint refuses if (now - x) < timedelta(days=7).
+    ultim_ping_revisio_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Timestamp de l'últim ping de revisió de cançons enviat "
+            "pel gestor. Usat per al cooldown de 7 dies."
+        ),
     )
 
     # Social links
@@ -584,6 +624,22 @@ class ArtistaLastfmAlias(models.Model):
         ),
     )
 
+    # Sprint Portal Artista (2026-05-19): the artist's `lastfm_nom`
+    # used to be the single source of truth for the canonical
+    # Last.fm name. The new convention: one of the artist's aliases
+    # is marked `prioritari=True` and that row drives the canonical
+    # name (mirrored to `Artista.lastfm_nom` via a post_save signal
+    # on this model). Other confirmed aliases continue to contribute
+    # to signal aggregation in `obtenir_senyal`.
+    prioritari = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Un sol prioritari per artista. Determina quin nom és "
+            "el principal als CRUD i el mirror a Artista.lastfm_nom."
+        ),
+    )
+
     class Meta:
         verbose_name = "Artista Last.fm alias"
         verbose_name_plural = "Artista Last.fm aliases"
@@ -591,6 +647,16 @@ class ArtistaLastfmAlias(models.Model):
             models.UniqueConstraint(
                 fields=["artista", "nom"],
                 name="uniq_artista_lastfm_alias_nom",
+            ),
+            # At most one prioritari row per artista. Conditional
+            # constraint so rows with prioritari=False can coexist
+            # freely. PostgreSQL supports partial UNIQUE indexes;
+            # Django translates the `condition` into the right CREATE
+            # UNIQUE INDEX ... WHERE prioritari SQL.
+            models.UniqueConstraint(
+                fields=["artista"],
+                condition=models.Q(prioritari=True),
+                name="uniq_artista_lastfm_prioritari",
             ),
         ]
 

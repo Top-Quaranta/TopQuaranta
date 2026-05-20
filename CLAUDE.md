@@ -124,8 +124,17 @@ the SPA palette but has no dependency on mm-design.
 - **Server:** Hetzner CX22 (`188.245.60.20`), Ubuntu 22.04.
 - **Runtime:** Python 3.12, Django 6.0.4, PostgreSQL 14. Node 22 + Vite 8
   for the SPA.
-- **Reverse proxy:** Caddy (auto TLS). Config: `/etc/caddy/Caddyfile`
-  (source of truth: `deploy/Caddyfile`).
+- **Reverse proxy:** Caddy (auto TLS). The shared box hosts TopQuaranta
+  alongside other projects (e.g. cercol-api), so Caddy's config is
+  multi-tenant:
+  - `/etc/caddy/Caddyfile` — owned by TopQuaranta. Source of truth:
+    `deploy/Caddyfile`. Synced by `tq-sync-infra`. The file ends with
+    `import /etc/caddy/conf.d/*.caddy`, which pulls in per-project
+    snippets.
+  - `/etc/caddy/conf.d/*.caddy` — snippets owned by other repos
+    deployed on the same server. TopQuaranta's tooling must never
+    touch this directory; each project ships and reloads its own
+    snippet independently. See `docs/ops/infra.md`.
 - **Process:** `topquaranta-web.service` → gunicorn :8083, settings
   `topquaranta.settings.web_server`, user `topquaranta`. `ExecReload=HUP`
   so `systemctl reload topquaranta-web` swaps workers gracefully on deploy
@@ -353,7 +362,10 @@ reality.
    `/etc/systemd/system/topquaranta-web.service`. It validates
    `Caddyfile` with `caddy validate` before installing, and only
    reloads caddy / runs `systemctl daemon-reload` when the file
-   actually changed.
+   actually changed. `tq-sync-infra` is the sole owner of
+   `/etc/caddy/Caddyfile`. It must never read, write, or delete
+   anything under `/etc/caddy/conf.d/`. That directory is reserved
+   for snippets owned by other repos deployed on the same server.
 
 **Never** SSH in to commit-and-deploy by hand. The 2026-05-07
 `Album.label` incident (gunicorn `--reload` picked up the new code

@@ -216,3 +216,8 @@ autoconfig.topquaranta.cat {
 	file_server
 	header Content-Type "application/xml; charset=utf-8"
 }
+
+# Per-project Caddy snippets owned by other repos installed at
+# /etc/caddy/conf.d/. Each project ships and reloads its own
+# snippet independently. tq-sync-infra MUST NOT touch this dir.
+import /etc/caddy/conf.d/*.caddy

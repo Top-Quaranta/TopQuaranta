@@ -40,6 +40,23 @@ jobs:
       - name: Run pytest
         run: python -m pytest -q
 
+  caddyfile:
+    # Multi-tenant safety net: catch syntax regressions in
+    # deploy/Caddyfile before they reach the server, where a bad
+    # config would either fail tq-sync-infra (best case) or be
+    # accepted but leave Caddy refusing to reload (worst case).
+    # The `import /etc/caddy/conf.d/*.caddy` directive expands to
+    # an empty set inside the container — caddy validate tolerates
+    # zero matches, so we don't need to shim any cercol-api snippet
+    # to make this pass.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Caddyfile
+        run: |
+          docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2 caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
+
   lint:
     runs-on: ubuntu-latest
     steps:

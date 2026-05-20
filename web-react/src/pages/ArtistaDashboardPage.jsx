@@ -1124,9 +1124,16 @@ function CanconsTab({ slug }) {
         </Card>
       </section>
 
-      {/* ── Verificades (informatiu, sense acció) ── */}
-      <section>
-        <header className="flex items-center gap-3 mb-2">
+      {/* ── Verificades (informatiu, sense acció) ──
+          Native `<details>` per consistència amb altres collapsibles
+          del SPA (TopBreakdownPanel, LastfmPanel, StaffSocialPage,
+          ArtistaEditPage). Tancat per defecte: és la secció més
+          llarga i menys actionable. */}
+      <details className="group">
+        <summary className="cursor-pointer list-none flex items-center gap-3 mb-2 select-none">
+          <span className="text-white/60 text-xs transition-transform group-open:rotate-90">
+            ▸
+          </span>
           <h3 className="text-sm font-semibold text-white">
             Verificades ({nVerificadesTotal})
           </h3>
@@ -1135,7 +1142,7 @@ function CanconsTab({ slug }) {
               · mostrant les {verificades.length} més recents
             </span>
           )}
-        </header>
+        </summary>
         <Card>
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-tq-ink/60">
@@ -1170,7 +1177,7 @@ function CanconsTab({ slug }) {
             </tbody>
           </table>
         </Card>
-      </section>
+      </details>
 
       <ConfirmDialog
         open={!!confirmPing}

@@ -760,6 +760,18 @@ def cancons_pendents(request: Request, slug: str) -> Response:
         .order_by("-data_llancament", "nom")
     )
     rebutjades = _query_cancons_rebutjades(artista)
+    # Verified tracks (`verificada=True, activa=True`). Same shape as
+    # pendents so the SPA can reuse the row renderer. Capped at 50
+    # recents (desc by `data_llancament`) — established artists can
+    # have hundreds and the panel is informational, not actionable.
+    verificades = (
+        Canco.objects.filter(artista=artista, verificada=True, activa=True)
+        .select_related("album")
+        .order_by("-data_llancament", "nom")[:50]
+    )
+    n_verificades_total = Canco.objects.filter(
+        artista=artista, verificada=True, activa=True
+    ).count()
 
     next_ping = None
     if artista.ultim_ping_revisio_at:
@@ -771,6 +783,8 @@ def cancons_pendents(request: Request, slug: str) -> Response:
             "results": [_serialize_canco_pendent(c) for c in pendents],
             "pendents": [_serialize_canco_pendent(c) for c in pendents],
             "rebutjades": [_serialize_canco_rebutjada(h) for h in rebutjades],
+            "verificades": [_serialize_canco_pendent(c) for c in verificades],
+            "n_verificades_total": n_verificades_total,
             "cooldown_until": next_ping,
         }
     )

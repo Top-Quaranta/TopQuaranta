@@ -102,10 +102,48 @@ function useArtista(slug) {
 // ───────────────────────── Tab: Estat ────────────────────────────
 
 
+function IndicatorRow({ ind, onCta }) {
+  return (
+    <Card>
+      <div className="p-4 flex items-start gap-3">
+        <Badge variant={SEVERITY_TONE[ind.severity] || 'default'}>
+          {ind.severity === 'success'
+            ? '✓'
+            : ind.severity === 'warning'
+            ? '!'
+            : '✕'}
+        </Badge>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm">{ind.label}</p>
+          <p className="text-sm text-tq-ink/70 mt-0.5">{ind.message}</p>
+          {INDICATOR_HELP[ind.key] && (
+            <p className="text-xs text-tq-ink/50 mt-1 italic">
+              {INDICATOR_HELP[ind.key]}
+            </p>
+          )}
+          {ind.cta && (
+            <button
+              type="button"
+              onClick={() => onCta(ind.cta.href)}
+              className="text-xs font-semibold text-tq-yellow-deep mt-2 hover:underline"
+            >
+              {ind.cta.label} →
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 function EstatTab({ slug, onSwitchTab }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Local memory only (per spec) — collapsed by default for the
+  // success block. Resets on tab unmount, which is fine: the user's
+  // attention should land on the alerts each time they open the tab.
+  const [showSuccess, setShowSuccess] = useState(false)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -129,6 +167,12 @@ function EstatTab({ slug, onSwitchTab }) {
   if (!data) return null
 
   const { score, n_alerts, indicators } = data
+  const success = indicators.filter(i => i.severity === 'success')
+  const issues = indicators.filter(i => i.severity !== 'success')
+  // Show the collapsible "N indicadors superats" footer only when
+  // there's a mix of states — pure-green or pure-red lists render
+  // everything inline.
+  const showCollapsible = success.length > 0 && issues.length > 0
 
   function handleCta(href) {
     if (!href) return
@@ -158,41 +202,39 @@ function EstatTab({ slug, onSwitchTab }) {
         </div>
       </Card>
 
+      {/* Default view: only non-success rows (or the full list when
+          everything's either green or red). */}
       <ul className="space-y-2">
-        {indicators.map(ind => (
+        {(showCollapsible ? issues : indicators).map(ind => (
           <li key={ind.key}>
-            <Card>
-              <div className="p-4 flex items-start gap-3">
-                <Badge variant={SEVERITY_TONE[ind.severity] || 'default'}>
-                  {ind.severity === 'success'
-                    ? '✓'
-                    : ind.severity === 'warning'
-                    ? '!'
-                    : '✕'}
-                </Badge>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{ind.label}</p>
-                  <p className="text-sm text-tq-ink/70 mt-0.5">{ind.message}</p>
-                  {INDICATOR_HELP[ind.key] && (
-                    <p className="text-xs text-tq-ink/50 mt-1 italic">
-                      {INDICATOR_HELP[ind.key]}
-                    </p>
-                  )}
-                  {ind.cta && (
-                    <button
-                      type="button"
-                      onClick={() => handleCta(ind.cta.href)}
-                      className="text-xs font-semibold text-tq-yellow-deep mt-2 hover:underline"
-                    >
-                      {ind.cta.label} →
-                    </button>
-                  )}
-                </div>
-              </div>
-            </Card>
+            <IndicatorRow ind={ind} onCta={handleCta} />
           </li>
         ))}
       </ul>
+
+      {showCollapsible && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowSuccess(v => !v)}
+            className="text-xs font-semibold text-white/70 hover:text-white"
+          >
+            {showSuccess ? '▾' : '▸'} {success.length} indicador
+            {success.length === 1 ? '' : 's'} superat
+            {success.length === 1 ? '' : 's'}{' '}
+            {showSuccess ? '(amaga)' : '(mostra)'}
+          </button>
+          {showSuccess && (
+            <ul className="space-y-2 mt-3">
+              {success.map(ind => (
+                <li key={ind.key}>
+                  <IndicatorRow ind={ind} onCta={handleCta} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -836,11 +878,33 @@ function EditarTab({ slug, data, onReload }) {
 // ───────────────────────── Tab: Cançons ──────────────────────────
 
 
+// Motiu → Badge tone. Maps the four reject reasons documented in
+// `HistorialRevisio.MOTIUS`. `no_catala` is the most common (~languaje
+// drift) and reads as neutral; `album_incorrecte` and `artista_
+// incorrecte` flag profile collisions and warrant a warning; `no_musica`
+// is rare and is shown danger because it usually means a podcast that
+// slipped through ingestion. Keep this table in sync with backend.
+const MOTIU_TONE = {
+  no_catala: 'default',
+  album_incorrecte: 'warning',
+  artista_incorrecte: 'warning',
+  no_musica: 'danger',
+}
+const MOTIU_LABEL = {
+  no_catala: 'No és en català',
+  album_incorrecte: 'Àlbum incorrecte',
+  artista_incorrecte: 'Artista incorrecte',
+  no_musica: 'No és música',
+}
+
 function CanconsTab({ slug }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [confirmPing, setConfirmPing] = useState(false)
+  // `confirmPing` carries the *kind* the user is about to ping for —
+  // 'pendents' or 'rebutjades' — so the modal body and the POST body
+  // can both reflect the right section.
+  const [confirmPing, setConfirmPing] = useState(null)
   const [feedback, setFeedback] = useState(null)
 
   function reload() {
@@ -861,6 +925,11 @@ function CanconsTab({ slug }) {
   if (error) return <Alert tone="danger">{error}</Alert>
   if (!data) return null
 
+  // Prefer the new `pendents` array; fall back to `results` for
+  // backwards-compat during the rollout window.
+  const pendents = data.pendents || data.results || []
+  const rebutjades = data.rebutjades || []
+
   const cooldownActive = !!(
     data.cooldown_until && new Date(data.cooldown_until) > new Date()
   )
@@ -872,15 +941,27 @@ function CanconsTab({ slug }) {
     ).padStart(2, '0')}/${d.getFullYear()}`
   }
 
-  async function handlePing() {
+  async function handlePing(kind) {
     setFeedback(null)
+    const body =
+      kind === 'rebutjades'
+        ? {
+            kind: 'rebutjades',
+            include_rebutjada_ids: rebutjades.map(r => r.pk),
+          }
+        : {}
     try {
       const res = await api.post(
-        `/compte/artista/${slug}/cancons-pendents/ping-staff/`
+        `/compte/artista/${slug}/cancons-pendents/ping-staff/`,
+        body
       )
       setFeedback({
         tone: 'success',
-        msg: `S'ha enviat la sol·licitud (${res.n_cancons} cançons). Pròxim ping disponible el ${fmtDate(res.next_ping_at)}.`,
+        msg:
+          `S'ha enviat la sol·licitud (${res.n_cancons} cançó/ns: ` +
+          `${res.n_pendents} pendent${res.n_pendents === 1 ? '' : 's'}, ` +
+          `${res.n_rebutjades} rebutjada${res.n_rebutjades === 1 ? '' : 's'}` +
+          `). Pròxim ping disponible el ${fmtDate(res.next_ping_at)}.`,
       })
       reload()
     } catch (ex) {
@@ -889,91 +970,181 @@ function CanconsTab({ slug }) {
         msg: ex.payload?.error || ex.message || 'Error',
       })
     } finally {
-      setConfirmPing(false)
+      setConfirmPing(null)
     }
   }
 
-  return (
-    <div className="space-y-4 mt-6">
-      <Card>
-        <div className="p-4 flex items-center gap-4">
-          <div className="flex-1">
-            <p className="text-sm font-semibold">
-              {data.results.length} cançó/ns no verificades.
-            </p>
-            {cooldownActive && (
-              <p className="text-xs text-tq-ink/60 mt-1">
-                Pròxim ping disponible el {fmtDate(data.cooldown_until)}.
-              </p>
-            )}
+  // Empty-state when neither list has rows.
+  if (pendents.length === 0 && rebutjades.length === 0) {
+    return (
+      <div className="space-y-4 mt-6">
+        {feedback && <Alert tone={feedback.tone}>{feedback.msg}</Alert>}
+        <Card>
+          <div className="p-6 text-center text-tq-ink/70">
+            Cap cançó pendent ni rebutjada. Tot al dia 🎉
           </div>
-          <button
-            type="button"
-            disabled={data.results.length === 0 || cooldownActive}
-            onClick={() => setConfirmPing(true)}
-            title={
-              cooldownActive
-                ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
-                : ''
-            }
-            className="px-4 py-2 bg-tq-yellow text-tq-ink rounded-md text-sm font-semibold disabled:opacity-50"
-          >
-            Demanar revisió de totes
-          </button>
-        </div>
-      </Card>
+        </Card>
+      </div>
+    )
+  }
 
+  return (
+    <div className="space-y-6 mt-6">
       {feedback && <Alert tone={feedback.tone}>{feedback.msg}</Alert>}
 
-      <Card>
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs text-tq-ink/60">
-            <tr>
-              <th className="p-3">Cançó</th>
-              <th className="p-3">Àlbum</th>
-              <th className="p-3">Data</th>
-              <th className="p-3">Estat</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.results.length === 0 ? (
+      {cooldownActive && (
+        <p className="text-xs text-white/70">
+          Cooldown actiu fins el {fmtDate(data.cooldown_until)} — només pots
+          demanar revisió un cop cada 7&nbsp;dies (val tant per a pendents
+          com per a rebutjades).
+        </p>
+      )}
+
+      {/* ── Pendents de verificar ── */}
+      <section>
+        <header className="flex items-center gap-3 mb-2">
+          <h3 className="text-sm font-semibold text-white">
+            Pendents de verificar ({pendents.length})
+          </h3>
+          <div className="ml-auto">
+            <button
+              type="button"
+              disabled={pendents.length === 0 || cooldownActive}
+              onClick={() => setConfirmPing('pendents')}
+              title={
+                cooldownActive
+                  ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
+                  : ''
+              }
+              className="px-3 py-1.5 bg-tq-yellow text-tq-ink rounded-md text-xs font-semibold disabled:opacity-50"
+            >
+              Demanar revisió
+            </button>
+          </div>
+        </header>
+        <Card>
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-tq-ink/60">
               <tr>
-                <td colSpan={4} className="p-6 text-center text-tq-ink/60">
-                  Cap cançó pendent. Totes verificades 🎉
-                </td>
+                <th className="p-3">Cançó</th>
+                <th className="p-3">Àlbum</th>
+                <th className="p-3">Data</th>
+                <th className="p-3">Estat</th>
               </tr>
-            ) : (
-              data.results.map(c => (
-                <tr key={c.pk} className="border-t border-gray-100">
-                  <td className="p-3">{c.nom}</td>
-                  <td className="p-3 text-tq-ink/70">{c.album_nom || '—'}</td>
-                  <td className="p-3 text-tq-ink/70">
-                    {fmtDate(c.data_llancament)}
-                  </td>
-                  <td className="p-3">
-                    <Badge variant="warning">no verificada</Badge>
+            </thead>
+            <tbody>
+              {pendents.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-tq-ink/60">
+                    Cap cançó pendent.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </Card>
+              ) : (
+                pendents.map(c => (
+                  <tr key={c.pk} className="border-t border-gray-100">
+                    <td className="p-3">{c.nom}</td>
+                    <td className="p-3 text-tq-ink/70">{c.album_nom || '—'}</td>
+                    <td className="p-3 text-tq-ink/70">
+                      {fmtDate(c.data_llancament)}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant="warning">no verificada</Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </Card>
+      </section>
+
+      {/* ── Rebutjades recents ── */}
+      <section>
+        <header className="flex items-center gap-3 mb-2">
+          <h3 className="text-sm font-semibold text-white">
+            Rebutjades recents ({rebutjades.length})
+          </h3>
+          <div className="ml-auto">
+            <button
+              type="button"
+              disabled={rebutjades.length === 0 || cooldownActive}
+              onClick={() => setConfirmPing('rebutjades')}
+              title={
+                cooldownActive
+                  ? `Pròxim ping disponible el ${fmtDate(data.cooldown_until)}`
+                  : ''
+              }
+              className="px-3 py-1.5 bg-tq-yellow text-tq-ink rounded-md text-xs font-semibold disabled:opacity-50"
+            >
+              Demanar reconsideració
+            </button>
+          </div>
+        </header>
+        <Card>
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-tq-ink/60">
+              <tr>
+                <th className="p-3">Cançó</th>
+                <th className="p-3">Àlbum</th>
+                <th className="p-3">Data rebuig</th>
+                <th className="p-3">Motiu</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rebutjades.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-tq-ink/60">
+                    Cap rebuig recent.
+                  </td>
+                </tr>
+              ) : (
+                rebutjades.map(r => (
+                  <tr key={r.pk} className="border-t border-gray-100">
+                    <td className="p-3">{r.canco_nom}</td>
+                    <td className="p-3 text-tq-ink/70">{r.album_nom || '—'}</td>
+                    <td className="p-3 text-tq-ink/70">
+                      {fmtDate(r.data_rebuig)}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={MOTIU_TONE[r.motiu] || 'default'}>
+                        {MOTIU_LABEL[r.motiu] || r.motiu}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </Card>
+      </section>
 
       <ConfirmDialog
-        open={confirmPing}
-        title="Demanar revisió a staff"
+        open={!!confirmPing}
+        title={
+          confirmPing === 'rebutjades'
+            ? 'Demanar reconsideració de rebutjades'
+            : 'Demanar revisió a staff'
+        }
         body={
-          <>
-            S'enviarà un missatge intern a Staff amb la llista de les{' '}
-            <strong>{data.results.length}</strong> cançons pendents.
-            Cooldown: 7&nbsp;dies entre pings.
-          </>
+          confirmPing === 'rebutjades' ? (
+            <>
+              S'enviarà a Staff la llista de les{' '}
+              <strong>{rebutjades.length}</strong> cançons rebutjades amb el
+              motiu original de cadascuna perquè puguin reconsiderar-les.
+              Cooldown: 7&nbsp;dies entre pings.
+            </>
+          ) : (
+            <>
+              S'enviarà un missatge intern a Staff amb la llista de les{' '}
+              <strong>{pendents.length}</strong> cançons pendents.
+              Cooldown: 7&nbsp;dies entre pings.
+            </>
+          )
         }
         confirmLabel="Enviar"
         severity="warning"
-        onConfirm={handlePing}
-        onCancel={() => setConfirmPing(false)}
+        onConfirm={() => handlePing(confirmPing)}
+        onCancel={() => setConfirmPing(null)}
       />
     </div>
   )
@@ -1009,7 +1180,7 @@ export default function ArtistaDashboardPage() {
 
   if (loading) {
     return (
-      <section className="max-w-3xl mx-auto py-10 space-y-3">
+      <section className="max-w-6xl mx-auto py-10 space-y-3">
         <div className="h-8 bg-white/10 rounded w-1/2 animate-pulse" />
         <div className="h-48 bg-white/10 rounded animate-pulse" />
       </section>
@@ -1018,7 +1189,7 @@ export default function ArtistaDashboardPage() {
 
   if (error?.status === 403) {
     return (
-      <section className="max-w-3xl mx-auto py-10 text-white">
+      <section className="max-w-6xl mx-auto py-10 text-white">
         <Alert tone="danger">
           No ets gestor verificat d'aquest artista. Demana la gestió des
           de la seua pàgina pública o contacta amb staff.
@@ -1033,7 +1204,7 @@ export default function ArtistaDashboardPage() {
   }
   if (error) {
     return (
-      <section className="max-w-3xl mx-auto py-10 text-white">
+      <section className="max-w-6xl mx-auto py-10 text-white">
         <Alert tone="danger">{error.message || 'Error'}</Alert>
       </section>
     )
@@ -1041,7 +1212,7 @@ export default function ArtistaDashboardPage() {
   if (!data) return null
 
   return (
-    <section className="max-w-4xl mx-auto py-8 text-white">
+    <section className="max-w-6xl mx-auto py-8 text-white">
       <header className="mb-4">
         <p className="text-[10px] uppercase tracking-widest text-white/60">
           <Link to="/compte" className="hover:text-white">

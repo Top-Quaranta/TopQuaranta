@@ -27,6 +27,7 @@ from music.models import (
     ArtistaLastfmAlias,
     ArtistaLocalitat,
     Canco,
+    HistorialRevisio,
     Municipi,
     StaffAuditLog,
     Territori,
@@ -379,6 +380,115 @@ def test_ping_staff_after_cooldown_passes(
     artista.save(update_fields=["ultim_ping_revisio_at"])
     r = client_g.post(_url(artista.slug, "cancons-pendents/ping-staff/"))
     assert r.status_code == 200
+
+
+# ───────────────────────── Quick fixes: rebutjades + ping mix ────
+
+
+@pytest.fixture
+def rebutjades_fixture(db, artista):
+    """Three HistorialRevisio rebutjada rows tied to Portal Band's
+    Deezer ID 999001, one per common motiu."""
+    rows = []
+    for motiu, nom in [
+        ("no_catala", "Track ES-only"),
+        ("album_incorrecte", "Track wrong-album"),
+        ("no_musica", "Track is-podcast"),
+    ]:
+        rows.append(
+            HistorialRevisio.objects.create(
+                canco_nom=nom,
+                album_nom="Some Album",
+                artista_nom="Portal Band",
+                artista_deezer_id=999001,
+                canco_deezer_id=11100 + len(rows),
+                canco_isrc=f"X{len(rows):010d}",
+                decisio="rebutjada",
+                motiu=motiu,
+            )
+        )
+    return rows
+
+
+def test_cancons_pendents_includes_rebutjades(
+    client_g, artista, rebutjades_fixture, cancons_pendents
+):
+    """The endpoint now returns three keys: legacy `results` (pendents,
+    for back-compat) + `pendents` + `rebutjades`."""
+    r = client_g.get(_url(artista.slug, "cancons-pendents/"))
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["pendents"]) == 3
+    assert len(body["results"]) == 3
+    assert len(body["rebutjades"]) == 3
+    motius = {row["motiu"] for row in body["rebutjades"]}
+    assert motius == {"no_catala", "album_incorrecte", "no_musica"}
+    # Required keys for the SPA's row renderer.
+    sample = body["rebutjades"][0]
+    for k in (
+        "canco_nom",
+        "album_nom",
+        "motiu",
+        "data_rebuig",
+        "canco_deezer_id",
+        "isrc",
+    ):
+        assert k in sample
+
+
+def test_cancons_pendents_no_deezer_ids_returns_empty_rebutjades(
+    db, gestor, artista, rebutjades_fixture
+):
+    """If an artist somehow has zero Deezer IDs, the rebutjades query
+    must return an empty list rather than matching all HistorialRevisio
+    rows with NULL deezer ids (which would leak unrelated rejections)."""
+    ArtistaDeezer.objects.filter(artista=artista).delete()
+    c = APIClient()
+    c.force_authenticate(user=gestor)
+    r = c.get(_url(artista.slug, "cancons-pendents/"))
+    assert r.status_code == 200
+    assert r.json()["rebutjades"] == []
+
+
+def test_ping_staff_with_rebutjades_kind(
+    client_g, artista, rebutjades_fixture, admin_user
+):
+    """`kind=rebutjades` pings reconsideration of the rebutjades only.
+    The DM body must enumerate them with the motiu label."""
+    r = client_g.post(
+        _url(artista.slug, "cancons-pendents/ping-staff/"),
+        {"kind": "rebutjades"},
+        format="json",
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_pendents"] == 0
+    assert body["n_rebutjades"] == 3
+    msg = Missatge.objects.filter(destinatari=admin_user).latest("created_at")
+    assert "Rebutjades a reconsiderar" in msg.cos
+    assert "no és en català" in msg.cos.lower()
+    assert "Reconsideració" in msg.assumpte
+
+
+def test_ping_staff_mix_includes_both_lists_via_include_rebutjada_ids(
+    client_g, artista, cancons_pendents, rebutjades_fixture, admin_user
+):
+    """Sending `include_rebutjada_ids=[…]` together with the default
+    pendents path produces a single DM with both sections."""
+    reb_ids = [h.pk for h in rebutjades_fixture[:2]]
+    r = client_g.post(
+        _url(artista.slug, "cancons-pendents/ping-staff/"),
+        {"include_rebutjada_ids": reb_ids},
+        format="json",
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_pendents"] == 3
+    assert body["n_rebutjades"] == 2
+    msg = Missatge.objects.filter(destinatari=admin_user).latest("created_at")
+    assert "Pendents de verificar (3)" in msg.cos
+    assert "Rebutjades a reconsiderar (2)" in msg.cos
+    assert "Revisió pendents + reconsiderar rebutjades" in msg.assumpte
 
 
 # ───────────────────────── D.1: dashboard surfaces qualitat ──────

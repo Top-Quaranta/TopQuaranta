@@ -712,6 +712,38 @@ def _serialize_canco_pendent(c) -> dict:
     }
 
 
+def _serialize_canco_rebutjada(h) -> dict:
+    """Payload minim per a una fila de HistorialRevisio rebutjada.
+
+    HistorialRevisio és un snapshot append-only: la `Canco` original
+    pot estar esborrada, així que confiem en `canco_nom`, `album_nom`,
+    `canco_isrc` i `canco_deezer_id` (denormalitzats al moment del
+    rebuig)."""
+    return {
+        "pk": h.pk,
+        "canco_nom": h.canco_nom,
+        "album_nom": h.album_nom,
+        "motiu": h.motiu,
+        "data_rebuig": h.created_at.isoformat() if h.created_at else None,
+        "canco_deezer_id": h.canco_deezer_id,
+        "isrc": h.canco_isrc,
+    }
+
+
+def _query_cancons_rebutjades(artista, limit: int = 50):
+    """HistorialRevisio rows matching any of this artist's Deezer IDs
+    where the decision was «rebutjada». Ordered by date desc."""
+    from music.models import HistorialRevisio
+
+    deezer_ids = list(artista.deezer_ids.values_list("deezer_id", flat=True))
+    if not deezer_ids:
+        return HistorialRevisio.objects.none()
+    return HistorialRevisio.objects.filter(
+        artista_deezer_id__in=deezer_ids,
+        decisio="rebutjada",
+    ).order_by("-created_at")[:limit]
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def cancons_pendents(request: Request, slug: str) -> Response:
@@ -722,17 +754,23 @@ def cancons_pendents(request: Request, slug: str) -> Response:
 
     from music.models import Canco
 
-    rows = (
+    pendents = (
         Canco.objects.filter(artista=artista, verificada=False, activa=True)
         .select_related("album")
         .order_by("-data_llancament", "nom")
     )
+    rebutjades = _query_cancons_rebutjades(artista)
+
     next_ping = None
     if artista.ultim_ping_revisio_at:
         next_ping = (artista.ultim_ping_revisio_at + PING_COOLDOWN).isoformat()
     return Response(
         {
-            "results": [_serialize_canco_pendent(c) for c in rows],
+            # Legacy key — the SPA reads `pendents` for the new tab
+            # layout; `results` stays for any pre-quick-fixes client.
+            "results": [_serialize_canco_pendent(c) for c in pendents],
+            "pendents": [_serialize_canco_pendent(c) for c in pendents],
+            "rebutjades": [_serialize_canco_rebutjada(h) for h in rebutjades],
             "cooldown_until": next_ping,
         }
     )
@@ -769,9 +807,12 @@ def cancons_pendents_ping_staff(request: Request, slug: str) -> Response:
             resp["Retry-After"] = str(int(remaining.total_seconds()))
             return resp
 
-    from music.models import Canco
+    from music.models import Canco, HistorialRevisio
 
     body = request.data or {}
+
+    # Pendents — same `include_canco_ids` filter as before. Defaults
+    # to ALL unverified.
     raw_ids = body.get("include_canco_ids") or []
     pendent_qs = Canco.objects.filter(
         artista=artista, verificada=False, activa=True
@@ -782,10 +823,42 @@ def cancons_pendents_ping_staff(request: Request, slug: str) -> Response:
         except (TypeError, ValueError):
             return Response({"error": "IDs de cançons invàlids."}, status=400)
         pendent_qs = pendent_qs.filter(pk__in=ids)
-    cancons = list(pendent_qs.order_by("-data_llancament", "nom"))
-    if not cancons:
+    pendents = list(pendent_qs.order_by("-data_llancament", "nom"))
+
+    # Rebutjades — opt-in via `include_rebutjada_ids` (HistorialRevisio
+    # PKs). Default empty so the existing pendents-only call site keeps
+    # working without changes. The `kind` parameter lets the SPA say
+    # "ping for rebutjades only" without enumerating IDs by passing
+    # `kind="rebutjades"`.
+    raw_reb_ids = body.get("include_rebutjada_ids") or []
+    kind = (body.get("kind") or "").strip()
+    rebutjades_qs = _query_cancons_rebutjades(artista)
+    if raw_reb_ids:
+        try:
+            reb_ids = [int(x) for x in raw_reb_ids]
+        except (TypeError, ValueError):
+            return Response({"error": "IDs de rebutjades invàlids."}, status=400)
+        rebutjades_qs = HistorialRevisio.objects.filter(
+            pk__in=reb_ids,
+            decisio="rebutjada",
+            artista_deezer_id__in=list(
+                artista.deezer_ids.values_list("deezer_id", flat=True)
+            ),
+        ).order_by("-created_at")
+    elif kind == "rebutjades":
+        # Explicit "rebutjades only" → drop pendents from this ping.
+        pendents = []
+    else:
+        # Default for the existing pendents-only call path: don't
+        # include rebutjades unless the caller asked. Keeps the
+        # legacy behaviour intact.
+        rebutjades_qs = HistorialRevisio.objects.none()
+
+    rebutjades = list(rebutjades_qs)
+
+    if not pendents and not rebutjades:
         return Response(
-            {"error": "No hi ha cançons pendents per a demanar revisió."},
+            {"error": "No hi ha cançons per a demanar revisió."},
             status=400,
         )
 
@@ -801,18 +874,41 @@ def cancons_pendents_ping_staff(request: Request, slug: str) -> Response:
         )
 
     base = (request.build_absolute_uri("/") or "").rstrip("/")
+    motiu_label = dict(HistorialRevisio.MOTIUS)
+    total = len(pendents) + len(rebutjades)
     lines = [
-        f"Hola staff,\n\nDemano revisió de {len(cancons)} cançó/ns sense "
-        f"verificar de l'artista {artista.nom} ({base}/artista/{artista.slug}):\n"
+        f"Hola staff,\n\nDemano revisió de {total} cançó/ns de l'artista "
+        f"{artista.nom} ({base}/artista/{artista.slug}):\n"
     ]
-    for i, c in enumerate(cancons, start=1):
-        lines.append(
-            f"{i}. {c.nom} — {c.album.nom if c.album_id else 'sense àlbum'} — "
-            f"{base}/canco/{c.slug}"
-        )
-    lines.append("\nGràcies. Tornaré a poder demanar revisió a partir d'7 dies.")
+    n = 0
+    if pendents:
+        lines.append(f"\n— Pendents de verificar ({len(pendents)}) —")
+        for c in pendents:
+            n += 1
+            lines.append(
+                f"{n}. {c.nom} — {c.album.nom if c.album_id else 'sense àlbum'} — "
+                f"{base}/canco/{c.slug}"
+            )
+    if rebutjades:
+        lines.append(f"\n— Rebutjades a reconsiderar ({len(rebutjades)}) —")
+        for h in rebutjades:
+            n += 1
+            motiu_txt = motiu_label.get(h.motiu, h.motiu)
+            isrc_part = f" · ISRC {h.canco_isrc}" if h.canco_isrc else ""
+            dz_part = f" · Deezer {h.canco_deezer_id}" if h.canco_deezer_id else ""
+            lines.append(
+                f"{n}. {h.canco_nom} — {h.album_nom or 'sense àlbum'} — "
+                f"motiu original: «{motiu_txt}»{isrc_part}{dz_part}"
+            )
+    lines.append("\nGràcies. Tornaré a poder demanar revisió d'aquí 7 dies.")
     cos = "\n".join(lines)
-    assumpte = f"Revisió de cançons — {artista.nom}"
+    if pendents and rebutjades:
+        assumpte = f"Revisió pendents + reconsiderar rebutjades — {artista.nom}"
+    elif rebutjades:
+        assumpte = f"Reconsideració de rebutjades — {artista.nom}"
+    else:
+        assumpte = f"Revisió de cançons — {artista.nom}"
+    cancons = pendents  # backwards-compat: existing audit metadata key
 
     from comptes.models import Missatge
     from web.api.comunitat_views._common import _enviar_notificacio_missatge
@@ -840,13 +936,16 @@ def cancons_pendents_ping_staff(request: Request, slug: str) -> Response:
         request,
         "gestor_ping_revisio",
         target=artista,
-        n_cancons=len(cancons),
+        n_cancons=len(pendents),
+        n_rebutjades=len(rebutjades),
         usuari=request.user.pk,
     )
     return Response(
         {
             "ok": True,
-            "n_cancons": len(cancons),
+            "n_cancons": total,
+            "n_pendents": len(pendents),
+            "n_rebutjades": len(rebutjades),
             "next_ping_at": (now + PING_COOLDOWN).isoformat(),
         }
     )

@@ -51,6 +51,63 @@ urlpatterns = [
         compte_views.gestor_artista_editar,
         name="compte_gestor_artista_editar",
     ),
+    # Sprint Portal Artista Ampliat (2026-05-20): slug-based surface.
+    # Same auth contract (`_gestor_check`) but resolved by slug.
+    path(
+        "compte/artista/<slug:slug>/qualitat/",
+        compte_views.gestor_artista.qualitat,
+        name="compte_gestor_artista_qualitat",
+    ),
+    path(
+        "compte/artista/<slug:slug>/editar/",
+        compte_views.gestor_artista.editar,
+        name="compte_gestor_artista_editar_slug",
+    ),
+    path(
+        "compte/artista/<slug:slug>/deezer-ids/",
+        compte_views.gestor_artista.deezer_id_add,
+        name="compte_gestor_artista_deezer_add",
+    ),
+    path(
+        "compte/artista/<slug:slug>/deezer-ids/<int:dz_id>/",
+        compte_views.gestor_artista.deezer_id_delete,
+        name="compte_gestor_artista_deezer_delete",
+    ),
+    path(
+        "compte/artista/<slug:slug>/lastfm-aliases/",
+        compte_views.gestor_artista.lastfm_alias_add,
+        name="compte_gestor_artista_lastfm_add",
+    ),
+    path(
+        "compte/artista/<slug:slug>/lastfm-aliases/<int:alias_id>/",
+        compte_views.gestor_artista.lastfm_alias_delete,
+        name="compte_gestor_artista_lastfm_delete",
+    ),
+    path(
+        "compte/artista/<slug:slug>/lastfm-aliases/<int:alias_id>/prioritari/",
+        compte_views.gestor_artista.lastfm_alias_set_prioritari,
+        name="compte_gestor_artista_lastfm_prioritari",
+    ),
+    path(
+        "compte/artista/<slug:slug>/localitats/",
+        compte_views.gestor_artista.localitat_add,
+        name="compte_gestor_artista_localitat_add",
+    ),
+    path(
+        "compte/artista/<slug:slug>/localitats/<int:loc_id>/",
+        compte_views.gestor_artista.localitat_delete,
+        name="compte_gestor_artista_localitat_delete",
+    ),
+    path(
+        "compte/artista/<slug:slug>/cancons-pendents/",
+        compte_views.gestor_artista.cancons_pendents,
+        name="compte_gestor_artista_cancons_pendents",
+    ),
+    path(
+        "compte/artista/<slug:slug>/cancons-pendents/ping-staff/",
+        compte_views.gestor_artista.cancons_pendents_ping_staff,
+        name="compte_gestor_artista_cancons_pendents_ping_staff",
+    ),
     # Public feedback (authenticated, any user)
     path("feedback/", compte_views.feedback_crear, name="feedback_crear"),
     # Account deletion (self-service): request sends a confirmation email.

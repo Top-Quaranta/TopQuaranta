@@ -1277,6 +1277,9 @@ class StaffAuditLog(models.Model):
         # via the public /compte/artista/<pk>/editar endpoint. Distinct from
         # `artista_edit` so the audit page can filter staff vs. self-service.
         ("gestor_edita_artista", "Artista: edició per gestor"),
+        # Manager-triggered request for staff to review the artist's
+        # unverified songs. Sprint Portal Artista Ampliat (2026-05-20).
+        ("gestor_ping_revisio", "Artista: ping de revisió de cançons (gestor)"),
         # Sprint I — social distribution. `social_publicat` is the
         # legacy Instagram-only label; the multi-channel cron writes
         # one of `<channel>_publicat` per CHANNELS in publicar_canal.py.

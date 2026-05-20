@@ -8,6 +8,7 @@ POST  /api/v1/compte/solicituds/  — submit a management request for an
                                     existing artist
 """
 
+from . import gestor_artista
 from .dashboard import dashboard, perfil
 from .feedback import feedback_crear
 from .propostes import gestor_artista_editar, proposta_crear, solicitud_crear
@@ -19,6 +20,7 @@ __all__ = [
     "proposta_crear",
     "solicitud_crear",
     "gestor_artista_editar",
+    "gestor_artista",
     "feedback_crear",
     "compte_esborrar_sollicitar",
     "exportar_dades",

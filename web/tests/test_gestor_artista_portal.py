@@ -410,6 +410,48 @@ def rebutjades_fixture(db, artista):
     return rows
 
 
+def test_cancons_pendents_includes_verificades(client_g, artista, cancons_pendents):
+    """A verified Canco shows up under `verificades` (not `pendents`)."""
+    from music.models import Album
+
+    album = Album.objects.create(artista=artista, nom="Verified EP", slug="verified-ep")
+    Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="Verified Track",
+        slug="portal-band-verified",
+        verificada=True,
+    )
+    r = client_g.get(_url(artista.slug, "cancons-pendents/"))
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["verificades"]) == 1
+    assert body["verificades"][0]["nom"] == "Verified Track"
+    assert body["n_verificades_total"] == 1
+    # Must NOT leak into pendents.
+    assert all(c["nom"] != "Verified Track" for c in body["pendents"])
+
+
+def test_cancons_pendents_n_verificades_total_caps_at_50(client_g, artista):
+    """`verificades` is capped at 50 recents but `n_verificades_total`
+    reflects the full count so the SPA can say 'mostrant les 50 més
+    recents'."""
+    from music.models import Album
+
+    album = Album.objects.create(artista=artista, nom="Big LP", slug="big-lp")
+    for i in range(55):
+        Canco.objects.create(
+            artista=artista,
+            album=album,
+            nom=f"Track {i:02d}",
+            slug=f"portal-band-verified-{i:02d}",
+            verificada=True,
+        )
+    body = client_g.get(_url(artista.slug, "cancons-pendents/")).json()
+    assert len(body["verificades"]) == 50
+    assert body["n_verificades_total"] == 55
+
+
 def test_cancons_pendents_includes_rebutjades(
     client_g, artista, rebutjades_fixture, cancons_pendents
 ):

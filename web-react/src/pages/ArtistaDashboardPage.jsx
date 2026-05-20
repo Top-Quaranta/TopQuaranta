@@ -929,6 +929,8 @@ function CanconsTab({ slug }) {
   // backwards-compat during the rollout window.
   const pendents = data.pendents || data.results || []
   const rebutjades = data.rebutjades || []
+  const verificades = data.verificades || []
+  const nVerificadesTotal = data.n_verificades_total ?? verificades.length
 
   const cooldownActive = !!(
     data.cooldown_until && new Date(data.cooldown_until) > new Date()
@@ -974,14 +976,18 @@ function CanconsTab({ slug }) {
     }
   }
 
-  // Empty-state when neither list has rows.
-  if (pendents.length === 0 && rebutjades.length === 0) {
+  // Empty-state when no list has rows.
+  if (
+    pendents.length === 0 &&
+    rebutjades.length === 0 &&
+    verificades.length === 0
+  ) {
     return (
       <div className="space-y-4 mt-6">
         {feedback && <Alert tone={feedback.tone}>{feedback.msg}</Alert>}
         <Card>
           <div className="p-6 text-center text-tq-ink/70">
-            Cap cançó pendent ni rebutjada. Tot al dia 🎉
+            Cap cançó al sistema encara.
           </div>
         </Card>
       </div>
@@ -1109,6 +1115,54 @@ function CanconsTab({ slug }) {
                       <Badge variant={MOTIU_TONE[r.motiu] || 'default'}>
                         {MOTIU_LABEL[r.motiu] || r.motiu}
                       </Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </Card>
+      </section>
+
+      {/* ── Verificades (informatiu, sense acció) ── */}
+      <section>
+        <header className="flex items-center gap-3 mb-2">
+          <h3 className="text-sm font-semibold text-white">
+            Verificades ({nVerificadesTotal})
+          </h3>
+          {nVerificadesTotal > verificades.length && (
+            <span className="text-xs text-white/60">
+              · mostrant les {verificades.length} més recents
+            </span>
+          )}
+        </header>
+        <Card>
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-tq-ink/60">
+              <tr>
+                <th className="p-3">Cançó</th>
+                <th className="p-3">Àlbum</th>
+                <th className="p-3">Data</th>
+                <th className="p-3">Estat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {verificades.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-tq-ink/60">
+                    Cap cançó verificada encara.
+                  </td>
+                </tr>
+              ) : (
+                verificades.map(c => (
+                  <tr key={c.pk} className="border-t border-gray-100">
+                    <td className="p-3">{c.nom}</td>
+                    <td className="p-3 text-tq-ink/70">{c.album_nom || '—'}</td>
+                    <td className="p-3 text-tq-ink/70">
+                      {fmtDate(c.data_llancament)}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant="success">verificada</Badge>
                     </td>
                   </tr>
                 ))

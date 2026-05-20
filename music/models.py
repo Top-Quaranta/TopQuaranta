@@ -1294,6 +1294,10 @@ class StaffAuditLog(models.Model):
         # Manager-triggered request for staff to review the artist's
         # unverified songs. Sprint Portal Artista Ampliat (2026-05-20).
         ("gestor_ping_revisio", "Artista: ping de revisió de cançons (gestor)"),
+        # Sprint Workflow Sol·licituds (2026-05-20).
+        ("sollicitud_revisio_creada", "Sol·licitud de revisió: creada"),
+        ("sollicitud_revisio_resolta", "Sol·licitud de revisió: resolta"),
+        ("rebutjada_reconsiderada", "Historial: rebutjada reconsiderada"),
         # Sprint I — social distribution. `social_publicat` is the
         # legacy Instagram-only label; the multi-channel cron writes
         # one of `<channel>_publicat` per CHANNELS in publicar_canal.py.

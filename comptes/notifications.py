@@ -211,6 +211,49 @@ def notify_user_proposta_resolta(proposta, accio: str) -> None:
     )
 
 
+def notify_admins_nova_sollicitud_revisio(sollicitud) -> None:
+    """A gestor has just opened a SolicitudRevisio. Pings every active
+    staff member with the link to the workbench. Sprint Workflow
+    Sol·licituds (2026-05-20)."""
+    _send(
+        subject=(
+            f"TopQuaranta · nova sol·licitud de revisió: "
+            f"{sollicitud.artista.nom} ({sollicitud.n_pendents + sollicitud.n_rebutjades} cançons)"
+        ),
+        template="comptes/email_staff_nova_sollicitud_revisio.html",
+        context={
+            "artista_nom": sollicitud.artista.nom,
+            "artista_slug": sollicitud.artista.slug,
+            "gestor_username": sollicitud.gestor.username,
+            "gestor_email": sollicitud.gestor.email,
+            "n_pendents": sollicitud.n_pendents,
+            "n_rebutjades": sollicitud.n_rebutjades,
+            "workbench_url": (
+                f"{_site_url()}/staff/sollicituds-revisio/{sollicitud.pk}/"
+            ),
+        },
+        to=_staff_emails(),
+    )
+
+
+def notify_gestor_sollicitud_revisio_resolta(sollicitud) -> None:
+    """Staff resolved a SolicitudRevisio. Sends the gestor a summary
+    + the optional resolution note."""
+    _send(
+        subject=("TopQuaranta · la teua sol·licitud de revisió ha sigut resolta"),
+        template="comptes/email_gestor_sollicitud_revisio_resolta.html",
+        context={
+            "artista_nom": sollicitud.artista.nom,
+            "artista_slug": sollicitud.artista.slug,
+            "n_pendents": sollicitud.n_pendents,
+            "n_rebutjades": sollicitud.n_rebutjades,
+            "nota_resolucio": sollicitud.nota_resolucio,
+            "portal_url": (f"{_site_url()}/compte/artista/{sollicitud.artista.slug}/"),
+        },
+        to=[sollicitud.gestor.email],
+    )
+
+
 def notify_user_feedback_resolt(feedback) -> None:
     """Staff resolved a Feedback. Sends a thank-you with optional
     notes for the reporter."""

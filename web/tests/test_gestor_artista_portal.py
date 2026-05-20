@@ -349,22 +349,30 @@ def test_cancons_pendents_list(client_g, artista, cancons_pendents):
     assert body["cooldown_until"] is None
 
 
-def test_ping_staff_first_call_creates_dm_and_audit(
-    client_g, artista, cancons_pendents, admin_user
+def test_ping_staff_first_call_creates_sollicitud_and_audit(
+    client_g, artista, cancons_pendents
 ):
+    """Sprint Workflow: ping crea un SolicitudRevisio (no DM) + audit
+    row + actualitza cooldown."""
+    from comptes.models import SolicitudRevisio
+
     r = client_g.post(_url(artista.slug, "cancons-pendents/ping-staff/"))
-    assert r.status_code == 200
+    assert r.status_code == 201
     body = r.json()
     assert body["n_cancons"] == 3
+    assert body["sollicitud_pk"]
     artista.refresh_from_db()
     assert artista.ultim_ping_revisio_at is not None
-    assert Missatge.objects.filter(destinatari=admin_user).exists()
+    s = SolicitudRevisio.objects.get(pk=body["sollicitud_pk"])
+    assert s.artista_id == artista.pk
+    assert s.n_pendents == 3
+    assert s.estat == SolicitudRevisio.ESTAT_PENDENT
     assert StaffAuditLog.objects.filter(
-        action="gestor_ping_revisio", target_id=artista.pk
+        action="sollicitud_revisio_creada", target_id=artista.pk
     ).exists()
 
 
-def test_ping_staff_cooldown_429(client_g, artista, cancons_pendents, admin_user):
+def test_ping_staff_cooldown_429(client_g, artista, cancons_pendents):
     artista.ultim_ping_revisio_at = timezone.now() - timedelta(days=2)
     artista.save(update_fields=["ultim_ping_revisio_at"])
     r = client_g.post(_url(artista.slug, "cancons-pendents/ping-staff/"))
@@ -373,13 +381,11 @@ def test_ping_staff_cooldown_429(client_g, artista, cancons_pendents, admin_user
     assert "next_ping_at" in r.json()
 
 
-def test_ping_staff_after_cooldown_passes(
-    client_g, artista, cancons_pendents, admin_user
-):
+def test_ping_staff_after_cooldown_passes(client_g, artista, cancons_pendents):
     artista.ultim_ping_revisio_at = timezone.now() - timedelta(days=8)
     artista.save(update_fields=["ultim_ping_revisio_at"])
     r = client_g.post(_url(artista.slug, "cancons-pendents/ping-staff/"))
-    assert r.status_code == 200
+    assert r.status_code == 201
 
 
 # ───────────────────────── Quick fixes: rebutjades + ping mix ────
@@ -492,45 +498,65 @@ def test_cancons_pendents_no_deezer_ids_returns_empty_rebutjades(
     assert r.json()["rebutjades"] == []
 
 
-def test_ping_staff_with_rebutjades_kind(
-    client_g, artista, rebutjades_fixture, admin_user
-):
-    """`kind=rebutjades` pings reconsideration of the rebutjades only.
-    The DM body must enumerate them with the motiu label."""
+def test_ping_staff_with_rebutjades_kind(client_g, artista, rebutjades_fixture):
+    """`kind=rebutjades` crea una SolicitudRevisio amb només
+    rebutjades — el snapshot conté els motius originals."""
+    from comptes.models import SolicitudRevisio
+
     r = client_g.post(
         _url(artista.slug, "cancons-pendents/ping-staff/"),
         {"kind": "rebutjades"},
         format="json",
     )
-    assert r.status_code == 200
+    assert r.status_code == 201
     body = r.json()
     assert body["n_pendents"] == 0
     assert body["n_rebutjades"] == 3
-    msg = Missatge.objects.filter(destinatari=admin_user).latest("created_at")
-    assert "Rebutjades a reconsiderar" in msg.cos
-    assert "no és en català" in msg.cos.lower()
-    assert "Reconsideració" in msg.assumpte
+    s = SolicitudRevisio.objects.get(pk=body["sollicitud_pk"])
+    assert s.pendents_ids == []
+    assert len(s.rebutjades_snapshot) == 3
+    motius = {row["motiu"] for row in s.rebutjades_snapshot}
+    assert motius == {"no_catala", "album_incorrecte", "no_musica"}
 
 
-def test_ping_staff_mix_includes_both_lists_via_include_rebutjada_ids(
-    client_g, artista, cancons_pendents, rebutjades_fixture, admin_user
+def test_ping_staff_mix_via_include_rebutjada_historial_pks(
+    client_g, artista, cancons_pendents, rebutjades_fixture
 ):
-    """Sending `include_rebutjada_ids=[…]` together with the default
-    pendents path produces a single DM with both sections."""
+    """El nou param canònic `include_rebutjada_historial_pks` combina
+    pendents (default ALL unverified) amb una selecció de rebutjades."""
+    from comptes.models import SolicitudRevisio
+
     reb_ids = [h.pk for h in rebutjades_fixture[:2]]
+    r = client_g.post(
+        _url(artista.slug, "cancons-pendents/ping-staff/"),
+        {"include_rebutjada_historial_pks": reb_ids},
+        format="json",
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["n_pendents"] == 3
+    assert body["n_rebutjades"] == 2
+    s = SolicitudRevisio.objects.get(pk=body["sollicitud_pk"])
+    assert len(s.pendents_ids) == 3
+    assert {r_["historial_pk"] for r_ in s.rebutjades_snapshot} == set(reb_ids)
+
+
+def test_ping_staff_legacy_include_rebutjada_ids_still_works(
+    client_g, artista, cancons_pendents, rebutjades_fixture
+):
+    """El nom legacy `include_rebutjada_ids` (que la SPA encara
+    emet al rollout) ha de ser equivalent al canònic."""
+    from comptes.models import SolicitudRevisio
+
+    reb_ids = [h.pk for h in rebutjades_fixture[:1]]
     r = client_g.post(
         _url(artista.slug, "cancons-pendents/ping-staff/"),
         {"include_rebutjada_ids": reb_ids},
         format="json",
     )
-    assert r.status_code == 200
-    body = r.json()
-    assert body["n_pendents"] == 3
-    assert body["n_rebutjades"] == 2
-    msg = Missatge.objects.filter(destinatari=admin_user).latest("created_at")
-    assert "Pendents de verificar (3)" in msg.cos
-    assert "Rebutjades a reconsiderar (2)" in msg.cos
-    assert "Revisió pendents + reconsiderar rebutjades" in msg.assumpte
+    assert r.status_code == 201
+    s = SolicitudRevisio.objects.get(pk=r.json()["sollicitud_pk"])
+    assert s.n_rebutjades == 1
 
 
 # ───────────────────────── D.1: dashboard surfaces qualitat ──────

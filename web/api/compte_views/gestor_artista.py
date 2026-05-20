@@ -839,12 +839,15 @@ def cancons_pendents_ping_staff(request: Request, slug: str) -> Response:
         pendent_qs = pendent_qs.filter(pk__in=ids)
     pendents = list(pendent_qs.order_by("-data_llancament", "nom"))
 
-    # Rebutjades — opt-in via `include_rebutjada_ids` (HistorialRevisio
-    # PKs). Default empty so the existing pendents-only call site keeps
-    # working without changes. The `kind` parameter lets the SPA say
-    # "ping for rebutjades only" without enumerating IDs by passing
-    # `kind="rebutjades"`.
-    raw_reb_ids = body.get("include_rebutjada_ids") or []
+    # Rebutjades — opt-in via `include_rebutjada_historial_pks`
+    # (canonical name, Sprint Workflow) or its legacy alias
+    # `include_rebutjada_ids` (still emitted by the SPA at quick-fixes
+    # rollout time). Both carry HistorialRevisio PKs.
+    raw_reb_ids = (
+        body.get("include_rebutjada_historial_pks")
+        or body.get("include_rebutjada_ids")
+        or []
+    )
     kind = (body.get("kind") or "").strip()
     rebutjades_qs = _query_cancons_rebutjades(artista)
     if raw_reb_ids:
@@ -876,93 +879,100 @@ def cancons_pendents_ping_staff(request: Request, slug: str) -> Response:
             status=400,
         )
 
-    # Find the admin pseudo-user. The seeding migration
-    # `comptes.0016_admin_pseudouser` guarantees the row exists in
-    # every environment.
-    admin_username = getattr(settings, "ADMIN_INBOX_USERNAME", "admin")
-    admin = Usuari.objects.filter(username=admin_username).first()
-    if admin is None:
-        return Response(
-            {"error": "Bústia d'admin no disponible. Contacta amb suport."},
-            status=503,
-        )
+    # Sprint Workflow Sol·licituds (2026-05-20): the per-row workflow
+    # supersedes the old DM-to-admin ping. We create a `SolicitudRevisio`
+    # row and send an email to staff with the workbench link. The DM
+    # path (`Missatge` to the Admin pseudouser) is DEPRECATED — every
+    # call site flows through this endpoint now.
+    from comptes.models import SolicitudRevisio
+    from comptes.notifications import notify_admins_nova_sollicitud_revisio
 
-    base = (request.build_absolute_uri("/") or "").rstrip("/")
-    motiu_label = dict(HistorialRevisio.MOTIUS)
     total = len(pendents) + len(rebutjades)
-    lines = [
-        f"Hola staff,\n\nDemano revisió de {total} cançó/ns de l'artista "
-        f"{artista.nom} ({base}/artista/{artista.slug}):\n"
+    pendents_ids = [c.pk for c in pendents]
+    rebutjades_snapshot = [
+        {
+            "historial_pk": h.pk,
+            "deezer_id": h.canco_deezer_id,
+            "isrc": h.canco_isrc,
+            "nom": h.canco_nom,
+            "album_nom": h.album_nom,
+            "motiu": h.motiu,
+        }
+        for h in rebutjades
     ]
-    n = 0
-    if pendents:
-        lines.append(f"\n— Pendents de verificar ({len(pendents)}) —")
-        for c in pendents:
-            n += 1
-            lines.append(
-                f"{n}. {c.nom} — {c.album.nom if c.album_id else 'sense àlbum'} — "
-                f"{base}/canco/{c.slug}"
-            )
-    if rebutjades:
-        lines.append(f"\n— Rebutjades a reconsiderar ({len(rebutjades)}) —")
-        for h in rebutjades:
-            n += 1
-            motiu_txt = motiu_label.get(h.motiu, h.motiu)
-            isrc_part = f" · ISRC {h.canco_isrc}" if h.canco_isrc else ""
-            dz_part = f" · Deezer {h.canco_deezer_id}" if h.canco_deezer_id else ""
-            lines.append(
-                f"{n}. {h.canco_nom} — {h.album_nom or 'sense àlbum'} — "
-                f"motiu original: «{motiu_txt}»{isrc_part}{dz_part}"
-            )
-    lines.append("\nGràcies. Tornaré a poder demanar revisió d'aquí 7 dies.")
-    cos = "\n".join(lines)
-    if pendents and rebutjades:
-        assumpte = f"Revisió pendents + reconsiderar rebutjades — {artista.nom}"
-    elif rebutjades:
-        assumpte = f"Reconsideració de rebutjades — {artista.nom}"
-    else:
-        assumpte = f"Revisió de cançons — {artista.nom}"
-    cancons = pendents  # backwards-compat: existing audit metadata key
-
-    from comptes.models import Missatge
-    from web.api.comunitat_views._common import _enviar_notificacio_missatge
 
     with transaction.atomic():
-        msg = Missatge.objects.create(
-            remitent=request.user,
-            destinatari=admin,
-            assumpte=assumpte[:200],
-            cos=cos,
+        sollicitud = SolicitudRevisio.objects.create(
+            gestor=request.user,
+            artista=artista,
+            pendents_ids=pendents_ids,
+            rebutjades_snapshot=rebutjades_snapshot,
         )
         artista.ultim_ping_revisio_at = now
         artista.save(update_fields=["ultim_ping_revisio_at"])
 
-    # Notification is best-effort (mail server hiccups should not undo
-    # the ping, which is the user-visible action).
+    # Best-effort: a mail-server hiccup shouldn't undo the row that
+    # the gestor has already paid the cooldown for.
     try:
-        _enviar_notificacio_missatge(request, msg)
-    except (IntegrityError, ValueError, ValidationError):
+        notify_admins_nova_sollicitud_revisio(sollicitud)
+    except Exception:  # noqa: BLE001
         pass
 
     from music.audit import log_staff_action
 
     log_staff_action(
         request,
-        "gestor_ping_revisio",
+        "sollicitud_revisio_creada",
         target=artista,
-        n_cancons=len(pendents),
+        sollicitud_pk=sollicitud.pk,
+        n_pendents=len(pendents),
         n_rebutjades=len(rebutjades),
         usuari=request.user.pk,
     )
     return Response(
         {
             "ok": True,
+            "sollicitud_pk": sollicitud.pk,
             "n_cancons": total,
             "n_pendents": len(pendents),
             "n_rebutjades": len(rebutjades),
             "next_ping_at": (now + PING_COOLDOWN).isoformat(),
-        }
+        },
+        status=201,
     )
+
+
+# ───────────────────────── Sol·licituds (gestor side) ────────────
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sollicituds_gestor(request: Request, slug: str) -> Response:
+    """Summary of the artist's SolicitudRevisio history for the
+    gestor's portal. Returns the latest row (any estat) + total
+    count. Sprint Workflow Sol·licituds B.5."""
+    result = _resolve_or_403(request, slug)
+    if isinstance(result, Response):
+        return result
+    artista = result
+
+    from comptes.models import SolicitudRevisio
+
+    qs = SolicitudRevisio.objects.filter(artista=artista).order_by("-created_at")
+    n_total = qs.count()
+    ultima = qs.first()
+    payload = {"n_total": n_total, "ultima": None}
+    if ultima is not None:
+        payload["ultima"] = {
+            "pk": ultima.pk,
+            "created_at": ultima.created_at.isoformat(),
+            "estat": ultima.estat,
+            "resolt_at": (ultima.resolt_at.isoformat() if ultima.resolt_at else None),
+            "nota_resolucio": ultima.nota_resolucio or "",
+            "n_pendents": ultima.n_pendents,
+            "n_rebutjades": ultima.n_rebutjades,
+        }
+    return Response(payload)
 
 
 # NOTE on B.6 (pk → slug redirect): the legacy

@@ -1,0 +1,20 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Nova sol·licitud de revisió{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  Nova sol·licitud de revisió
+</h1>
+<p style="margin:0 0 16px;">
+  <strong style="color:#facc15;">{{ gestor_username }}</strong> ({{ gestor_email }}) demana revisió
+  de cançons de <strong>{{ artista_nom }}</strong>.
+</p>
+<ul style="margin:0 0 18px;padding-left:20px;color:#d1d5db;font-size:14px;line-height:1.6;">
+  <li>Pendents de verificar: <strong>{{ n_pendents }}</strong></li>
+  <li>Rebutjades a reconsiderar: <strong>{{ n_rebutjades }}</strong></li>
+</ul>
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ workbench_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Obrir al workbench
+  </a>
+</p>
+{% endblock %}

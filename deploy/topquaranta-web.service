@@ -7,18 +7,25 @@ User=topquaranta
 Group=topquaranta
 WorkingDirectory=/home/topquaranta/app
 EnvironmentFile=/home/topquaranta/app/.env
-ExecStart=/home/topquaranta/app/.venv/bin/gunicorn topquaranta.wsgi:application --bind 127.0.0.1:8083 --workers 2 --timeout 120 --reload --env DJANGO_SETTINGS_MODULE=topquaranta.settings.web_server
-# `--reload` makes gunicorn watch every imported `.py` and
-# gracefully restart any worker whose source changed since boot.
-# Cost: a few stat() calls per request, negligible at our traffic.
-# Benefit: edits to renderer / payload / API code are picked up
-# automatically, no manual `systemctl reload` needed between
-# iterations. (Silent stale-code bug bit us 2026-04-27 on the social
-# renderer — gunicorn workers kept the previous `_feed_portada`
-# while the file on disk had already been updated.)
+ExecStart=/home/topquaranta/app/.venv/bin/gunicorn topquaranta.wsgi:application --bind 127.0.0.1:8083 --workers 2 --timeout 120 --env DJANGO_SETTINGS_MODULE=topquaranta.settings.web_server
+# NOTE: gunicorn `--reload` was REMOVED on 2026-05-20 after three
+# production 500s in a single week (`imatge_url`, `reconsiderada`,
+# missing `SolicitudRevisio` table) caused by workers picking up
+# in-flight `.py` edits in the server worktree before the matching
+# migrations had been applied. The flag turns the worktree into an
+# implicit deploy surface — anything left modified on disk goes
+# live regardless of whether the DB has caught up.
 #
-# SIGHUP still works as an explicit graceful reload — the deploy
-# script + the staff "Deploy" hook both fire it.
+# Code changes now reach production EXCLUSIVELY through `bin/tq-deploy`,
+# which (a) `git reset --hard origin/main` wipes any worktree drift,
+# (b) `manage.py migrate` runs before the reload, and (c) `systemctl
+# reload topquaranta-web` graceful-swaps the workers. SIGHUP still
+# works as the explicit graceful reload — the deploy script + the
+# staff "Deploy" hook both fire it.
+#
+# Backup of the previous unit (with --reload) lives at
+# /etc/systemd/system/topquaranta-web.service.bak-20260520 on the
+# Hetzner box, for rollback only.
 ExecReload=/bin/kill -HUP $MAINPID
 KillSignal=SIGTERM
 Restart=always

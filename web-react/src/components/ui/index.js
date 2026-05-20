@@ -1,4 +1,6 @@
 export { default as Button } from './Button'
 export { default as Card } from './Card'
 export { default as Badge } from './Badge'
+export { default as ConfirmDialog } from './ConfirmDialog'
 export { default as SectionLabel } from './SectionLabel'
+export { default as Tabs } from './Tabs'

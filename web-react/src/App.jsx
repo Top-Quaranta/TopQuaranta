@@ -19,7 +19,8 @@ import ComptePage from './pages/ComptePage'
 import ComptePerfilPage from './pages/ComptePerfilPage'
 import ProposarArtistaPage from './pages/ProposarArtistaPage'
 import SolicitarGestioPage from './pages/SolicitarGestioPage'
-import GestioArtistaEditPage from './pages/GestioArtistaEditPage'
+import GestioArtistaRedirect from './pages/GestioArtistaRedirect'
+import ArtistaDashboardPage from './pages/ArtistaDashboardPage'
 import ComFuncionaPage from './pages/ComFuncionaPage'
 import { LegalIndex } from './pages/legal/LegalLayout'
 import AvisLegalPage from './pages/legal/AvisLegalPage'
@@ -162,7 +163,12 @@ function AppContent() {
         <Route path="/compte/perfil" element={<ComptePerfilPage />} />
         <Route path="/compte/artista/proposta" element={<ProposarArtistaPage />} />
         <Route path="/compte/artista/gestio" element={<SolicitarGestioPage />} />
-        <Route path="/compte/artista/:pk/editar" element={<GestioArtistaEditPage />} />
+        {/* Sprint Portal Artista Ampliat (2026-05-20): the slug-based
+            dashboard is canonical. The pk-based legacy URL is kept as
+            a client-side redirect so existing bookmarks still work. */}
+        <Route path="/compte/artista/:slug/" element={<ArtistaDashboardPage />} />
+        <Route path="/compte/artista/:slug" element={<ArtistaDashboardPage />} />
+        <Route path="/compte/artista/:pk/editar" element={<GestioArtistaRedirect />} />
         {/* Perfil + missatges moved under /comunitat so they share the
             community sidebar. Old URLs kept as redirects. */}
         <Route path="/compte/perfil-usuari" element={<Navigate to="/comunitat/perfil" replace />} />

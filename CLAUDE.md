@@ -322,6 +322,9 @@ React SPA: Vitest not yet wired for runtime tests; builds validated via
 
 ## 10. Code conventions
 
+Canonical home: **`docs/policies/conventions.md`**. Summary
+(authoritative source is the policy file):
+
 - No `print()` → `logging` or `self.stdout.write()`.
 - No `sys.exit()` → `raise CommandError(...)`.
 - No `TRUNCATE` or raw DDL outside migrations.
@@ -332,6 +335,14 @@ React SPA: Vitest not yet wired for runtime tests; builds validated via
 - black + isort on Python. Comments and docstrings in English.
 - Catalan for user-facing strings (React pages, Django templates, error
   messages). Technical English everywhere else.
+- `# Spec: docs/<path>.md` backlink at the head of modules with a
+  dedicated architecture doc (pre-commit hook validates the path).
+- Captures shown in reports must be real or labelled `EXAMPLE`/`MOCK`.
+- E2E smokes use the `qa_smoke` user + fixture artist, never real
+  artistes.
+
+See `docs/policies/conventions.md` for the rationale, examples, and
+links to the post-mortems each rule traces back to.
 
 ## 11. Workflow
 

@@ -17,11 +17,17 @@ from __future__ import annotations
 
 import datetime
 import logging
+import time
 from pathlib import Path
 
 import requests
 
-from social.constants import HTTP_TIMEOUT_S as TIMEOUT_S
+from social.constants import (
+    BLUESKY_UPLOAD_BACKOFF_S,
+    BLUESKY_UPLOAD_RETRIES,
+    BLUESKY_UPLOAD_TIMEOUT_S,
+    HTTP_TIMEOUT_S as TIMEOUT_S,
+)
 from social.models import BlueskyAuth
 
 logger = logging.getLogger(__name__)
@@ -74,7 +80,13 @@ def _auth_headers() -> dict:
 
 
 def upload_blob(image_path: Path) -> dict:
-    """Upload an image. Returns the AT Proto blob ref dict."""
+    """Upload an image. Returns the AT Proto blob ref dict.
+
+    Retry policy (ADR-0005): up to BLUESKY_UPLOAD_RETRIES attempts
+    with back-off between them, only for transient network failures
+    (`ReadTimeout`, `ConnectionError`). HTTP 4xx responses (auth,
+    payload errors) are NOT retried — those won't fix themselves.
+    """
     if is_dry_run():
         return {
             "$type": "blob",
@@ -83,15 +95,51 @@ def upload_blob(image_path: Path) -> dict:
             "size": 1,
         }
     with image_path.open("rb") as fh:
-        r = requests.post(
-            f"{PDS_BASE}/xrpc/com.atproto.repo.uploadBlob",
-            data=fh.read(),
-            headers={**_auth_headers(), "Content-Type": "image/png"},
-            timeout=TIMEOUT_S,
-        )
-    if not r.ok:
-        raise RuntimeError(f"Bluesky uploadBlob {r.status_code}: {r.text[:300]}")
-    return r.json()["blob"]
+        data = fh.read()
+
+    last_exc: Exception | None = None
+    for attempt in range(1, BLUESKY_UPLOAD_RETRIES + 1):
+        try:
+            r = requests.post(
+                f"{PDS_BASE}/xrpc/com.atproto.repo.uploadBlob",
+                data=data,
+                headers={**_auth_headers(), "Content-Type": "image/png"},
+                timeout=BLUESKY_UPLOAD_TIMEOUT_S,
+            )
+        except (requests.ReadTimeout, requests.ConnectionError) as exc:
+            last_exc = exc
+            if attempt >= BLUESKY_UPLOAD_RETRIES:
+                logger.warning(
+                    "Bluesky uploadBlob exhausted retries (%d/%d): %s",
+                    attempt,
+                    BLUESKY_UPLOAD_RETRIES,
+                    exc,
+                )
+                raise
+            backoff = BLUESKY_UPLOAD_BACKOFF_S[
+                min(attempt - 1, len(BLUESKY_UPLOAD_BACKOFF_S) - 1)
+            ]
+            logger.info(
+                "Bluesky uploadBlob attempt %d failed (%s); retrying in %ds",
+                attempt,
+                type(exc).__name__,
+                backoff,
+            )
+            time.sleep(backoff)
+            continue
+        if not r.ok:
+            # 4xx / 5xx — don't retry; the response carries actionable
+            # info (auth expired, payload rejected, etc.).
+            raise RuntimeError(
+                f"Bluesky uploadBlob {r.status_code}: {r.text[:300]}"
+            )
+        return r.json()["blob"]
+
+    # Unreachable in practice (the loop either returns or raises),
+    # but quiets the linter.
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Bluesky uploadBlob: unknown failure")
 
 
 def create_post(

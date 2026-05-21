@@ -5,6 +5,7 @@
 - **Severity:** high (silent degradation, not visible without
   cross-channel comparison)
 - **Author:** Miquel
+- **Status:** Resolved by ADR-0005 (2026-05-21)
 
 ## Impact
 

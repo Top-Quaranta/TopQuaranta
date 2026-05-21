@@ -41,6 +41,7 @@ number, kebab-case slug). Fill in:
 | 0002 | GSC auth via OAuth user creds (admin@) | Accepted | 2026-05-21 |
 | 0003 | Pytest pin via `--ds=` to block env override | Accepted | 2026-05-20 |
 | 0004 | Workflow Sol·licituds de Revisió | Accepted | 2026-05-20 |
+| 0005 | Bluesky `upload_blob` timeout 180 s + retry 3× | Accepted | 2026-05-21 |
 
 ## Lifecycle
 

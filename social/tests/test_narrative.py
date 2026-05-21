@@ -242,6 +242,10 @@ def test_hero_has_nine_codes_three_lengths_fifteen_entries_each():
         "a6_canco_recent",
         "a7_long_runner",
         "a8_pujada_forta",
+        "a9_debut_anywhere",
+        "a10_artista_first_ever",
+        "a11_top5_drop_generic",
+        "a12_artista_emerging",
         "fallback_no_event",
     }
     assert set(HERO.keys()) == expected_codes
@@ -266,6 +270,8 @@ def test_short_phrases_fit_under_120_chars():
         "posicio": 3,
         "posicio_ordinal": "3r",
         "posicio_anterior_str": "fora del top",
+        "posicio_anterior": 3,
+        "posicio_anterior_ordinal": "3r",
         "posicio_nova_str": "al 5è",
         "n_cancons": 4,
         "dies": 18,
@@ -315,6 +321,8 @@ def test_phrases_interpolate_with_diverse_artist_names():
         "posicio": 3,
         "posicio_ordinal": "3r",
         "posicio_anterior_str": "fora del top",
+        "posicio_anterior": 3,
+        "posicio_anterior_ordinal": "3r",
         "posicio_nova_str": "al 5è",
         "n_cancons": 4,
         "dies": 18,

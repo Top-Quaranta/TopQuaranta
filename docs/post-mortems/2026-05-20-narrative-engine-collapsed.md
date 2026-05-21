@@ -3,6 +3,7 @@
 - **Date of incident:** observed 2026-05-20 during social
   investigation; degradation accumulated over weeks
 - **Severity:** high (every weekly social post affected)
+- **Status:** Resolved by ADR-0006, ADR-0007, ADR-0008 (2026-05-21)
 - **Author:** Miquel
 
 ## Impact

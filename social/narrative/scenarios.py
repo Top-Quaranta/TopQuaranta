@@ -2,7 +2,8 @@
 
 # Spec: docs/architecture/social.md
 
-Eight detectors + a fallback. Each detector returns at most one
+Twelve detectors + a fallback (a1-a12, see ADR-0008). Each
+detector returns at most one
 `Scenario` (the strongest case of its kind for the given week);
 `detect_all` calls every detector and returns the list sorted by
 severity desc so the composer picks the headline beat first.
@@ -326,6 +327,177 @@ def detect_a8_pujada_forta(
     return Scenario("a8_pujada_forta", best_climb // 2, data)
 
 
+def detect_a9_debut_anywhere(
+    territori: str, setmana: datetime.date
+) -> Optional[Scenario]:
+    """ADR-0008: Cançó nova al top que NO és top 3 (això ja és A4).
+    Coberta posicions 4–40. Severity = max(1, (41 - posicio) // 8) per
+    quedar entre 1 i 5: una entrada al #4 val 4, una al #40 val 1.
+    Volem una severitat moderada perquè ho fem servir com a notícia
+    secundària/terciària, no com a headline (A4 és el headline per
+    debuts forts)."""
+    rows = list(_load_week(territori, setmana))
+    if not rows:
+        return None
+    prev = _previous_positions(territori, setmana)
+    candidate = None
+    for r in rows:
+        if not r.canco_id:
+            continue
+        if r.posicio <= 3:
+            continue  # A4's job
+        if r.canco_id in prev:
+            continue
+        if candidate is None or r.posicio < candidate.posicio:
+            candidate = r
+    if not candidate:
+        return None
+    artista, canco = _row_data(candidate, territori)
+    data = _base_data(artista, canco, territori)
+    data["posicio"] = candidate.posicio
+    data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
+    severity = max(1, (41 - candidate.posicio) // 8)
+    return Scenario("a9_debut_anywhere", severity, data)
+
+
+def detect_a10_artista_first_ever(
+    territori: str, setmana: datetime.date
+) -> Optional[Scenario]:
+    """ADR-0008: Un artista apareix al top per primera vegada en tota
+    la història del territori. Severity 8 — és una notícia rotunda
+    («estrena absoluta») que aspira a hero quan el cim no aporta més
+    que continuïtat. Si hi ha múltiples first-ever, escollim el de
+    posició més alta (millor entrada)."""
+    from ranking.models import TopSetmanal
+
+    rows = list(_load_week(territori, setmana))
+    if not rows:
+        return None
+    candidate = None
+    for r in rows:
+        if not r.canco_id or not r.canco or not r.canco.artista_id:
+            continue
+        aid = r.canco.artista_id
+        # Was this artist in any TopSetmanal row of this territori
+        # at any week BEFORE this one?
+        seen = TopSetmanal.objects.filter(
+            territori=territori,
+            setmana__lt=setmana,
+            canco__artista_id=aid,
+        ).exists()
+        if seen:
+            continue
+        if candidate is None or r.posicio < candidate.posicio:
+            candidate = r
+    if not candidate:
+        return None
+    artista, canco = _row_data(candidate, territori)
+    data = _base_data(artista, canco, territori)
+    data["posicio"] = candidate.posicio
+    data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
+    return Scenario("a10_artista_first_ever", 8, data)
+
+
+def detect_a11_top5_drop_generic(
+    territori: str, setmana: datetime.date
+) -> Optional[Scenario]:
+    """ADR-0008: Cançó que la setmana anterior era al top 5 (però NO
+    #1, això ja és A3) i ara està fora del top 10 o fora del top.
+    Severity = 4 + (1 si era al #2 la setmana passada). A3 prima per
+    severity, però A11 cobreix les caigudes des de #2..#5 que abans
+    no tenien narrativa."""
+    from ranking.models import TopSetmanal
+
+    prev_setmana = _previous_monday(setmana)
+    prev_top5 = list(
+        TopSetmanal.objects.filter(
+            territori=territori, setmana=prev_setmana, posicio__in=range(2, 6)
+        )
+        .select_related("canco", "canco__artista")
+        .order_by("posicio")
+    )
+    if not prev_top5:
+        return None
+    this_positions = {
+        cid: pos
+        for cid, pos in TopSetmanal.objects.filter(
+            territori=territori, setmana=setmana
+        ).values_list("canco_id", "posicio")
+        if cid is not None
+    }
+    candidate = None
+    for r in prev_top5:
+        if not r.canco_id:
+            continue
+        this_pos = this_positions.get(r.canco_id)
+        if this_pos is not None and this_pos <= 10:
+            continue  # didn't drop hard enough
+        if candidate is None or r.posicio < candidate.posicio:
+            candidate = (r, this_pos)
+    if not candidate:
+        return None
+    row, this_pos = candidate
+    artista, canco = _row_data(row, territori)
+    data = _base_data(artista, canco, territori)
+    data["posicio_anterior"] = row.posicio
+    data["posicio_anterior_ordinal"] = ordinal_ca(int(row.posicio))
+    if this_pos is None:
+        data["posicio_nova_str"] = "fora del top"
+    else:
+        data["posicio_nova_str"] = f"al {ordinal_ca(this_pos)}"
+    severity = 4 + (1 if row.posicio == 2 else 0)
+    return Scenario("a11_top5_drop_generic", severity, data)
+
+
+def detect_a12_artista_emerging(
+    territori: str, setmana: datetime.date
+) -> Optional[Scenario]:
+    """ADR-0008: Artista que té cançons al top aquesta setmana però
+    no en tenia cap la setmana anterior (sigui per debut sigui per
+    reentrada). Different from A10 (first-ever): A12 cobreix
+    reaparicions. Severity 3 — context, no headline. Pren l'artista
+    amb la millor posició entrant."""
+    from ranking.models import TopSetmanal
+
+    rows = list(_load_week(territori, setmana))
+    if not rows:
+        return None
+    artists_now: dict[int, list] = {}
+    for r in rows:
+        if not r.canco_id or not r.canco or not r.canco.artista_id:
+            continue
+        artists_now.setdefault(r.canco.artista_id, []).append(r)
+    if not artists_now:
+        return None
+    prev_setmana = _previous_monday(setmana)
+    artists_prev = set(
+        TopSetmanal.objects.filter(territori=territori, setmana=prev_setmana)
+        .values_list("canco__artista_id", flat=True)
+        .distinct()
+    )
+    artists_prev.discard(None)
+    candidate_row = None
+    for aid, lst in artists_now.items():
+        if aid in artists_prev:
+            continue
+        # A10 supersedes A12 for first-ever — skip if no historical
+        # presence at all (the cron for A10 will catch it).
+        if not TopSetmanal.objects.filter(
+            territori=territori, setmana__lt=setmana, canco__artista_id=aid
+        ).exists():
+            continue
+        best = min(lst, key=lambda r: r.posicio)
+        if candidate_row is None or best.posicio < candidate_row.posicio:
+            candidate_row = best
+    if not candidate_row:
+        return None
+    artista, canco = _row_data(candidate_row, territori)
+    data = _base_data(artista, canco, territori)
+    data["posicio"] = candidate_row.posicio
+    data["posicio_ordinal"] = ordinal_ca(int(candidate_row.posicio))
+    return Scenario("a12_artista_emerging", 3, data)
+
+
 def fallback_scenario(territori: str) -> Scenario:
     """Catch-all when no detector fires."""
     return Scenario(
@@ -347,6 +519,10 @@ _DETECTORS = (
     detect_a6_canco_recent,
     detect_a7_long_runner,
     detect_a8_pujada_forta,
+    detect_a9_debut_anywhere,
+    detect_a10_artista_first_ever,
+    detect_a11_top5_drop_generic,
+    detect_a12_artista_emerging,
 )
 
 

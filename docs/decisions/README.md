@@ -44,6 +44,7 @@ number, kebab-case slug). Fill in:
 | 0005 | Bluesky `upload_blob` timeout 180 s + retry 3× | Accepted | 2026-05-21 |
 | 0006 | Posicions com a ordinals catalans en lloc de `#N` | Accepted | 2026-05-21 |
 | 0007 | `@username` restituït al composer d'Instagram | Accepted | 2026-05-21 |
+| 0008 | Detectors narratius a9–a12 + slot terciari a IG | Accepted | 2026-05-21 |
 
 ## Lifecycle
 

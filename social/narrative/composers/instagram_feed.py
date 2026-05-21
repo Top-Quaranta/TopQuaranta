@@ -109,12 +109,34 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     if connector.endswith(","):
         secondary_text = connectors_bank.lowercase_first(secondary_text)
 
+    # ADR-0008: tertiary slot for the long-budget IG feed only. We
+    # surface a third scene (short tier) when there's still narrative
+    # to tell after the headline + the secondary. Truncation logic
+    # below drops tertiary first, before the secondary.
+    tertiary_text = ""
+    pid_tertiary = ""
+    tertiary_canco = ""
+    if len(scenarios) >= 3:
+        ter = scenarios[2]
+        ter = scen.Scenario(
+            code=ter.code,
+            severity=ter.severity,
+            data=_ig_hero_data(ter.data, entries),
+        )
+        pid_tertiary, tertiary_text = pick_phrase(
+            ter, "short", territori, CHANNEL, rng=rng
+        )
+        tertiary_canco = ter.data.get("canco") or ""
+    connector2 = connectors_bank.pick_connector(rng=rng) if tertiary_text else ""
+    if connector2.endswith(","):
+        tertiary_text = connectors_bank.lowercase_first(tertiary_text)
+
     hero_canco = hero.data.get("canco") or ""
     # Filter top-5 by cançó: drop hero + secondary referents. The
     # entries are rewritten with @handle (when present) AFTER the
     # cançó-based filter so the lookup keys stay stable.
     top5 = entries[:5]
-    skip_cancons = {c for c in (hero_canco, secondary_canco) if c}
+    skip_cancons = {c for c in (hero_canco, secondary_canco, tertiary_canco) if c}
     remaining = [_ig_entry(e) for e in top5 if e.get("canco_nom") not in skip_cancons]
     # Case A vs Case B (Fase 4 esmena 4): if the hero referent is
     # NOT at the cim, frame the #1 separately so we don't list it
@@ -128,7 +150,7 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     cta = cta_bank.pick_cta(CHANNEL, url="", rng=rng)
     hashtags = hashtags_bank.build_hashtags(territori, CHANNEL, rng=rng)
 
-    def assemble(h_text, sec_text, t5_text, hts):
+    def assemble(h_text, sec_text, ter_text, t5_text, hts):
         # Fase 4 esmena 1: no robotic header. The body starts with
         # the hero directly; the territori_label and week context
         # are inside the hero phrase itself.
@@ -137,6 +159,8 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
             parts.append(h_text)
         if sec_text:
             parts += ["", f"{connector} {sec_text}"]
+        if ter_text:
+            parts += ["", f"{connector2} {ter_text}"]
         if t5_text:
             parts += ["", t5_text]
         parts += ["", cta]
@@ -144,24 +168,30 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
             parts += ["", " ".join(hts)]
         return "\n".join(parts)
 
-    text = assemble(hero_text, secondary_text, top5_text, hashtags)
-    # Truncate priority: secondary → top5 detail → hashtags.
+    text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
+    # Truncate priority: tertiary → secondary → top5 detail → hashtags.
+    if len(text) > MAX_CHARS and tertiary_text:
+        tertiary_text = ""
+        pid_tertiary = ""
+        text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
     if len(text) > MAX_CHARS and secondary_text:
         secondary_text = ""
         pid_secondary = ""
-        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+        text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
     if len(text) > MAX_CHARS and top5_text:
         top5_text = ""
-        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+        text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
     while len(text) > MAX_CHARS and hashtags:
         hashtags = hashtags[:-1]
-        text = assemble(hero_text, secondary_text, top5_text, hashtags)
+        text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
 
     phrase_ids: list[str] = []
     if pid_hero:
         phrase_ids.append(pid_hero)
     if pid_secondary:
         phrase_ids.append(pid_secondary)
+    if pid_tertiary:
+        phrase_ids.append(pid_tertiary)
     return {
         "text": text,
         "hashtags": hashtags,

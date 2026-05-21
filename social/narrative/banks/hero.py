@@ -1,7 +1,8 @@
 """Hero phrase bank — the editorial opener of every post.
 
-Nine scenario codes × three length tiers × 15 entries each = 405
-templates. Each template is a `.format(**data)`-ready string.
+Thirteen scenario codes × three length tiers × 15 entries each =
+585 templates (a1-a12 + fallback; see ADR-0008 for the four
+expansion detectors a9-a12). Each template is a `.format(**data)`-ready string.
 
 Conventions:
 * `{de_artista}` is pre-rendered by the scenario detector via
@@ -478,6 +479,235 @@ A8_PUJADA_FORTA = {
 }
 
 
+# ── A9: debut at any position (4-40) — ADR-0008 ─────────────────────
+# data: artista, de_artista, canco, posicio, posicio_ordinal, territori_label
+A9_DEBUT_ANYWHERE = {
+    "short": [
+        "Debut al top {territori_label}: «{canco}» {de_artista} entra al {posicio_ordinal} 🆕",
+        "Nova entrada al top {territori_label}: «{canco}» al {posicio_ordinal} 🚪",
+        "«{canco}» {de_artista} estrena top al {posicio_ordinal} 🎬",
+        "{artista} debuta al top {territori_label}: «{canco}» al {posicio_ordinal} ✨",
+        "Cara nova al rànquing {territori_label}: «{canco}» al {posicio_ordinal} 👋",
+        "Entrada fresca al top {territori_label}: «{canco}» {de_artista} al {posicio_ordinal} 🌱",
+        "S'estrena al rànquing: «{canco}», {de_artista}, al {posicio_ordinal} 🎯",
+        "Debut tranquil al top {territori_label}: {artista} al {posicio_ordinal} 🪴",
+        "Aterratge al top {territori_label}: «{canco}» al {posicio_ordinal} 🛬",
+        "{artista} pica a la porta del top al {posicio_ordinal} amb «{canco}» 🚀",
+        "Estrena al cos del top {territori_label}: «{canco}» al {posicio_ordinal} 📍",
+        "Nou nom al rànquing {territori_label}: {artista} al {posicio_ordinal} 🔔",
+        "Apareix al top {territori_label} «{canco}» {de_artista}, al {posicio_ordinal} 💡",
+        "Primer cop al top {territori_label} per a «{canco}» al {posicio_ordinal} 🌟",
+        "Entra al rànquing {territori_label} «{canco}» {de_artista}, al {posicio_ordinal} 🎵",
+    ],
+    "medium": [
+        "Debut al top {territori_label}: «{canco}», {de_artista}, entra al {posicio_ordinal} aquesta setmana. Una nova cara que ja ha trobat el seu lloc. 🆕",
+        "Nova entrada al rànquing {territori_label}: «{canco}» {de_artista} aterra al {posicio_ordinal} per estrenar-se. 🚪",
+        "{artista} debuta al top {territori_label} amb «{canco}», que entra directament al {posicio_ordinal}. 🎬",
+        "Cara nova al rànquing {territori_label}: «{canco}», {de_artista}, irromp al {posicio_ordinal} amb una notícia tranquil·la però real. 👋",
+        "Entrada fresca al top {territori_label}: «{canco}» entra al {posicio_ordinal} i confirma que el catàleg es renova setmana a setmana. 🌱",
+        "S'estrena al top {territori_label} «{canco}», {de_artista}, al {posicio_ordinal}: una entrada modesta amb potencial de pujar. 🎯",
+        "Debut tranquil al top {territori_label}: {artista} arriba al rànquing al {posicio_ordinal} amb «{canco}». 🪴",
+        "Aterratge net al top {territori_label}: «{canco}», {de_artista}, entra al rànquing al {posicio_ordinal} sense estridències. 🛬",
+        "{artista} pica a la porta del top {territori_label}: «{canco}» entra al {posicio_ordinal} i busca quedar-s'hi setmanes. 🚀",
+        "Estrena al cos del top {territori_label}: «{canco}», {de_artista}, debuta al {posicio_ordinal}. 📍",
+        "Nou nom al rànquing {territori_label}: {artista} entra al top al {posicio_ordinal} amb «{canco}», una novetat per descobrir. 🔔",
+        "Apareix al top {territori_label} «{canco}», {de_artista}: aterra al {posicio_ordinal} per quedar-se a prova. 💡",
+        "Primer cop al top {territori_label} per a «{canco}» {de_artista}, que entra al {posicio_ordinal} aquesta setmana. 🌟",
+        "Entra al rànquing {territori_label} «{canco}» {de_artista}, al {posicio_ordinal}: el catàleg setmanal incorpora una nova proposta. 🎵",
+        "Debut amb personalitat al top {territori_label}: «{canco}» {de_artista} arriba al {posicio_ordinal} i marca presència. ✨",
+    ],
+    "long": [
+        "Debut al top {territori_label}: «{canco}», {de_artista}, entra al {posicio_ordinal} aquesta setmana. Una entrada moderada però real, que demostra que el rànquing té encara marge per a propostes que no han fet soroll de cop. 🆕",
+        "Nova entrada al rànquing {territori_label}: «{canco}» {de_artista} aterra al {posicio_ordinal} per estrenar-se. Veurem si el debut té continuïtat o si es queda en una sola visita al top. 🚪",
+        "{artista} debuta al top {territori_label} amb «{canco}», que entra directament al {posicio_ordinal}. El primer cop a la llista mai és casualitat; sempre indica que alguna cosa s'està movent al territori. 🎬",
+        "Cara nova al rànquing {territori_label}: «{canco}», {de_artista}, irromp al {posicio_ordinal} amb una notícia tranquil·la però real. Aquest tipus de debut és sovint l'avantsala de pujades a l'alça. 👋",
+        "Entrada fresca al top {territori_label}: «{canco}» entra al {posicio_ordinal} i confirma que el catàleg es renova setmana a setmana, sense necessitat d'un cop d'efecte als llocs alts. 🌱",
+        "S'estrena al top {territori_label} «{canco}», {de_artista}, al {posicio_ordinal}: una entrada modesta amb potencial de pujar les properes setmanes, depenent del recorregut que sàpiga construir. 🎯",
+        "Debut tranquil al top {territori_label}: {artista} arriba al rànquing al {posicio_ordinal} amb «{canco}». La permanència és el que dirà si el debut consolida o si serà un pas curt. 🪴",
+        "Aterratge net al top {territori_label}: «{canco}», {de_artista}, entra al rànquing al {posicio_ordinal} sense estridències, però amb una posició respectable per a una primera setmana. 🛬",
+        "{artista} pica a la porta del top {territori_label}: «{canco}» entra al {posicio_ordinal} i busca quedar-s'hi setmanes. Els debuts a la zona mitjana acostumen a ser els més estables. 🚀",
+        "Estrena al cos del top {territori_label}: «{canco}», {de_artista}, debuta al {posicio_ordinal} amb un perfil discret però que mereix atenció els pròxims cicles. 📍",
+        "Nou nom al rànquing {territori_label}: {artista} entra al top al {posicio_ordinal} amb «{canco}», una novetat per descobrir abans que potser faci el salt cap a posicions més altes. 🔔",
+        "Apareix al top {territori_label} «{canco}», {de_artista}: aterra al {posicio_ordinal} per quedar-se a prova. Els propers set dies dictaran si consolida la presència o si recula. 💡",
+        "Primer cop al top {territori_label} per a «{canco}» {de_artista}, que entra al {posicio_ordinal} aquesta setmana. Una de les cares noves que cal seguir d'a prop a les pròximes edicions. 🌟",
+        "Entra al rànquing {territori_label} «{canco}» {de_artista}, al {posicio_ordinal}: el catàleg setmanal incorpora una nova proposta que ja ha trobat el seu lloc inicial al top. 🎵",
+        "Debut amb personalitat al top {territori_label}: «{canco}» {de_artista} arriba al {posicio_ordinal} i marca presència. Caldrà veure si la setmana que ve manté o millora la posició d'avui. ✨",
+    ],
+}
+
+
+# ── A10: artist's first-ever appearance — ADR-0008 ──────────────────
+# data: artista, de_artista, canco, posicio, posicio_ordinal, territori_label
+A10_ARTISTA_FIRST_EVER = {
+    "short": [
+        "Primera vegada al top {territori_label} {per_a_artista} amb «{canco}», al {posicio_ordinal} 🎉",
+        "{artista} estrena top {territori_label}: «{canco}» al {posicio_ordinal} 🎊",
+        "Cap rànquing previ: {artista} arriba al top al {posicio_ordinal} amb «{canco}» 🆕",
+        "Estrena absoluta al top {territori_label}: {artista} amb «{canco}», al {posicio_ordinal} ✨",
+        "Primer cop de la història {per_a_artista} al top, al {posicio_ordinal} 🪄",
+        "Debut històric al top {territori_label} {per_a_artista} amb «{canco}» 🏁",
+        "{artista} entra per primera vegada al top {territori_label} al {posicio_ordinal} 🚪",
+        "Cap aparició anterior: {artista} arriba al rànquing al {posicio_ordinal} 🎬",
+        "Top {territori_label} estrena nom: {artista} amb «{canco}», al {posicio_ordinal} 🌟",
+        "Hola, top {territori_label}: {artista} debuta a la llista al {posicio_ordinal} 👋",
+        "Una primera vegada al rànquing {territori_label}: {artista} amb «{canco}» 💫",
+        "Salt fundacional: {artista} entra al top al {posicio_ordinal} 🪜",
+        "Inauguració al top {territori_label} {per_a_artista} al {posicio_ordinal} 🎀",
+        "Mai havia tocat el top {territori_label} fins ara: «{canco}» {de_artista}, al {posicio_ordinal} 🔓",
+        "Cara absolutament nova al rànquing {territori_label}: {artista} al {posicio_ordinal} 🌅",
+    ],
+    "medium": [
+        "Primera vegada al top {territori_label} {per_a_artista}: «{canco}» entra al {posicio_ordinal} sense cap aparició anterior al rànquing. 🎉",
+        "{artista} estrena top {territori_label} amb «{canco}», que el situa al {posicio_ordinal}: una porta oberta a futures presències. 🎊",
+        "Cap rànquing previ {per_a_artista}: el seu debut absolut al top {territori_label} arriba al {posicio_ordinal} amb «{canco}». 🆕",
+        "Estrena absoluta al top {territori_label}: {artista} apareix per primer cop al rànquing amb «{canco}», al {posicio_ordinal}. ✨",
+        "Primer cop de la història al top {territori_label} {per_a_artista}: «{canco}» l'asseu al {posicio_ordinal} d'un cop. 🪄",
+        "Debut històric al top {territori_label} {per_a_artista}: la setmana es marca al calendari amb «{canco}» al {posicio_ordinal}. 🏁",
+        "{artista} entra per primera vegada al top {territori_label} al {posicio_ordinal}: cap edició anterior l'havia tingut. 🚪",
+        "Cap aparició anterior al rànquing {territori_label} {per_a_artista}: «{canco}» trenca el silenci al {posicio_ordinal}. 🎬",
+        "Top {territori_label} estrena nom: {artista} hi entra per primera vegada amb «{canco}», al {posicio_ordinal}. 🌟",
+        "Hola, top {territori_label}: {artista} es presenta al rànquing al {posicio_ordinal} amb «{canco}», sense passat al top. 👋",
+        "Una primera vegada al rànquing {territori_label}: «{canco}», {de_artista}, situa l'artista al {posicio_ordinal} per estrena. 💫",
+        "Salt fundacional al top {territori_label}: {artista} arriba al {posicio_ordinal} amb «{canco}» i obre el seu compte al rànquing. 🪜",
+        "Inauguració al top {territori_label} {per_a_artista}: «{canco}» l'estrena al {posicio_ordinal}, sense cap precedent al rànquing. 🎀",
+        "Mai havia tocat el top {territori_label} fins ara: «{canco}» {de_artista} arriba al {posicio_ordinal} per primer cop. 🔓",
+        "Cara absolutament nova al rànquing {territori_label}: {artista} debuta al top al {posicio_ordinal} amb «{canco}». 🌅",
+    ],
+    "long": [
+        "Primera vegada al top {territori_label} {per_a_artista}: «{canco}» entra al {posicio_ordinal} sense cap aparició anterior al rànquing. Aquestes estrenes absolutes són les que confirmen que el catàleg local continua creixent. 🎉",
+        "{artista} estrena top {territori_label} amb «{canco}», que el situa al {posicio_ordinal}: una porta oberta a futures presències, sigui amb aquesta cançó o amb les properes. 🎊",
+        "Cap rànquing previ {per_a_artista}: el seu debut absolut al top {territori_label} arriba al {posicio_ordinal} amb «{canco}». Una entrada que mereix seguiment a llarg termini. 🆕",
+        "Estrena absoluta al top {territori_label}: {artista} apareix per primer cop al rànquing amb «{canco}», al {posicio_ordinal}. Les primeres vegades són dades; allò que diran els propers cicles és la veritable notícia. ✨",
+        "Primer cop de la història al top {territori_label} {per_a_artista}: «{canco}» l'asseu al {posicio_ordinal} d'un cop. Una entrada significativa, perquè la història al rànquing es comença aquesta setmana. 🪄",
+        "Debut històric al top {territori_label} {per_a_artista}: la setmana es marca al calendari amb «{canco}» al {posicio_ordinal}. És el tipus de notícia que recolza la idea que el top setmanal és un termòmetre, no un mirall. 🏁",
+        "{artista} entra per primera vegada al top {territori_label} al {posicio_ordinal} amb «{canco}»: cap edició anterior l'havia tingut, i això converteix aquesta entrada en una primera fita pública. 🚪",
+        "Cap aparició anterior al rànquing {territori_label} {per_a_artista}: «{canco}» trenca el silenci al {posicio_ordinal} i suma un nom més al cens d'artistes que han passat pel top. 🎬",
+        "Top {territori_label} estrena nom: {artista} hi entra per primera vegada amb «{canco}», al {posicio_ordinal}. Els debuts absoluts són pocs cada any; aquest és un d'ells. 🌟",
+        "Hola, top {territori_label}: {artista} es presenta al rànquing al {posicio_ordinal} amb «{canco}», sense passat al top. La presència mereix aquesta primera línia abans de mirar com aguanta. 👋",
+        "Una primera vegada al rànquing {territori_label}: «{canco}», {de_artista}, situa l'artista al {posicio_ordinal} per estrena. Aquestes entrades sense precedents són les que evidencien la diversitat real del catàleg. 💫",
+        "Salt fundacional al top {territori_label}: {artista} arriba al {posicio_ordinal} amb «{canco}» i obre el seu compte al rànquing. Caldrà veure si aquesta primera setmana és el principi d'una sèrie o un episodi puntual. 🪜",
+        "Inauguració al top {territori_label} {per_a_artista}: «{canco}» l'estrena al {posicio_ordinal}, sense cap precedent al rànquing. La inauguració, com totes les inauguracions, demana confirmació en les setmanes vinents. 🎀",
+        "Mai havia tocat el top {territori_label} fins ara: «{canco}» {de_artista} arriba al {posicio_ordinal} per primer cop. El rànquing setmanal s'eixampla amb una entrada netament nova. 🔓",
+        "Cara absolutament nova al rànquing {territori_label}: {artista} debuta al top al {posicio_ordinal} amb «{canco}». La història al top comença aquesta setmana; veurem com creix les properes. 🌅",
+    ],
+}
+
+
+# ── A11: top-5 song drops out of top 10 — ADR-0008 ──────────────────
+# data: artista, de_artista, canco, posicio_anterior, posicio_anterior_ordinal,
+# posicio_nova_str, territori_label
+A11_TOP5_DROP_GENERIC = {
+    "short": [
+        "Caiguda forta al top {territori_label}: «{canco}» {de_artista}, del {posicio_anterior_ordinal} a {posicio_nova_str} 📉",
+        "«{canco}» {de_artista} surt del podi: del {posicio_anterior_ordinal} a {posicio_nova_str} 🪂",
+        "Salta del top 5 «{canco}» {de_artista}: del {posicio_anterior_ordinal} a {posicio_nova_str} ⬇️",
+        "Cau del cim {de_artista}: «{canco}» del {posicio_anterior_ordinal} a {posicio_nova_str} 🍂",
+        "«{canco}» perd lloc al podi {territori_label}: {posicio_nova_str} 🪨",
+        "Recanvi al podi: «{canco}» {de_artista}, del {posicio_anterior_ordinal} a {posicio_nova_str} 🔁",
+        "Sortida del podi {territori_label}: «{canco}» del {posicio_anterior_ordinal} a {posicio_nova_str} 🚪",
+        "Baixa al cos del top «{canco}» {de_artista}, del {posicio_anterior_ordinal} a {posicio_nova_str} 📊",
+        "«{canco}» {de_artista} cedeix podi: del {posicio_anterior_ordinal} a {posicio_nova_str} 🛤️",
+        "Caiguda notable al top {territori_label}: «{canco}» del {posicio_anterior_ordinal} a {posicio_nova_str} 🌬️",
+        "Trànsit del podi al cos: «{canco}» {de_artista}, {posicio_nova_str} 🚏",
+        "«{canco}» perd força aquesta setmana: del {posicio_anterior_ordinal} a {posicio_nova_str} 🌒",
+        "El podi {territori_label} reordena: «{canco}» {de_artista} surt del 5 ⛔",
+        "Setmana de retrocés {per_a_artista} amb «{canco}»: {posicio_nova_str} ⏬",
+        "{artista} cedeix el podi: «{canco}» a {posicio_nova_str} 🧭",
+    ],
+    "medium": [
+        "Caiguda forta al top {territori_label}: «{canco}», {de_artista}, passa del {posicio_anterior_ordinal} a {posicio_nova_str} en una sola setmana. 📉",
+        "«{canco}» {de_artista} surt del podi: del {posicio_anterior_ordinal} a {posicio_nova_str}, un salt cap avall que mereix nota. 🪂",
+        "Salt fora del top 5: «{canco}» {de_artista} passa del {posicio_anterior_ordinal} a {posicio_nova_str} aquesta setmana. ⬇️",
+        "Cau del cim {de_artista}: «{canco}» va del {posicio_anterior_ordinal} a {posicio_nova_str}, deixant lloc al podi. 🍂",
+        "«{canco}» perd lloc al podi {territori_label} després d'estar al {posicio_anterior_ordinal}: ara és {posicio_nova_str}. 🪨",
+        "Recanvi al podi {territori_label}: «{canco}» {de_artista} baixa del {posicio_anterior_ordinal} a {posicio_nova_str}. 🔁",
+        "Sortida del podi al top {territori_label}: «{canco}» va del {posicio_anterior_ordinal} a {posicio_nova_str} en un cicle. 🚪",
+        "Baixada al cos del top: «{canco}» {de_artista} passa del {posicio_anterior_ordinal} a {posicio_nova_str}. 📊",
+        "«{canco}» {de_artista} cedeix el podi: del {posicio_anterior_ordinal} a {posicio_nova_str}, l'aterratge més dur de la setmana. 🛤️",
+        "Caiguda notable al top {territori_label}: «{canco}» passa del {posicio_anterior_ordinal} a {posicio_nova_str} en set dies. 🌬️",
+        "Trànsit del podi al cos del top: «{canco}», {de_artista}, és ara {posicio_nova_str} després de venir del {posicio_anterior_ordinal}. 🚏",
+        "«{canco}» perd força aquesta setmana al top {territori_label}: del {posicio_anterior_ordinal} a {posicio_nova_str}. 🌒",
+        "El podi {territori_label} es reordena: «{canco}», {de_artista}, surt del top 5 i passa a {posicio_nova_str}. ⛔",
+        "Setmana de retrocés {per_a_artista} amb «{canco}»: del {posicio_anterior_ordinal} a {posicio_nova_str} en un cicle complet. ⏬",
+        "{artista} cedeix el podi: «{canco}» passa del {posicio_anterior_ordinal} a {posicio_nova_str} aquesta setmana. 🧭",
+    ],
+    "long": [
+        "Caiguda forta al top {territori_label}: «{canco}», {de_artista}, passa del {posicio_anterior_ordinal} a {posicio_nova_str} en una sola setmana. El podi de la setmana anterior ja és història per a aquesta peça. 📉",
+        "«{canco}» {de_artista} surt del podi: del {posicio_anterior_ordinal} a {posicio_nova_str}, un salt cap avall que sovint precedeix la sortida definitiva del top. 🪂",
+        "Salt fora del top 5: «{canco}» {de_artista} passa del {posicio_anterior_ordinal} a {posicio_nova_str} aquesta setmana, un retrocés que cal contextualitzar amb les pròximes edicions. ⬇️",
+        "Cau del cim {de_artista}: «{canco}» va del {posicio_anterior_ordinal} a {posicio_nova_str}, deixant lloc al podi. Les caigudes brusques no acostumen a recuperar-se en una setmana. 🍂",
+        "«{canco}» perd lloc al podi {territori_label} després d'estar al {posicio_anterior_ordinal}: ara és {posicio_nova_str}. El podi s'ha reordenat amb dues sortides i una entrada lateral. 🪨",
+        "Recanvi al podi {territori_label}: «{canco}» {de_artista} baixa del {posicio_anterior_ordinal} a {posicio_nova_str}, una caiguda sobtada al cos del top que demana atenció. 🔁",
+        "Sortida del podi al top {territori_label}: «{canco}» va del {posicio_anterior_ordinal} a {posicio_nova_str} en un cicle. Aquest moviment no és casualitat; sovint es deu a una novetat que ha empès la cançó cap avall. 🚪",
+        "Baixada al cos del top: «{canco}», {de_artista}, passa del {posicio_anterior_ordinal} a {posicio_nova_str}. La velocitat del salt és la que fa que mereixi una línia pròpia. 📊",
+        "«{canco}» {de_artista} cedeix el podi: del {posicio_anterior_ordinal} a {posicio_nova_str}, l'aterratge més dur de la setmana al top {territori_label}. 🛤️",
+        "Caiguda notable al top {territori_label}: «{canco}» passa del {posicio_anterior_ordinal} a {posicio_nova_str} en set dies, un dels moviments més bruscos d'aquest cicle. 🌬️",
+        "Trànsit del podi al cos del top: «{canco}», {de_artista}, és ara {posicio_nova_str} després de venir del {posicio_anterior_ordinal}. Les caigudes des del top 5 acostumen a obrir lloc per a entrades fresques. 🚏",
+        "«{canco}» perd força aquesta setmana al top {territori_label}: del {posicio_anterior_ordinal} a {posicio_nova_str}. Caldrà veure si toca fons o si manté la trajectòria a la baixa. 🌒",
+        "El podi {territori_label} es reordena: «{canco}», {de_artista}, surt del top 5 i passa a {posicio_nova_str}. La rotació del podi és el reflex del comportament de l'oient setmanal. ⛔",
+        "Setmana de retrocés {per_a_artista} amb «{canco}»: del {posicio_anterior_ordinal} a {posicio_nova_str} en un cicle. Cal mirar el conjunt: a vegades les caigudes són temporals i a vegades són estructurals. ⏬",
+        "{artista} cedeix el podi: «{canco}» passa del {posicio_anterior_ordinal} a {posicio_nova_str} aquesta setmana. La sortida del top 5 sempre marca un punt d'inflexió en la trajectòria de la cançó. 🧭",
+    ],
+}
+
+
+# ── A12: artist emerging (no songs last week, ≥1 this week) — ADR-0008 ─
+# data: artista, de_artista, canco, posicio, posicio_ordinal, territori_label
+A12_ARTISTA_EMERGING = {
+    "short": [
+        "Torna al top {territori_label} {artista}: «{canco}» al {posicio_ordinal} 🔁",
+        "Reapareix al rànquing {artista} amb «{canco}» al {posicio_ordinal} 🌱",
+        "{artista} torna a aparèixer al top {territori_label} al {posicio_ordinal} 🌿",
+        "Setmana de retorn {per_a_artista}: «{canco}» al {posicio_ordinal} 🪴",
+        "{artista} surt de pausa al top {territori_label} al {posicio_ordinal} 🌅",
+        "Nova presència al top {territori_label} {per_a_artista}: «{canco}» al {posicio_ordinal} 🔔",
+        "{artista} reentra al rànquing {territori_label} al {posicio_ordinal} 🪜",
+        "Retorn discret al top {territori_label} {per_a_artista}: «{canco}» al {posicio_ordinal} 🍃",
+        "Es deixa veure de nou al top {territori_label} {artista} al {posicio_ordinal} 👀",
+        "{artista} reapareix amb «{canco}» al top {territori_label} al {posicio_ordinal} 🌤️",
+        "Tornada al rànquing {territori_label} {per_a_artista} amb «{canco}» al {posicio_ordinal} 🚪",
+        "{artista} torna a sumar setmana al top {territori_label} al {posicio_ordinal} 📒",
+        "Nou tram al top {territori_label} {per_a_artista}: «{canco}» al {posicio_ordinal} 🪶",
+        "El rànquing {territori_label} recupera {artista} al {posicio_ordinal} 🧭",
+        "Retornen al top {territori_label} els noms {de_artista} al {posicio_ordinal} 🎈",
+    ],
+    "medium": [
+        "Torna al top {territori_label} {artista}: «{canco}» entra al {posicio_ordinal} després d'haver estat fora del rànquing la setmana passada. 🔁",
+        "Reapareix al rànquing {territori_label} {artista} amb «{canco}», ara al {posicio_ordinal}: una tornada modesta però comptable. 🌱",
+        "{artista} torna a aparèixer al top {territori_label} al {posicio_ordinal} amb «{canco}» després d'un cicle absent. 🌿",
+        "Setmana de retorn {per_a_artista}: «{canco}» el situa al {posicio_ordinal} del top {territori_label}. 🪴",
+        "{artista} surt de pausa al top {territori_label}: «{canco}» l'asseu al {posicio_ordinal} aquesta setmana. 🌅",
+        "Nova presència al top {territori_label} {per_a_artista}: «{canco}» entra al {posicio_ordinal}, recuperant lloc al rànquing. 🔔",
+        "{artista} reentra al rànquing {territori_label} al {posicio_ordinal} després d'una setmana sense presència al top. 🪜",
+        "Retorn discret al top {territori_label} {per_a_artista}: «{canco}» suma una entrada al {posicio_ordinal} aquesta setmana. 🍃",
+        "Es deixa veure de nou al top {territori_label} {artista} amb «{canco}», al {posicio_ordinal} després de no aparèixer al cicle anterior. 👀",
+        "{artista} reapareix amb «{canco}» al top {territori_label} al {posicio_ordinal}: una nota discreta, però útil per a la continuïtat. 🌤️",
+        "Tornada al rànquing {territori_label} {per_a_artista} amb «{canco}»: la cançó es col·loca al {posicio_ordinal} aquesta setmana. 🚪",
+        "{artista} torna a sumar setmana al top {territori_label} al {posicio_ordinal}, recuperant el lloc al rànquing. 📒",
+        "Nou tram al top {territori_label} {per_a_artista}: «{canco}» reentra al {posicio_ordinal} aquesta setmana. 🪶",
+        "El rànquing {territori_label} recupera {artista} al {posicio_ordinal}: una reaparició que es notarà en les setmanes properes. 🧭",
+        "Retornen al top {territori_label} els noms {de_artista}: «{canco}» entra al {posicio_ordinal} aquesta setmana. 🎈",
+    ],
+    "long": [
+        "Torna al top {territori_label} {artista}: «{canco}» entra al {posicio_ordinal} després d'haver estat fora del rànquing la setmana passada. Les reaparicions són sovint el camí lent cap a una segona escalada. 🔁",
+        "Reapareix al rànquing {territori_label} {artista} amb «{canco}», ara al {posicio_ordinal}: una tornada modesta però comptable, que demana seguiment a llarg termini. 🌱",
+        "{artista} torna a aparèixer al top {territori_label} al {posicio_ordinal} amb «{canco}» després d'un cicle absent. Sovint aquestes tornades són les que indiquen continuïtat real. 🌿",
+        "Setmana de retorn {per_a_artista}: «{canco}» el situa al {posicio_ordinal} del top {territori_label}. La presència al top no és lineal; les pauses formen part del recorregut. 🪴",
+        "{artista} surt de pausa al top {territori_label}: «{canco}» l'asseu al {posicio_ordinal} aquesta setmana, marcant una reentrada que mereix nota. 🌅",
+        "Nova presència al top {territori_label} {per_a_artista}: «{canco}» entra al {posicio_ordinal}, recuperant lloc al rànquing després d'una setmana de descans. 🔔",
+        "{artista} reentra al rànquing {territori_label} al {posicio_ordinal} després d'una setmana sense presència al top. Les reaparicions discretes consoliden trajectòries més que els salts brusques. 🪜",
+        "Retorn discret al top {territori_label} {per_a_artista}: «{canco}» suma una entrada al {posicio_ordinal} aquesta setmana, un cicle després d'haver desaparegut del rànquing. 🍃",
+        "Es deixa veure de nou al top {territori_label} {artista} amb «{canco}», al {posicio_ordinal} després de no aparèixer al cicle anterior. La continuïtat en xifres és el millor termòmetre real. 👀",
+        "{artista} reapareix amb «{canco}» al top {territori_label} al {posicio_ordinal}: una nota discreta, però útil per a la continuïtat del nom al rànquing en cicles llargs. 🌤️",
+        "Tornada al rànquing {territori_label} {per_a_artista} amb «{canco}»: la cançó es col·loca al {posicio_ordinal} aquesta setmana, després d'una pausa breu al top. 🚪",
+        "{artista} torna a sumar setmana al top {territori_label} al {posicio_ordinal}, recuperant el lloc al rànquing. Aquestes reentrades són les que diferencien les trajectòries amb fons. 📒",
+        "Nou tram al top {territori_label} {per_a_artista}: «{canco}» reentra al {posicio_ordinal} aquesta setmana i obre un nou capítol al rànquing setmanal. 🪶",
+        "El rànquing {territori_label} recupera {artista} al {posicio_ordinal} amb «{canco}»: una reaparició que es notarà en les setmanes properes si manté presència. 🧭",
+        "Retornen al top {territori_label} els noms {de_artista} amb «{canco}», al {posicio_ordinal}: una entrada que tanca el cercle d'una absència curta. 🎈",
+    ],
+}
+
+
 # ── Fallback: no scenario fired ────────────────────────────────────
 # data: territori_label
 FALLBACK_NO_EVENT = {
@@ -545,5 +775,9 @@ HERO: dict[str, dict[str, list[str]]] = {
     "a6_canco_recent": A6_CANCO_RECENT,
     "a7_long_runner": A7_LONG_RUNNER,
     "a8_pujada_forta": A8_PUJADA_FORTA,
+    "a9_debut_anywhere": A9_DEBUT_ANYWHERE,
+    "a10_artista_first_ever": A10_ARTISTA_FIRST_EVER,
+    "a11_top5_drop_generic": A11_TOP5_DROP_GENERIC,
+    "a12_artista_emerging": A12_ARTISTA_EMERGING,
     "fallback_no_event": FALLBACK_NO_EVENT,
 }

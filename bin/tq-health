@@ -94,6 +94,8 @@ for cmd in "${!MAX_AGE_HOURS[@]}"; do
     max_h=${MAX_AGE_HOURS[$cmd]}
     skips=$(grep '^consecutive_skips=' "$f" | cut -d= -f2)
     skips=${skips:-0}
+    fails=$(grep '^consecutive_failures=' "$f" | cut -d= -f2)
+    fails=${fails:-0}
 
     # Order matters: STALE (last_run too old) is the most informative
     # signal. SKIPPED_BY_LOCK alone is fine — it means a long run is
@@ -101,6 +103,28 @@ for cmd in "${!MAX_AGE_HOURS[@]}"; do
     # become STALE. Pre-2026-05-01 the bug was that lock-skip was
     # written as status=OK with last_run=now, masking stale state.
     silenced=${SILENCED[$cmd]:-}
+
+    # Watchdog (FASE F, 2026-05-22): consecutive_skips and
+    # consecutive_failures escalate past the `silenced=true` flag once
+    # they cross a threshold. silenced=true is for *expected* skips
+    # (re-OAuth pending, planned maintenance), not for letting a
+    # persistent regression slide. Two thresholds:
+    #   >= 3   → WARN, append [watchdog WARN]
+    #   >= 10  → CRIT, append [watchdog CRIT] and force overall=1 even
+    #             when silenced
+    # Caught at the start of the playlists revival sprint:
+    # `actualitzar_playlists_spotify` had been silently FAILing daily
+    # for over a month behind `silenced=true`, with nobody alerted.
+    persistent=$(( skips > fails ? skips : fails ))
+    watchdog_tag=""
+    if (( persistent >= 10 )); then
+        watchdog_tag=" [watchdog CRIT, ${persistent} consecutive]"
+        overall=1  # always escalate at CRIT, even if silenced.
+    elif (( persistent >= 3 )); then
+        watchdog_tag=" [watchdog WARN, ${persistent} consecutive]"
+        if [[ -n "$silenced" ]]; then overall=1; fi  # silenced WARN still escalates.
+    fi
+
     if [[ $age_h -gt $max_h ]]; then
         if [[ "$status" == "SKIPPED_BY_LOCK" ]] && (( skips > 0 )); then
             display="STUCK(${age_h}h, ${skips}skips)"
@@ -116,6 +140,7 @@ for cmd in "${!MAX_AGE_HOURS[@]}"; do
     else
         display="OK(${age_h}h)"
     fi
+    display="${display}${watchdog_tag}"
     printf "%-32s  %-12s  %s\n" "$cmd" "$display" "$last"
 done
 
@@ -207,6 +232,63 @@ else
 fi
 
 if (( WEB_OK == 0 )); then overall=1; fi
+
+# ── Spotify integration health (FASE F, 2026-05-22).
+# Two sub-checks: Premium subscription on the app owner (weekly,
+# cached) and coverage of the matched / total ratio on every
+# SpotifyPlaylist row (daily). Both wrapped in scripts/health/ so
+# the Python core is testable in isolation; this section just
+# threads their exit codes into the overall health.
+echo
+# tq-health runs from /home/topquaranta/bin/ on prod but is sourced
+# from /home/topquaranta/app/ in the repo. `SP_DIR` resolves to
+# whichever exists so we can run the same script in either layout.
+SP_DIR=""
+for cand in /home/topquaranta/app/scripts/health "$(dirname "$0")/../scripts/health"; do
+    if [[ -d "$cand" ]]; then SP_DIR="$cand"; break; fi
+done
+
+if [[ -n "$SP_DIR" && -x "$SP_DIR/spotify_premium_active.sh" ]]; then
+    out=$("$SP_DIR/spotify_premium_active.sh" 2>&1)
+    sc=$?
+    case "$sc" in
+        0) prefix="OK  " ;;
+        1) prefix="WARN" ;;
+        *) prefix="CRIT" ;;
+    esac
+    # The wrapper prints one JSON line; tq-health collapses it to a
+    # short headline so the table-style report stays scannable.
+    summary=$(echo "$out" | python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.stdin.read().splitlines()[-1])
+    print(d.get('message', ''))
+except Exception as exc:
+    print(f'(unparsed) {exc}')
+" 2>/dev/null)
+    echo "Spotify Premium:                          $prefix  $summary"
+    if (( sc != 0 )); then overall=1; fi
+fi
+
+if [[ -n "$SP_DIR" && -x "$SP_DIR/spotify_playlist_coverage.sh" ]]; then
+    out=$("$SP_DIR/spotify_playlist_coverage.sh" 2>&1)
+    sc=$?
+    case "$sc" in
+        0) prefix="OK  " ;;
+        1) prefix="WARN" ;;
+        *) prefix="CRIT" ;;
+    esac
+    summary=$(echo "$out" | python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.stdin.read().splitlines()[-1])
+    print(d.get('message', ''))
+except Exception as exc:
+    print(f'(unparsed) {exc}')
+" 2>/dev/null)
+    echo "Spotify playlist coverage:                $prefix  $summary"
+    if (( sc != 0 )); then overall=1; fi
+fi
 
 # ── Pending Django migrations (added 2026-05-07 after the
 # Album.label deploy ordering bug — caught a 30-email inbox flood

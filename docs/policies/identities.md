@@ -49,11 +49,12 @@ Each refresh token / API key has a row in `docs/ops/runbook.md`:
 
 A token without a runbook row is an outage waiting to happen.
 
-## Token inventory (snapshot 2026-05-21)
+## Token inventory (snapshot 2026-05-22)
 
 | Integration | Identity | Storage | Rotation procedure |
 |---|---|---|---|
 | GSC Search Analytics API | `admin@topquaranta.cat` (OAuth user creds) | `.env::GSC_OAUTH_REFRESH_TOKEN` | `docs/ops/runbook.md` § "GSC — auth path" |
+| Spotify Web API (playlist sync) | `admin@topquaranta.cat` + Spotify Premium | `.env::SPOTIFY_CLIENT_ID/SECRET` + `music.SpotifyAuth.refresh_token` row | `/staff/social/spotify/` UI (FASE B); fallback `manage.py autoritzar_spotify` |
 | Instagram Graph API | TopQuaranta IG business account | `.env::INSTAGRAM_ACCESS_TOKEN` | `bin/renovar_token_instagram` (long-lived 60 d cycle) |
 | Mastodon API | TopQuaranta instance app | `social.MastodonAuth` row | `social/management/commands/autoritzar_instagram.py` equivalent (TODO: document) |
 | Bluesky | `topquaranta.bsky.social` app password | `social.BlueskyAuth` row | App password rotated at bsky.social settings |
@@ -62,6 +63,24 @@ A token without a runbook row is an outage waiting to happen.
 | Resend (cercol.team) | Resend account | (Stalwart MTA strategy) | Resend dashboard |
 | Hetzner Cloud API | `HETZNER_API_TOKEN` | `.env` | Hetzner console |
 | CDMON DNS | `CDMON_API_KEY` | `.env` | CDMON web panel |
+
+### Spotify-specific notes
+
+Spotify is the first inventory entry with a **recurring subscription
+cost** attached to the identity (Premium Individual, 11.99 EUR/month
+on `admin@topquaranta.cat`). The integration silently breaks if the
+subscription ever lapses, because Spotify Web API returns `403` with
+the body `"Active premium subscription required for the owner of the
+app"` and the cron treats that as a generic API failure. Two
+mitigations:
+
+1. The FASE F monitoring check (`spotify_premium_active.sh`) calls
+   `GET /v1/me` weekly and alerts CRITICAL if `product != "premium"`,
+   independently of the cron's own error reporting.
+2. Subscription billing notifications from Spotify land in the
+   `admin@topquaranta.cat` mailbox, which is monitored.
+
+See ADR-0009 for the full decision context.
 
 Items marked TODO are open backlog. Adding a new integration
 without filling its row is the kind of skip this policy catches.

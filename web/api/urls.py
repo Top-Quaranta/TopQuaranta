@@ -447,6 +447,30 @@ urlpatterns = [
         staff_views.social_telegram_clear,
         name="staff_social_telegram_clear",
     ),
+    # Spotify (FASE B of the playlists revival sprint).
+    # `estat/` is GET, the others are POST. The OAuth `callback/` is
+    # NOT the redirect URL Spotify hits — that's the SPA route
+    # `/staff/social/spotify/callback`. Spotify never POSTs anywhere.
+    path(
+        "staff/social/spotify/estat/",
+        staff_views.spotify_estat,
+        name="staff_social_spotify_estat",
+    ),
+    path(
+        "staff/social/spotify/oauth-start/",
+        staff_views.spotify_oauth_start,
+        name="staff_social_spotify_oauth_start",
+    ),
+    path(
+        "staff/social/spotify/oauth-callback/",
+        staff_views.spotify_oauth_callback,
+        name="staff_social_spotify_oauth_callback",
+    ),
+    path(
+        "staff/social/spotify/sync/",
+        staff_views.spotify_sync,
+        name="staff_social_spotify_sync",
+    ),
     path(
         "staff/social/slides/",
         staff_views.social_slides_for,

@@ -23,3 +23,4 @@ LASTFM_API_SECRET = ""
 # Spotify (for tests)
 SPOTIFY_CLIENT_ID = "test-client-id"
 SPOTIFY_CLIENT_SECRET = "test-client-secret"
+SPOTIFY_REDIRECT_URI = "http://127.0.0.1:8000/staff/social/spotify/callback"

@@ -98,6 +98,11 @@ const GROUPS = [
       // Single landing page now covers all 5 channels — Instagram +
       // Mastodon + Bluesky + Newsletter + RSS — under "Social".
       { to: '/staff/social', label: 'Social' },
+      // Spotify is a separate landing because the OAuth + Premium
+      // monitoring shape doesn't fit inside the SocialPost-centric
+      // table on /staff/social. Surfaced as a sibling under the same
+      // "Distribució" group so it's discoverable next to the rest.
+      { to: '/staff/social/spotify', label: 'Spotify' },
     ],
   },
   {

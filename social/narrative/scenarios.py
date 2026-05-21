@@ -19,7 +19,11 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
-from social.narrative.utils import apostrof_de, territori_label, with_preposition
+from social.narrative.utils import (
+    ordinal_ca,
+    territori_label,
+    with_preposition,
+)
 
 # ── Data class ─────────────────────────────────────────────────────
 
@@ -118,9 +122,9 @@ def detect_a1_outside_to_top1(
     if prev_pos is None:
         severity, prev_str = 10, "fora del top"
     elif prev_pos >= 10:
-        severity, prev_str = 8, f"al #{prev_pos}"
+        severity, prev_str = 8, f"al {ordinal_ca(prev_pos)}"
     else:
-        severity, prev_str = 6, f"al #{prev_pos}"
+        severity, prev_str = 6, f"al {ordinal_ca(prev_pos)}"
     artista, canco = _row_data(top1, territori)
     data = _base_data(artista, canco, territori)
     data["posicio_anterior_str"] = prev_str
@@ -188,7 +192,7 @@ def detect_a3_fall_from_top1(
         data["posicio_nova_str"] = "fora del top"
     else:
         severity = 4
-        data["posicio_nova_str"] = f"al #{this_pos}"
+        data["posicio_nova_str"] = f"al {ordinal_ca(this_pos)}"
     return Scenario("a3_fall_from_top1", severity, data)
 
 
@@ -211,6 +215,7 @@ def detect_a4_debut_alt(territori: str, setmana: datetime.date) -> Optional[Scen
     artista, canco = _row_data(candidate, territori)
     data = _base_data(artista, canco, territori)
     data["posicio"] = candidate.posicio
+    data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
     return Scenario("a4_debut_alt", 10 - candidate.posicio, data)
 
 
@@ -262,6 +267,7 @@ def detect_a6_canco_recent(
     dies = max(1, (setmana - best.canco.data_llancament).days)
     data = _base_data(artista, canco, territori)
     data["posicio"] = best.posicio
+    data["posicio_ordinal"] = ordinal_ca(int(best.posicio))
     data["dies"] = dies
     return Scenario("a6_canco_recent", 11 - best.posicio, data)
 
@@ -315,6 +321,7 @@ def detect_a8_pujada_forta(
     artista, canco = _row_data(best, territori)
     data = _base_data(artista, canco, territori)
     data["posicio"] = best.posicio
+    data["posicio_ordinal"] = ordinal_ca(int(best.posicio))
     data["pujada"] = best_climb
     return Scenario("a8_pujada_forta", best_climb // 2, data)
 

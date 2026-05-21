@@ -1,14 +1,14 @@
 """Top-5 completion phrases.
 
 Two banks per length tier — chosen by the composer depending on
-whether the hero referent occupies the #1 slot or not:
+whether the hero referent occupies the 1r slot or not:
 
-* **CASE A — hero is #1.** The completion mention covers the rest
+* **CASE A — hero is 1r.** The completion mention covers the rest
   of the top 5 (positions 2-5 minus any other already-mentioned
   referent). Templates take a single `{artistes}` (short) or
   `{detalls}` (long) variable.
 
-* **CASE B — hero is NOT #1.** We name the #1 entry separately
+* **CASE B — hero is NOT 1r.** We name the 1r entry separately
   (leader) before listing the remaining top-5 entries. Templates
   take `{leader_canco}`, `{leader_de}` (apostrof-aware), and the
   rest as `{artistes}` / `{detalls}`.
@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import random
 
-from social.narrative.utils import apostrof_de, llista_amb_i
+from social.narrative.utils import apostrof_de, llista_amb_i, ordinal_ca
 
-# ── CASE A — hero referent is #1 ──────────────────────────────────
+# ── CASE A — hero referent is 1r ──────────────────────────────────
 # Variables: {artistes} (short) or {detalls} (long).
 
 COMPLETING_SHORT_TEMPLATES: list[str] = [
@@ -53,40 +53,44 @@ COMPLETING_LONG_TEMPLATES: list[str] = [
 ]
 
 
-# ── CASE B — hero referent is NOT #1 ──────────────────────────────
+# ── CASE B — hero referent is NOT 1r ──────────────────────────────
 # Variables: {leader_canco}, {leader_de}, {artistes}/{detalls}.
 
 WITH_LEADER_SHORT_TEMPLATES: list[str] = [
     "Al cim continua «{leader_canco}», {leader_de}. També al top 5 hi trobem {artistes}.",
-    "El #1 segueix sent de «{leader_canco}», {leader_de}. Al top 5 hi trobem també {artistes}.",
+    "El 1r segueix sent de «{leader_canco}», {leader_de}. Al top 5 hi trobem també {artistes}.",
     "Al cap del rànquing, «{leader_canco}», {leader_de}. Al top 5 també hi són {artistes}.",
-    "Al #1 segueix «{leader_canco}», {leader_de}; al top 5 acompanyen {artistes}.",
+    "Al 1r segueix «{leader_canco}», {leader_de}; al top 5 acompanyen {artistes}.",
     "El primer lloc continua amb «{leader_canco}», {leader_de}. Al top 5 hi tenim també {artistes}.",
     "Al cim, «{leader_canco}» {leader_de}; també al top 5 {artistes}.",
-    "El #1 és per a «{leader_canco}», {leader_de}. Al top 5 trobem també {artistes}.",
+    "El 1r és per a «{leader_canco}», {leader_de}. Al top 5 trobem també {artistes}.",
     "Al podi continua «{leader_canco}», {leader_de}, i al top 5 hi són també {artistes}.",
     "Sense canvis al cim ({leader_de}, «{leader_canco}»); al top 5 hi tenim {artistes}.",
-    "«{leader_canco}», {leader_de}, manté el #1, i al top 5 acompanyen {artistes}.",
+    "«{leader_canco}», {leader_de}, manté el 1r, i al top 5 acompanyen {artistes}.",
 ]
 
 WITH_LEADER_LONG_TEMPLATES: list[str] = [
-    "Al cim continua «{leader_canco}», {leader_de}, al #1. També al top 5 hi tenim {detalls}.",
-    "El #1 segueix sent de «{leader_canco}», {leader_de}. Al top 5 hi trobem també {detalls}.",
-    "Al cap del rànquing, «{leader_canco}», {leader_de}, manté el #1. Al top 5 també hi són {detalls}.",
+    "Al cim continua «{leader_canco}», {leader_de}, al 1r. També al top 5 hi tenim {detalls}.",
+    "El 1r segueix sent de «{leader_canco}», {leader_de}. Al top 5 hi trobem també {detalls}.",
+    "Al cap del rànquing, «{leader_canco}», {leader_de}, manté el 1r. Al top 5 també hi són {detalls}.",
     "El primer lloc continua amb «{leader_canco}», {leader_de}. Acompanyen al top 5 {detalls}.",
     "Al podi continua «{leader_canco}», {leader_de}, al cim. Al top 5 hi són també {detalls}.",
     "El cim és per a «{leader_canco}», {leader_de}. Al top 5 trobem també {detalls}.",
-    "Al #1 segueix «{leader_canco}», {leader_de}; al top 5 acompanyen {detalls}.",
+    "Al 1r segueix «{leader_canco}», {leader_de}; al top 5 acompanyen {detalls}.",
     "Al cap, «{leader_canco}» {leader_de} continua manant; al top 5 hi trobem també {detalls}.",
 ]
 
 
 def _detall(entry: dict) -> str:
-    """Render a long-form mention for one entry: «canço» de A al #N."""
+    """Render a long-form mention for one entry: «canço» de A al N-è.
+
+    ADR-0006: position emitted as a Catalan ordinal (1r, 2n, 3r, 4t,
+    5è...) so IG/Telegram don't parse it as a clickable hashtag."""
     canco = entry.get("canco_nom") or "—"
     artista = entry.get("artista_nom") or "—"
-    posicio = entry.get("posicio") or "?"
-    return f"«{canco}» {apostrof_de(artista)} al #{posicio}"
+    posicio = entry.get("posicio")
+    pos_str = ordinal_ca(int(posicio)) if posicio else "?"
+    return f"«{canco}» {apostrof_de(artista)} al {pos_str}"
 
 
 def pick_short(
@@ -96,7 +100,7 @@ def pick_short(
 ) -> str:
     """Pick a SHORT top-5 completion line.
 
-    `leader` is the #1 entry when the hero referent is NOT at the
+    `leader` is the 1r entry when the hero referent is NOT at the
     cim. When given, the template mentions `«leader_canco», leader_de`
     explicitly and lists `others` as completion. When `None`, the
     hero is the cim; the template is "Completen el top 5 X, Y i Z."
@@ -141,7 +145,7 @@ def pick_long(
     if not others:
         return (
             f"Al cim continua «{leader_canco}», "
-            f"{apostrof_de(leader_artista)}, al #1."
+            f"{apostrof_de(leader_artista)}, al 1r."
         )
     detalls = llista_amb_i([_detall(e) for e in others])
     tpl = (rng or random).choice(WITH_LEADER_LONG_TEMPLATES)

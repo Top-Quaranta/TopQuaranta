@@ -45,6 +45,7 @@ number, kebab-case slug). Fill in:
 | 0006 | Posicions com a ordinals catalans en lloc de `#N` | Accepted | 2026-05-21 |
 | 0007 | `@username` restituït al composer d'Instagram | Accepted | 2026-05-21 |
 | 0008 | Detectors narratius a9–a12 + slot terciari a IG | Accepted | 2026-05-21 |
+| 0009 | Spotify identity migrated to admin@ + Premium | Accepted | 2026-05-22 |
 
 ## Lifecycle
 

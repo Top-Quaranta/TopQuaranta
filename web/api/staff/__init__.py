@@ -103,6 +103,10 @@ from web.api.staff.social import (  # noqa: F401
     social_telegram_save,
     social_telegram_test,
     social_toggle,
+    spotify_estat,
+    spotify_oauth_callback,
+    spotify_oauth_start,
+    spotify_sync,
 )
 from web.api.staff.solicituds import (  # noqa: F401
     _solicitud_row,

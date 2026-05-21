@@ -47,6 +47,12 @@ from .posts import (
     social_reset,
     social_slides_for,
 )
+from .spotify import (
+    spotify_estat,
+    spotify_oauth_callback,
+    spotify_oauth_start,
+    spotify_sync,
+)
 
 __all__ = [
     "social_list",
@@ -75,5 +81,9 @@ __all__ = [
     "social_fase",
     "social_story_cap",
     "social_delay",
+    "spotify_estat",
+    "spotify_oauth_callback",
+    "spotify_oauth_start",
+    "spotify_sync",
     "_serve_png",
 ]

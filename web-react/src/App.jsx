@@ -72,6 +72,7 @@ const UsuarisPage = lazy(() => import('./pages/staff/UsuarisPage'))
 const UsuariDetailPage = lazy(() => import('./pages/staff/UsuariDetailPage'))
 const FeedbackPage = lazy(() => import('./pages/staff/FeedbackPage'))
 const StaffSocialPage = lazy(() => import('./pages/staff/StaffSocialPage'))
+const StaffSocialSpotifyPage = lazy(() => import('./pages/staff/StaffSocialSpotifyPage'))
 const EstatPage = lazy(() => import('./pages/staff/EstatPage'))
 const StaffPublicacionsPage = lazy(() => import('./pages/staff/StaffPublicacionsPage'))
 const StaffAnalyticsPage = lazy(() => import('./pages/staff/StaffAnalyticsPage'))
@@ -197,6 +198,15 @@ function AppContent() {
           }
         />
         <Route path="/spotify/callback" element={<SpotifyCallbackPage />} />
+        {/*
+          Canonical Spotify OAuth callback route since the FASE B
+          revival (2026-05-22). The legacy /spotify/callback is kept
+          above for the SSH-based autoritzar_spotify fallback.
+        */}
+        <Route
+          path="/staff/social/spotify/callback"
+          element={<SpotifyCallbackPage />}
+        />
         {/* Staff panel. All /staff/* routes sit under a shared
             StaffLayout (dark sidebar) and require `is_staff`. As we
             port each Django staff view we'll add a nested route. */}
@@ -233,6 +243,7 @@ function AppContent() {
                   <Route path="/usuaris/:pk" element={<UsuariDetailPage />} />
                   <Route path="/feedback" element={<FeedbackPage />} />
                   <Route path="/social" element={<StaffSocialPage />} />
+                  <Route path="/social/spotify" element={<StaffSocialSpotifyPage />} />
                   <Route path="/estat" element={<EstatPage />} />
                   <Route path="/publicacions" element={<StaffPublicacionsPage />} />
                   <Route path="/analytics" element={<StaffAnalyticsPage />} />

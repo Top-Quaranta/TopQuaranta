@@ -46,6 +46,8 @@ number, kebab-case slug). Fill in:
 | 0007 | `@username` restituït al composer d'Instagram | Accepted | 2026-05-21 |
 | 0008 | Detectors narratius a9–a12 + slot terciari a IG | Accepted | 2026-05-21 |
 | 0009 | Spotify identity migrated to admin@ + Premium | Accepted | 2026-05-22 |
+| 0010 | No second-output to YouTube Music (yet) | Accepted | 2026-05-22 |
+| 0011 | Spotify sync cron schedule (daily 6h + weekly) | Proposed | 2026-05-22 |
 
 ## Lifecycle
 

@@ -596,3 +596,91 @@ Backup del `.env` pre-canvi a `/home/topquaranta/app/.env.bak-YYYYMMDD`.
 
 Vegeu `docs/decisions/0002-gsc-oauth-user-creds.md` i
 `docs/post-mortems/2026-05-20-gsc-permission-revoked.md`.
+
+## Spotify — auth path
+
+El cron `actualitzar_playlists_spotify` usa OAuth user credentials
+del compte **admin@topquaranta.cat** (refresh_token a la fila
+singleton `music.SpotifyAuth(pk=1)`) i requereix una subscripció
+**Spotify Premium activa** al mateix compte. Política Spotify des
+de finals de 2024: qualsevol crida Web API des d'una app amb
+propietari free retorna `403 "Active premium subscription
+required for the owner of the app"`.
+
+`SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` al `.env`,
+`SPOTIFY_REDIRECT_URI=https://www.topquaranta.cat/staff/social/spotify/callback`.
+
+### Si Spotify Premium ha expirat
+
+Símptoma: tots els cron tick fallen amb el 403 anterior. La pàgina
+`/staff/social/spotify/` mostra el badge "Premium" en vermell amb
+el valor real de `me().product`.
+
+1. Re-activar Premium a `https://www.spotify.com/account/upgrade/`
+   amb el compte `admin@topquaranta.cat`.
+2. Esperar la propagació. Spotify diu literalment _"it can take
+   a few hours before requests are allowed again"_; observat: 3-6
+   hores típic. No es pot accelerar.
+3. Re-validar via Client Credentials des de prod:
+   `cd /home/topquaranta/app && .venv/bin/python /tmp/check_playlists.py`.
+4. Quan totes 10 retornin 200, el cron correrà al seu pròxim tick.
+
+### Si el refresh_token ha caducat
+
+Símptoma: la pàgina mostra `live_error` amb `401 Unauthorized`.
+
+1. Anar a `/staff/social/spotify/`.
+2. Click "Reautoritzar Spotify".
+3. Logar-se a Spotify amb `admin@topquaranta.cat` (si no ho està
+   ja) i acceptar els scopes.
+4. La pàgina valida `product == "premium"` i persisteix la nova
+   fila. Si retorna 400 amb "no és Premium", reactivar Premium
+   primer (apartat anterior).
+
+### Si la cobertura `last_n_matched / last_n_tracks` cau
+
+Llindar WARN: < 0.85. Llindar CRITICAL: < 0.50.
+
+Símptoma típic: una caiguda sobtada al 70% indica drift d'ISRC a la
+ingest (Deezer/Last.fm) o que un block d'ISRC noves encara no
+està a Spotify (artistes auto-editats sense distribució). A
+investigar abans de reactivar Premium si es comporta diferent al
+patró 95%+ històric.
+
+Vegeu `docs/decisions/0009-spotify-identity-migration.md`,
+`docs/decisions/0011-spotify-cron-schedule.md` i
+`docs/architecture/playlists.md`.
+
+## Lessons learned
+
+### Squash-merge + parallel branches
+
+Quan una branca llarga (X) es fa squash-merge a `main`, una segona
+branca (Y) que va sortir abans del merge i conté els mateixos
+commits individuals NO es pot rebasar netament: `git rebase main`
+intenta re-aplicar cada commit de Y, però main ja en té els
+canvis sota un sol SHA diferent (la squash), i això produeix
+conflictes de contingut a cada commit individual.
+
+**Solució pragmàtica**:
+
+1. `git rebase --abort`.
+2. `git checkout origin/main -b <nova-branca>`.
+3. `git cherry-pick <SHA-1> <SHA-2> ...` només els commits propis
+   de Y que NO eren a X.
+4. `git branch -D <branca-vella>` i renombrar la nova si vols
+   mantenir el nom.
+5. `git push --force-with-lease origin <nom-branca>` per actualitzar
+   la PR en curs.
+
+Observat al sprint Playlists revival (2026-05-22): la PR #59
+(social refactor) es va squash-mergeger mentre la PR #60 (Spotify
+identity + UI) tenia 7 commits propis més 7 commits de la #59 que
+ja estaven incorporats a main. El rebase fallava en cada commit
+de la #59. Cherry-pick dels 2 commits únics de #60 sobre main
+fresc va resoldre-ho en 5 min.
+
+**Per a evitar-ho la pròxima vegada**: si una branca llarga està a
+prop de mergejar, no comencis una segona branca sobre ella fins
+que el merge hagi pujat a main. Si ja és tard, la solució
+cherry-pick d'avall és més ràpida que intentar resoldre conflictes.

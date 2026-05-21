@@ -26,8 +26,8 @@ from social.constants import (
     BLUESKY_UPLOAD_BACKOFF_S,
     BLUESKY_UPLOAD_RETRIES,
     BLUESKY_UPLOAD_TIMEOUT_S,
-    HTTP_TIMEOUT_S as TIMEOUT_S,
 )
+from social.constants import HTTP_TIMEOUT_S as TIMEOUT_S
 from social.models import BlueskyAuth
 
 logger = logging.getLogger(__name__)
@@ -130,9 +130,7 @@ def upload_blob(image_path: Path) -> dict:
         if not r.ok:
             # 4xx / 5xx — don't retry; the response carries actionable
             # info (auth expired, payload rejected, etc.).
-            raise RuntimeError(
-                f"Bluesky uploadBlob {r.status_code}: {r.text[:300]}"
-            )
+            raise RuntimeError(f"Bluesky uploadBlob {r.status_code}: {r.text[:300]}")
         return r.json()["blob"]
 
     # Unreachable in practice (the loop either returns or raises),

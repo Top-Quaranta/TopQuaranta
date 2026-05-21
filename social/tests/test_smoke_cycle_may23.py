@@ -124,9 +124,9 @@ def test_smoke_no_hashtag_positions_across_channels(territori):
             rng=random.Random(0),
         )
         text = out.get("text") or out.get("html") or ""
-        assert not HASHTAG_DIGIT.search(text), (
-            f"{territori}/{name} body contains ` #<digit>`: {text!r}"
-        )
+        assert not HASHTAG_DIGIT.search(
+            text
+        ), f"{territori}/{name} body contains ` #<digit>`: {text!r}"
 
 
 @pytest.mark.django_db
@@ -141,9 +141,9 @@ def test_smoke_ig_substitutes_at_handle(territori):
         setmana=SETMANA,
         rng=random.Random(0),
     )
-    assert "@artista2_handle" in out["text"], (
-        f"{territori}/instagram_feed missing @handle: {out['text']!r}"
-    )
+    assert (
+        "@artista2_handle" in out["text"]
+    ), f"{territori}/instagram_feed missing @handle: {out['text']!r}"
 
 
 @pytest.mark.django_db
@@ -201,6 +201,6 @@ def test_smoke_non_ig_channels_no_at_handle(territori):
             rng=random.Random(0),
         )
         text = out.get("text") or out.get("html") or ""
-        assert "@artista2_handle" not in text, (
-            f"{territori}/{name} leaks @handle: {text!r}"
-        )
+        assert (
+            "@artista2_handle" not in text
+        ), f"{territori}/{name} leaks @handle: {text!r}"

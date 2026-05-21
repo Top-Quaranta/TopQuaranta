@@ -1,5 +1,7 @@
 """Publish the same weekly content to a non-Instagram channel.
 
+# Spec: docs/architecture/social.md
+
 Channels supported (selected via `--channel`):
   mastodon   — toot on the configured instance
   bluesky    — feed post on bsky.social

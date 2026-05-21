@@ -1,6 +1,8 @@
 """Payload builders — turn DB rows into the dict shape the renderer
 + caption helpers expect.
 
+# Spec: docs/architecture/social.md
+
 Each builder returns either:
   - {"entries": [...], "hero_cover_url": ...}  for top_*
   - {"items":   [...]}                         for nous_*

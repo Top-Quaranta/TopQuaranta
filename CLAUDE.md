@@ -48,11 +48,15 @@
 Every doc lives under `docs/` organised by audience. Quick map:
 
 - **`docs/EMAIL.md`** — Stalwart + Brevo/Resend smarthost architecture.
-- **`docs/architecture/`** — `models.md`, `pipeline.md`, `algorithm.md`,
-  `analytics.md`, `seo.md` (Sprint S),
-  `staff.md`, `api-versioning.md`, `brand-logo.md` (read this BEFORE
-  touching anything that loads the brand SVG — three traps documented).
-  Reference for the codebase.
+- **`docs/architecture/`** — `algorithm.md`, `analytics.md`,
+  `api-versioning.md`, `brand-logo.md` (read this BEFORE touching
+  anything that loads the brand SVG — three traps documented),
+  `comptes.md`, `models.md`, `pipeline.md`, `seo.md`, `social.md`,
+  `staff.md`. Reference for the codebase.
+- **`docs/policies/`** — `conventions.md`, `docs-maintenance.md`,
+  `identities.md`, `post-mortems.md`, `sprint-process.md`. Rules.
+- **`docs/decisions/`** — ADRs (Architecture Decision Records).
+- **`docs/post-mortems/`** — incident write-ups.
 - **`docs/product/`** — `definition.md` (què compta com a música en català).
 - **`docs/ops/`** — `runbook.md`, `retention.md`, `deprecation.md`,
   `ssh-keys.md`. Things you read when something breaks or has to be

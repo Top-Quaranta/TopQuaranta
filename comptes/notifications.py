@@ -1,5 +1,7 @@
 """Central transactional-email layer for moderation lifecycle events.
 
+# Spec: docs/architecture/comptes.md
+
 Until 2026-05-17 every user-facing email at TopQuaranta was dispatched
 inline from the view that triggered it. That worked for the
 registration / password / RGPD flows (one-off, simple), but left an

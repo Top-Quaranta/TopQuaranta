@@ -48,11 +48,15 @@
 Every doc lives under `docs/` organised by audience. Quick map:
 
 - **`docs/EMAIL.md`** — Stalwart + Brevo/Resend smarthost architecture.
-- **`docs/architecture/`** — `models.md`, `pipeline.md`, `algorithm.md`,
-  `analytics.md`, `seo.md` (Sprint S),
-  `staff.md`, `api-versioning.md`, `brand-logo.md` (read this BEFORE
-  touching anything that loads the brand SVG — three traps documented).
-  Reference for the codebase.
+- **`docs/architecture/`** — `algorithm.md`, `analytics.md`,
+  `api-versioning.md`, `brand-logo.md` (read this BEFORE touching
+  anything that loads the brand SVG — three traps documented),
+  `comptes.md`, `models.md`, `pipeline.md`, `seo.md`, `social.md`,
+  `staff.md`. Reference for the codebase.
+- **`docs/policies/`** — `conventions.md`, `docs-maintenance.md`,
+  `identities.md`, `post-mortems.md`, `sprint-process.md`. Rules.
+- **`docs/decisions/`** — ADRs (Architecture Decision Records).
+- **`docs/post-mortems/`** — incident write-ups.
 - **`docs/product/`** — `definition.md` (què compta com a música en català).
 - **`docs/ops/`** — `runbook.md`, `retention.md`, `deprecation.md`,
   `ssh-keys.md`. Things you read when something breaks or has to be
@@ -254,7 +258,7 @@ list.
 | **Multi-channel distribution (Sprint I bis, 2026-04-27)** | Same payload, five channels: **Instagram** (feed + stories), **Mastodon**, **Bluesky**, **Telegram** (full carousel via media-group, up to 10 photos), **Newsletter** (HTML email via Brevo to `Usuari.vol_newsletter=True`), **RSS** (`/rss/{top,novetats}.xml`, Atom 1.0). One command `publicar_canal --channel <name>` for the four non-IG channels; auth singletons `{Mastodon,Bluesky,Telegram}Auth`; staff endpoints `/staff/social/{name}/{,test/,clear/}`; toggles in `ConfiguracioGlobal.{instagram,mastodon,bluesky,telegram,newsletter,rss}_actiu`. Cron staggered: Sat IG 09:30 → Mastodon 09:40 → Bluesky 09:50 → Telegram 09:55 → Newsletter 10:00. Auto-tag artists on feed posts via `user_tags` Graph API. |
 | **Renderer editorial redesign (2026-04-27)** | First-pass renderer was monochrome + dark + schematic. Rewrote 4 slide kinds + stories: SVG-rasterised brand logo (`vendor/mm-design/icons/brand/logo-topquaranta-rect.svg`) and territory icons (mm-design SVGs), `colors.terr_color()` mirroring SPA's `TERR_COLORS`, `colors.best_text_on()` for monochromatic logo over coloured pills, `ImageOps.fit` cover-fit (no black bars), pill-system using mm-design `--mm-radius-lg`. Caption uses project-week numbering (`music.dates.project_week_number`, anchor Sat 2026-04-25 = wk 34). Novetats window anchored to last publication of same tipus (no fixed 7-day rolling). Eliminated all "Països Catalans" references. |
 | **Static social PNG hosting (2026-04-27)** | Meta's media fetcher rejected our Django view (CSP/COOP headers caused code 9004). Caddy now serves `/static/social/*` directly from `/var/cache/topquaranta/social/renders/` as plain files. Setting `SOCIAL_PUBLIC_BASE` in `web_server.py` switches the URL builder. The Django view at `/api/v1/social/render/` stays as fallback. |
-| **Gunicorn `--reload`** | Added to `deploy/topquaranta-web.service` after a silent stale-code bug (renderer changes not picked up). Cost: a few stat() per request, negligible. Edits to `.py` files are now picked up automatically without `systemctl reload`. |
+| **Gunicorn `--reload` (REMOVED 2026-05-20)** | Vegeu `docs/decisions/0001-gunicorn-no-reload.md` (Accepted 2026-05-20). |
 | **Mail infrastructure (Sprint I bis, 2026-04-27)** | **Stalwart Mail Server** v0.16.1 on the Hetzner box for inbound + IMAP for `topquaranta.cat` and `cercol.team`. **Outbound via smarthost routing** in Stalwart's MTA strategy: `sender_domain == 'cercol.team' ? 'resend-relay' : 'brevo-relay'`. Brevo (free tier 300/day) for TopQuaranta, Resend for Cercol. Hetzner blocks port 25 outbound, hence smarthosts. TLS cert Let's Encrypt: Caddy obtains it for `mail.topquaranta.cat`; a systemd `path` unit (`stalwart-cert-sync.path` + `.service`) syncs the cert into `/etc/stalwart/certs/` on rotation. **BIMI** TXT at `default._bimi.topquaranta.cat` + Tiny PS SVG at `https://www.topquaranta.cat/static/brand/bimi.svg` (no VMC). **Mozilla autoconfig** at `mail.topquaranta.cat/.well-known/autoconfig/...` so clients self-configure. Full architecture at `docs/EMAIL.md`. |
 | **Hetzner Cloud + CDMON DNS APIs (2026-04-27)** | `HETZNER_API_TOKEN` in `.env` + `hcloud` CLI installed; we manage firewall rules via API (e.g. opening 25/465/587/993 was scripted). `CDMON_API_KEY` in `.env`; `dns-backup/cdmon_clean.py` script for batch DNS ops (used to drop 18 legacy CDMON-Micropla records). API endpoint: `https://api-domains.cdmon.services/api-domains/`, header `apikey:`. Caveat: `dnsrecords/create` rejects A apex with bogus error "Destination to redirect not valid"; that one record needs the web panel. |
 | **Ingest robustness pass (2026-05-03)** | Three fixes after the APECAT cross-check turned up holes in the pipeline. (a) **D5 self-collab guard**: `_create_track` and `_upsert_track` now compare a Deezer contributor against `set(artista.deezer_ids.values_list("deezer_id", flat=True))` instead of just `deezer_id_principal`. Without this, an artista with multiple Deezer profiles (autoedit + label) crashed signal D5 every hour for ~12 h. (b) **ISRC collision skip**: `obtenir_metadata` now catches `IntegrityError` on `canco_isrc_unique_when_set` and skips the duplicate row instead of aborting the artista's transaction (single-on-LP and featuring-on-both-profiles cases). (c) **Multi-Deezer-ID iteration**: `_fetch_for_artist` loops every `ArtistaDeezer` row of an artista, principal first, so label-secondary catalogues no longer hide. |
@@ -265,7 +269,7 @@ list.
 | **Staff sees private profiles in community directori (Fase 1.5.B parcial, 2026-05-17)** | The `/api/v1/comunitat/directori/` listing is bifurcated by `request.user.is_staff`: staff get every active `PerfilUsuari` (regardless of `visible_directori`); non-staff keep the existing `visible_directori=True` gate. Each row in the payload carries `visible_directori` so the SPA can flag non-public rows visibly in the staff view. Purpose: let admins reach users for one-on-one moderation correspondence without forcing them to self-publish. Note: the DM endpoint `missatge_crear` was already permissive (raw `User.objects.get`), so no change was needed there — discoverability is the effective gate. Partial because the broader Fase 1.5.B item (a user→admin contact channel; "contact us" surface) is still being scoped and is NOT in this slice. |
 | **Admin pseudo-user + DM relay (Fase 1.5.B, 2026-05-18)** | A seed `Usuari(username="admin", email="admin@topquaranta.cat", is_staff=False)` fronts a community inbox. Settings: `ADMIN_INBOX_USERNAME = "admin"`. Any logged-in user can DM this account (it shows up in the directori) and the `_enviar_notificacio_missatge` helper fans the alert out by email to every active `is_staff=True` user plus the `admin@` mailbox itself. The pseudo-user's own `notificar_missatges_email` opt-out is ignored on the fan-out branch — the staff alert is the whole point. Staff replies use the staff user as `remitent` (the existing flow already does this; no change needed). Seeded by migration `comptes.0016_admin_pseudouser` (idempotent: looked up by email; reverse deletes the row). |
 | **Social counter source = SocialPost (Bug 1 Fase 3, 2026-05-18)** | `analytics_summary.social[]` ara deriva de `SocialPost.objects.filter(status=publicat, setmana__gte=...).values("platform","tipus").annotate(total=Count("id"))` en lloc de `MetricaEsdeveniment(clau="social_publicat")`. SocialPost és la font canònica idempotent (una fila per slot, status=publicat només quan realment ha sortit). `MetricaEsdeveniment` és append-only i depenia de cada call site recordar invocar `register()` — això va causar (a) publicacions pre-wire del register() invisibles i (b) story-sets over-comptats (resolt al PR #31). `MetricaEsdeveniment` manté el rol per a esdeveniments sense entitat pròpia (clicks UTM, page views, feedback creat). El filter és per `setmana__gte=since_week` (Monday of since-date) perquè `setmana` és el camp natural d'agrupació, no `published_at`. |
-| **Narrative engine for weekly social posts (Fase 4 PR 1, 2026-05-18)** | New `social/narrative/` package, **not wired yet** — library work only. Four layers: (1) `scenarios.py` runs three detectors over `TopSetmanal` (`detect_a2_streak`, `detect_a4_debut_alt`, `detect_a5_artista_multiple`) and returns `Scenario(code, severity, data)` objects; `detect_all` sorts them desc. (2) `phrases.py` ships 15 templated copy lines per scenario × 3 length tiers (short ≤ 80 / medium ≤ 200 / long unbounded) + per-territori hashtag table. Catalan, colloquial, 1–2 emojis per line, no em-dashes. (3) `registry.py` backed by new `social.NarrativePhraseUsage` model (migration `social.0006_narrativephraseusage`) — filters phrases used at the same `(channel, territori)` within the last N weeks; falls back to full bank when exhausted (post must go out). (4) `composers/{instagram_feed,instagram_story,mastodon,bluesky,telegram,newsletter}.py` — per-channel assemblers that pick hero + optional secondary scenario, list entries with the right mention style (IG: `@handle`, others: plain name per Fase 1 decision), apply per-channel hashtag density and length budgets (Bluesky 300 / Mastodon 500 / Telegram 1024 / IG feed 2200; newsletter unbounded). Integration with `captions.py` and `publicar_social.py` lands in a later PR. |
+| **Narrative engine for weekly social posts (Fase 4 PR 1, 2026-05-18; wired since)** | `social/narrative/` package — **wired into `captions.py::compose_for_channel`** for tipus `top_ppcc` / `top_territorial`. Expanded to **8 detectors** (a1-a8 + fallback) over `TopSetmanal`. Anti-repeat registry backed by `social.NarrativePhraseUsage`. Per-channel composers apply mention style (IG `@handle` on legacy path only — narrative path regressed, vegeu `docs/post-mortems/2026-05-20-narrative-engine-collapsed.md`) and length budgets. Full architecture at `docs/architecture/social.md`. |
 | **SocialTab quick wins: KPI delta + Newsletter audience + Omès visibility (Fase 3 problems 3/4/6, 2026-05-18)** | Tres millores discretes a `StaffAnalyticsPage.jsx::SocialTab` sense reorganitzar-la estructuralment: (3) `<Kpi>` del strip de seguidors rep `delta` calculat al frontend des de `followers_series` (punt ~7 dies enrere); (4) `analytics_summary` exposa `newsletter_audience` (`Usuari.vol_newsletter=True, is_active=True`) i la SocialTab afegeix una entrada Newsletter al strip; (6) `analytics_summary` exposa `social_omes[]` (mateixa shape que `social[]` però `status=OMES`), i la SocialTab afegeix una card "Publicacions omeses" amb count per canal en pills. Decisió de separar la card omeses en lloc de stacked-bar al chart existent: evita barrejar el comptador d'èxit amb el de fallades. |
 | **Story-set counts as 1 publication (Bug 2 Fase 3, 2026-05-18)** | `publicar_social._publish_story` cridava `_register_event("social_publicat", n=len(story_ids))`, inflant el comptador 42× per cada top-story-set i 5× per als territorials. Una publicació conceptual = un slot (mateix tractament que un carrusel feed amb N imatges). Fix d'una línia: `n=1`. Test al `test_publicar_social.py` que mock-eja renderer + instagram_client i captura les crides a `register()` per a verificar `n=1`. Bug 1 de la mateixa auditoria (doble font de veritat `MetricaEsdeveniment` vs `SocialPost`) NO és aquest PR. |
 | **Deezer image sizing per slot (Fix 2, 2026-05-18)** | Tiny util `web-react/src/lib/img.js::deezerImg(url, size)` rewrites the `WxH` segment of stored Deezer CDN URLs at consumption time. `Album.imatge_url` is stored as the canonical 1000×1000 string (Deezer `cover_xl`); serving that to a 40×40 slot was the main LCP driver per PSI 2026-05-16 (≈4.2 MiB wasted per page). Slot → size table (2× retina baked in): ≤48 px → 120, ≤128 px → 250, ≤320 px → 500, social renderer (1080) keeps 1000. Deezer supports arbitrary `WxH` up to ~1400; 2000+ returns 403 (verified empirically). No model change, no migration. 14 `<img>` slots touched across HomePage / TopPage / ArtistaPage / AlbumPage / CancoPage / ArtistesPage / MapaPage / StaffAlbumsPage / AlbumEditPage. |
@@ -310,13 +314,20 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **302 passed, 8 skipped**.
+Mock all external HTTP — no real API calls. Current suite: **575 passed, 8 skipped** (May 2026).
 Run: `.venv/bin/python -m pytest -q`.
+
+`pytest.ini` pins `addopts = --ds=topquaranta.settings.test`, so env-var
+overrides can't silently flip pytest to production settings. Vegeu
+`docs/decisions/0003-pytest-ds-pin.md`.
 
 React SPA: Vitest not yet wired for runtime tests; builds validated via
 `npm run build` in CI-style deploys.
 
 ## 10. Code conventions
+
+Canonical home: **`docs/policies/conventions.md`**. Summary
+(authoritative source is the policy file):
 
 - No `print()` → `logging` or `self.stdout.write()`.
 - No `sys.exit()` → `raise CommandError(...)`.
@@ -328,6 +339,14 @@ React SPA: Vitest not yet wired for runtime tests; builds validated via
 - black + isort on Python. Comments and docstrings in English.
 - Catalan for user-facing strings (React pages, Django templates, error
   messages). Technical English everywhere else.
+- `# Spec: docs/<path>.md` backlink at the head of modules with a
+  dedicated architecture doc (pre-commit hook validates the path).
+- Captures shown in reports must be real or labelled `EXAMPLE`/`MOCK`.
+- E2E smokes use the `qa_smoke` user + fixture artist, never real
+  artistes.
+
+See `docs/policies/conventions.md` for the rationale, examples, and
+links to the post-mortems each rule traces back to.
 
 ## 11. Workflow
 

@@ -11,7 +11,7 @@
 <br/>
 
 ![Status](https://img.shields.io/badge/Live-12b76a?style=for-the-badge)
-![Django](https://img.shields.io/badge/Django_5.2-0047ba?style=for-the-badge&logo=django&logoColor=white)
+![Django](https://img.shields.io/badge/Django_6.0-0047ba?style=for-the-badge&logo=django&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-0047ba?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Last.fm](https://img.shields.io/badge/Last.fm-cf3339?style=for-the-badge&logo=lastdotfm&logoColor=white)
 ![CI](https://img.shields.io/github/actions/workflow/status/Top-Quaranta/TopQuaranta/ci.yml?branch=main&style=for-the-badge&label=CI)
@@ -65,10 +65,10 @@ qualsevol pugui revisar com es calcula.
 ![React](https://img.shields.io/badge/React_19-0047ba?style=flat-square&logo=react&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite_8-0047ba?style=flat-square&logo=vite&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_v4-0047ba?style=flat-square&logo=tailwindcss&logoColor=white)
-![Django](https://img.shields.io/badge/Django_5.2-0047ba?style=flat-square&logo=django&logoColor=white)
+![Django](https://img.shields.io/badge/Django_6.0-0047ba?style=flat-square&logo=django&logoColor=white)
 ![DRF](https://img.shields.io/badge/DRF-cf3339?style=flat-square)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_14-0047ba?style=flat-square&logo=postgresql&logoColor=white)
-![Python](https://img.shields.io/badge/Python_3.10-0047ba?style=flat-square&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python_3.12-0047ba?style=flat-square&logo=python&logoColor=white)
 ![Caddy](https://img.shields.io/badge/Caddy-0047ba?style=flat-square&logo=caddy)
 ![Hetzner](https://img.shields.io/badge/Hetzner-cf3339?style=flat-square)
 
@@ -99,7 +99,7 @@ TopQuaranta/
 
 ## <img src="https://raw.githubusercontent.com/miquelmatoses/mm-design/main/icons/readme/icon-code-blue.svg" width="20" height="20" /> Desenvolupament local
 
-Requisits: Python 3.10, PostgreSQL 14+ (o SQLite per a tests).
+Requisits: Python 3.12, PostgreSQL 14+ (o SQLite per a tests).
 
 ```bash
 # 1. Clone
@@ -107,7 +107,7 @@ git clone git@github.com:Top-Quaranta/TopQuaranta.git
 cd TopQuaranta
 
 # 2. Entorn virtual + dependencies
-python3.10 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 
@@ -136,11 +136,14 @@ npm run build      # bundle estàtic a web-react/dist/
 
 - **Llegeix primer**: [`CLAUDE.md`](./CLAUDE.md) (convencions de codi,
   estructura, convencions de commit).
-- **Emergències / incidents**: [`docs/ops/runbook.md`](./RUNBOOK.md).
-- **Història del projecte**: [`docs/history/roadmap.md`](./ROADMAP.md) i
-  [`docs/history/changelog.md`](./CHANGELOG.md).
-- **Política d'API**: [`docs/architecture/api-versioning.md`](./web/api/VERSIONING.md).
-- **Política de claus SSH**: [`docs/ops/ssh-keys.md`](./deploy/SSH_KEY_POLICY.md).
+- **Polítiques i convencions**: [`docs/policies/`](./docs/policies/).
+- **Emergències / incidents**: [`docs/ops/runbook.md`](./docs/ops/runbook.md).
+- **Història del projecte**: [`docs/history/roadmap.md`](./docs/history/roadmap.md) i
+  [`docs/history/changelog.md`](./docs/history/changelog.md).
+- **Decisions arquitectòniques**: [`docs/decisions/`](./docs/decisions/).
+- **Post-mortems**: [`docs/post-mortems/`](./docs/post-mortems/).
+- **Política d'API**: [`docs/architecture/api-versioning.md`](./docs/architecture/api-versioning.md).
+- **Política de claus SSH**: [`docs/ops/ssh-keys.md`](./docs/ops/ssh-keys.md).
 
 Cada commit ha de passar:
 - **pytest** (sense xarxa: mocks per a Last.fm / Deezer).
@@ -162,7 +165,6 @@ servidor.
 
 <div align="center">
 
-![Last Updated](https://img.shields.io/badge/Última_actualització-Abril_2026-0047ba?style=flat-square)
 ![License](https://img.shields.io/badge/Codi-AGPL_3.0-cf3339?style=flat-square)
 ![Data](https://img.shields.io/badge/Dades-CC_BY_4.0-12b76a?style=flat-square)
 

@@ -1,5 +1,7 @@
 """Caption (text body) generator for social posts.
 
+# Spec: docs/architecture/social.md
+
 Two paths live here:
 
 1. **Top-of-the-week captions** (`top_ppcc` / `top_territorial`) go

@@ -1,5 +1,7 @@
 """Scenario detectors over `TopSetmanal` (Fase 4 reset, 2026-05-18).
 
+# Spec: docs/architecture/social.md
+
 Eight detectors + a fallback. Each detector returns at most one
 `Scenario` (the strongest case of its kind for the given week);
 `detect_all` calls every detector and returns the list sorted by

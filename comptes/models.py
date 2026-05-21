@@ -1,3 +1,8 @@
+"""Auth, profile, gestor↔artista, community, workflow sol·licituds.
+
+# Spec: docs/architecture/comptes.md
+"""
+
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import URLValidator
 from django.db import models

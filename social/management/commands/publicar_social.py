@@ -1,5 +1,7 @@
 """Run the social distribution for a given calendar day.
 
+# Spec: docs/architecture/social.md
+
 Cron entry-point. Idempotent per (platform, tipus, territori,
 setmana) via the SocialPost row. Modes:
 

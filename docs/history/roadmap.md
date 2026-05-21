@@ -369,9 +369,14 @@ Auditoria narrativa del 2026-05-18 va detectar el core 5-patrons
 "sempre fires" als tops setmanals (A1/A2, A4, A5, A6, A7) i el banc
 mínim per a copy variat sense repetir-se.
 
-Aquest PR és **library work, sense integració**: el paquet és
-consumit per tests unitaris, no per `publicar_social.py` ni
-`captions.py` encara.
+Aquest PR és **library work**; integració amb `captions.py` ha
+seguit en PRs posteriors. **Estat actual (2026-05-21):** el motor
+està WIREJAT a `captions.compose_for_channel` per a tipus
+`top_ppcc`/`top_territorial` i expandit a **8 detectors** (a1-a8 +
+fallback). Vegeu `docs/architecture/social.md` per a l'estat
+canònic i `docs/post-mortems/2026-05-20-narrative-engine-collapsed.md`
+per a les regressions detectades (IG `@handle` perdut a la nova path,
+`#N` posicionals parsejats com a hashtags clicables).
 
 * **`social/narrative/scenarios.py`**: 3 detectors universals sobre
   `TopSetmanal` — A2 (streak al #1), A4 (debut a ≤#3), A5 (artista

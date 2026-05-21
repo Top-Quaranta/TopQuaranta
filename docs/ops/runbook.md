@@ -524,3 +524,75 @@ adds a migration with a destructive operation. It's a soft warning
 This is a single-operator project. The phone number is yours. In that
 case — the best thing to do is **write more here** each time you solve
 an incident, so future-you doesn't start from zero.
+
+---
+
+## Gunicorn — sense `--reload`
+
+El unit file de `topquaranta-web` **NO** ha de contenir el flag
+`--reload`. Aquest flag causa que els workers agafin codi del worktree
+sense aplicar migracions, provocant errors 500 a producció.
+
+Incidents 2026-05 que ho van demostrar:
+- 2026-05-19 — `Artista.imatge_url` referenciat al codi abans de la
+  migració 0072. 29 errors 500 a `/canco/<slug>` en 15 min.
+- 2026-05-20 — `HistorialRevisio.reconsiderada` referenciat abans
+  de la migració 0075. `obtenir_novetats` cron-fail.
+- 2026-05-20 — `SolicitudRevisio` table referenciada abans de
+  `comptes 0018`. Staff workbench 500.
+
+El deploy s'ha de fer **SEMPRE** via `bin/tq-deploy`, que:
+1. `git reset --hard origin/main` (neteja drift del worktree).
+2. Aplica migracions pendents abans del reload (`manage.py migrate`).
+3. Reload graceful de gunicorn via SIGHUP.
+
+Backup del unit file anterior (amb `--reload`):
+`/etc/systemd/system/topquaranta-web.service.bak-20260520`.
+
+Font de veritat del unit: `deploy/topquaranta-web.service` al repo.
+`bin/tq-sync-infra` el sincronitza a `/etc/systemd/system/` quan
+detecta drift, i fa `systemctl daemon-reload`.
+
+Vegeu `docs/decisions/0001-gunicorn-no-reload.md` i
+`docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
+
+---
+
+## GSC — auth path
+
+El cron `recollir_metrics_gsc` usa OAuth user credentials del compte
+**admin@topquaranta.cat** (refresh_token al `.env` com a
+`GSC_OAUTH_REFRESH_TOKEN`). El service account
+`seo-ingest@topquaranta-seo.iam.gserviceaccount.com` queda al
+`.secrets/` com a fallback inactiu però **NO es pot usar** perquè
+Google té un bug confirmat
+(https://support.google.com/webmasters/community-guide/429538961)
+que impedeix afegir service accounts nous a propietats `sc-domain:`
+amb error "Failed to add user: email address not found".
+
+Bug documentat al commit `9391e3f` del 2026-05-06 al repo.
+
+### Si cal regenerar el refresh_token
+
+(Per pèrdua de permisos, canvi de responsable de la propietat, o
+revocació explícita al panel del compte Google.)
+
+1. Verificar a GSC que el compte propietari té rol Owner/Full a la
+   propietat `sc-domain:topquaranta.cat`.
+2. OAuth Playground (https://developers.google.com/oauthplayground/)
+   → engranatge dalt-dreta → "Use your own OAuth credentials" →
+   enganxar `GSC_OAUTH_CLIENT_ID` i `GSC_OAUTH_CLIENT_SECRET` del
+   `.env` actual.
+3. Scope: `https://www.googleapis.com/auth/webmasters.readonly`.
+4. Autoritzar amb **admin@topquaranta.cat**.
+5. Substituir `GSC_OAUTH_REFRESH_TOKEN` al `.env`, fer backup, i
+   `sudo systemctl restart topquaranta-web`.
+6. Re-executar manualment cobrint el gap dels dies fallits:
+   `sudo -u topquaranta /home/topquaranta/bin/tq-run recollir_metrics_gsc`
+   (o `manage.py recollir_metrics_gsc --date YYYY-MM-DD` per cada
+   dia perdut; el flag és `--date`, no `--since`).
+
+Backup del `.env` pre-canvi a `/home/topquaranta/app/.env.bak-YYYYMMDD`.
+
+Vegeu `docs/decisions/0002-gsc-oauth-user-creds.md` i
+`docs/post-mortems/2026-05-20-gsc-permission-revoked.md`.

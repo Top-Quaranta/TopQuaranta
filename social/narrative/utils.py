@@ -166,3 +166,26 @@ def territori_label(codi: str) -> str:
     composer should never crash because a new territori was added
     upstream without updating this map)."""
     return _TERRITORI_LABELS.get(codi, codi)
+
+
+# Catalan ordinal forms (ADR-0006). Used to replace `#N` positional
+# tokens (which IG and Telegram parse as clickable hashtags) with
+# plain text the parsers leave alone. Coverage 1-99; the top is 40
+# but margin doesn't cost anything. Raises `ValueError` for n <= 0
+# (the top has no 0th or negative position).
+_ORDINAL_SUFFIX = {1: "r", 2: "n", 3: "r", 4: "t"}
+
+
+def ordinal_ca(n: int) -> str:
+    """Return the Catalan ordinal abbreviation for `n` (1-99).
+
+    Forms: 1r, 2n, 3r, 4t, 5è, 6è, ..., 11è, 21è, 33è, 99è.
+
+    Above 4 the suffix is always "è", regardless of the units digit
+    (so 21st is "21è", not "21r"). This matches IEC orthography
+    and what a periodista in català would write.
+    """
+    if n <= 0:
+        raise ValueError(f"ordinal_ca requires n >= 1, got {n}")
+    suffix = _ORDINAL_SUFFIX.get(n, "è") if n <= 4 else "è"
+    return f"{n}{suffix}"

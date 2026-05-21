@@ -15,6 +15,16 @@ that belong inside their callsite.
 HTTP_TIMEOUT_S = 60
 
 
+# Bluesky `uploadBlob` against `bsky.social` PDS for 4-PNG carousels
+# (~1 MB each) is marginal at 60 s — five publications dropped in one
+# week (post-mortem 2026-05-21-bluesky-silent-failures.md). Bumped to
+# 180 s with the retry helper below. Vegeu ADR-0005.
+BLUESKY_UPLOAD_TIMEOUT_S = 180
+BLUESKY_UPLOAD_RETRIES = 3
+# Back-off seconds between retries (1st → 2nd → 3rd attempt).
+BLUESKY_UPLOAD_BACKOFF_S = (5, 15)
+
+
 # ── Renderer layout primitives ───────────────────────────────────────
 #
 # Numeric anchors shared across slide kinds so the visual rhythm stays

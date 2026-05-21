@@ -1,0 +1,112 @@
+name: CI · docs
+
+# Documentation checks that run on every push and PR. Split from
+# ci.yml because they're docs-only and don't need the Python or
+# Node toolchains (faster).
+#
+# Checks:
+#   - markdownlint     — surface obvious markdown errors
+#   - link-checker     — verify every link in every .md resolves
+#   - spec-path        — Python `# Spec: docs/<path>.md` backlinks
+#                        point to real files
+#   - docs-coherence   — touches a documented subsystem without
+#                        updating its doc? add needs-docs-review label
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  markdownlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: markdownlint-cli2
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          # Liberal config: surface broken-references and malformed
+          # headings; don't enforce wrapped-at-80 (we don't follow that).
+          globs: |
+            **/*.md
+            !node_modules
+            !.venv
+            !web-react/node_modules
+            !vendor
+          config: '.markdownlint.json'
+
+  link-checker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: lychee link checker
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --exclude-path node_modules
+            --exclude-path .venv
+            --exclude-path web-react/node_modules
+            --exclude-path vendor
+            --exclude-path scripts/model_comparison
+            './**/*.md'
+          fail: true
+
+  spec-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate # Spec docs backlinks
+        run: python3 scripts/check_spec_paths.py
+
+  docs-coherence:
+    # Soft signal only — adds `needs-docs-review` label when a PR
+    # touches a subsystem with a dedicated doc but doesn't update
+    # the doc. Doesn't block merge; the PR template checkbox is
+    # the canonical check.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check docs vs code coupling
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          CHANGED=$(git diff --name-only "origin/$BASE_REF...HEAD" || true)
+          # Subsystem → doc mapping. Touching files under the
+          # subsystem prefix without touching its doc → flag.
+          NEEDS=""
+          # shellcheck disable=SC2206
+          MAPPINGS=(
+            "social/:docs/architecture/social.md"
+            "comptes/:docs/architecture/comptes.md"
+            "music/:docs/architecture/models.md"
+            "ranking/:docs/architecture/algorithm.md"
+            "ingesta/:docs/architecture/pipeline.md"
+            "web/api/staff/:docs/architecture/staff.md"
+            "analytics/:docs/architecture/analytics.md"
+            "web/seo/:docs/architecture/seo.md"
+          )
+          for pair in "${MAPPINGS[@]}"; do
+            prefix="${pair%%:*}"
+            doc="${pair#*:}"
+            if echo "$CHANGED" | grep -q "^$prefix" && ! echo "$CHANGED" | grep -qF "$doc"; then
+              NEEDS="$NEEDS $prefix→$doc"
+            fi
+          done
+          if [ -n "$NEEDS" ]; then
+            echo "::warning ::PR touches documented subsystems without updating their docs:$NEEDS"
+            gh pr edit "$PR_NUMBER" --add-label "needs-docs-review" || true
+            echo "Added label needs-docs-review (soft signal, not a block)."
+          else
+            echo "No subsystem/doc coupling triggers detected."
+          fi

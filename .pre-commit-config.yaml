@@ -49,3 +49,14 @@ repos:
         language: system
         pass_filenames: false
         files: \.py$
+
+      # Local hook: every `# Spec: docs/<path>.md` backlink at the top
+      # of a Python module must point to an existing file. Renaming a
+      # doc without updating spec backlinks is a commit-time error,
+      # not a runtime discovery. See
+      # docs/policies/docs-maintenance.md Rule 1.
+      - id: check-spec-paths
+        name: Validate # Spec docs paths
+        entry: python3 scripts/check_spec_paths.py
+        language: system
+        pass_filenames: false

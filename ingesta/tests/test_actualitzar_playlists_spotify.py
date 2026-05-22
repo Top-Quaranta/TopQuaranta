@@ -169,9 +169,7 @@ def test_cache_only_skips_unenriched_cancons(auth_present, client_mock):
     )
     album = Album.objects.create(artista=artista, nom="EXEMPLE Album 2")
     # 3 enriched (status=found) + 2 not_attempted.
-    [
-        _make_canco(artista, album, 1000 + i, ml_confianca=0.9) for i in range(3)
-    ]
+    [_make_canco(artista, album, 1000 + i, ml_confianca=0.9) for i in range(3)]
     [
         _make_canco(artista, album, 2000 + i, ml_confianca=0.8, enrich=False)
         for i in range(2)

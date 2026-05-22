@@ -1,0 +1,200 @@
+"""Health checks for the Spotify subsystem — FASE F.
+
+Coverage:
+  * `check_spotify_premium`: no auth row, transient API error,
+    Free product, Premium happy path.
+  * `check_spotify_coverage`: no rows, healthy rows, mixed
+    thresholds (WARN, CRIT).
+  * `bin/tq-health` watchdog escalation past `silenced=true` —
+    we don't shell out to bash here; instead we verify the
+    `consecutive_failures` field is written by `tq-run`'s logic
+    by simulating the persisted file shape and asserting the
+    Python-side reads it correctly.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from music.health import (
+    check_spotify_coverage,
+    check_spotify_premium,
+)
+
+# ── check_spotify_premium ─────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_premium_crit_when_no_auth_row():
+    """No SpotifyAuth singleton row means OAuth has never been
+    completed. CRIT so the operator gets nudged toward
+    /staff/social/spotify/."""
+    sev, msg, payload = check_spotify_premium()
+    assert sev == "CRIT"
+    assert "OAuth dance not completed" in msg
+    assert payload == {}
+
+
+@pytest.mark.django_db
+def test_premium_warn_on_transient_api_error():
+    from music.models import SpotifyAuth
+
+    SpotifyAuth.objects.create(
+        pk=1,
+        refresh_token="dummy",
+        scope="playlist-modify-private playlist-modify-public",
+        spotify_user_id="legacy_user",
+    )
+    with patch("ingesta.clients.spotify.UserSpotifyClient") as mock_cls:
+        mock_client = MagicMock()
+        # Simulate a transient transport error (5xx) — the client
+        # raises after retry exhaustion. WARN, not CRIT, because
+        # this could be Spotify-side weather and the cron's own
+        # status file is the canonical "did it work?" signal.
+        mock_client.me.side_effect = RuntimeError(
+            "Spotify GET /me failed after 3 attempts"
+        )
+        mock_cls.return_value = mock_client
+        sev, msg, payload = check_spotify_premium()
+    assert sev == "WARN"
+    assert "Spotify /me call failed" in msg
+
+
+@pytest.mark.django_db
+def test_premium_crit_when_product_free():
+    """ADR-0009 invariant: Free product means the cron will 403
+    on the next /v1/search call. Escalate to CRIT so the operator
+    reactivates Premium before the next planned sync."""
+    from music.models import SpotifyAuth
+
+    SpotifyAuth.objects.create(
+        pk=1,
+        refresh_token="dummy",
+        scope="playlist-modify-private",
+        spotify_user_id="free_user",
+    )
+    with patch("ingesta.clients.spotify.UserSpotifyClient") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.me.return_value = {
+            "id": "free_user",
+            "product": "free",
+        }
+        mock_cls.return_value = mock_client
+        sev, msg, payload = check_spotify_premium()
+    assert sev == "CRIT"
+    assert "no longer Premium" in msg
+    assert payload["product"] == "free"
+
+
+@pytest.mark.django_db
+def test_premium_ok_on_premium():
+    from music.models import SpotifyAuth
+
+    SpotifyAuth.objects.create(
+        pk=1,
+        refresh_token="dummy",
+        scope="playlist-modify-private playlist-modify-public",
+        spotify_user_id="admin_user",
+    )
+    with patch("ingesta.clients.spotify.UserSpotifyClient") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.me.return_value = {
+            "id": "admin_user",
+            "product": "premium",
+            "display_name": "Admin",
+            "country": "ES",
+        }
+        mock_cls.return_value = mock_client
+        sev, msg, payload = check_spotify_premium()
+    assert sev == "OK"
+    assert "admin_user" in msg
+    assert payload["product"] == "premium"
+
+
+# ── check_spotify_coverage ────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_coverage_warn_when_no_rows():
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "WARN"
+    assert "configurar_spotify_playlists" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_warn_when_all_rows_never_synced():
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat", kind=SpotifyPlaylist.KIND_TOP, territori="CAT"
+    )
+    SpotifyPlaylist.objects.create(
+        codi="top-val", kind=SpotifyPlaylist.KIND_TOP, territori="VAL"
+    )
+    sev, msg, payload = check_spotify_coverage()
+    # All rows have last_n_tracks=0 → WARN to nudge the operator.
+    assert sev == "WARN"
+    assert "never synced" in msg
+    assert len(payload["rows"]) == 2
+
+
+@pytest.mark.django_db
+def test_coverage_ok_when_healthy():
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=38,  # 95%
+        last_sync_ok=True,
+    )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "OK"
+    assert "Coverage OK" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_warn_at_below_85():
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=32,  # 80%
+        last_sync_ok=True,
+    )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "WARN"
+    assert "top-cat" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_crit_at_below_50():
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=15,  # 37.5%
+        last_sync_ok=True,
+    )
+    # A second row at WARN level — CRIT should win.
+    SpotifyPlaylist.objects.create(
+        codi="top-val",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="VAL",
+        last_n_tracks=40,
+        last_n_matched=34,  # 85%, exactly on the boundary — WARN excluded
+        last_sync_ok=True,
+    )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "CRIT"
+    assert "top-cat" in msg

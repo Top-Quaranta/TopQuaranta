@@ -209,7 +209,7 @@ def _parse_release_date(date_str: str) -> date | None:
 # User OAuth client — for playlist management (weekly sync cron).
 #
 # The class above uses Client Credentials and can't touch user-scoped
-# endpoints like /me/playlists or /playlists/<id>/tracks. This one reads
+# endpoints like /me/playlists or /playlists/<id>/items. This one reads
 # the refresh_token stored in `music.SpotifyAuth` and manages a short-
 # lived access token on top so we can mutate user-owned playlists.
 # ─────────────────────────────────────────────────────────────────────────
@@ -368,22 +368,30 @@ class UserSpotifyClient:
     def replace_playlist_tracks(self, playlist_id: str, uris: list[str]) -> None:
         """Replace the whole playlist in place.
 
-        Spotify's PUT /playlists/<id>/tracks caps at 100 URIs per call.
+        Spotify's PUT /playlists/<id>/items caps at 100 URIs per call.
         For larger lists we PUT the first 100 (which also truncates
         anything beyond) then POST the rest in 100-URI chunks. We
-        never exceed 100 in practice (top-40 + novetats ≲ 100), but
+        never exceed 100 in practice (top-40 + novetats <= 100), but
         the chunking keeps the helper general.
+
+        Endpoint note (2026-05-22): the previous path
+        `/playlists/<id>/tracks` was deprecated by Spotify's February
+        2026 Web API migration and now returns 403 Forbidden to apps
+        in Development Mode. The new path is `/items` with the same
+        request and response shape (`{"uris": [...]}`). Migrating to
+        `/items` is the entire fix for the 2026-05-22 "all 12 playlists
+        return 403" incident.
         """
         first = uris[: self.PLAYLIST_TRACK_BATCH]
         self._request(
             "PUT",
-            f"/playlists/{playlist_id}/tracks",
+            f"/playlists/{playlist_id}/items",
             json={"uris": first},
         )
         for i in range(self.PLAYLIST_TRACK_BATCH, len(uris), self.PLAYLIST_TRACK_BATCH):
             chunk = uris[i : i + self.PLAYLIST_TRACK_BATCH]
             self._request(
                 "POST",
-                f"/playlists/{playlist_id}/tracks",
+                f"/playlists/{playlist_id}/items",
                 json={"uris": chunk},
             )

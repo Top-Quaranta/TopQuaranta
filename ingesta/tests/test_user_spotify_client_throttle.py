@@ -127,6 +127,44 @@ def test_429_at_tolerance_boundary_sleeps(patched_token):
     assert result is None  # success path; no raise
 
 
+def test_replace_playlist_tracks_uses_items_endpoint(patched_token):
+    """Spotify deprecated /playlists/{id}/tracks on 2026-03 and the old
+    path now returns 403 to Development Mode apps. The client MUST hit
+    /playlists/{id}/items. Regression guard so a future refactor can't
+    silently revert the path."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    ok = _mock_response(200, {"snapshot_id": "fake_snap"})
+    with patch(
+        "ingesta.clients.spotify.requests.request", return_value=ok
+    ) as mock_request:
+        client.replace_playlist_tracks("EXEMPLE_PID", ["spotify:track:abc"])
+    # First (and only) call: PUT to /items, NOT /tracks.
+    call = mock_request.call_args_list[0]
+    method = call.args[0]
+    url = call.args[1]
+    assert method == "PUT"
+    assert "/playlists/EXEMPLE_PID/items" in url
+    assert "/tracks" not in url
+
+
+def test_replace_playlist_tracks_chunks_via_items_endpoint(patched_token):
+    """Chunking branch (>100 URIs) must also use /items, not /tracks."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    ok = _mock_response(200, {"snapshot_id": "fake_snap"})
+    with patch(
+        "ingesta.clients.spotify.requests.request", return_value=ok
+    ) as mock_request:
+        uris = [f"spotify:track:exempl{i:04d}" for i in range(150)]
+        client.replace_playlist_tracks("EXEMPLE_PID2", uris)
+    # First call PUT, second call POST, both to /items.
+    assert len(mock_request.call_args_list) == 2
+    first, second = mock_request.call_args_list
+    assert first.args[0] == "PUT"
+    assert "/items" in first.args[1] and "/tracks" not in first.args[1]
+    assert second.args[0] == "POST"
+    assert "/items" in second.args[1] and "/tracks" not in second.args[1]
+
+
 def test_custom_throttle_overrides_default():
     """A `throttle_s=1.5` passed in __init__ becomes the per-request
     sleep value."""

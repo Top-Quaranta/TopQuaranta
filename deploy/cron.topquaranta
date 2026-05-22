@@ -101,11 +101,23 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 07:00 → Daily provisional ranking. Uses today's freshly-ingested signal.
 0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run calcular_top --provisional >> /var/log/topquaranta/top-provisional.log 2>&1
 
-# 07:15 → Spotify playlist sync. Runs right after the provisional
-# ranking settles so the 4 territorial playlists + Novetats reflect
-# the freshest data. Silently skips tracks that don't resolve via
-# ISRC; mismatches counted in SpotifyPlaylist.last_n_*.
+# 07:15 -> Process A (Spotify playlist sync, cache-only). Pushes the
+# cached spotify_id from SpotifyMetadata to the 12 playlists. NEVER
+# calls /v1/search; cache lives in SpotifyMetadata, populated by
+# Process B (enriquir_spotify, below). Runs right after the
+# provisional ranking settles so the territorial top playlists
+# reflect the freshest data. See docs/architecture/playlists.md
+# (Process A) and ADR-0013 for the A/B split.
 15 7 * * *  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify >> /var/log/topquaranta/playlists.log 2>&1
+
+# :30 every hour -> Process B (Spotify enrichment). One-shot per
+# Canço: search ISRC -> fetch track + artist -> persist
+# SpotifyMetadata. Throttled (0.5s default per call) so the
+# per-minute /search budget stays clear. --limit 200 means a fresh
+# backlog of ~1500 cançons fills in ~7-8 ticks. NOT
+# --target-playlists in regime; that flag is for the operator's
+# first cold-cache run only.
+30 * * * *  topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 200 --throttle 0.5 >> /var/log/topquaranta/playlists.log 2>&1
 
 # 22:30 → Pull engagement metrics from each social platform
 # (Mastodon, Bluesky, Instagram, Telegram). Per-post counters for the

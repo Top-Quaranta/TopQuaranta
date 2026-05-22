@@ -80,6 +80,19 @@ from web.api.staff._common import IsStaff, _paginate
 
 
 def _canco_row(c) -> dict:
+    # Spotify enrichment payload (Process B, see ADR-0012). The
+    # OneToOne reverse accessor raises DoesNotExist when there's no
+    # SpotifyMetadata row, which is the legitimate state for Cançons
+    # created before migration 0080 or never processed; getattr with
+    # default keeps the response shape stable.
+    sm = getattr(c, "spotify", None)
+    spotify_payload = None
+    if sm is not None and sm.enrichment_status == "found":
+        spotify_payload = {
+            "spotify_id": sm.spotify_id,
+            "artist_name": sm.spotify_artist_name or "",
+            "artist_id": sm.spotify_artist_id or "",
+        }
     return {
         "pk": c.pk,
         "nom": c.nom,
@@ -99,6 +112,7 @@ def _canco_row(c) -> dict:
         "mb_work_id": c.mb_work_id or "",
         "mb_lyrics_language": c.mb_lyrics_language or "",
         "mbrainz_confirmed": c.mbrainz_confirmed,
+        "spotify": spotify_payload,
         "artista": (
             {
                 "pk": c.artista_id,
@@ -109,6 +123,11 @@ def _canco_row(c) -> dict:
                 "mb_end_date": (
                     c.artista.mb_end_date.isoformat() if c.artista.mb_end_date else None
                 ),
+                # Spotify dispersion: count of distinct principal
+                # spotify_artist_ids across this artista's enriched
+                # cançons. >1 is the "possible Deezer barreja" badge
+                # the SPA surfaces on the row.
+                "spotify_dispersio": c.artista.spotify_artist_dispersio,
             }
             if c.artista
             else None

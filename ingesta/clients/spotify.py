@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import date, timedelta
+from datetime import date
 
 import requests
 from django.conf import settings
@@ -364,6 +364,55 @@ class UserSpotifyClient:
         )
         items = resp.json().get("tracks", {}).get("items", [])
         return items[0]["uri"] if items else None
+
+    def get_track(self, spotify_id: str) -> dict | None:
+        """Fetch the full Spotify track JSON for a known spotify_id.
+
+        Returns a dict with the fields ADR-0012 confirms are populated
+        for our prod app (id, name, duration_ms, explicit, is_playable,
+        track_number, disc_number, external_ids.isrc, album.*,
+        artists[]). Fields like popularity / preview_url /
+        available_markets come back NULL on Wave-One-restricted apps;
+        callers must not rely on them.
+
+        Returns None on 404 (the spotify_id is no longer valid in the
+        Spotify catalogue — happens with takedowns, re-uploads). Other
+        non-200 statuses raise via `_request.raise_for_status`.
+
+        Batch endpoint `/v1/tracks?ids=` is 403 for our app, so we
+        always go one-at-a-time. The throttle in `_request` keeps the
+        bulk-loop budget under Spotify's per-minute window.
+        """
+        if not spotify_id:
+            return None
+        try:
+            resp = self._request("GET", f"/tracks/{spotify_id}")
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return None
+            raise
+        return resp.json()
+
+    def get_artist(self, spotify_id: str) -> dict | None:
+        """Fetch the full Spotify artist JSON for a known artist ID.
+
+        Returns id, uri, name, images (3 sizes), external_urls. The
+        genres list usually comes back empty on Wave-One-restricted
+        apps (kept in the response for forward compatibility);
+        followers / popularity come back NULL.
+
+        Returns None on 404 (artist was removed from the catalogue).
+        Other non-200 statuses raise.
+        """
+        if not spotify_id:
+            return None
+        try:
+            resp = self._request("GET", f"/artists/{spotify_id}")
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return None
+            raise
+        return resp.json()
 
     def replace_playlist_tracks(self, playlist_id: str, uris: list[str]) -> None:
         """Replace the whole playlist in place.

@@ -308,6 +308,23 @@ export default function StaffCanconsPage() {
                 </Td>
                 <Td>
                   <div>{c.artista.nom}</div>
+                  {/* Spotify canonical artist name when it differs from
+                      Deezer's, plus the dispersion badge. Discreet on
+                      purpose: only surfaces when the data is there,
+                      otherwise no visual noise. See ADR-0012. */}
+                  {c.spotify?.artist_name && c.spotify.artist_name !== c.artista.nom && (
+                    <div className="text-[10px] opacity-60" title="Nom canonic a Spotify (post enrichment)">
+                      Sp: {c.spotify.artist_name}
+                    </div>
+                  )}
+                  {c.artista.spotify_dispersio > 1 && (
+                    <div
+                      className="text-[10px] font-semibold text-amber-700"
+                      title={`Aquest artista te ${c.artista.spotify_dispersio} identitats Spotify distintes a les seves cancons enriquides. Possible barreja Deezer.`}
+                    >
+                      possible barreja: {c.artista.spotify_dispersio} artistes Spotify
+                    </div>
+                  )}
                   {c.artista.mb_end_date && (
                     <div className="text-[10px] font-semibold text-red-600" title={`MusicBrainz: dissolt ${c.artista.mb_end_date}`}>
                       ⚠ dissolt {c.artista.mb_end_date.slice(0, 4)}

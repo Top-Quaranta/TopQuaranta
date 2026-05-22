@@ -33,8 +33,12 @@ def _mock_response(status: int, body: dict | None = None, headers=None):
     if status >= 400:
         # `raise_for_status` raises for 4xx/5xx; our client checks the
         # known cases (401, 429) BEFORE calling it, so set it here so
-        # any unexpected status surfaces in tests.
-        r.raise_for_status.side_effect = requests.HTTPError(f"HTTP {status}")
+        # any unexpected status surfaces in tests. The HTTPError must
+        # carry the response back to the caller because get_track /
+        # get_artist read `exc.response.status_code` to special-case 404.
+        err = requests.HTTPError(f"HTTP {status}")
+        err.response = r
+        r.raise_for_status.side_effect = err
     else:
         r.raise_for_status.return_value = None
     return r
@@ -172,3 +176,135 @@ def test_custom_throttle_overrides_default():
     assert client._throttle_s == 1.5
     # And the default for the max retry tolerance is preserved.
     assert client._max_retry_after_s == UserSpotifyClient.DEFAULT_MAX_RETRY_AFTER_S
+
+
+# ── get_track / get_artist (FASE 2 of Process A/B split) ─────────────
+
+
+def test_get_track_returns_full_json(patched_token):
+    """Happy path: a fresh GET /v1/tracks/{id} returns the populated
+    track dict with the fields ADR-0012 confirms are live."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    body = {
+        "id": "ABCD1",
+        "name": "EXEMPLE Track",
+        "duration_ms": 302000,
+        "explicit": False,
+        "is_playable": True,
+        "track_number": 1,
+        "disc_number": 1,
+        "external_ids": {"isrc": "QT3TB2546815"},
+        "album": {
+            "album_type": "single",
+            "release_date": "2026-01-19",
+            "images": [
+                {"url": "https://e/640.jpg", "width": 640, "height": 640},
+                {"url": "https://e/300.jpg", "width": 300, "height": 300},
+            ],
+        },
+        "artists": [
+            {"id": "ARTID1", "name": "EXEMPLE Artist", "uri": "spotify:artist:ARTID1"}
+        ],
+        # Wave One nulls — included in the mock so the client must
+        # tolerate their presence (it just passes the dict through).
+        "popularity": None,
+        "preview_url": None,
+        "available_markets": None,
+    }
+    with patch(
+        "ingesta.clients.spotify.requests.request",
+        return_value=_mock_response(200, body),
+    ) as mock_req:
+        result = client.get_track("ABCD1")
+    # URL contains /tracks/{id}; method is GET.
+    assert mock_req.call_args.args[0] == "GET"
+    assert "/tracks/ABCD1" in mock_req.call_args.args[1]
+    # And the body comes through unchanged.
+    assert result["id"] == "ABCD1"
+    assert result["external_ids"]["isrc"] == "QT3TB2546815"
+    assert len(result["album"]["images"]) == 2
+
+
+def test_get_track_returns_none_on_404(patched_token):
+    """A removed-from-catalogue ID returns None, not a raise."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    with patch(
+        "ingesta.clients.spotify.requests.request",
+        return_value=_mock_response(404, {"error": {"status": 404}}),
+    ):
+        result = client.get_track("REMOVED")
+    assert result is None
+
+
+def test_get_track_empty_id_returns_none(patched_token):
+    """Defensive: empty input doesn't even hit the network."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    with patch("ingesta.clients.spotify.requests.request") as mock_req:
+        result = client.get_track("")
+    assert result is None
+    mock_req.assert_not_called()
+
+
+def test_get_artist_returns_json(patched_token):
+    """Happy path: GET /v1/artists/{id} returns the artist dict."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    body = {
+        "id": "ARTID1",
+        "name": "EXEMPLE Artist",
+        "uri": "spotify:artist:ARTID1",
+        "images": [
+            {"url": "https://a/640.jpg", "width": 640, "height": 640},
+        ],
+        "external_urls": {"spotify": "https://open.spotify.com/artist/ARTID1"},
+        "genres": [],
+        "followers": None,
+        "popularity": None,
+    }
+    with patch(
+        "ingesta.clients.spotify.requests.request",
+        return_value=_mock_response(200, body),
+    ) as mock_req:
+        result = client.get_artist("ARTID1")
+    assert mock_req.call_args.args[0] == "GET"
+    assert "/artists/ARTID1" in mock_req.call_args.args[1]
+    assert result["id"] == "ARTID1"
+    assert result["genres"] == []
+
+
+def test_get_artist_404_returns_none(patched_token):
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0)
+    with patch(
+        "ingesta.clients.spotify.requests.request",
+        return_value=_mock_response(404, {"error": {"status": 404}}),
+    ):
+        assert client.get_artist("REMOVED") is None
+
+
+def test_get_track_throttle_applied(patched_token):
+    """Each fetch sleeps the configured throttle before firing,
+    matching the search_isrc behaviour."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0.07)
+    with (
+        patch("ingesta.clients.spotify.time.sleep") as mock_sleep,
+        patch(
+            "ingesta.clients.spotify.requests.request",
+            return_value=_mock_response(200, {"id": "x", "artists": []}),
+        ),
+    ):
+        client.get_track("x")
+    assert 0.07 in [c.args[0] for c in mock_sleep.call_args_list]
+
+
+def test_get_track_long_retry_after_raises(patched_token):
+    """The same RateLimitedError contract as search_isrc / writes:
+    Retry-After > tolerance -> raise, don't sleep."""
+    client = UserSpotifyClient(_fake_auth(), throttle_s=0, max_retry_after_s=60)
+    long_429 = _mock_response(429, headers={"Retry-After": "86076"})
+    with (
+        patch("ingesta.clients.spotify.time.sleep") as mock_sleep,
+        patch("ingesta.clients.spotify.requests.request", return_value=long_429),
+    ):
+        with pytest.raises(RateLimitedError):
+            client.get_track("x")
+    # The long value MUST NOT be slept.
+    assert 86076 not in [c.args[0] for c in mock_sleep.call_args_list]

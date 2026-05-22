@@ -1398,16 +1398,32 @@ class SpotifyPlaylist(models.Model):
 
     KIND_TOP = "top"
     KIND_NOVETATS = "novetats"
+    # FASE C (2026-05-22): the no_verificades kind sources Canco rows
+    # with verificada=False, sorted by created_at desc, chunked into
+    # windows of 100. `chunk_index` (0..6) selects which window each
+    # playlist gets so staff can triage 700 of the most recently
+    # ingested tracks across 7 Spotify playlists.
+    KIND_NO_VERIFICADES = "no_verificades"
     KIND_CHOICES = [
         (KIND_TOP, "Top provisional"),
         (KIND_NOVETATS, "Novetats"),
+        (KIND_NO_VERIFICADES, "No verificades (triage)"),
     ]
 
     codi = models.SlugField(max_length=50, unique=True)
     kind = models.CharField(max_length=20, choices=KIND_CHOICES)
-    # Only used when kind=top. Empty string for kind=novetats.
+    # Only used when kind=top. Empty string for kind=novetats / no_verificades.
     territori = models.CharField(max_length=10, blank=True)
     spotify_playlist_id = models.CharField(max_length=100, blank=True)
+    # Only used when kind=no_verificades: 0-based index into the
+    # window of 700 most-recently-ingested unverified tracks, so the
+    # 7 triage playlists each get a non-overlapping slice of 100.
+    # NULL for top / novetats rows (where it does not apply).
+    chunk_index = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Window chunk for no_verificades playlists (0-based).",
+    )
 
     last_sync_at = models.DateTimeField(null=True, blank=True)
     last_sync_ok = models.BooleanField(default=True)

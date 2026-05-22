@@ -101,6 +101,98 @@ log volume / chances-of-catching-a-transient-5xx.
   `/spotify/callback` route is kept for the SSH `autoritzar_spotify`
   fallback flow.
 
+## Spotify enrichment (Process B)
+
+Distinct from the sync cron (Process A) that writes the 12
+playlists. Process B is a one-shot enrichment pass that pulls
+Spotify metadata back into the DB so the public site can render
+Spotify-canonical artist images and disambiguate Deezer-collapsed
+artists.
+
+Process B does NOT exist as code today (May 2026). The design
+below is the agreed shape; it will land as its own sprint after
+the daily + weekly sync stabilises.
+
+### Two purposes, one column on Canco
+
+The cached `Canco.spotify_id` (a 22-char Spotify track ID written
+by `actualitzar_playlists_spotify` after a successful
+`search_isrc` resolution) does double duty:
+
+1. **Distribution.** `spotify:track:<id>` URIs feed
+   `replace_playlist_tracks` (Process A) so the playlist sync
+   stays cheap on repeat runs.
+2. **Disambiguation.** The Spotify track JSON includes an
+   authoritative `artists[]` list with stable Spotify artist IDs.
+   When Deezer collapses two distinct artists under one ID
+   (caught at the Crim / D5 incident, see CLAUDE.md), the
+   Spotify mapping lets us split them on the canonical Spotify
+   identity rather than guessing from name strings.
+
+### Field availability (empirical, 2026-05-22)
+
+Single-fetch via `GET /v1/tracks/{id}` and `GET /v1/artists/{id}`,
+both HTTP 200 for the prod app. Full table at ADR-0012.
+
+Available fields (track):
+
+| Field | Use case |
+|---|---|
+| `id`, `uri`, `name`, `duration_ms`, `explicit` | always populated |
+| `external_ids.isrc` | cross-check our own `Canco.isrc` |
+| `album.images` (3 sizes) | cover art fallback if Deezer is missing |
+| `album.release_date` | release_date precision (day/month/year) |
+| `album.album_type` (single / album / ep) | type classification |
+| `artists[].id`, `artists[].name`, `artists[].uri` | disambiguation anchor |
+| `is_playable` | per-market playability flag |
+
+Available fields (artist):
+
+| Field | Use case |
+|---|---|
+| `id`, `uri`, `name` | canonical identifier |
+| `images` (3 sizes) | artist cover image |
+| `external_urls.spotify` | open.spotify.com link for "Escolta-ho a" |
+
+Dead fields (always NULL on our app, do NOT rely on):
+`track.popularity`, `track.preview_url`, `track.available_markets`,
+`artist.genres`, `artist.popularity`, `artist.followers`.
+Dead endpoints (403 Forbidden): `/v1/tracks?ids=...`,
+`/v1/artists?ids=...`, `/v1/audio-features/{id}`,
+`/v1/audio-analysis/{id}`.
+
+The signal we feed the ranking comes from Last.fm; the rich
+metadata comes from Deezer and MusicBrainz. Spotify is identifier
++ disambiguation only. See ADR-0012 for the constraint rationale
+and ADR-0009 for the identity-migration backstory.
+
+### Batch limitation
+
+The batch endpoints (`/v1/tracks?ids=`, `/v1/artists?ids=`) are
+Forbidden for our app. Process B does one HTTP request per
+Canco, throttled to 0.2s by default (the
+`UserSpotifyClient.DEFAULT_THROTTLE_S` constant added in the
+2026-05-22 rate-limit mitigation). A full pass over ~2000 Canco
+rows takes ~7 minutes (well within any reasonable cron slot).
+
+### Idempotence
+
+Process B only fires when the per-Canco enrichment fields are
+NULL or older than 90 days. Fresh resolutions update the same
+row in place. There is no separate `enrichment_at` table; the
+existing `Canco.updated_at` plus a `spotify_metadata_at`
+timestamp (to be added with Process B) suffice.
+
+### Caching post-write
+
+After a `/items` write, the legacy `GET /v1/playlists/{id}`
+endpoint returns `tracks.total=0` for migrated apps. Monitoring
+that needs an authoritative count must use
+`GET /v1/playlists/{id}/items?limit=1` and read `total` from the
+paging envelope. This affects F.2 (`check_spotify_coverage`)
+which we will likely re-point at the `/items` endpoint when
+Process B lands. Documented at ADR-0012.
+
 ## Monitoring (FASE F — pending)
 
 Two checks planned, fired from `tq-health`:
@@ -166,6 +258,7 @@ proper ADR when the time comes.
 - ADR-0009 — Spotify identity migration.
 - ADR-0010 — No YouTube Music.
 - ADR-0011 — Cron schedule.
+- ADR-0012: Web API capabilities for new apps (empirical, 2026-05-22).
 - `ingesta/clients/spotify.py` — both clients (Client Credentials
   for catalog reads, refresh-token-backed for playlist writes).
 - `ingesta/management/commands/actualitzar_playlists_spotify.py`

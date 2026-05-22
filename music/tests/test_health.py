@@ -118,6 +118,11 @@ def test_premium_ok_on_premium():
 
 @pytest.mark.django_db
 def test_coverage_warn_when_no_rows():
+    # FASE C seeded 7 no-verif rows in the data migration. The "no rows"
+    # branch of check_spotify_coverage requires us to wipe them first.
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.all().delete()
     sev, msg, payload = check_spotify_coverage()
     assert sev == "WARN"
     assert "configurar_spotify_playlists" in msg
@@ -127,6 +132,9 @@ def test_coverage_warn_when_no_rows():
 def test_coverage_warn_when_all_rows_never_synced():
     from music.models import SpotifyPlaylist
 
+    # Reset to a clean slate so the assertion on row count is meaningful
+    # (the data migration seeds 7 rows with last_n_tracks=0).
+    SpotifyPlaylist.objects.all().delete()
     SpotifyPlaylist.objects.create(
         codi="top-cat", kind=SpotifyPlaylist.KIND_TOP, territori="CAT"
     )

@@ -684,3 +684,30 @@ fresc va resoldre-ho en 5 min.
 prop de mergejar, no comencis una segona branca sobre ella fins
 que el merge hagi pujat a main. Si ja és tard, la solució
 cherry-pick d'avall és més ràpida que intentar resoldre conflictes.
+
+### Black corromp JSON quan li passes el fitxer explícitament
+
+`black` només processa fitxers `.py` per defecte (via include
+filter), però **arguments explícits salten el filtre** i black
+intenta formatar-los igual. Quan li passes un `.json` (per error o
+per bulk-format), interpreta el JSON com a Python i hi afegeix
+trailing commas — JSON invàlid. Caught al sprint Process A+B
+(FASE 7, 2026-05-22) amb `deploy/cron-meta.json`.
+
+**Regla**: a `bin/tq-deploy`, scripts de format en bloc, o quan
+invoquis black manualment, **no passis fitxers no-Python com a
+arguments**. El patró segur és:
+```sh
+git diff --name-only origin/main | grep '\.py$' | xargs .venv/bin/black
+```
+o bé deixar que black descobreixi els fitxers per ell mateix:
+```sh
+.venv/bin/black .
+```
+(que respecta include + extend-exclude de `pyproject.toml`).
+
+**Detecció**: si veus `black` reformatant un fitxer no-`.py` al log
+("would reformat .../foo.json"), atura, restaura amb
+`git checkout HEAD -- foo.json` i re-aplica el diff manualment.
+La integritat del fitxer es valida amb `python -c "import json;
+json.load(open('foo.json'))"`.

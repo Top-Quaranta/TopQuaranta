@@ -24,7 +24,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.core.management import call_command, CommandError
+from django.core.management import CommandError, call_command
 
 from ingesta.clients.spotify import RateLimitedError
 from music.models import Album, Artista, Canco, SpotifyMetadata, SpotifyPlaylist

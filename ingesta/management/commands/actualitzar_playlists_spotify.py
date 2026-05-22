@@ -1,4 +1,4 @@
-"""Daily Spotify playlist sync.
+"""Spotify playlist sync (Process A). CACHE-ONLY since 2026-05-22.
 
 For each configured `SpotifyPlaylist`:
   * kind=top: TopProvisional.filter(territori=X) ordered by posicio,
@@ -7,24 +7,29 @@ For each configured `SpotifyPlaylist`:
     capped at 100. Currently parked (no row in prod since FASE C).
   * kind=no_verificades: Canco.objects.pendents() (verificada=False AND
     activa=True), ordered by ml_confianca desc, sliced into 7 non-
-    overlapping chunks of 100. The chunk a row receives is selected by
-    SpotifyPlaylist.chunk_index (0..6 -> the 700 most-likely-Catalan
-    unverified tracks). Staff triage workflow: each playlist is one
-    screen of work. Reusing `pendents()` so the playlist mirrors the
-    /staff/cancons workbench exactly; without `activa=True` the playlist
-    leaks ~1300 caducades that staff already moved out of triage.
+    overlapping chunks of 100. Mirrors the /staff/cancons workbench
+    exactly (single source of truth via Canco.objects.pendents()).
 
-Each Canco is resolved to a Spotify track URI by ISRC search. The
-result is cached on Canco.spotify_id so subsequent runs don't re-search.
-Mismatches are silently skipped (per design: we don't want to blur the
-playlist with noise).
+DESIGN: This command is the DISTRIBUTION half of the Process A / B
+split. It NEVER calls /v1/search. It reads spotify_id from
+SpotifyMetadata.spotify_id and turns it into a URI for the playlist
+write. Cançons whose SpotifyMetadata is in status="found" go in;
+status="not_attempted" and status="not_found" are skipped silently.
+
+Why this separation: /v1/search has the tightest Spotify rate-limit
+bucket and the previous "search-on-demand" approach made every cron
+run hit /search hundreds of times against a cold cache, which on
+2026-05-22 triggered a 24h Retry-After ban. Splitting search into a
+separate, throttled, idempotent Process B (`enriquir_spotify`) makes
+this command deterministic and safe to run on any cadence.
 
 The Spotify playlist is rewritten in place via PUT /playlists/<id>/
-tracks so the public URL + follower count survive every run.
+items so the public URL + follower count survive every run.
 
-Run daily at 07:15 UTC via `cron.topquaranta`, shortly after the
-provisional ranking recalc finishes.
+# Spec: docs/architecture/playlists.md (Process A)
 """
+
+from __future__ import annotations
 
 from datetime import timedelta
 
@@ -34,7 +39,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
-from music.models import Canco, SpotifyAuth, SpotifyPlaylist
+from music.models import Canco, SpotifyAuth, SpotifyMetadata, SpotifyPlaylist
 from ranking.models import TopProvisional
 
 # Total window pulled from the unverified backlog. 7 chunks * 100 = 700
@@ -45,13 +50,16 @@ NO_VERIF_CHUNK_SIZE = 100
 
 
 class Command(BaseCommand):
-    help = "Daily sync of the configured Spotify playlists from live rankings."
+    help = (
+        "Spotify playlist sync (Process A). Cache-only since 2026-05-22; "
+        "never calls /search. Run enriquir_spotify (Process B) to fill cache."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Compute the track lists and ISRC matches but don't hit Spotify.",
+            help="Compute the URI lists but don't write to Spotify.",
         )
         parser.add_argument(
             "--only",
@@ -64,10 +72,9 @@ class Command(BaseCommand):
             default=None,
             help=(
                 "Seconds to wait between Spotify API calls. Defaults to "
-                "UserSpotifyClient.DEFAULT_THROTTLE_S (0.2). Use a higher "
-                "value (e.g. 1.0) for the first wet sync after a long "
-                "cold-cache period to avoid tripping the per-minute "
-                "search rate limit."
+                "UserSpotifyClient.DEFAULT_THROTTLE_S (0.2). Used only "
+                "for the playlist write endpoint; cache-only sync has "
+                "no search calls."
             ),
         )
 
@@ -99,20 +106,10 @@ class Command(BaseCommand):
         # Materialise the no_verificades window ONCE per run, not once per
         # playlist: 7 separate queries would all hit the same scan + sort.
         # We slice from the cached list per chunk_index inside
-        # `_select_cancons`.
-        #
-        # Order: ml_confianca DESC (most-likely-Catalan first) so chunk 0
-        # carries the easiest A/B-tier triage decisions for staff. Then
-        # created_at DESC as a stable tiebreaker (newer wins on score
-        # ties). nulls_last keeps unclassified rows out of the top chunks
-        # even though prod currently shows 0% NULLs; defensive in case
-        # the cron is reorganised and `pre_classificar` falls behind.
+        # `_select_cancons`. Same ordering rationale as before
+        # (ml_confianca desc, created_at desc tiebreak, nulls_last).
         self._no_verif_window: list[Canco] | None = None
         if any(pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES for pl in playlists):
-            # Source = same queryset as the /staff/cancons workbench
-            # default view (`Canco.objects.pendents()` -> verificada=False
-            # AND activa=True). Single source of truth so the playlist
-            # never drifts from the screen the staff actually triages on.
             self._no_verif_window = list(
                 Canco.objects.pendents()
                 .exclude(isrc="")
@@ -123,8 +120,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"[no_verificades] window carregada: "
                 f"{len(self._no_verif_window)} cançons "
-                f"(top {NO_VERIF_WINDOW} per ml_confianca desc, "
-                f"created_at desc com a tiebreaker)"
+                f"(top {NO_VERIF_WINDOW} per ml_confianca desc)"
             )
 
         dry = opts.get("dry_run", False)
@@ -133,11 +129,10 @@ class Command(BaseCommand):
             try:
                 self._sync_one(client, pl, dry)
             except RateLimitedError as exc:
-                # Spotify asked us to back off for hours. We persist a
-                # FAIL state on this row and stop the loop entirely so
-                # the watchdog sees a clean exit-non-zero, not a half-
-                # synced batch where some rows passed and others were
-                # never attempted.
+                # Spotify can rate-limit the playlist-write endpoint too
+                # (different bucket from /search, but still possible
+                # under sustained load). Same fail-fast contract: mark
+                # the affected row FAIL and stop the loop.
                 self.stderr.write(self.style.ERROR(f"[{pl.codi}] {exc}"))
                 self._mark_failed(pl, str(exc))
                 sync_aborted = True
@@ -162,19 +157,22 @@ class Command(BaseCommand):
         )
 
         cancons = self._select_cancons(pl)
-        self.stdout.write(f"  cançons candidates: {len(cancons)}")
-
+        # Cache-only resolution: for each Canco, look at SpotifyMetadata
+        # and use the cached spotify_id when present. Cançons in
+        # status="not_attempted" or "not_found" are silently skipped;
+        # Process B (enriquir_spotify) is responsible for filling them.
         uris: list[str] = []
         matched = 0
         for canco in cancons:
-            # `_resolve_uri` swallows transient errors but re-raises
-            # RateLimitedError so the outer handler can stop the run.
-            uri = self._resolve_uri(client, canco)
+            uri = self._resolve_uri_cache_only(canco)
             if uri:
                 uris.append(uri)
                 matched += 1
 
-        self.stdout.write(f"  ISRC match: {matched}/{len(cancons)}")
+        self.stdout.write(
+            f"  candidates={len(cancons)} cache_hits={matched} "
+            f"(gap={len(cancons) - matched} pending enrichment)"
+        )
 
         if dry:
             self.stdout.write("  (dry-run no s'escriu a Spotify)")
@@ -184,6 +182,9 @@ class Command(BaseCommand):
         ok = True
         try:
             client.replace_playlist_tracks(pl.spotify_playlist_id, uris)
+        except RateLimitedError:
+            # Propagate so the outer handle() loop can stop cleanly.
+            raise
         except Exception as exc:  # noqa: BLE001 we log and carry on
             ok = False
             error_msg = f"{type(exc).__name__}: {exc}"
@@ -230,9 +231,6 @@ class Command(BaseCommand):
             )
 
         if pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES:
-            # Slice the pre-loaded window for this chunk. chunk_index
-            # NULL would mean the row was misconfigured; we treat it as
-            # empty rather than crashing the whole cron.
             if pl.chunk_index is None or self._no_verif_window is None:
                 self.stderr.write(
                     self.style.WARNING(
@@ -248,41 +246,32 @@ class Command(BaseCommand):
 
     def _mark_failed(self, pl: SpotifyPlaylist, msg: str) -> None:
         """Persist a FAIL state on the playlist row so tq-health and
-        check_spotify_coverage see it as a real cron failure (not a
-        silent skip)."""
+        check_spotify_coverage see it as a real cron failure."""
         with transaction.atomic():
             pl.last_sync_at = timezone.now()
             pl.last_sync_ok = False
             pl.last_sync_msg = msg[:500]
             pl.save(update_fields=["last_sync_at", "last_sync_ok", "last_sync_msg"])
 
-    # ── per-canço URI resolution ─────────────────────────────────────────
-    def _resolve_uri(self, client: UserSpotifyClient, canco: Canco) -> str | None:
-        # Cache hit: Canco.spotify_id is a persistent cache of the ISRC
-        # search result. Trust it even if Spotify's catalogue changes
-        # worst case the URI becomes stale and the PUT will surface an
-        # error next time we try to add it, at which point staff can
-        # clear the cache via the edit page.
-        if canco.spotify_id:
-            return f"spotify:track:{canco.spotify_id}"
+    # ── per-canço URI resolution (CACHE ONLY) ───────────────────────────
+    def _resolve_uri_cache_only(self, canco: Canco) -> str | None:
+        """Return a Spotify URI for the Canço if (and only if)
+        SpotifyMetadata.status == found.
 
-        if not canco.isrc:
+        Never calls /v1/search. Returns None for not_attempted /
+        not_found so the playlist write simply skips this slot. Process
+        B (enriquir_spotify) is the only path that can promote a Canço
+        into found status; calling it on its own throttled cron keeps
+        the search rate-limit budget under control regardless of how
+        often Process A runs.
+        """
+        # Try the OneToOne reverse accessor (.spotify); a Canço with no
+        # SpotifyMetadata row is treated identically to not_attempted.
+        sm = getattr(canco, "spotify", None)
+        if sm is None:
             return None
-
-        try:
-            uri = client.search_isrc(canco.isrc)
-        except RateLimitedError:
-            # Propagate: caller stops the loop and persists FAIL.
-            raise
-        except Exception as exc:  # noqa: BLE001
-            self.stderr.write(
-                self.style.WARNING(f"  search fails for ISRC {canco.isrc}: {exc}")
-            )
+        if sm.enrichment_status != SpotifyMetadata.STATUS_FOUND:
             return None
-
-        if uri:
-            # Cache: URIs are "spotify:track:XXX" we only keep the ID.
-            spotify_id = uri.rsplit(":", 1)[-1]
-            Canco.objects.filter(pk=canco.pk).update(spotify_id=spotify_id)
-
-        return uri
+        if not sm.spotify_id:
+            return None
+        return f"spotify:track:{sm.spotify_id}"

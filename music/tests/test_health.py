@@ -116,8 +116,31 @@ def test_premium_ok_on_premium():
 # ── check_spotify_coverage ────────────────────────────────────────
 
 
+@pytest.fixture
+def unsilence_cron():
+    """The repo's deploy/cron-meta.json marks the Process A cron as
+    silenced (regime gate before first wet sync). Most coverage tests
+    want to exercise the unsilenced path, so we mock the helper to
+    return False unconditionally."""
+    with patch("music.health._cron_is_silenced", return_value=False) as m:
+        yield m
+
+
 @pytest.mark.django_db
-def test_coverage_warn_when_no_rows():
+def test_coverage_silenced_short_circuits_to_ok():
+    """When the Process A cron is silenced (cron-meta.json), the check
+    must return OK and skip the coverage analysis entirely. Without
+    this gate the staff dashboard reported CRIT every load while the
+    cron was paused (FASE F false positive, 2026-05-22)."""
+    with patch("music.health._cron_is_silenced", return_value=True):
+        sev, msg, payload = check_spotify_coverage()
+    assert sev == "OK"
+    assert "silenced" in msg.lower()
+    assert payload.get("silenced") is True
+
+
+@pytest.mark.django_db
+def test_coverage_warn_when_no_rows(unsilence_cron):
     # FASE C seeded 7 no-verif rows in the data migration. The "no rows"
     # branch of check_spotify_coverage requires us to wipe them first.
     from music.models import SpotifyPlaylist
@@ -129,7 +152,7 @@ def test_coverage_warn_when_no_rows():
 
 
 @pytest.mark.django_db
-def test_coverage_warn_when_all_rows_never_synced():
+def test_coverage_warn_when_all_rows_never_synced(unsilence_cron):
     from music.models import SpotifyPlaylist
 
     # Reset to a clean slate so the assertion on row count is meaningful
@@ -149,7 +172,7 @@ def test_coverage_warn_when_all_rows_never_synced():
 
 
 @pytest.mark.django_db
-def test_coverage_ok_when_healthy():
+def test_coverage_ok_when_healthy(unsilence_cron):
     from music.models import SpotifyPlaylist
 
     SpotifyPlaylist.objects.create(
@@ -166,7 +189,7 @@ def test_coverage_ok_when_healthy():
 
 
 @pytest.mark.django_db
-def test_coverage_warn_at_below_85():
+def test_coverage_warn_at_below_85(unsilence_cron):
     from music.models import SpotifyPlaylist
 
     SpotifyPlaylist.objects.create(
@@ -183,7 +206,7 @@ def test_coverage_warn_at_below_85():
 
 
 @pytest.mark.django_db
-def test_coverage_crit_at_below_50():
+def test_coverage_crit_at_below_50(unsilence_cron):
     from music.models import SpotifyPlaylist
 
     SpotifyPlaylist.objects.create(

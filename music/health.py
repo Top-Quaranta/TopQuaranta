@@ -113,16 +113,55 @@ def check_spotify_premium() -> tuple[Severity, str, dict]:
     return "OK", f"Premium OK for {user_id} (product={product})", payload
 
 
+def _cron_is_silenced(cron_name: str) -> bool:
+    """Return True iff deploy/cron-meta.json marks this cron as silenced.
+
+    Read at call time (not at import) because the JSON file ships with
+    the repo and changes on deploy. Fail-open: if the file is missing
+    or malformed we treat the cron as NOT silenced, so a degraded
+    cron-meta still produces alerts instead of silently swallowing
+    them (worst-case noise > worst-case silence).
+    """
+    import json
+    from pathlib import Path
+
+    candidates = [
+        Path("/home/topquaranta/app/deploy/cron-meta.json"),
+        Path(__file__).resolve().parents[1] / "deploy" / "cron-meta.json",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except Exception:  # noqa: BLE001
+            return False
+        entry = data.get(cron_name) or {}
+        return bool(entry.get("silenced"))
+    return False
+
+
 def check_spotify_coverage() -> tuple[Severity, str, dict]:
     """Inspect `SpotifyPlaylist.last_n_matched / last_n_tracks`.
 
     Returns:
       ("OK",   message, payload)  — every successfully-synced row
-                                    has matched / total ≥ WARN.
+                                    has matched / total ≥ WARN, OR the
+                                    Process A cron is silenced (no
+                                    sync expected so low coverage is
+                                    not actionable).
       ("WARN", message, payload)  — at least one row below WARN, or
-                                    the cron is not silenced but
-                                    has never synced anything.
+                                    the cron is active and no row has
+                                    ever synced.
       ("CRIT", message, payload)  — at least one row below CRIT.
+
+    Silenced gate (added 2026-05-22 after FASE F false-positive
+    review): when `actualitzar_playlists_spotify` is silenced in
+    `cron-meta.json` we short-circuit to OK regardless of last_n_*
+    because the operator has explicitly told us not to expect a
+    healthy sync yet. Without this, every staff dashboard load while
+    the cron was silenced reported coverage CRIT (all 12 playlists at
+    0 tracks until the first wet sync), drowning out real signals.
 
     Rows with `last_sync_ok=False` are reported via the message but
     don't trigger CRIT on their own; the cron's own status file is
@@ -133,6 +172,19 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
         from music.models import SpotifyPlaylist
     except Exception as exc:  # noqa: BLE001
         return "CRIT", f"Django import failed: {exc}", {}
+
+    # If the operator has silenced the sync cron, low coverage is the
+    # expected state, not a regression. Skip the analysis to avoid the
+    # false positive on every dashboard load while the cron is paused.
+    if _cron_is_silenced("actualitzar_playlists_spotify"):
+        return (
+            "OK",
+            (
+                "actualitzar_playlists_spotify is silenced; coverage check "
+                "skipped (sync not expected to run)."
+            ),
+            {"rows": [], "silenced": True},
+        )
 
     rows = list(SpotifyPlaylist.objects.order_by("codi"))
     if not rows:

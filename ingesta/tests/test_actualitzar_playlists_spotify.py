@@ -49,16 +49,19 @@ def client_mock():
         yield instance
 
 
-def _make_canco(artista, album, ord_idx: int) -> Canco:
-    """Helper: create a Canco with a deterministic ISRC and
-    `created_at` ordering. Note the EXEMPLE label on the synthetic
-    Catalan-looking title (per project convention `# EXEMPLE`)."""
+def _make_canco(
+    artista, album, ord_idx: int, ml_confianca: float | None = None
+) -> Canco:
+    """Helper: create a Canco with a deterministic ISRC and an explicit
+    ML score so tests can assert the chunk ordering (ml_confianca desc).
+    EXEMPLE label per project convention."""
     return Canco.objects.create(
         artista=artista,
         album=album,
         nom=f"EXEMPLE-cancons-{ord_idx:04d}",
         isrc=f"ZZ00X{ord_idx:07d}",
         verificada=False,
+        ml_confianca=ml_confianca,
     )
 
 
@@ -66,18 +69,21 @@ def _make_canco(artista, album, ord_idx: int) -> Canco:
 def test_no_verificades_chunks_are_disjoint_and_ordered(auth_present, client_mock):
     """Create 250 unverified Canco rows and run the command against 3
     chunks (0, 1, 2). Each chunk should receive a non-overlapping
-    100-track slice; the third chunk only sees 50 (250 - 200)."""
+    100-track slice; the third chunk only sees 50 (250 - 200).
+
+    Order is ml_confianca desc, so we wire the helper to assign
+    decreasing scores to later-inserted rows. ord_idx 249 -> highest
+    score, ord_idx 0 -> lowest. Chunk 0 should therefore contain the
+    100 highest scores (ord_idx 150..249)."""
     artista = Artista.objects.create(
         nom="EXEMPLE Artista", lastfm_nom="EXEMPLE Artista"
     )
     album = Album.objects.create(artista=artista, nom="EXEMPLE Album")
-    # Create 250 cançons in stable creation order; we don't need to keep
-    # the list, only the side-effect on the DB.
+    # Score = ord_idx / 250 so each row has a distinct score in (0, 1].
+    # Higher ord_idx = higher score = earlier in the chunk window.
     for i in range(250):
-        _make_canco(artista, album, i)
+        _make_canco(artista, album, i, ml_confianca=i / 250.0)
 
-    # Most recently created is the LAST one we inserted (ord_idx 249).
-    # The expected chunk 0 (newest 100) maps to ISRCs 249..150 (desc).
     SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
     SpotifyPlaylist.objects.create(
         codi="no-verif-1",
@@ -117,8 +123,9 @@ def test_no_verificades_chunks_are_disjoint_and_ordered(auth_present, client_moc
     assert set(chunk1).isdisjoint(chunk2)
     assert set(chunk0).isdisjoint(chunk2)
 
-    # Order check: chunk 0 should contain the most-recently-inserted
-    # tracks, which by ord_idx are 249..150 (desc).
+    # Order check: chunk 0 should contain the rows with the highest
+    # ml_confianca values. Since score scales linearly with ord_idx,
+    # chunk 0 = ord_idx 150..249 (100 highest scores).
     expected_isrcs_chunk0 = {f"ZZ00X{i:07d}" for i in range(150, 250)}
     actual_isrcs_chunk0 = {uri.removeprefix("spotify:track:URI-") for uri in chunk0}
     assert actual_isrcs_chunk0 == expected_isrcs_chunk0
@@ -204,6 +211,43 @@ def test_no_verificades_misconfigured_chunk_index_is_skipped(auth_present, clien
     assert by_pl["fake-pl-broken"] == []
     # Healthy row: 1 track.
     assert len(by_pl["fake-pl-0"]) == 1
+
+
+@pytest.mark.django_db
+def test_no_verificades_nulls_last_and_created_at_tiebreak(auth_present, client_mock):
+    """Two rows with identical ml_confianca should break the tie by
+    created_at desc (newest first). Unscored rows (ml_confianca NULL)
+    should land at the very end of the window, after every scored one."""
+    artista = Artista.objects.create(
+        nom="EXEMPLE Artista 4", lastfm_nom="EXEMPLE Artista 4"
+    )
+    album = Album.objects.create(artista=artista, nom="EXEMPLE Album 4")
+
+    # Inserted in this order: older first, newer last.
+    high_old = _make_canco(artista, album, 0, ml_confianca=0.9)
+    high_new = _make_canco(artista, album, 1, ml_confianca=0.9)
+    null1 = _make_canco(artista, album, 2, ml_confianca=None)
+    null2 = _make_canco(artista, album, 3, ml_confianca=None)
+    low_only = _make_canco(artista, album, 4, ml_confianca=0.1)
+
+    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.create(
+        codi="no-verif-1",
+        kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+        chunk_index=0,
+        spotify_playlist_id="fake-pl-0",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    # Sequence expected: high_new (newest with top score), high_old,
+    # low_only, then the two NULLs in created_at desc order.
+    expected = [
+        f"spotify:track:URI-{c.isrc}"
+        for c in [high_new, high_old, low_only, null2, null1]
+    ]
+    assert pushed == expected
 
 
 def test_window_constants_are_consistent():

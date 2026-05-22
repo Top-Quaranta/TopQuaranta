@@ -27,6 +27,7 @@ from datetime import timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from ingesta.clients.spotify import UserSpotifyClient
@@ -80,19 +81,30 @@ class Command(BaseCommand):
             return
 
         # Materialise the no_verificades window ONCE per run, not once per
-        # playlist: 7 separate `.order_by("-created_at")[:700]` queries
-        # would all hit the same scan + sort. We slice from the cached
-        # list per chunk_index inside `_select_cancons`.
+        # playlist: 7 separate queries would all hit the same scan + sort.
+        # We slice from the cached list per chunk_index inside
+        # `_select_cancons`.
+        #
+        # Order: ml_confianca DESC (most-likely-Catalan first) so chunk 0
+        # carries the easiest A/B-tier triage decisions for staff. Then
+        # created_at DESC as a stable tiebreaker (newer wins on score
+        # ties). nulls_last keeps unclassified rows out of the top chunks
+        # even though prod currently shows 0% NULLs; defensive in case
+        # the cron is reorganised and `pre_classificar` falls behind.
         self._no_verif_window: list[Canco] | None = None
         if any(pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES for pl in playlists):
             self._no_verif_window = list(
                 Canco.objects.filter(verificada=False)
                 .exclude(isrc="")
-                .order_by("-created_at")[:NO_VERIF_WINDOW]
+                .order_by(F("ml_confianca").desc(nulls_last=True), "-created_at")[
+                    :NO_VERIF_WINDOW
+                ]
             )
             self.stdout.write(
                 f"[no_verificades] window carregada: "
-                f"{len(self._no_verif_window)} cançons (top {NO_VERIF_WINDOW} per created_at desc)"
+                f"{len(self._no_verif_window)} cançons "
+                f"(top {NO_VERIF_WINDOW} per ml_confianca desc, "
+                f"created_at desc com a tiebreaker)"
             )
 
         dry = opts.get("dry_run", False)

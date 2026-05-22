@@ -5,11 +5,14 @@ For each configured `SpotifyPlaylist`:
     capped at 40. One row per ranking territori (PPCC + 4 territories).
   * kind=novetats: Canco with data_llancament = yesterday, activa=True,
     capped at 100. Currently parked (no row in prod since FASE C).
-  * kind=no_verificades: Canco.objects.filter(verificada=False) ordered
-    by created_at desc, sliced into 7 non-overlapping chunks of 100. The
-    chunk a row receives is selected by SpotifyPlaylist.chunk_index
-    (0..6 -> the 700 most-recently-ingested unverified tracks). Staff
-    triage workflow: each playlist is one screen of work.
+  * kind=no_verificades: Canco.objects.pendents() (verificada=False AND
+    activa=True), ordered by ml_confianca desc, sliced into 7 non-
+    overlapping chunks of 100. The chunk a row receives is selected by
+    SpotifyPlaylist.chunk_index (0..6 -> the 700 most-likely-Catalan
+    unverified tracks). Staff triage workflow: each playlist is one
+    screen of work. Reusing `pendents()` so the playlist mirrors the
+    /staff/cancons workbench exactly; without `activa=True` the playlist
+    leaks ~1300 caducades that staff already moved out of triage.
 
 Each Canco is resolved to a Spotify track URI by ISRC search. The
 result is cached on Canco.spotify_id so subsequent runs don't re-search.
@@ -30,7 +33,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from ingesta.clients.spotify import UserSpotifyClient
+from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
 from music.models import Canco, SpotifyAuth, SpotifyPlaylist
 from ranking.models import TopProvisional
 
@@ -55,6 +58,18 @@ class Command(BaseCommand):
             default="",
             help="Sync only the playlist with this codi (else: all).",
         )
+        parser.add_argument(
+            "--throttle",
+            type=float,
+            default=None,
+            help=(
+                "Seconds to wait between Spotify API calls. Defaults to "
+                "UserSpotifyClient.DEFAULT_THROTTLE_S (0.2). Use a higher "
+                "value (e.g. 1.0) for the first wet sync after a long "
+                "cold-cache period to avoid tripping the per-minute "
+                "search rate limit."
+            ),
+        )
 
     def handle(self, *args, **opts):
         auth = SpotifyAuth.load()
@@ -64,7 +79,8 @@ class Command(BaseCommand):
                 "`manage.py autoritzar_spotify` primer."
             )
 
-        client = UserSpotifyClient(auth)
+        throttle = opts.get("throttle")
+        client = UserSpotifyClient(auth, throttle_s=throttle)
 
         qs = SpotifyPlaylist.objects.exclude(spotify_playlist_id="")
         only = (opts.get("only") or "").strip()
@@ -93,8 +109,12 @@ class Command(BaseCommand):
         # the cron is reorganised and `pre_classificar` falls behind.
         self._no_verif_window: list[Canco] | None = None
         if any(pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES for pl in playlists):
+            # Source = same queryset as the /staff/cancons workbench
+            # default view (`Canco.objects.pendents()` -> verificada=False
+            # AND activa=True). Single source of truth so the playlist
+            # never drifts from the screen the staff actually triages on.
             self._no_verif_window = list(
-                Canco.objects.filter(verificada=False)
+                Canco.objects.pendents()
                 .exclude(isrc="")
                 .order_by(F("ml_confianca").desc(nulls_last=True), "-created_at")[
                     :NO_VERIF_WINDOW
@@ -108,8 +128,27 @@ class Command(BaseCommand):
             )
 
         dry = opts.get("dry_run", False)
+        sync_aborted = False
         for pl in playlists:
-            self._sync_one(client, pl, dry)
+            try:
+                self._sync_one(client, pl, dry)
+            except RateLimitedError as exc:
+                # Spotify asked us to back off for hours. We persist a
+                # FAIL state on this row and stop the loop entirely so
+                # the watchdog sees a clean exit-non-zero, not a half-
+                # synced batch where some rows passed and others were
+                # never attempted.
+                self.stderr.write(self.style.ERROR(f"[{pl.codi}] {exc}"))
+                self._mark_failed(pl, str(exc))
+                sync_aborted = True
+                break
+
+        if sync_aborted:
+            raise CommandError(
+                "Spotify rate limit exceeded the client tolerance; sync "
+                "aborted. Watchdog will see status=FAIL on the affected "
+                "row. Retry after the Retry-After window."
+            )
 
     # ── per-playlist sync ────────────────────────────────────────────────
     def _sync_one(
@@ -128,6 +167,8 @@ class Command(BaseCommand):
         uris: list[str] = []
         matched = 0
         for canco in cancons:
+            # `_resolve_uri` swallows transient errors but re-raises
+            # RateLimitedError so the outer handler can stop the run.
             uri = self._resolve_uri(client, canco)
             if uri:
                 uris.append(uri)
@@ -205,6 +246,16 @@ class Command(BaseCommand):
 
         return []
 
+    def _mark_failed(self, pl: SpotifyPlaylist, msg: str) -> None:
+        """Persist a FAIL state on the playlist row so tq-health and
+        check_spotify_coverage see it as a real cron failure (not a
+        silent skip)."""
+        with transaction.atomic():
+            pl.last_sync_at = timezone.now()
+            pl.last_sync_ok = False
+            pl.last_sync_msg = msg[:500]
+            pl.save(update_fields=["last_sync_at", "last_sync_ok", "last_sync_msg"])
+
     # ── per-canço URI resolution ─────────────────────────────────────────
     def _resolve_uri(self, client: UserSpotifyClient, canco: Canco) -> str | None:
         # Cache hit: Canco.spotify_id is a persistent cache of the ISRC
@@ -220,6 +271,9 @@ class Command(BaseCommand):
 
         try:
             uri = client.search_isrc(canco.isrc)
+        except RateLimitedError:
+            # Propagate: caller stops the loop and persists FAIL.
+            raise
         except Exception as exc:  # noqa: BLE001
             self.stderr.write(
                 self.style.WARNING(f"  search fails for ISRC {canco.isrc}: {exc}")

@@ -130,12 +130,20 @@ def _canco_row(c) -> dict:
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def cancons_list(request: Request) -> Response:
-    qs = Canco.objects.select_related("artista", "album")
+    # Pick the base queryset via the manager method so the
+    # no_verificades Spotify playlists (which also call `pendents()`)
+    # cannot drift from this workbench view. `pendents()` = verificada=
+    # False AND activa=True. The verificada=="1" branch keeps its old
+    # `verificada=True only` semantics on purpose so staff can still
+    # inspect already-verified caducades.
     verificada = request.GET.get("verificada", "0")
     if verificada == "0":
-        qs = qs.filter(verificada=False, activa=True)
+        qs = Canco.objects.pendents()
     elif verificada == "1":
-        qs = qs.filter(verificada=True)
+        qs = Canco.objects.filter(verificada=True)
+    else:
+        qs = Canco.objects.all()
+    qs = qs.select_related("artista", "album")
     ml_classe = request.GET.get("ml_classe", "")
     if ml_classe in ("A", "B", "C"):
         qs = qs.filter(ml_classe=ml_classe)

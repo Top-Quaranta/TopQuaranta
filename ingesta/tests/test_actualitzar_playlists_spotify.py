@@ -254,3 +254,77 @@ def test_window_constants_are_consistent():
     """Sanity guard: chunk count must be int and slot in 0..6 must fit
     inside the window (700 / 100 = 7 chunks)."""
     assert NO_VERIF_WINDOW == 7 * NO_VERIF_CHUNK_SIZE
+
+
+@pytest.mark.django_db
+def test_no_verificades_uses_pendents_filter_excludes_inactives(
+    auth_present, client_mock
+):
+    """The no_verificades source must mirror the /staff/cancons workbench
+    default view, i.e. `Canco.objects.pendents()` = verificada=False AND
+    activa=True. The earlier code used `verificada=False` only, which
+    leaked ~1300 inactive (caducades) cançons into the triage playlists.
+    """
+    artista = Artista.objects.create(
+        nom="EXEMPLE Artista filter", lastfm_nom="EXEMPLE Artista filter"
+    )
+    album = Album.objects.create(artista=artista, nom="EXEMPLE Album filter")
+    # 2 alive + 3 caducades (activa=False). Only the 2 alive should sync.
+    Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="EXEMPLE-alive-1",
+        isrc="ZZAL0000001",
+        verificada=False,
+        activa=True,
+        ml_confianca=0.9,
+    )
+    Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="EXEMPLE-alive-2",
+        isrc="ZZAL0000002",
+        verificada=False,
+        activa=True,
+        ml_confianca=0.8,
+    )
+    for i in range(3):
+        Canco.objects.create(
+            artista=artista,
+            album=album,
+            nom=f"EXEMPLE-dead-{i}",
+            isrc=f"ZZDE000000{i}",
+            verificada=False,
+            activa=False,
+            ml_confianca=0.95,  # high score but should still be excluded
+        )
+
+    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.create(
+        codi="no-verif-1",
+        kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+        chunk_index=0,
+        spotify_playlist_id="fake-pl-0",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    assert len(pushed) == 2  # only the 2 alive
+    assert all("ZZAL" in uri for uri in pushed)
+    assert not any("ZZDE" in uri for uri in pushed)
+
+
+@pytest.mark.django_db
+def test_throttle_flag_propagates_to_client(auth_present):
+    """`--throttle 1.5` should construct UserSpotifyClient with
+    throttle_s=1.5 so the per-request sleep matches the CLI value."""
+    with patch(
+        "ingesta.management.commands.actualitzar_playlists_spotify.UserSpotifyClient"
+    ) as cls:
+        instance = MagicMock()
+        instance.search_isrc.return_value = None
+        cls.return_value = instance
+        call_command("actualitzar_playlists_spotify", throttle=1.5)
+    # First positional is the auth row; throttle_s should be the kwarg.
+    assert cls.call_args.kwargs.get("throttle_s") == 1.5

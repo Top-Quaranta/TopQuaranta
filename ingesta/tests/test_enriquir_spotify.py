@@ -20,12 +20,11 @@ EXEMPLE labels per project convention.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.management import call_command, CommandError
-from django.utils import timezone
 
 from ingesta.clients.spotify import RateLimitedError
 from music.models import Album, Artista, Canco, SpotifyMetadata, SpotifyPlaylist
@@ -322,8 +321,8 @@ def test_dispersion_recomputed_for_affected_artists(auth_present, client_mock):
     """After enrichment, the affected artistes have dispersion set."""
     a = Artista.objects.create(nom="EXEMPLE A9", lastfm_nom="EXEMPLE A9")
     al = Album.objects.create(artista=a, nom="EXEMPLE Al9")
-    c1 = _make_canco(a, al, 600, ml=0.9)
-    c2 = _make_canco(a, al, 601, ml=0.8)
+    _make_canco(a, al, 600, ml=0.9)
+    _make_canco(a, al, 601, ml=0.8)
 
     call_count = [0]
 

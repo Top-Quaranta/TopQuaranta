@@ -109,9 +109,41 @@ Spotify metadata back into the DB so the public site can render
 Spotify-canonical artist images and disambiguate Deezer-collapsed
 artists.
 
-Process B does NOT exist as code today (May 2026). The design
-below is the agreed shape; it will land as its own sprint after
-the daily + weekly sync stabilises.
+Process B landed on 2026-05-22 alongside the Process A cache-only
+refactor (see ADR-0013). The two processes are now strictly
+separated:
+
+  * Process A (`actualitzar_playlists_spotify`): cache-only. Reads
+    `SpotifyMetadata.spotify_id` and pushes via `/items`. Never
+    calls `/v1/search`. Safe to run on any cadence.
+  * Process B (`enriquir_spotify`): one-shot per Cançó. Calls
+    `/v1/search` then `/v1/tracks/{id}` and `/v1/artists/{id}`.
+    Throttled (default 0.5s between calls). Writes the cache.
+
+Source ordering inside Process B (FASE 0 "opció C compost"):
+  1. Public Cançons (`verificada=True, activa=True`) ordered by
+     the latest `SenyalDiari.lastfm_playcount desc`, NULLs last.
+  2. Pending Cançons (`verificada=False, activa=True`) ordered by
+     `ml_confianca desc`, NULLs last.
+
+Flags:
+  * `--limit N` caps per-run work (default 200).
+  * `--throttle FLOAT` overrides the per-call sleep (default 0.5).
+  * `--retry-not-found` cycles through previously-not-found
+    cançons after the main pool is exhausted.
+  * `--target-playlists` narrows the pool to Cançons currently
+    in any active SpotifyPlaylist window. Used for the first
+    cold-cache run only; regime cron runs without it.
+
+Dispersion signal: every successful Process B run calls
+`music.spotify_dispersio.recalcular_dispersio` for the affected
+artistes. `Artista.spotify_artist_dispersio` ends up as the count
+of distinct PRINCIPAL `spotify_artist_id` values across that
+artist's enriched cançons. `>1` is the canonical signature of a
+Deezer name-collapse (Crim-style); the staff triage workbench
+surfaces it as a "possible barreja" badge. A standalone command
+`recalcular_dispersio_spotify` re-runs the full-DB calc when an
+operator needs to refresh it.
 
 ### Two purposes, one column on Canco
 
@@ -177,11 +209,16 @@ rows takes ~7 minutes (well within any reasonable cron slot).
 
 ### Idempotence
 
-Process B only fires when the per-Canco enrichment fields are
-NULL or older than 90 days. Fresh resolutions update the same
-row in place. There is no separate `enrichment_at` table; the
-existing `Canco.updated_at` plus a `spotify_metadata_at`
-timestamp (to be added with Process B) suffice.
+Process B is gated by `SpotifyMetadata.enrichment_status`:
+  * `not_attempted` -> picked up on the next run.
+  * `found` -> skipped (we already have the cache).
+  * `not_found` -> skipped UNLESS `--retry-not-found` is set, in
+    which case the oldest `enriched_at` are re-attempted first so
+    each retry cycle walks the pool evenly.
+
+The OneToOne `Canco -> SpotifyMetadata` link plus the
+`enriched_at` timestamp suffice to drive idempotence; no separate
+queue table.
 
 ### Caching post-write
 

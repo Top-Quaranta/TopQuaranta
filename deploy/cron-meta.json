@@ -51,7 +51,16 @@
     "max_age_hours": 26,
     "skip_concern": 1,
     "silenced": true,
-    "silenced_reason": "Esperant Spotify Premium per re-OAuth"
+    "silenced_reason": "Process A cache-only; pending first wet sync post-Process-B priming.",
+    "description": "Process A: Spotify playlist sync, cache-only. Reads SpotifyMetadata.spotify_id and pushes to 12 playlists via /items. Never touches /search; that is Process B's job."
+  },
+  "enriquir_spotify": {
+    "frequency_label": "Cada hora :30",
+    "max_age_hours": 3,
+    "skip_concern": 1,
+    "silenced": true,
+    "silenced_reason": "Pending first manual run with --target-playlists --throttle 1.0 to seed cache before regime cron starts.",
+    "description": "Process B: Spotify enrichment. Search ISRC -> fetch track + artist -> persist SpotifyMetadata. Throttled (0.5s default); --limit 200 per tick covers a fresh backlog in ~7-8 ticks."
   },
   "tq-restore-test": {
     "frequency_label": "Mensual (dia 1, 04:30)",

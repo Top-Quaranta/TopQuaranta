@@ -129,7 +129,7 @@ def test_subset_filter_only_updates_those_artistas():
 def test_artist_with_no_enriched_cancons_keeps_null():
     a = Artista.objects.create(nom="EXEMPLE Z", lastfm_nom="EXEMPLE Z")
     al = Album.objects.create(artista=a, nom="EXEMPLE Z")
-    c = _canco(a, al, 500)
+    _canco(a, al, 500)
     # Stays not_attempted -> no signal.
     recalcular_dispersio(artista_ids=[a.pk])
     a.refresh_from_db()

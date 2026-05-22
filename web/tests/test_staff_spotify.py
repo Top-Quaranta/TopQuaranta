@@ -44,9 +44,14 @@ def anon_client():
 
 @pytest.fixture
 def spotify_playlists(db):
-    """Five SpotifyPlaylist rows mimicking the production seed."""
+    """Five SpotifyPlaylist rows mimicking the production seed.
+
+    Wipes any pre-existing rows first because FASE C's data migration
+    seeds 7 no-verif-N rows that would otherwise inflate the count
+    assertions further down."""
     from music.models import SpotifyPlaylist
 
+    SpotifyPlaylist.objects.all().delete()
     rows = [
         ("top-cat", SpotifyPlaylist.KIND_TOP, "CAT", "0Vzdo5gpRPeSBpWVFUKE1G"),
         ("top-val", SpotifyPlaylist.KIND_TOP, "VAL", "0zt9V8u8lRsgdPPRVIc9kC"),

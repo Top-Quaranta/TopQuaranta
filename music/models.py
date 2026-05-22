@@ -379,6 +379,32 @@ class Artista(models.Model):
     )
     genere_locked = models.BooleanField(default=False)
 
+    # Spotify dispersion signal (Process B output, see ADR-0012).
+    # `spotify_artist_dispersio` is the count of DISTINCT principal
+    # Spotify artist IDs across all this artista's enriched Cançons.
+    # 1 means every enriched track points to one Spotify artist (clean
+    # mapping); >1 means Deezer probably merged two distinct artists
+    # under the same Deezer ID (Crim-style collision). The triage UI
+    # surfaces this as a "possible barreja" badge so staff catch it
+    # before approving cançons that don't actually belong here.
+    spotify_artist_dispersio = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Distinct principal spotify_artist_id count across this "
+            "artist's enriched tracks. >1 suggests Deezer homonym merge."
+        ),
+    )
+    spotify_artist_ids_distints = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Sorted list of the distinct principal Spotify artist IDs "
+            "seen across enriched cançons. Mirrors dispersio for debug."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     # SEO Sprint S (2026-05-06): single source of truth for sitemap
     # `lastmod` and HTTP `Last-Modified` headers on the per-artist
@@ -1438,3 +1464,89 @@ class SpotifyPlaylist(models.Model):
 
     def __str__(self) -> str:
         return f"{self.codi} ({self.kind}:{self.territori or '-'})"
+
+
+class SpotifyMetadata(models.Model):
+    """Per-Canço Spotify enrichment row, populated by Process B.
+
+    Architectural split (see docs/architecture/playlists.md "Spotify
+    enrichment (Process B)" and ADR-0012):
+
+      Process A — actualitzar_playlists_spotify, cache-only sync to
+                  Spotify playlists. Reads `spotify_id` from this
+                  table. NEVER calls /search.
+      Process B — enriquir_spotify, one-shot per Canço. Hits
+                  /v1/search (ISRC lookup), then /v1/tracks/{id} and
+                  /v1/artists/{id}. Fills this row. Throttled.
+
+    This table is the ONLY place we cache Spotify identifiers and the
+    handful of metadata fields the post-2026 API still gives us.
+    Spotify is identifier + disambiguation source, not metadata source
+    (per ADR-0012). Rich metadata stays Deezer / Last.fm / MB.
+
+    The `spotify_artist_id` (principal artist on the Spotify track) is
+    the key to the dispersion signal: when several Cançons of the same
+    `Artista` resolve to different `spotify_artist_id`, Deezer probably
+    collapsed two distinct artists under one row and staff should split
+    them. See `music.spotify_dispersio.recalcular_dispersio`.
+    """
+
+    STATUS_NOT_ATTEMPTED = "not_attempted"
+    STATUS_FOUND = "found"
+    STATUS_NOT_FOUND = "not_found"
+    STATUS_CHOICES = [
+        (STATUS_NOT_ATTEMPTED, "Encara no provada"),
+        (STATUS_FOUND, "Trobada"),
+        (STATUS_NOT_FOUND, "ISRC no a Spotify"),
+    ]
+
+    canco = models.OneToOneField(
+        Canco,
+        on_delete=models.CASCADE,
+        related_name="spotify",
+    )
+    # Spotify track ID (22 chars). Indexed because Process A filters
+    # by `enrichment_status="found"` AND non-empty spotify_id.
+    spotify_id = models.CharField(max_length=64, blank=True, db_index=True)
+    # Principal Spotify artist (artists[0].id from /v1/tracks). The
+    # disambiguation anchor for dispersion calculation.
+    spotify_artist_id = models.CharField(max_length=64, blank=True, db_index=True)
+    # Every Spotify artist on the track (collaborators included).
+    # JSONField list of ID strings, preserving order from Spotify.
+    spotify_artist_ids = models.JSONField(default=list, blank=True)
+    # Display name of the principal artist (canonical Spotify spelling
+    # vs Deezer's). Surfaced in the staff triage workbench so reviewers
+    # can spot a Deezer-vs-Spotify name divergence at a glance.
+    spotify_artist_name = models.CharField(max_length=255, blank=True)
+    # album.album_type: "single" / "album" / "ep".
+    album_type = models.CharField(max_length=32, blank=True)
+    # album.release_date as string (Spotify returns YYYY / YYYY-MM /
+    # YYYY-MM-DD depending on `release_date_precision`).
+    release_date = models.CharField(max_length=10, blank=True)
+    duration_ms = models.IntegerField(null=True, blank=True)
+    explicit = models.BooleanField(null=True)
+    is_playable = models.BooleanField(null=True)
+    # album.images: list of {url, width, height}. Spotify returns 3
+    # sizes (640, 300, 64) for every album.
+    images = models.JSONField(default=list, blank=True)
+    # artist.genres: usually empty on Wave-One-restricted apps but kept
+    # for completeness in case Spotify ever re-enables them.
+    genres = models.JSONField(default=list, blank=True)
+
+    enrichment_status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_NOT_ATTEMPTED,
+        db_index=True,
+    )
+    enriched_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Spotify metadata"
+        verbose_name_plural = "Spotify metadata"
+
+    def __str__(self) -> str:
+        return f"SpotifyMetadata({self.canco_id}, {self.enrichment_status})"

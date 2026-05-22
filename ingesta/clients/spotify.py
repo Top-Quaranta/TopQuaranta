@@ -215,12 +215,41 @@ def _parse_release_date(date_str: str) -> date | None:
 # ─────────────────────────────────────────────────────────────────────────
 
 
+class RateLimitedError(RuntimeError):
+    """Raised by UserSpotifyClient when Spotify returns 429 with a
+    Retry-After larger than the configured tolerance (60s by default).
+
+    A 24h `Retry-After: 86076` was hit on the first FASE C dry-run
+    (2026-05-22), and the previous code just `time.sleep`d it, hanging
+    the cron for a full day. We now raise instead so the caller can
+    surface the failure cleanly and the watchdog flips status=FAIL.
+    """
+
+    def __init__(self, retry_after_s: int, path: str) -> None:
+        super().__init__(
+            f"Spotify rate limited on {path}; Retry-After={retry_after_s}s "
+            f"(> client tolerance). Aborting instead of sleeping."
+        )
+        self.retry_after_s = retry_after_s
+        self.path = path
+
+
 class UserSpotifyClient:
     """OAuth refresh-token-backed client for playlist management.
 
     `SpotifyAuth` is populated once by the `autoritzar_spotify` mgmt
     command. On every call we lazily refresh the access token; on 401
-    mid-flight we refresh once and retry; on 429 we honour Retry-After.
+    mid-flight we refresh once and retry.
+
+    Rate limiting (2026-05-22):
+      * Every request waits `throttle` seconds before firing (default
+        0.2s = 5 req/s, well under Spotify's typical /search limit).
+        Caller can pass a more conservative value via the command's
+        `--throttle` flag.
+      * On 429 we honour `Retry-After` only when it is <=
+        `max_retry_after_s` (default 60s). Larger values raise
+        `RateLimitedError` so the cron fails fast instead of sleeping
+        for hours.
     """
 
     # NOTE: `user-read-private` is required to receive a populated
@@ -233,11 +262,31 @@ class UserSpotifyClient:
     OAUTH_SCOPES = "playlist-modify-private playlist-modify-public user-read-private"
     # Spotify allows up to 100 URIs per add/replace call.
     PLAYLIST_TRACK_BATCH = 100
+    # Default throttle (seconds) between API calls. Empirically the cron
+    # in regime hits 200-300 /search calls per run; 0.2s spreads them
+    # over ~1 minute and stays clear of Spotify's per-minute window.
+    DEFAULT_THROTTLE_S = 0.2
+    # Anything past this is "Spotify is asking us to back off for hours" —
+    # we refuse to sleep that long and bubble up the failure instead.
+    DEFAULT_MAX_RETRY_AFTER_S = 60
 
-    def __init__(self, auth) -> None:
+    def __init__(
+        self,
+        auth,
+        throttle_s: float | None = None,
+        max_retry_after_s: int | None = None,
+    ) -> None:
         # Imported lazily to avoid a models-not-ready issue at module load.
         self._auth = auth
         self._access_token: str | None = None
+        self._throttle_s = (
+            throttle_s if throttle_s is not None else self.DEFAULT_THROTTLE_S
+        )
+        self._max_retry_after_s = (
+            max_retry_after_s
+            if max_retry_after_s is not None
+            else self.DEFAULT_MAX_RETRY_AFTER_S
+        )
 
     # ── Auth ────────────────────────────────────────────────────────────
     def _refresh_access_token(self) -> None:
@@ -268,7 +317,9 @@ class UserSpotifyClient:
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{API_BASE}{path}"
         for attempt in range(MAX_RETRIES):
-            time.sleep(RATE_LIMIT_SLEEP)
+            # Proactive throttle: spreads burst of /search calls so the
+            # per-minute budget never trips a 429 in normal operation.
+            time.sleep(self._throttle_s)
             resp = requests.request(
                 method, url, headers=self._headers(), timeout=20, **kwargs
             )
@@ -278,6 +329,16 @@ class UserSpotifyClient:
                 continue
             if resp.status_code == 429:
                 wait = int(resp.headers.get("Retry-After", 2))
+                if wait > self._max_retry_after_s:
+                    # Refuse to hang the cron for hours: surface to caller.
+                    logger.error(
+                        "Spotify rate limited on %s with Retry-After=%ds "
+                        "(> %ds tolerance); aborting",
+                        path,
+                        wait,
+                        self._max_retry_after_s,
+                    )
+                    raise RateLimitedError(wait, path)
                 logger.warning("Spotify rate limited; sleeping %ds", wait)
                 time.sleep(wait)
                 continue

@@ -223,7 +223,14 @@ class UserSpotifyClient:
     mid-flight we refresh once and retry; on 429 we honour Retry-After.
     """
 
-    OAUTH_SCOPES = "playlist-modify-private playlist-modify-public"
+    # NOTE: `user-read-private` is required to receive a populated
+    # `product` field on /v1/me. Without it Spotify returns
+    # `product=""` even for Premium accounts, which made the staff
+    # callback reject a valid Premium token as "no longer Premium"
+    # (caught on the first wet OAuth on 2026-05-22). Keep all three
+    # together; the staff oauth-start endpoint and `check_spotify_premium`
+    # both rely on this constant.
+    OAUTH_SCOPES = "playlist-modify-private playlist-modify-public user-read-private"
     # Spotify allows up to 100 URIs per add/replace call.
     PLAYLIST_TRACK_BATCH = 100
 

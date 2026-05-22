@@ -146,6 +146,13 @@ def test_oauth_start_returns_url_with_state(staff_client, settings):
     assert "client_id=fake_id" in url
     assert "show_dialog=true" in url
     assert "state=" in url
+    # The scope must include `user-read-private`, otherwise Spotify
+    # returns an empty `product` field on /me even for Premium accounts
+    # and the callback rejects the valid auth as "no longer Premium".
+    # (Regression guard for the 2026-05-22 first-OAuth incident.)
+    assert "user-read-private" in url
+    assert "playlist-modify-private" in url
+    assert "playlist-modify-public" in url
 
 
 @pytest.mark.django_db

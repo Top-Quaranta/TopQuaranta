@@ -305,3 +305,204 @@ def test_sync_forwards_to_management_command(staff_client, spotify_playlists):
     assert "calling actualitzar_playlists_spotify" in data["stdout"]
     # The endpoint always returns the current playlist payload.
     assert len(data["playlists"]) == 5
+
+
+# ── FASE D UI: weekly + target_coverage ───────────────────────────
+
+
+@pytest.fixture
+def fase_d_playlists(db):
+    """SpotifyPlaylist set matching FASE D shape: daily-tops +
+    weekly mirrors + a no_verificades chunk. Wipes existing rows so
+    the test owns the universe."""
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.all().delete()
+    daily = [
+        ("top-cat", "CAT", "DAILYCAT"),
+        ("top-val", "VAL", "DAILYVAL"),
+    ]
+    weekly = [
+        ("top-cat-weekly", "CAT", "WEEKLYCAT"),
+        ("top-val-weekly", "VAL", "WEEKLYVAL"),
+        ("top-alt-weekly", "ALT", "WEEKLYALT"),
+    ]
+    for codi, terr, pid in daily:
+        SpotifyPlaylist.objects.create(
+            codi=codi,
+            kind=SpotifyPlaylist.KIND_TOP,
+            freq=SpotifyPlaylist.FREQ_DAILY,
+            territori=terr,
+            spotify_playlist_id=pid,
+        )
+    for codi, terr, pid in weekly:
+        SpotifyPlaylist.objects.create(
+            codi=codi,
+            kind=SpotifyPlaylist.KIND_TOP,
+            freq=SpotifyPlaylist.FREQ_WEEKLY,
+            territori=terr,
+            spotify_playlist_id=pid,
+        )
+    return None
+
+
+@pytest.mark.django_db
+def test_estat_payload_includes_freq_and_target_coverage(
+    staff_client, fase_d_playlists
+):
+    """Every playlist row in /estat/ carries `freq` and a
+    `target_coverage` dict. Target_coverage shows None when there is
+    no source data yet (no TopProvisional / TopSetmanal rows)."""
+    r = staff_client.get("/api/v1/staff/social/spotify/estat/")
+    assert r.status_code == 200, r.content
+    data = r.json()
+
+    by_codi = {pl["codi"]: pl for pl in data["playlists"]}
+    assert "top-cat" in by_codi and "top-cat-weekly" in by_codi
+    assert by_codi["top-cat"]["freq"] == "daily"
+    assert by_codi["top-cat-weekly"]["freq"] == "weekly"
+
+    # No ranking source rows -> total=0, ratio=None for each.
+    for codi in ("top-cat", "top-cat-weekly", "top-val-weekly"):
+        tc = by_codi[codi]["target_coverage"]
+        assert tc["total"] == 0
+        assert tc["found"] == 0
+        assert tc["ratio"] is None
+
+
+@pytest.mark.django_db
+def test_estat_target_coverage_for_weekly_reads_topsetmanal(
+    staff_client, fase_d_playlists
+):
+    """target_coverage for a freq=weekly playlist counts how many of
+    the latest TopSetmanal cançons (per territori) have a
+    SpotifyMetadata row in status=found."""
+    from datetime import date
+
+    from music.models import Album, Artista, Canco, SpotifyMetadata
+    from ranking.models import TopSetmanal
+
+    a = Artista.objects.create(nom="EXEMPLE TC", lastfm_nom="EXEMPLE TC")
+    al = Album.objects.create(artista=a, nom="EXEMPLE TC Al")
+    # 3 cançons on the latest weekly chart for CAT.
+    cancons = []
+    for i in range(3):
+        c = Canco.objects.create(
+            artista=a,
+            album=al,
+            nom=f"EXEMPLE-tc-{i}",
+            isrc=f"ZZ00TC0000{i:03d}",
+        )
+        TopSetmanal.objects.create(
+            canco=c,
+            territori="CAT",
+            setmana=date(2026, 5, 19),
+            posicio=i + 1,
+            score_setmanal=1.0,
+        )
+        cancons.append(c)
+    # 2 of the 3 already enriched; 1 still not_attempted.
+    SpotifyMetadata.objects.create(
+        canco=cancons[0],
+        spotify_id="A",
+        enrichment_status=SpotifyMetadata.STATUS_FOUND,
+    )
+    SpotifyMetadata.objects.create(
+        canco=cancons[1],
+        spotify_id="B",
+        enrichment_status=SpotifyMetadata.STATUS_FOUND,
+    )
+    SpotifyMetadata.objects.create(canco=cancons[2])  # not_attempted
+
+    r = staff_client.get("/api/v1/staff/social/spotify/estat/")
+    by_codi = {pl["codi"]: pl for pl in r.json()["playlists"]}
+    tc = by_codi["top-cat-weekly"]["target_coverage"]
+    assert tc["total"] == 3
+    assert tc["found"] == 2
+    assert tc["ratio"] == round(2 / 3, 3)
+
+
+@pytest.mark.django_db
+def test_estat_target_coverage_picks_latest_setmana(staff_client, fase_d_playlists):
+    """When TopSetmanal has multiple setmanas for a territori, the
+    target_coverage payload reflects only the most recent one (the
+    same setmana the sync command would push)."""
+    from datetime import date
+
+    from music.models import Album, Artista, Canco, SpotifyMetadata
+    from ranking.models import TopSetmanal
+
+    a = Artista.objects.create(nom="EXEMPLE TC2", lastfm_nom="EXEMPLE TC2")
+    al = Album.objects.create(artista=a, nom="EXEMPLE TC2 Al")
+    old = Canco.objects.create(
+        artista=a,
+        album=al,
+        nom="EXEMPLE-old",
+        isrc="ZZOLD0000001",
+    )
+    new = Canco.objects.create(
+        artista=a,
+        album=al,
+        nom="EXEMPLE-new",
+        isrc="ZZNEW0000001",
+    )
+    # Old setmana with no enrichment.
+    TopSetmanal.objects.create(
+        canco=old,
+        territori="VAL",
+        setmana=date(2026, 4, 21),
+        posicio=1,
+        score_setmanal=1.0,
+    )
+    # New setmana with enrichment.
+    TopSetmanal.objects.create(
+        canco=new,
+        territori="VAL",
+        setmana=date(2026, 5, 19),
+        posicio=1,
+        score_setmanal=1.0,
+    )
+    SpotifyMetadata.objects.create(
+        canco=new,
+        spotify_id="N",
+        enrichment_status=SpotifyMetadata.STATUS_FOUND,
+    )
+
+    r = staff_client.get("/api/v1/staff/social/spotify/estat/")
+    by_codi = {pl["codi"]: pl for pl in r.json()["playlists"]}
+    tc = by_codi["top-val-weekly"]["target_coverage"]
+    # Only the new setmana row counted -> 1/1, not 1/2.
+    assert tc["total"] == 1
+    assert tc["found"] == 1
+    assert tc["ratio"] == 1.0
+
+
+@pytest.mark.django_db
+def test_sync_endpoint_forwards_freq_weekly(staff_client, fase_d_playlists):
+    """The sync endpoint passes `freq=weekly` to the underlying
+    management command. Cache-only contract (no /search) is enforced
+    by Process A's own test fixture; here we only assert the kwarg
+    plumbing."""
+    with patch("web.api.staff.social.spotify.call_command") as mock_cmd:
+
+        def fake_call(name, **kwargs):
+            import sys
+
+            print(f"called {name} freq={kwargs.get('freq')}", file=sys.stdout)
+
+        mock_cmd.side_effect = fake_call
+
+        r = staff_client.post(
+            "/api/v1/staff/social/spotify/sync/",
+            {"freq": "weekly", "dry_run": False},
+            format="json",
+        )
+
+    assert r.status_code == 200, r.content
+    data = r.json()
+    assert data["ok"] is True
+    assert data["freq"] == "weekly"
+    # The command got the freq kwarg.
+    args, kwargs = mock_cmd.call_args
+    assert args == ("actualitzar_playlists_spotify",)
+    assert kwargs.get("freq") == "weekly"

@@ -72,6 +72,63 @@ daily PPCC playlist was never created at the Spotify Dashboard.
 If product wants it later, the path is `SpotifyPlaylist.objects.create(...)`
 + `configurar_spotify_playlists --top-ppcc-daily <id>`.
 
+### Staff UI for FASE D (`/staff/social/spotify/`)
+
+The page now renders three independent sections so the operator can
+sync each cadence in isolation:
+
+1. **Playlists públiques setmanals** (yellow-bordered, top section,
+   only shown when at least one `freq=weekly` row exists). The 5
+   mirrors of the weekly chart. Each row shows the latest published
+   sync KPIs (`coverage` = last `last_n_matched / last_n_tracks`)
+   AND a predictive `target_coverage` (of the cançons the next sync
+   would push, how many already have `SpotifyMetadata.found`). The
+   target column tells the operator "if I press Sync weekly now,
+   will 95 % of the chart land, or only 40 %?" without hitting
+   Spotify. A pair of buttons triggers `--freq weekly` (dry-run or
+   wet).
+
+2. **Playlists provisionals diàries**. The daily-top rows
+   (TopProvisional sources). Same KPI layout, dedicated
+   `--freq daily` buttons.
+
+3. **Triage no verificades**. The 7 chunks of 100 cançons each.
+   No per-section sync button (they ride the daily cron).
+
+The `target_coverage` field is computed on every `/estat/` call. For
+weekly rows it reads `TopSetmanal` for the latest `setmana` per
+territori; for daily rows it reads `TopProvisional`; for
+no_verificades it slices the same `pendents()` window the cron uses
+and counts the chunk. Crossing the 95 % threshold for the weekly
+mirrors is the signal that the first wet sync is worth running.
+
+### FASE D status (2026-05-23)
+
+The 5 weekly rows now exist as `SpotifyPlaylist` entries (migration
+0082). `SpotifyPlaylist.freq` selects between TopProvisional (daily)
+and TopSetmanal (weekly) at sync time. The `--freq` flag on
+`actualitzar_playlists_spotify` filters which rows a run touches.
+
+**The weekly cron is registered but COMMENTED OUT** in
+`deploy/cron.topquaranta` pending the first manual wet sync. To
+activate after this PR merges:
+
+1. SSH into the box and run:
+   ```bash
+   sudo -u topquaranta tq-run actualitzar_playlists_spotify --freq weekly
+   ```
+2. Inspect `last_n_matched / last_n_tracks` on the 5 weekly rows. The
+   first run can legitimately have a partial match because the cache
+   (`SpotifyMetadata.spotify_id`) only contains tracks Process B has
+   already resolved. Coverage will climb as Process B walks the
+   backlog over the following days.
+3. Open the 5 playlists at `https://open.spotify.com/playlist/<id>` and
+   confirm the tracks look right.
+4. Uncomment the `0 10 * * 6 ... --freq weekly` line in
+   `deploy/cron.topquaranta` and push via the normal Mac -> PR -> CI
+   -> deploy flow. The Saturday 10:00 UTC tick will start syncing
+   weekly from then on.
+
 ## Schedule (ADR-0011)
 
 ```cron

@@ -1436,11 +1436,32 @@ class SpotifyPlaylist(models.Model):
         (KIND_NO_VERIFICADES, "No verificades (triage)"),
     ]
 
+    # Cadence the sync cron applies. "daily" rows source from
+    # TopProvisional (rolling); "weekly" rows source from TopSetmanal
+    # (the published weekly ranking). The sync command picks the
+    # appropriate ranking table based on this field.
+    FREQ_DAILY = "daily"
+    FREQ_WEEKLY = "weekly"
+    FREQ_CHOICES = [
+        (FREQ_DAILY, "Diari"),
+        (FREQ_WEEKLY, "Setmanal"),
+    ]
+
     codi = models.SlugField(max_length=50, unique=True)
     kind = models.CharField(max_length=20, choices=KIND_CHOICES)
     # Only used when kind=top. Empty string for kind=novetats / no_verificades.
     territori = models.CharField(max_length=10, blank=True)
     spotify_playlist_id = models.CharField(max_length=100, blank=True)
+    # Cadence (FASE D, 2026-05-23). daily=TopProvisional, weekly=TopSetmanal.
+    # Pre-existing rows default to daily; FASE D's data migration seeds the
+    # 5 weekly rows (one per ranking territori) with this set to "weekly".
+    freq = models.CharField(
+        max_length=10,
+        choices=FREQ_CHOICES,
+        default=FREQ_DAILY,
+        db_index=True,
+        help_text="Cadence: daily reads TopProvisional, weekly reads TopSetmanal.",
+    )
     # Only used when kind=no_verificades: 0-based index into the
     # window of 700 most-recently-ingested unverified tracks, so the
     # 7 triage playlists each get a non-overlapping slice of 100.

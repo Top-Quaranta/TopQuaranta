@@ -31,26 +31,45 @@ error, not a runtime discovery.
 
 The same hook runs in CI on PR (see `.github/workflows/ci-docs.yml`).
 
-### Rule 2 — PR template checkbox for docs coupling
+### Rule 2 — Hard CI gates for docs coupling, novelty and size
 
-The repo's pull-request template asks the contributor to either:
+Three independent CI checks (each its own job under
+`.github/workflows/ci-docs.yml`, so branch protection can require
+them individually):
 
-- check the box "I updated `docs/architecture/<area>.md` for this
-  change", **or**
-- justify why no docs update was needed (one line).
-
-CI gives the PR a `needs-docs-review` label when it touches a
-subsystem with a dedicated doc and the doc wasn't touched. The
-label is a signal, not a hard block — sometimes "no doc update
-needed" is genuinely the right answer.
+| Check name | What it asserts |
+|---|---|
+| `docs-coherence` | A PR that touches a subsystem mapped in `docs-map.yml` must also update the mapped doc, OR carry an override line in the PR body. |
+| `docs-novelty` | Every top-level code directory (Django app or any dir with at least one `*.py`) must appear in `docs-map.yml` under `mapping:` or `exclude:`. |
+| `docs-size` | Every doc inside `size.scope` must respect `size.threshold_lines` unless it appears under `exempt_permanent` or `grandfathered`. |
 
 The canonical prefix-to-doc mapping (which paths trigger which
 docs, longest-prefix match, plus the exclude list and the size
-thresholds for future enforcement) lives at
-`docs/policies/docs-map.yml`. The CI job
-`.github/workflows/ci-docs.yml::docs-coherence` consumes it via
-`scripts/check_docs_coherence.py`; the planned pre-commit hook will
-consume the same file.
+thresholds) lives at `docs/policies/docs-map.yml`. All three
+checks consume it; the planned pre-commit hook will too.
+
+#### `docs-coherence` override format
+
+Single line, anywhere in the PR body, repeat once per doc to skip:
+
+```
+docs-reviewed: <doc-path> : <reason>
+```
+
+The verifier checks three facts (it does not judge the truth of the
+reason):
+
+1. `<doc-path>` exists on disk.
+2. `<doc-path>` is exactly the doc the mapping resolved for one of
+   the subsystems the PR touched.
+3. `<reason>` is non-empty after whitespace strip.
+
+When the override is accepted, the workflow adds the
+`docs-review-skipped` label so reviewers can filter and audit.
+
+Editing the PR body to add an override re-triggers the check
+(`types: [..., edited]` on `pull_request`), so you can fix an
+override without pushing an empty commit.
 
 ### Rule 3 — Quarterly decay sweep
 

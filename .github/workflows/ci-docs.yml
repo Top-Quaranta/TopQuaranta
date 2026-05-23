@@ -4,19 +4,29 @@ name: CI · docs
 # ci.yml because they're docs-only and don't need the Python or
 # Node toolchains (faster).
 #
-# Checks:
-#   - markdownlint     — surface obvious markdown errors
-#   - link-checker     — verify every link in every .md resolves
-#   - spec-path        — Python `# Spec: docs/<path>.md` backlinks
-#                        point to real files
-#   - docs-coherence   — touches a documented subsystem without
-#                        updating its doc? add needs-docs-review label
+# Checks (each is its own job so branch protection can require them
+# individually at FASE 3):
+#   - markdownlint     surface obvious markdown errors
+#   - link-checker     verify every link in every .md resolves
+#   - spec-path        Python `# Spec: docs/<path>.md` backlinks point
+#                      to real files
+#   - docs-coherence   PR touches a documented subsystem; the doc
+#                      must be in the diff OR the PR body must carry
+#                      a `docs-reviewed: <doc> : <reason>` override
+#   - docs-novelty     new top-level code dir must be mapped or
+#                      excluded in docs-map.yml
+#   - docs-size        docs inside `size.scope` must respect
+#                      `threshold_lines` unless allow-listed
+#
+# `types` includes `edited` so re-editing the PR body to add an
+# override line triggers a re-run of docs-coherence.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   markdownlint:
@@ -64,14 +74,13 @@ jobs:
         run: python3 scripts/check_spec_paths.py
 
   docs-coherence:
-    # Soft signal only — adds `needs-docs-review` label when a PR
-    # touches a subsystem with a dedicated doc but doesn't update
-    # the doc. Doesn't block merge; the PR template checkbox is
-    # the canonical check.
-    #
-    # Mapping lives at `docs/policies/docs-map.yml` (single source
-    # of truth, shared with the future pre-commit hook). Resolution
-    # logic is in `scripts/check_docs_coherence.py`.
+    # FASE 2: HARD gate. A PR that touches a mapped subsystem without
+    # updating its doc fails this check. Escape hatch is one or more
+    # `docs-reviewed: <doc> : <reason>` lines in the PR body; the
+    # check verifies (a) the doc exists on disk, (b) the doc is the
+    # one the mapping resolved for the touched subsystem, (c) the
+    # reason is non-empty. When the override is used the workflow
+    # adds the `docs-review-skipped` label so reviewers can filter.
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -95,9 +104,54 @@ jobs:
             echo "No files changed."
             exit 0
           fi
+          # Fetch the body fresh so the `edited` trigger sees the
+          # latest version (the workflow payload caches the body at
+          # PR creation time).
+          PR_BODY=$(gh pr view "$PR_NUMBER" --json body -q .body)
+          export PR_BODY
+          set +e
           OUTPUT=$(echo "$CHANGED" | python3 scripts/check_docs_coherence.py)
+          STATUS=$?
+          set -e
           echo "$OUTPUT"
           if echo "$OUTPUT" | grep -q "^needs-docs-review$"; then
             gh pr edit "$PR_NUMBER" --add-label "needs-docs-review" || true
-            echo "Added label needs-docs-review (soft signal, not a block)."
           fi
+          if echo "$OUTPUT" | grep -q "^docs-review-skipped$"; then
+            gh pr edit "$PR_NUMBER" --add-label "docs-review-skipped" || true
+          fi
+          exit $STATUS
+
+  docs-novelty:
+    # FASE 2: HARD gate. A new top-level code directory must be
+    # declared in `docs/policies/docs-map.yml` either under `mapping:`
+    # (with a doc) or under `exclude:` (with a reason). Catches the
+    # case where a new Django app or top-level Python package
+    # appears without anyone choosing whether it needs an
+    # architectural doc.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: pip install pyyaml --quiet
+      - name: Check for unmapped top-level code dirs
+        run: python3 scripts/check_docs_novelty.py
+
+  docs-size:
+    # FASE 2: HARD gate. Docs inside `size.scope` must stay under
+    # `threshold_lines` unless explicitly allow-listed under
+    # `exempt_permanent` (forever) or `grandfathered` (temporary,
+    # until a Rule 3 split lands).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: pip install pyyaml --quiet
+      - name: Check doc sizes
+        run: python3 scripts/check_docs_size.py

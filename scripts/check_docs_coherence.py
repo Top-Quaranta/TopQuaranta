@@ -87,16 +87,45 @@ def resolve(file: str, mapping: list[dict], exclude: list[dict]) -> str | None:
     return None
 
 
+# Paths that never trigger the coherence gate even if they fall
+# inside a mapped subsystem. Tests and migrations are
+# implementation-detail churn: a PR that only touches them does
+# not change the subsystem's architecture and so should not force
+# a doc update. Keeping them out of the gate matches what
+# `scripts/check_spec_paths.py` already does for `migrations/`,
+# and avoids banalising the override (every test PR otherwise
+# would need `docs-reviewed: ...`).
+def _is_implementation_churn(path: str) -> bool:
+    """True iff `path` is a test file, a Django migration, or a
+    pytest conftest. Such a file is skipped before the resolver
+    runs."""
+    parts = path.split("/")
+    filename = parts[-1] if parts else path
+    if "tests" in parts or "migrations" in parts:
+        return True
+    if filename == "conftest.py":
+        return True
+    if filename.startswith("test_") and filename.endswith(".py"):
+        return True
+    if filename.endswith("_test.py"):
+        return True
+    return False
+
+
 def find_coupled_misses(
     changed: list[str], mapping: list[dict], exclude: list[dict]
 ) -> list[tuple[str, str]]:
     """Returns (code_file, missing_doc) pairs in insertion order,
     deduplicated. A "miss" is a code file that resolves to a doc the
-    PR does not also touch."""
+    PR does not also touch. Test files, Django migrations and
+    `conftest.py` are filtered out before resolution: they are
+    implementation churn, not architectural change."""
     docs_touched = {f for f in changed if f.startswith("docs/")}
     seen: set[tuple[str, str]] = set()
     misses: list[tuple[str, str]] = []
     for file in changed:
+        if _is_implementation_churn(file):
+            continue
         doc = resolve(file, mapping, exclude)
         if doc is None or doc in docs_touched:
             continue

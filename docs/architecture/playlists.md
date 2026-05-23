@@ -72,6 +72,33 @@ daily PPCC playlist was never created at the Spotify Dashboard.
 If product wants it later, the path is `SpotifyPlaylist.objects.create(...)`
 + `configurar_spotify_playlists --top-ppcc-daily <id>`.
 
+### FASE D status (2026-05-23)
+
+The 5 weekly rows now exist as `SpotifyPlaylist` entries (migration
+0082). `SpotifyPlaylist.freq` selects between TopProvisional (daily)
+and TopSetmanal (weekly) at sync time. The `--freq` flag on
+`actualitzar_playlists_spotify` filters which rows a run touches.
+
+**The weekly cron is registered but COMMENTED OUT** in
+`deploy/cron.topquaranta` pending the first manual wet sync. To
+activate after this PR merges:
+
+1. SSH into the box and run:
+   ```bash
+   sudo -u topquaranta tq-run actualitzar_playlists_spotify --freq weekly
+   ```
+2. Inspect `last_n_matched / last_n_tracks` on the 5 weekly rows. The
+   first run can legitimately have a partial match because the cache
+   (`SpotifyMetadata.spotify_id`) only contains tracks Process B has
+   already resolved. Coverage will climb as Process B walks the
+   backlog over the following days.
+3. Open the 5 playlists at https://open.spotify.com/playlist/{id} and
+   confirm the tracks look right.
+4. Uncomment the `0 10 * * 6 ... --freq weekly` line in
+   `deploy/cron.topquaranta` and push via the normal Mac -> PR -> CI
+   -> deploy flow. The Saturday 10:00 UTC tick will start syncing
+   weekly from then on.
+
 ## Schedule (ADR-0011)
 
 ```cron

@@ -108,7 +108,7 @@ def test_no_verificades_chunks_are_disjoint_and_ordered(auth_present, client_moc
     for i in range(250):
         _make_canco(artista, album, i, ml_confianca=i / 250.0)
 
-    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
     SpotifyPlaylist.objects.create(
         codi="no-verif-1",
         kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
@@ -175,7 +175,7 @@ def test_cache_only_skips_unenriched_cancons(auth_present, client_mock):
         for i in range(2)
     ]
 
-    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
     SpotifyPlaylist.objects.create(
         codi="no-verif-1",
         kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
@@ -213,7 +213,7 @@ def test_no_verificades_misconfigured_chunk_index_is_skipped(auth_present, clien
     # Wipe the seeded no-verif-N rows first so they don't run alongside
     # our two fixtures (chunk lookups would slice into an empty Canco
     # window and pollute the assertion).
-    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
     SpotifyPlaylist.objects.create(
         codi="no-verif-broken",
         kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
@@ -254,7 +254,7 @@ def test_no_verificades_nulls_last_and_created_at_tiebreak(auth_present, client_
     null2 = _make_canco(artista, album, 3, ml_confianca=None)
     low_only = _make_canco(artista, album, 4, ml_confianca=0.1)
 
-    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
     SpotifyPlaylist.objects.create(
         codi="no-verif-1",
         kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
@@ -338,7 +338,7 @@ def test_no_verificades_uses_pendents_filter_excludes_inactives(
     for i in range(3):
         _dead(f"EXEMPLE-dead-{i}", f"ZZDE000000{i}", 0.95)
 
-    SpotifyPlaylist.objects.filter(codi__startswith="no-verif").delete()
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
     SpotifyPlaylist.objects.create(
         codi="no-verif-1",
         kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
@@ -372,3 +372,199 @@ def test_throttle_flag_propagates_to_client(auth_present):
         call_command("actualitzar_playlists_spotify", throttle=1.5)
     # First positional is the auth row; throttle_s should be the kwarg.
     assert cls.call_args.kwargs.get("throttle_s") == 1.5
+
+
+# ── FASE D: weekly / daily freq bifurcation ──────────────────────────
+
+
+@pytest.mark.django_db
+def test_freq_weekly_reads_topsetmanal(auth_present, client_mock):
+    """A SpotifyPlaylist with freq=weekly + kind=top must source its
+    cançons from TopSetmanal (most recent setmana) instead of
+    TopProvisional."""
+    from datetime import date
+
+    from ranking.models import TopProvisional, TopSetmanal
+
+    a = Artista.objects.create(nom="EXEMPLE FD A", lastfm_nom="EXEMPLE FD A")
+    al = Album.objects.create(artista=a, nom="EXEMPLE FD Al")
+    # Two cançons: one only in TopSetmanal, the other only in
+    # TopProvisional. With freq=weekly we expect the TopSetmanal one
+    # to make it into the playlist, and TopProvisional ignored.
+    canco_weekly = _make_canco(a, al, 7001, ml_confianca=0.9)
+    canco_daily = _make_canco(a, al, 7002, ml_confianca=0.9)
+    TopSetmanal.objects.create(
+        canco=canco_weekly,
+        territori="EXTR",
+        setmana=date(2026, 5, 19),
+        posicio=1,
+        score_setmanal=1.0,
+    )
+    TopProvisional.objects.create(
+        canco=canco_daily,
+        territori="EXTR",
+        posicio=1,
+        score_setmanal=1.0,
+    )
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
+    SpotifyPlaylist.objects.create(
+        codi="top-EXTR-weekly",
+        kind=SpotifyPlaylist.KIND_TOP,
+        freq=SpotifyPlaylist.FREQ_WEEKLY,
+        territori="EXTR",
+        spotify_playlist_id="fake-weekly-pl",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    assert len(pushed) == 1
+    assert canco_weekly.isrc in pushed[0]
+    assert canco_daily.isrc not in pushed[0]
+
+
+@pytest.mark.django_db
+def test_freq_weekly_picks_most_recent_setmana(auth_present, client_mock):
+    """When TopSetmanal has multiple setmanas, only the latest must
+    feed the playlist. Older snapshots stay archived."""
+    from datetime import date
+
+    from ranking.models import TopSetmanal
+
+    a = Artista.objects.create(nom="EXEMPLE FD B", lastfm_nom="EXEMPLE FD B")
+    al = Album.objects.create(artista=a, nom="EXEMPLE FD Al B")
+    old_canco = _make_canco(a, al, 7010, ml_confianca=0.5)
+    new_canco = _make_canco(a, al, 7011, ml_confianca=0.5)
+    # Older setmana (Apr) vs newer setmana (May). Only the newer
+    # should be selected.
+    TopSetmanal.objects.create(
+        canco=old_canco,
+        territori="EXTR",
+        setmana=date(2026, 4, 28),
+        posicio=1,
+        score_setmanal=0.5,
+    )
+    TopSetmanal.objects.create(
+        canco=new_canco,
+        territori="EXTR",
+        setmana=date(2026, 5, 19),
+        posicio=1,
+        score_setmanal=1.0,
+    )
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
+    SpotifyPlaylist.objects.create(
+        codi="top-EXTR-w2",
+        kind=SpotifyPlaylist.KIND_TOP,
+        freq=SpotifyPlaylist.FREQ_WEEKLY,
+        territori="EXTR",
+        spotify_playlist_id="fake-weekly-pl-2",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    assert len(pushed) == 1
+    assert new_canco.isrc in pushed[0]
+    assert old_canco.isrc not in pushed[0]
+
+
+@pytest.mark.django_db
+def test_freq_weekly_empty_when_no_setmanal_data(auth_present, client_mock):
+    """A territori with no TopSetmanal rows yet (e.g. ALT in its first
+    weeks) results in an empty playlist write rather than a crash."""
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
+    SpotifyPlaylist.objects.create(
+        codi="top-NEWT-weekly",
+        kind=SpotifyPlaylist.KIND_TOP,
+        freq=SpotifyPlaylist.FREQ_WEEKLY,
+        territori="NEWT",
+        spotify_playlist_id="fake-weekly-pl-3",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    assert pushed == []
+
+
+@pytest.mark.django_db
+def test_freq_daily_still_reads_topprovisional(auth_present, client_mock):
+    """Regression-guard: the freq=daily path must keep reading from
+    TopProvisional after the bifurcation lands."""
+    from ranking.models import TopProvisional
+
+    a = Artista.objects.create(nom="EXEMPLE FD C", lastfm_nom="EXEMPLE FD C")
+    al = Album.objects.create(artista=a, nom="EXEMPLE FD Al C")
+    canco = _make_canco(a, al, 7020, ml_confianca=0.7)
+    TopProvisional.objects.create(
+        canco=canco,
+        territori="EXTR",
+        posicio=1,
+        score_setmanal=1.0,
+    )
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
+    SpotifyPlaylist.objects.create(
+        codi="top-EXTR-daily",
+        kind=SpotifyPlaylist.KIND_TOP,
+        freq=SpotifyPlaylist.FREQ_DAILY,
+        territori="EXTR",
+        spotify_playlist_id="fake-daily-pl",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    assert len(pushed) == 1
+    assert canco.isrc in pushed[0]
+
+
+@pytest.mark.django_db
+def test_freq_flag_filters_playlists(auth_present, client_mock):
+    """`--freq weekly` must skip the daily-freq playlists and vice
+    versa. Without the flag, both run."""
+    from datetime import date
+
+    from ranking.models import TopProvisional, TopSetmanal
+
+    a = Artista.objects.create(nom="EXEMPLE FD D", lastfm_nom="EXEMPLE FD D")
+    al = Album.objects.create(artista=a, nom="EXEMPLE FD Al D")
+    canco_w = _make_canco(a, al, 7030, ml_confianca=0.9)
+    canco_d = _make_canco(a, al, 7031, ml_confianca=0.9)
+    TopSetmanal.objects.create(
+        canco=canco_w,
+        territori="EXTR",
+        setmana=date(2026, 5, 19),
+        posicio=1,
+        score_setmanal=1.0,
+    )
+    TopProvisional.objects.create(
+        canco=canco_d,
+        territori="EXTR",
+        posicio=1,
+        score_setmanal=1.0,
+    )
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
+    SpotifyPlaylist.objects.create(
+        codi="top-EXTR-d",
+        kind=SpotifyPlaylist.KIND_TOP,
+        freq=SpotifyPlaylist.FREQ_DAILY,
+        territori="EXTR",
+        spotify_playlist_id="fake-d-pl",
+    )
+    SpotifyPlaylist.objects.create(
+        codi="top-EXTR-w",
+        kind=SpotifyPlaylist.KIND_TOP,
+        freq=SpotifyPlaylist.FREQ_WEEKLY,
+        territori="EXTR",
+        spotify_playlist_id="fake-w-pl",
+    )
+
+    # --freq weekly: only the weekly playlist gets pushed.
+    call_command("actualitzar_playlists_spotify", freq="weekly")
+    calls = client_mock.replace_playlist_tracks.call_args_list
+    pushed_pids = {c.args[0] for c in calls}
+    assert pushed_pids == {"fake-w-pl"}

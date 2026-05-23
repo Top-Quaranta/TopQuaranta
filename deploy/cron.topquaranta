@@ -101,14 +101,21 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 07:00 → Daily provisional ranking. Uses today's freshly-ingested signal.
 0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run calcular_top --provisional >> /var/log/topquaranta/top-provisional.log 2>&1
 
-# 07:15 -> Process A (Spotify playlist sync, cache-only). Pushes the
-# cached spotify_id from SpotifyMetadata to the 12 playlists. NEVER
-# calls /v1/search; cache lives in SpotifyMetadata, populated by
-# Process B (enriquir_spotify, below). Runs right after the
-# provisional ranking settles so the territorial top playlists
-# reflect the freshest data. See docs/architecture/playlists.md
-# (Process A) and ADR-0013 for the A/B split.
-15 7 * * *  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify >> /var/log/topquaranta/playlists.log 2>&1
+# 07:15 -> Process A (Spotify playlist sync, daily slice). --freq daily
+# limits the sync to the daily-top + no_verificades rows; the weekly
+# mirrors run on a separate slot (below). Cache-only since 2026-05-22:
+# NEVER calls /v1/search. See docs/architecture/playlists.md (Process A)
+# and ADR-0013 for the A/B split.
+15 7 * * *  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify --freq daily >> /var/log/topquaranta/playlists.log 2>&1
+
+# Saturday 10:00 UTC -> Process A weekly slice. Mirrors the 5 weekly
+# top playlists (PPCC + 4 territories) from TopSetmanal of the latest
+# published setmana. 30 min after the Saturday 09:30 publicar_social
+# slot so the social posts and the playlist update arrive close in
+# time. COMMENTED OUT pending the first manual wet sync (FASE D, see
+# the merge ordering in the PR). Uncomment after validating coverage
+# at /staff/social/spotify/ post-merge.
+# 0 10 * * 6  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify --freq weekly >> /var/log/topquaranta/playlists.log 2>&1
 
 # :30 every hour -> Process B (Spotify enrichment). One-shot per
 # Canço: search ISRC -> fetch track + artist -> persist

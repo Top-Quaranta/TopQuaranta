@@ -40,7 +40,7 @@ from django.utils import timezone
 
 from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
 from music.models import Canco, SpotifyAuth, SpotifyMetadata, SpotifyPlaylist
-from ranking.models import TopProvisional
+from ranking.models import TopProvisional, TopSetmanal
 
 # Total window pulled from the unverified backlog. 7 chunks * 100 = 700
 # slots across 7 Spotify playlists; the rest of the backlog (anything
@@ -77,6 +77,19 @@ class Command(BaseCommand):
                 "no search calls."
             ),
         )
+        parser.add_argument(
+            "--freq",
+            default="",
+            choices=("", "daily", "weekly"),
+            help=(
+                "Filter playlists by SpotifyPlaylist.freq. 'daily' "
+                "covers the rolling top playlists + no_verificades "
+                "triage; 'weekly' covers the published weekly chart "
+                "mirror playlists (TopSetmanal-based, FASE D). "
+                "Empty (default) syncs every configured playlist "
+                "regardless of cadence."
+            ),
+        )
 
     def handle(self, *args, **opts):
         auth = SpotifyAuth.load()
@@ -92,7 +105,13 @@ class Command(BaseCommand):
         qs = SpotifyPlaylist.objects.exclude(spotify_playlist_id="")
         only = (opts.get("only") or "").strip()
         if only:
+            # --only wins over --freq: if the operator names a specific
+            # playlist, that is the one row to sync regardless of freq.
             qs = qs.filter(codi=only)
+        else:
+            freq = (opts.get("freq") or "").strip()
+            if freq:
+                qs = qs.filter(freq=freq)
         playlists = list(qs)
         if not playlists:
             self.stdout.write(
@@ -212,6 +231,28 @@ class Command(BaseCommand):
     # ── selection ────────────────────────────────────────────────────────
     def _select_cancons(self, pl: SpotifyPlaylist) -> list[Canco]:
         if pl.kind == SpotifyPlaylist.KIND_TOP:
+            # FASE D: daily reads TopProvisional (rolling), weekly reads
+            # TopSetmanal for the most recent published setmana (the
+            # canonical chart, not yesterday's provisional estimate).
+            if pl.freq == SpotifyPlaylist.FREQ_WEEKLY:
+                latest = (
+                    TopSetmanal.objects.filter(territori=pl.territori)
+                    .order_by("-setmana")
+                    .values_list("setmana", flat=True)
+                    .first()
+                )
+                if latest is None:
+                    # No setmanal data yet for this territori (e.g. ALT
+                    # in its first weeks). Empty playlist is acceptable;
+                    # better than failing the sync entirely.
+                    return []
+                rows = (
+                    TopSetmanal.objects.filter(territori=pl.territori, setmana=latest)
+                    .select_related("canco")
+                    .order_by("posicio")[:40]
+                )
+                return [rs.canco for rs in rows if rs.canco]
+            # Default and FREQ_DAILY: TopProvisional.
             rows = (
                 TopProvisional.objects.filter(territori=pl.territori)
                 .select_related("canco")

@@ -54,6 +54,14 @@
     "silenced_reason": "Process A cache-only; pending first wet sync post-Process-B priming.",
     "description": "Process A: Spotify playlist sync, cache-only. Reads SpotifyMetadata.spotify_id and pushes to 12 playlists via /items. Never touches /search; that is Process B's job."
   },
+  "actualitzar_playlists_spotify_weekly": {
+    "frequency_label": "Dissabte 10:00 (--freq weekly)",
+    "max_age_hours": 170,
+    "skip_concern": 1,
+    "silenced": true,
+    "silenced_reason": "FASE D weekly cron commented out in cron.topquaranta; uncomment after manual wet sync validates the 5 weekly playlists.",
+    "description": "Process A weekly slice: mirrors the 5 weekly top playlists from TopSetmanal (PPCC + CAT + VAL + BAL + ALT). Same cache-only contract as the daily run."
+  },
   "enriquir_spotify": {
     "frequency_label": "Cada hora :30",
     "max_age_hours": 3,

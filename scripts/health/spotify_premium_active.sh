@@ -65,7 +65,16 @@ if (( code == 1 )); then
 else
     cache_window=$CACHE_TTL_SECONDS
 fi
-printf "%d\t%s\n" "$code" "$out" > "$CACHE_FILE"
+# Strip everything before the final JSON line. Django's `axes` app
+# (and other startup hooks) prints INFO lines to stderr at import,
+# which `2>&1` folds into $out. The cache then has the axes log on
+# line 1 and the JSON message on line 2; `head -1` of the cache (used
+# by the bash health summary) captures the axes log instead of the
+# JSON and prints "(unparsed) Expecting ',' delimiter". Filtering to
+# the last line keeps only the JSON. Caught at tq-health audit on
+# 2026-05-23.
+json_only=$(printf '%s\n' "$out" | tail -n1)
+printf "%d\t%s\n" "$code" "$json_only" > "$CACHE_FILE"
 # Backdate the mtime so subsequent runs respect the per-severity
 # cache window above (touch with a time in the past for WARN).
 if (( cache_window != CACHE_TTL_SECONDS )); then

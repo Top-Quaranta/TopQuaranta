@@ -352,19 +352,32 @@ export default function StaffCanconsPage() {
                   {!c.activa && <Pill tone="red">Inactiva</Pill>}
                 </Td>
                 <Td className="text-right" onClick={e => e.stopPropagation()}>
-                  {c.deezer_id ? (
-                    <a
-                      href={`https://www.deezer.com/track/${c.deezer_id}`}
-                      target="_blank"
-                      rel="noopener"
-                      className="text-xs underline text-tq-ink/70 hover:text-tq-ink whitespace-nowrap"
-                      title="Escoltar a Deezer"
-                    >
-                      ▶ Deezer
-                    </a>
-                  ) : (
-                    <span className="text-[11px] opacity-60">—</span>
-                  )}
+                  <div className="flex flex-col items-end gap-0.5">
+                    {c.deezer_id ? (
+                      <a
+                        href={`https://www.deezer.com/track/${c.deezer_id}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-xs underline text-tq-ink/70 hover:text-tq-ink whitespace-nowrap"
+                        title="Escoltar a Deezer"
+                      >
+                        ▶ Deezer
+                      </a>
+                    ) : (
+                      !c.spotify?.spotify_id && <span className="text-[11px] opacity-60">—</span>
+                    )}
+                    {c.spotify?.spotify_id && (
+                      <a
+                        href={`https://open.spotify.com/track/${c.spotify.spotify_id}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-xs underline text-tq-ink/70 hover:text-tq-ink whitespace-nowrap"
+                        title="Escoltar a Spotify"
+                      >
+                        ▶ Spotify
+                      </a>
+                    )}
+                  </div>
                 </Td>
               </Tr>
             ))}

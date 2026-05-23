@@ -14,26 +14,32 @@
 
 ## Checklist
 
-- [ ] He llegit `docs/policies/` rellevants per al canvi
+Només les declaracions que el CI no pot verificar (la resta ja les força):
+
+- [ ] He llegit les `docs/policies/` rellevants per al canvi
       (`conventions.md`, `identities.md`, `sprint-process.md`,
       `docs-maintenance.md`, `post-mortems.md`).
-- [ ] He actualitzat `docs/architecture/<area>.md` si el canvi
-      toca un subsistema documentat — **o justifica per què no
-      cal** en una línia aquí sota.
 - [ ] Si el canvi és una decisió arquitectònica (criteris a
-      `docs/policies/sprint-process.md`), he creat ADR a
+      `docs/policies/sprint-process.md`), he creat un ADR a
       `docs/decisions/`.
-- [ ] Si el canvi toca `models.py`, la migració corresponent va
-      al mateix PR i `bin/tq-deploy` l'aplicarà abans del reload
-      (vegeu `docs/policies/conventions.md` § "Migrations").
-- [ ] He afegit `# Spec: docs/<path>.md` als mòduls nous amb
-      doc dedicada.
-- [ ] Tests verds localment o al servidor (`pytest -q`).
-- [ ] Captures/screenshots a la descripció són reals o
+- [ ] Les captures/screenshots a la descripció són reals o estan
       etiquetades `EXAMPLE` / `MOCK`.
 
-<!-- "No cal docs update" justification (if you didn't check the
-     box above): -->
+## Override docs-coherence (excepcional)
+
+Si `docs-coherence` falla perquè el PR toca un subsistema documentat
+i de debò no cal actualitzar el doc (refactor intern sense efecte
+conceptual, renaming purament mecànic, etc.), afegeix una línia al
+cos del PR amb aquest format exacte:
+
+```
+docs-reviewed: <doc-path> : <raó>
+```
+
+El CI verifica que el doc existeix, que correspon al subsistema
+disparat, i que la raó no és buida. Cada override accepta afegeix
+la label `docs-review-skipped` per a auditoria. Per defecte,
+actualitza el doc; no facis servir l'override com a camí ràpid.
 
 ## Related
 

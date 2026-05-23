@@ -51,9 +51,19 @@ mapping:
   - prefix: web/
     doc: docs/architecture/web.md
 
-  # ingesta/ granular split: the Spotify subsystem has its own
-  # architectural doc (`playlists.md`) separate from the broader
+  # ingesta/ granular split: the Spotify playlist subsystem has its
+  # own architectural doc (`playlists.md`) separate from the broader
   # ingestion pipeline (`pipeline.md`). The specific file paths win.
+  #
+  # Not on this list (so they fall through to the generic `ingesta/
+  # -> pipeline.md` entry below):
+  #   - enriquir_spotify.py: metadata enrichment of the ISRC cache.
+  #     Conceptually pure pipeline work; the playlist sync is just
+  #     one downstream consumer of the cache it populates.
+  #   - recalcular_dispersio_spotify.py: recomputes the
+  #     `spotify_artist_dispersio` signal fed into the RF verification
+  #     classifier documented at pipeline.md §4. Has nothing to do
+  #     with playlist publication.
   - prefix: ingesta/clients/spotify.py
     doc: docs/architecture/playlists.md
   - prefix: ingesta/management/commands/actualitzar_playlists_spotify.py
@@ -61,10 +71,6 @@ mapping:
   - prefix: ingesta/management/commands/autoritzar_spotify.py
     doc: docs/architecture/playlists.md
   - prefix: ingesta/management/commands/configurar_spotify_playlists.py
-    doc: docs/architecture/playlists.md
-  - prefix: ingesta/management/commands/enriquir_spotify.py
-    doc: docs/architecture/playlists.md
-  - prefix: ingesta/management/commands/recalcular_dispersio_spotify.py
     doc: docs/architecture/playlists.md
   - prefix: ingesta/
     doc: docs/architecture/pipeline.md

@@ -57,7 +57,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from ingesta.clients.spotify import API_BASE, TOKEN_URL, UserSpotifyClient
-from music.models import SpotifyAuth, SpotifyPlaylist
+from music.models import Canco, SpotifyAuth, SpotifyMetadata, SpotifyPlaylist
+from ranking.models import TopProvisional, TopSetmanal
 from web.api.staff._common import IsStaff
 
 # OAuth state TTL. Spotify expects the state to round-trip through
@@ -81,15 +82,88 @@ _VALID_PRODUCTS = {"premium"}
 # ── Helpers ────────────────────────────────────────────────────────
 
 
+def _target_coverage(pl: SpotifyPlaylist) -> dict:
+    """Predictive coverage: of the cançons this playlist would push
+    on the next sync, how many already have a `SpotifyMetadata` row
+    in `enrichment_status=found` (i.e. would actually make it through
+    the cache-only Process A).
+
+    This is intentionally distinct from `last_n_matched / last_n_tracks`
+    (the post-sync coverage). For weekly playlists that have never
+    been synced, `last_*` is 0/0 (no signal), but the operator still
+    wants to see "if I press sync now, will 90 % of the chart land or
+    only 30 %?". That's `target_coverage`.
+
+    Source per playlist (matches `_select_cancons` in the sync command):
+      * kind=top, freq=daily   -> TopProvisional, top 40 by posicio.
+      * kind=top, freq=weekly  -> TopSetmanal, latest setmana per
+                                   territori, top 40 by posicio.
+      * kind=no_verificades    -> chunk of `Canco.objects.pendents()`.
+      * kind=novetats          -> currently parked, returns None.
+
+    Returns `{"total": int, "found": int, "ratio": float|None}`.
+    Ratio is None when `total == 0` (no source data yet for that
+    territori / window).
+    """
+    canco_ids: list[int] = []
+    if pl.kind == SpotifyPlaylist.KIND_TOP:
+        if pl.freq == SpotifyPlaylist.FREQ_WEEKLY:
+            latest = (
+                TopSetmanal.objects.filter(territori=pl.territori)
+                .order_by("-setmana")
+                .values_list("setmana", flat=True)
+                .first()
+            )
+            if latest is not None:
+                canco_ids = list(
+                    TopSetmanal.objects.filter(territori=pl.territori, setmana=latest)
+                    .order_by("posicio")
+                    .values_list("canco_id", flat=True)[:40]
+                )
+        else:
+            canco_ids = list(
+                TopProvisional.objects.filter(territori=pl.territori)
+                .order_by("posicio")
+                .values_list("canco_id", flat=True)[:40]
+            )
+    elif pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES:
+        # Mirror Process A: 700-row window over pendents() ordered by
+        # ml_confianca desc, sliced into 100-track chunks. We compute
+        # this Cançó's chunk only (NOT the whole window) so the
+        # coverage matches what THIS playlist will push.
+        if pl.chunk_index is not None:
+            window = list(
+                Canco.objects.pendents()
+                .exclude(isrc="")
+                .order_by("-ml_confianca", "-created_at")
+                .values_list("pk", flat=True)[:700]
+            )
+            start = pl.chunk_index * 100
+            canco_ids = window[start : start + 100]
+    # kind=novetats currently parked.
+
+    total = len(canco_ids)
+    if total == 0:
+        return {"total": 0, "found": 0, "ratio": None}
+    found = SpotifyMetadata.objects.filter(
+        canco_id__in=canco_ids, enrichment_status=SpotifyMetadata.STATUS_FOUND
+    ).count()
+    return {"total": total, "found": found, "ratio": round(found / total, 3)}
+
+
 def _playlist_payload(pl: SpotifyPlaylist) -> dict:
     """Serialise one SpotifyPlaylist row for the estat endpoint.
 
     Kept here (not on the model) because the model is shared with the
     cron and we don't want to couple model serialisation to a UI
-    contract."""
+    contract. Includes both the post-sync `coverage` (what the last
+    cron run achieved) and `target_coverage` (what the next sync
+    WOULD push, given the current cache state) so the operator can
+    decide if a manual sync is worth it yet."""
     return {
         "codi": pl.codi,
         "kind": pl.kind,
+        "freq": pl.freq,
         "territori": pl.territori,
         "spotify_playlist_id": pl.spotify_playlist_id,
         "spotify_url": (
@@ -105,6 +179,7 @@ def _playlist_payload(pl: SpotifyPlaylist) -> dict:
         "coverage": (
             round(pl.last_n_matched / pl.last_n_tracks, 3) if pl.last_n_tracks else None
         ),
+        "target_coverage": _target_coverage(pl),
     }
 
 
@@ -385,10 +460,10 @@ def spotify_sync(request: Request) -> Response:
     so the operator can see ISRC match counts inline. Capped at 120s
     (the same timeout DRF uses for synchronous requests behind Caddy).
 
-    NOTE: the `--freq` flag does NOT exist yet on the command (FASE D
-    adds it). We pass it conditionally so this endpoint already works
-    for the legacy command; once FASE D lands, the SPA can pick
-    daily vs weekly explicitly."""
+    The `--freq` flag landed with FASE D (2026-05-23). The legacy
+    TypeError fallback below is kept defensively in case anyone
+    pins an older client release. Cache-only contract preserved:
+    the sync command NEVER calls /search."""
     freq = (request.data.get("freq") or "").strip()
     only = (request.data.get("only") or "").strip()
     dry_run = bool(request.data.get("dry_run"))

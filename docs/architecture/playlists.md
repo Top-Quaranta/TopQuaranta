@@ -72,6 +72,36 @@ daily PPCC playlist was never created at the Spotify Dashboard.
 If product wants it later, the path is `SpotifyPlaylist.objects.create(...)`
 + `configurar_spotify_playlists --top-ppcc-daily <id>`.
 
+### Staff UI for FASE D (`/staff/social/spotify/`)
+
+The page now renders three independent sections so the operator can
+sync each cadence in isolation:
+
+1. **Playlists públiques setmanals** (yellow-bordered, top section,
+   only shown when at least one `freq=weekly` row exists). The 5
+   mirrors of the weekly chart. Each row shows the latest published
+   sync KPIs (`coverage` = last `last_n_matched / last_n_tracks`)
+   AND a predictive `target_coverage` (of the cançons the next sync
+   would push, how many already have `SpotifyMetadata.found`). The
+   target column tells the operator "if I press Sync weekly now,
+   will 95 % of the chart land, or only 40 %?" without hitting
+   Spotify. A pair of buttons triggers `--freq weekly` (dry-run or
+   wet).
+
+2. **Playlists provisionals diàries**. The daily-top rows
+   (TopProvisional sources). Same KPI layout, dedicated
+   `--freq daily` buttons.
+
+3. **Triage no verificades**. The 7 chunks of 100 cançons each.
+   No per-section sync button (they ride the daily cron).
+
+The `target_coverage` field is computed on every `/estat/` call. For
+weekly rows it reads `TopSetmanal` for the latest `setmana` per
+territori; for daily rows it reads `TopProvisional`; for
+no_verificades it slices the same `pendents()` window the cron uses
+and counts the chunk. Crossing the 95 % threshold for the weekly
+mirrors is the signal that the first wet sync is worth running.
+
 ### FASE D status (2026-05-23)
 
 The 5 weekly rows now exist as `SpotifyPlaylist` entries (migration

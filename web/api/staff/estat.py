@@ -51,6 +51,7 @@ from music.models import (
     Canco,
     HistorialRevisio,
     Municipi,
+    SpotifyMetadata,
     StaffAuditLog,
 )
 from music.services import (
@@ -422,6 +423,89 @@ def _ml_subtier_stats() -> dict:
         "auto_min_samples": ML_AUTO_MIN_SAMPLES,
         "auto_approved": list(ML_AUTO_APPROVE_SUBTIERS),
         "auto_rejected": list(ML_AUTO_REJECT_SUBTIERS),
+    }
+
+
+def _spotify_enrichment_stats() -> dict:
+    """Summary of Spotify enrichment coverage across the catalog.
+
+    Process B (`enriquir_spotify`) writes one `SpotifyMetadata` row per
+    Canço in one of three states:
+      * `found`         — search hit + track + artist fetched.
+      * `not_found`     — search returned no ISRC match.
+      * `not_attempted` — never processed yet (or row absent).
+
+    Mirrors the shape of the Whisper / MusicBrainz blocks: total +
+    per-state counts + a breakdown that helps staff prioritise.
+
+    The breakdown axis is verificada (public vs pending): a found
+    canco from the public side helps Process A push the daily/weekly
+    top playlists; a found canco from the pending side helps the
+    no_verificades triage chunks. Staff want to know if the
+    enrichment cache is warm enough for the public playlists
+    independently of the pending backlog.
+    """
+    # Total catalogue size + Spotify metadata rows. Note: not every
+    # Canço has a SpotifyMetadata row yet (rows created BEFORE
+    # migration 0080 do; rows created AFTER need to be backfilled
+    # by Process B or the on-demand sync). The "no row" case counts
+    # as not_attempted from the dashboard's point of view because
+    # Process B has not touched it.
+    canco_total = Canco.objects.count()
+    sm_qs = SpotifyMetadata.objects.all()
+    sm_total = sm_qs.count()
+
+    found_qs = sm_qs.filter(enrichment_status=SpotifyMetadata.STATUS_FOUND)
+    not_found_qs = sm_qs.filter(enrichment_status=SpotifyMetadata.STATUS_NOT_FOUND)
+    found = found_qs.count()
+    not_found = not_found_qs.count()
+    not_attempted_with_row = sm_qs.filter(
+        enrichment_status=SpotifyMetadata.STATUS_NOT_ATTEMPTED
+    ).count()
+    # Cançons without any SpotifyMetadata row at all are effectively
+    # not_attempted from the operator's perspective.
+    not_attempted_no_row = max(0, canco_total - sm_total)
+    not_attempted = not_attempted_with_row + not_attempted_no_row
+
+    # Breakdown by verificada (the same axis the workbench uses).
+    found_public = found_qs.filter(canco__verificada=True, canco__activa=True).count()
+    found_pending = found_qs.filter(canco__verificada=False, canco__activa=True).count()
+    public_total = Canco.objects.filter(verificada=True, activa=True).count()
+    pending_total = Canco.objects.pendents().count()
+
+    # Coverage ratios. `found / canco_total` is the dashboard-level
+    # number; the per-axis ratios are the actionable ones (operators
+    # care about public coverage for daily tops, pending coverage for
+    # the triage chunks).
+    coverage_total = round(found / canco_total, 3) if canco_total else None
+    coverage_public = round(found_public / public_total, 3) if public_total else None
+    coverage_pending = (
+        round(found_pending / pending_total, 3) if pending_total else None
+    )
+
+    # ETA on the unattempted backlog at the regime cron rate (--limit
+    # 50 every hour after the 2026-05-23 calibration, see ADR-0013).
+    enrich_per_hour = 50
+    eta_hours = (
+        round(not_attempted / enrich_per_hour, 1)
+        if enrich_per_hour and not_attempted
+        else None
+    )
+
+    return {
+        "canco_total": canco_total,
+        "found": found,
+        "not_found": not_found,
+        "not_attempted": not_attempted,
+        "found_public": found_public,
+        "found_pending": found_pending,
+        "public_total": public_total,
+        "pending_total": pending_total,
+        "coverage_total": coverage_total,
+        "coverage_public": coverage_public,
+        "coverage_pending": coverage_pending,
+        "enrich_per_hour": enrich_per_hour,
+        "eta_hours_to_clear_backlog": eta_hours,
     }
 
 
@@ -893,6 +977,7 @@ def estat(request: Request) -> Response:
                 "total": c_total,
             },
             "musicbrainz": _musicbrainz_stats(),
+            "spotify_enrichment": _spotify_enrichment_stats(),
             "homonimia": (
                 lambda c: {
                     "casos_sospitosos": len(c),

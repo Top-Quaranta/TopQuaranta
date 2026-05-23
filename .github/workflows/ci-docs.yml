@@ -68,12 +68,21 @@ jobs:
     # touches a subsystem with a dedicated doc but doesn't update
     # the doc. Doesn't block merge; the PR template checkbox is
     # the canonical check.
+    #
+    # Mapping lives at `docs/policies/docs-map.yml` (single source
+    # of truth, shared with the future pre-commit hook). Resolution
+    # logic is in `scripts/check_docs_coherence.py`.
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: pip install pyyaml --quiet
       - name: Check docs vs code coupling
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -82,31 +91,13 @@ jobs:
         run: |
           set -e
           CHANGED=$(git diff --name-only "origin/$BASE_REF...HEAD" || true)
-          # Subsystem → doc mapping. Touching files under the
-          # subsystem prefix without touching its doc → flag.
-          NEEDS=""
-          # shellcheck disable=SC2206
-          MAPPINGS=(
-            "social/:docs/architecture/social.md"
-            "comptes/:docs/architecture/comptes.md"
-            "music/:docs/architecture/models.md"
-            "ranking/:docs/architecture/algorithm.md"
-            "ingesta/:docs/architecture/pipeline.md"
-            "web/api/staff/:docs/architecture/staff.md"
-            "analytics/:docs/architecture/analytics.md"
-            "web/seo/:docs/architecture/seo.md"
-          )
-          for pair in "${MAPPINGS[@]}"; do
-            prefix="${pair%%:*}"
-            doc="${pair#*:}"
-            if echo "$CHANGED" | grep -q "^$prefix" && ! echo "$CHANGED" | grep -qF "$doc"; then
-              NEEDS="$NEEDS $prefix→$doc"
-            fi
-          done
-          if [ -n "$NEEDS" ]; then
-            echo "::warning ::PR touches documented subsystems without updating their docs:$NEEDS"
+          if [ -z "$CHANGED" ]; then
+            echo "No files changed."
+            exit 0
+          fi
+          OUTPUT=$(echo "$CHANGED" | python3 scripts/check_docs_coherence.py)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "^needs-docs-review$"; then
             gh pr edit "$PR_NUMBER" --add-label "needs-docs-review" || true
             echo "Added label needs-docs-review (soft signal, not a block)."
-          else
-            echo "No subsystem/doc coupling triggers detected."
           fi

@@ -1,0 +1,146 @@
+# Canonical mapping between code paths and the architecture/ops docs
+# that document them. Single source of truth shared by:
+#
+#   - `.github/workflows/ci-docs.yml` (docs-coherence job), via
+#     `scripts/check_docs_coherence.py`. Soft signal only today:
+#     labels the PR `needs-docs-review`, does not block merge.
+#   - A pre-commit hook (planned, FASE 2).
+#
+# Format chosen: YAML. Justification: the mapping is human-edited and
+# benefits from per-entry comments and inline rationale (which JSON
+# would force into ad-hoc `_doc` keys, as `deploy/cron-meta.json`
+# already has to). YAML matches the surrounding tooling
+# (`.pre-commit-config.yaml`, GitHub workflows). The CI cost is one
+# `pip install pyyaml --quiet` in the docs-coherence step.
+#
+# # Spec: docs/policies/docs-maintenance.md
+
+# ---------------------------------------------------------------------
+# mapping: ordered list of {prefix, doc}. Longest matching prefix wins
+# at resolution time, so the specific entry beats the generic one
+# (e.g. `ingesta/clients/spotify.py` resolves to `playlists.md`, not
+# the generic `ingesta/ → pipeline.md`). The order in this file is
+# only for human readability; the resolver sorts by descending prefix
+# length.
+# ---------------------------------------------------------------------
+mapping:
+  # Django apps (1-to-1 with INSTALLED_APPS where possible)
+  - prefix: social/
+    doc: docs/architecture/social.md
+  - prefix: comptes/
+    doc: docs/architecture/comptes.md
+  - prefix: music/
+    doc: docs/architecture/models.md
+  - prefix: ranking/
+    doc: docs/architecture/algorithm.md
+  - prefix: analytics/
+    doc: docs/architecture/analytics.md
+
+  # web/ split: the more specific staff/SEO docs win over the generic
+  # api-versioning doc for files under their subtrees, and the
+  # ultra-generic `web/` fallback catches the leftover surface
+  # (error handlers, RSS feeds, sitemaps, legal versions).
+  # `web/seo` (no trailing slash) matches both `web/seo/<file>` and
+  # a hypothetical future `web/seo.py`.
+  - prefix: web/api/staff/
+    doc: docs/architecture/staff.md
+  - prefix: web/seo
+    doc: docs/architecture/seo.md
+  - prefix: web/api/
+    doc: docs/architecture/api-versioning.md
+  - prefix: web/
+    doc: docs/architecture/web.md
+
+  # ingesta/ granular split: the Spotify subsystem has its own
+  # architectural doc (`playlists.md`) separate from the broader
+  # ingestion pipeline (`pipeline.md`). The specific file paths win.
+  - prefix: ingesta/clients/spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/actualitzar_playlists_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/autoritzar_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/configurar_spotify_playlists.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/enriquir_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/recalcular_dispersio_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/
+    doc: docs/architecture/pipeline.md
+
+  # SPA frontend
+  - prefix: web-react/
+    doc: docs/architecture/frontend.md
+
+  # Infrastructure + ops scripts
+  - prefix: bin/
+    doc: docs/ops/runbook.md
+  - prefix: deploy/
+    doc: docs/ops/infra.md
+  - prefix: topquaranta/
+    doc: docs/ops/infra.md
+
+# ---------------------------------------------------------------------
+# exclude: prefixes that never trip the docs-coherence check. A PR
+# touching only excluded prefixes resolves to no doc and gets no
+# label. Each entry must carry a `reason` so the exemption is
+# auditable.
+# ---------------------------------------------------------------------
+exclude:
+  - prefix: scripts/
+    reason: >-
+      Ad-hoc analysis scripts and migration helpers. No fixed
+      architectural contract; accepting graveyard status until a
+      piece grows enough to deserve its own doc.
+  - prefix: vendor/
+    reason: >-
+      Design tokens vendored from the mm-design repo. Source of
+      truth lives upstream; touching files here means re-vendoring,
+      not changing the contract.
+
+# ---------------------------------------------------------------------
+# size: doc-size thresholds. Not enforced by a CI gate yet (FASE 2);
+# centralised here so the future check has a single config to read.
+#
+#   threshold_lines     hard ceiling for docs under `scope`.
+#   exempt_permanent    paths that never count against the ceiling.
+#   grandfathered       paths that currently exceed the ceiling but
+#                       are allowed temporarily until split per
+#                       `docs-maintenance.md` Rule 3. Each entry
+#                       names the current line count so a drift
+#                       (further growth) is visible at next review.
+# ---------------------------------------------------------------------
+size:
+  threshold_lines: 400
+  scope:
+    - docs/architecture/
+    - docs/ops/
+  exempt_permanent:
+    - path: docs/history/roadmap.md
+      reason: >-
+        Historical sprint log. Grows by design; Rule 3 archives
+        completed sprints quarterly, but the live file stays long.
+  grandfathered:
+    - path: docs/ops/runbook.md
+      current_lines: 747
+      reason: >-
+        Exceeds the local 400 threshold. Rule 3's split row in
+        docs-maintenance.md only covers docs/architecture/<X>.md,
+        so a runbook split is a discretionary cleanup, not an
+        automatic decay sweep. Candidates: deploy, ML, social,
+        ingest sub-runbooks.
+    - path: docs/architecture/pipeline.md
+      current_lines: 531
+      reason: >-
+        Over Rule 3's hard 500-line ceiling for
+        docs/architecture/<X>.md. Schedule a split at the next
+        decay sweep into per-source files (Last.fm signal,
+        MusicBrainz reconciliation, Whisper LID).
+    - path: docs/architecture/models.md
+      current_lines: 425
+      reason: >-
+        Over the local 400 threshold but still under Rule 3's
+        500-line ceiling, so no decay-sweep obligation yet.
+        Split candidates if it grows: domain (music/), ranking
+        (ranking/), social (social/).

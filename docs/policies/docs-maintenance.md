@@ -44,6 +44,14 @@ subsystem with a dedicated doc and the doc wasn't touched. The
 label is a signal, not a hard block — sometimes "no doc update
 needed" is genuinely the right answer.
 
+The canonical prefix-to-doc mapping (which paths trigger which
+docs, longest-prefix match, plus the exclude list and the size
+thresholds for future enforcement) lives at
+`docs/policies/docs-map.yml`. The CI job
+`.github/workflows/ci-docs.yml::docs-coherence` consumes it via
+`scripts/check_docs_coherence.py`; the planned pre-commit hook will
+consume the same file.
+
 ### Rule 3 — Quarterly decay sweep
 
 Four times a year (15 March, 15 June, 15 September, 15 December),

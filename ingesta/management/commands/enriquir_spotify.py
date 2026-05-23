@@ -25,8 +25,10 @@ appearing in any active SpotifyPlaylist (top + no_verificades
 windows). Used for the first run after a long cold-cache period to
 fill the playlists quickly before walking the broader backlog.
 
-Resilience: RateLimitedError aborts the run cleanly via CommandError
-(watchdog sees a non-zero exit). Per-Canço commits mean a mid-run
+Resilience (updated 2026-05-23): RateLimitedError writes a cooldown
+file and exits cleanly (exit 0) so the watchdog does NOT see a FAIL.
+Subsequent cron ticks check the cooldown file and skip silently until
+the Retry-After window has passed. Per-Canço commits mean a mid-run
 abort never wastes the work already done.
 
 # Spec: docs/architecture/playlists.md (Process B section)
@@ -35,6 +37,9 @@ abort never wastes the work already done.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
+from datetime import timezone as dt_tz
+from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -47,6 +52,8 @@ from music.spotify_dispersio import recalcular_dispersio
 from ranking.models import SenyalDiari
 
 logger = logging.getLogger(__name__)
+
+COOLDOWN_FILE = Path("/var/log/topquaranta/status/enriquir_spotify.cooldown")
 
 
 class Command(BaseCommand):
@@ -88,6 +95,25 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
+        # ── Cooldown gate: skip silently if a previous run set a
+        # cooldown (Retry-After was too long). The cron fires every
+        # 30 min; we don't want 4+ wasted runs per cooldown window.
+        cooldown_file = COOLDOWN_FILE
+        if cooldown_file.exists():
+            try:
+                resume_at = datetime.fromisoformat(cooldown_file.read_text().strip())
+                if datetime.now(tz=dt_tz.utc).replace(tzinfo=None) < resume_at:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"[enriquir_spotify] Spotify cooldown active "
+                            f"until {resume_at.isoformat()}. Skipping."
+                        )
+                    )
+                    return
+            except (ValueError, OSError):
+                pass  # corrupt file — fall through and delete it
+            cooldown_file.unlink(missing_ok=True)
+
         auth = SpotifyAuth.load()
         if not auth:
             raise CommandError("No SpotifyAuth row. Run the staff OAuth flow first.")
@@ -127,11 +153,24 @@ class Command(BaseCommand):
                 elif outcome == "not_found":
                     not_found += 1
         except RateLimitedError as exc:
-            # Spotify asked us to back off for hours; abort the run so
-            # the watchdog sees status=FAIL. The work done so far is
-            # already persisted (we commit per Canço inside _enrich_one).
+            # Spotify asked us to back off for hours. Write a cooldown
+            # file so subsequent cron ticks skip silently, and exit 0
+            # so the watchdog does NOT flip status=FAIL.
             aborted = True
-            self.stderr.write(self.style.ERROR(f"[enriquir_spotify] {exc}"))
+            resume_at = datetime.now(tz=dt_tz.utc).replace(tzinfo=None) + timedelta(
+                seconds=exc.retry_after_s
+            )
+            try:
+                COOLDOWN_FILE.write_text(resume_at.isoformat())
+            except OSError:
+                logger.warning("Could not write cooldown file %s", COOLDOWN_FILE)
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[enriquir_spotify] Spotify rate limited; "
+                    f"cooldown until {resume_at.isoformat()}. "
+                    f"Partial progress saved."
+                )
+            )
 
         # Recompute dispersion only for the artists we touched. The
         # full-DB recalc lives in `recalcular_dispersio_spotify` for
@@ -145,12 +184,6 @@ class Command(BaseCommand):
             f"artists_recomputed={len(affected_artist_ids)} "
             f"aborted={aborted}"
         )
-
-        if aborted:
-            raise CommandError(
-                "Spotify rate limit aborted the run; partial progress "
-                "saved. Retry after the Retry-After window."
-            )
 
     # ── candidate selection ─────────────────────────────────────────────
     def _select_candidates(

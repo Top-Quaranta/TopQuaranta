@@ -241,11 +241,17 @@ class UserSpotifyClient:
     command. On every call we lazily refresh the access token; on 401
     mid-flight we refresh once and retry.
 
-    Rate limiting (2026-05-22):
+    Rate limiting (2026-05-22, adaptive 2026-05-23):
       * Every request waits `throttle` seconds before firing (default
         0.2s = 5 req/s, well under Spotify's typical /search limit).
         Caller can pass a more conservative value via the command's
         `--throttle` flag.
+      * **Adaptive throttle (2026-05-23)**: on a short 429 (Retry-After
+        <= tolerance) the per-request sleep doubles after each hit,
+        capped at ``MAX_ADAPTIVE_THROTTLE_S`` (30s). This spreads the
+        remaining calls over a longer window and avoids exhausting
+        Spotify's per-hour quota. The adaptive value resets on each
+        new client instantiation (i.e. each cron run).
       * On 429 we honour `Retry-After` only when it is <=
         `max_retry_after_s` (default 60s). Larger values raise
         `RateLimitedError` so the cron fails fast instead of sleeping
@@ -269,6 +275,9 @@ class UserSpotifyClient:
     # Anything past this is "Spotify is asking us to back off for hours" —
     # we refuse to sleep that long and bubble up the failure instead.
     DEFAULT_MAX_RETRY_AFTER_S = 60
+    # Adaptive throttle ceiling. After repeated short 429s the per-call
+    # sleep doubles each time, but never past this cap.
+    MAX_ADAPTIVE_THROTTLE_S = 30.0
 
     def __init__(
         self,
@@ -287,6 +296,9 @@ class UserSpotifyClient:
             if max_retry_after_s is not None
             else self.DEFAULT_MAX_RETRY_AFTER_S
         )
+        # Adaptive throttle: starts at the configured value and doubles
+        # on each short 429, capped at MAX_ADAPTIVE_THROTTLE_S.
+        self._current_throttle_s = self._throttle_s
 
     # ── Auth ────────────────────────────────────────────────────────────
     def _refresh_access_token(self) -> None:
@@ -317,9 +329,10 @@ class UserSpotifyClient:
     def _request(self, method: str, path: str, **kwargs) -> requests.Response:
         url = f"{API_BASE}{path}"
         for attempt in range(MAX_RETRIES):
-            # Proactive throttle: spreads burst of /search calls so the
-            # per-minute budget never trips a 429 in normal operation.
-            time.sleep(self._throttle_s)
+            # Proactive adaptive throttle: starts at the configured value
+            # and doubles after each short 429 to avoid exhausting the
+            # per-hour quota.
+            time.sleep(self._current_throttle_s)
             resp = requests.request(
                 method, url, headers=self._headers(), timeout=20, **kwargs
             )
@@ -341,6 +354,18 @@ class UserSpotifyClient:
                     raise RateLimitedError(wait, path)
                 logger.warning("Spotify rate limited; sleeping %ds", wait)
                 time.sleep(wait)
+                # Adaptive back-off: double the proactive throttle so
+                # subsequent calls spread further apart.
+                new_throttle = min(
+                    self._current_throttle_s * 2 or self._throttle_s,
+                    self.MAX_ADAPTIVE_THROTTLE_S,
+                )
+                if new_throttle != self._current_throttle_s:
+                    self._current_throttle_s = new_throttle
+                    logger.info(
+                        "Spotify throttle increased to %.1fs after rate limit",
+                        self._current_throttle_s,
+                    )
                 continue
             resp.raise_for_status()
             return resp

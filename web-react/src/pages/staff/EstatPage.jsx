@@ -404,7 +404,7 @@ export default function EstatPage() {
     )
   }
 
-  const { bd, whisper, ranking, senyal, comunitat, crons, ml, flux, musicbrainz: mb, homonimia } = data
+  const { bd, whisper, ranking, senyal, comunitat, crons, ml, flux, musicbrainz: mb, homonimia, spotify_enrichment: sp } = data
 
   // Biggest importance for scaling bars.
   const maxImp = ml?.importances?.[0]?.value || 1
@@ -863,6 +863,146 @@ export default function EstatPage() {
                 </tbody>
               </table>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* ─── Spotify enrichment (Process B) ─── */}
+      {sp && (
+        <section>
+          <h2 className="text-sm uppercase tracking-widest text-white/60 mb-2">
+            Spotify enrichment
+          </h2>
+          <div className="grid lg:grid-cols-2 gap-3">
+            {/* Catalogue-wide distribution. Same StackedBar pattern as
+                Whisper and MusicBrainz so the three coverage panels
+                stay visually consistent. */}
+            <div className="bg-white text-tq-ink rounded-lg p-4">
+              <p className="text-[11px] uppercase tracking-widest opacity-60 mb-2">
+                Cobertura del catàleg ({sp.coverage_total != null
+                  ? `${(sp.coverage_total * 100).toFixed(1)}% trobades`
+                  : 'sense dades'})
+              </p>
+              <StackedBar
+                total={sp.canco_total || 0}
+                segments={[
+                  {
+                    label: 'Trobada',
+                    value: sp.found || 0,
+                    color: 'var(--color-tq-success)',
+                  },
+                  {
+                    label: 'No trobada (Spotify)',
+                    value: sp.not_found || 0,
+                    color: 'var(--color-tq-danger)',
+                  },
+                  {
+                    label: 'No provada',
+                    value: sp.not_attempted || 0,
+                    color: 'var(--color-tq-neutral-soft)',
+                  },
+                ]}
+              />
+              <p className="text-[11px] opacity-60 mt-3">
+                {sp.not_attempted > 0 && sp.enrich_per_hour ? (
+                  <>
+                    Cua pendent: <strong>{(sp.not_attempted).toLocaleString('ca')}</strong> cançons.
+                    A {sp.enrich_per_hour}/h, la cron arribarà al fons
+                    en{' '}
+                    <strong>
+                      {sp.eta_hours_to_clear_backlog != null
+                        ? `${sp.eta_hours_to_clear_backlog} h`
+                        : '—'}
+                    </strong>.
+                  </>
+                ) : (
+                  <>
+                    Cua al dia. Process B (enriquir_spotify) processa les
+                    noves entrades cada hora :30.
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Breakdown públiques vs pendents. Mirror of MB's split
+                so staff can tell at a glance whether the daily-top
+                playlists are warm independently of the triage chunks. */}
+            <div className="bg-white text-tq-ink rounded-lg p-4">
+              <p className="text-[11px] uppercase tracking-widest opacity-60 mb-2">
+                Cobertura per estat
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="opacity-70">Públiques (verificades)</span>
+                    <span className="tabular-nums">
+                      <strong>{sp.found_public || 0}</strong>
+                      <span className="opacity-60"> / {sp.public_total || 0}</span>
+                      {sp.coverage_public != null && (
+                        <span className="opacity-60">
+                          {' '}
+                          ({(sp.coverage_public * 100).toFixed(1)}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <StackedBar
+                    total={sp.public_total || 0}
+                    segments={[
+                      {
+                        label: 'Trobades',
+                        value: sp.found_public || 0,
+                        color: 'var(--color-tq-success)',
+                      },
+                      {
+                        label: 'Sense cache',
+                        value: Math.max(0, (sp.public_total || 0) - (sp.found_public || 0)),
+                        color: 'var(--color-tq-neutral-soft)',
+                      },
+                    ]}
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="opacity-70">Pendents de triage</span>
+                    <span className="tabular-nums">
+                      <strong>{sp.found_pending || 0}</strong>
+                      <span className="opacity-60"> / {sp.pending_total || 0}</span>
+                      {sp.coverage_pending != null && (
+                        <span className="opacity-60">
+                          {' '}
+                          ({(sp.coverage_pending * 100).toFixed(1)}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <StackedBar
+                    total={sp.pending_total || 0}
+                    segments={[
+                      {
+                        label: 'Trobades',
+                        value: sp.found_pending || 0,
+                        color: 'var(--color-tq-success)',
+                      },
+                      {
+                        label: 'Sense cache',
+                        value: Math.max(0, (sp.pending_total || 0) - (sp.found_pending || 0)),
+                        color: 'var(--color-tq-neutral-soft)',
+                      },
+                    ]}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] opacity-60 mt-3">
+                Cobertura pública alimenta les playlists top diàries i
+                setmanals; cobertura pendent alimenta les 7 playlists
+                de triage no_verificades. Veure
+                <code className="text-[10px] bg-black/5 px-1 ml-1">
+                  /staff/social/spotify/
+                </code>{' '}
+                per detall per playlist.
+              </p>
+            </div>
           </div>
         </section>
       )}

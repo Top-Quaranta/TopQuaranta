@@ -47,13 +47,21 @@ jobs:
           config: '.markdownlint.json'
 
   link-checker:
+    # Internal-only: lychee runs with `--offline`, which makes it
+    # skip every URL it cannot resolve from the local filesystem
+    # (HTTP, HTTPS, mailto). Only relative links between Markdown
+    # files (and absolute paths into the repo) are checked. This
+    # keeps the gate deterministic: no third-party site going down
+    # can fail CI. We still catch the case we actually care about
+    # (`docs/foo.md` linking to `docs/bar.md` that got renamed).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: lychee link checker
+      - name: lychee link checker (offline, internal-only)
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
+            --offline
             --no-progress
             --exclude-path node_modules
             --exclude-path .venv

@@ -90,6 +90,19 @@ FEATURE_NAMES = [
     "mbrainz_confirmed",
     "mb_lyrics_cat",
     "artista_te_mbid",
+    # Spotify dispersion (FASE Process A/B, 2026-05-23). Count of
+    # DISTINCT principal `spotify_artist_id` values across the
+    # Cançó's artist's enriched cançons. dispersion=1 means a clean
+    # mapping (every track resolves to the same Spotify artist);
+    # >1 means Deezer probably collapsed two homonyms under one ID
+    # (the canonical Crim-style collision signal). NULL falls
+    # through as 0.0 here.
+    #
+    # The signal is nearly constant (0/1) until Process B has walked
+    # enough of the catalogue; we add the feature now so the retrain
+    # infrastructure is ready, and the first retrain after the cache
+    # fills will get a meaningful column.
+    "spotify_artist_dispersio",
 ] + [f"tfidf_{i}" for i in range(TFIDF_MAX_FEATURES)]
 
 TFIDF_PATH = Path(__file__).parent / "ml_tfidf.joblib"
@@ -304,6 +317,7 @@ def _build_features(canco) -> list[float]:
             fallback_p=canco.whisper_p,
         )
         + _mb_features(canco, artista)
+        + [_spotify_dispersion_feature(artista)]
         + _tfidf_features(canco.nom)
     )
 
@@ -315,6 +329,21 @@ def _mb_features(canco, artista) -> list[float]:
         1.0 if canco.mb_lyrics_language == "cat" else 0.0,
         1.0 if (artista and artista.musicbrainz_id) else 0.0,
     ]
+
+
+def _spotify_dispersion_feature(artista) -> float:
+    """Return the Spotify dispersion signal as a float feature.
+
+    Reads `Artista.spotify_artist_dispersio`, which is recomputed by
+    Process B at the end of every successful enrichment run via
+    `music.spotify_dispersio.recalcular_dispersio`. None falls
+    through as 0.0 so untouched artistes don't pollute the column
+    with NaNs.
+    """
+    if artista is None:
+        return 0.0
+    disp = getattr(artista, "spotify_artist_dispersio", None)
+    return float(disp) if disp is not None else 0.0
 
 
 def _build_features_from_historial(rec) -> list[float]:
@@ -375,8 +404,32 @@ def _build_features_from_historial(rec) -> list[float]:
         ]
         + _whisper_features_from_historial(rec)
         + _mb_features_from_historial(rec)
+        + [_spotify_dispersion_from_historial(rec)]
         + _tfidf_features(rec.canco_nom)
     )
+
+
+def _spotify_dispersion_from_historial(rec) -> float:
+    """Same signal as `_spotify_dispersion_feature` but for a
+    HistorialRevisio row.
+
+    Historical records don't snapshot dispersion. We look up the
+    current Artista (via deezer_id -> Canco -> Artista, with ISRC
+    fallback) and read its current dispersion. For artistes the
+    operator has since merged or split, the historical row sees the
+    post-resolution dispersion — which is the right signal, because
+    that is what staff would weigh now. Missing -> 0.0.
+    """
+    from music.models import Canco
+
+    canco = None
+    if rec.canco_deezer_id:
+        canco = Canco.objects.filter(deezer_id=rec.canco_deezer_id).first()
+    if canco is None and rec.canco_isrc:
+        canco = Canco.objects.filter(isrc=rec.canco_isrc).first()
+    if canco is None:
+        return 0.0
+    return _spotify_dispersion_feature(canco.artista)
 
 
 def _mb_features_from_historial(rec) -> list[float]:

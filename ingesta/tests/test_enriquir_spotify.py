@@ -259,7 +259,9 @@ def test_public_ordering_by_latest_senyaldiari_playcount(auth_present, client_mo
 
 
 @pytest.mark.django_db
-def test_rate_limit_writes_cooldown_and_exits_cleanly(auth_present, client_mock):
+def test_rate_limit_writes_cooldown_and_exits_cleanly(
+    auth_present, client_mock, tmp_path
+):
     """RateLimitedError mid-run -> cooldown file written, exit 0 (no
     CommandError), but the cançons processed before the error are
     persisted (per-Canço transaction)."""
@@ -276,8 +278,12 @@ def test_rate_limit_writes_cooldown_and_exits_cleanly(auth_present, client_mock)
 
     client_mock.search_isrc.side_effect = search_side_effect
 
-    # No CommandError raised — exits cleanly so tq-health doesn't alert.
-    call_command("enriquir_spotify", limit=10)
+    # Redirect the cooldown file to tmp_path so the test works on CI
+    # (no /var/log/topquaranta/ there).
+    cooldown = tmp_path / "enriquir_spotify.cooldown"
+    with patch("ingesta.management.commands.enriquir_spotify.COOLDOWN_FILE", cooldown):
+        # No CommandError raised — exits cleanly so tq-health doesn't alert.
+        call_command("enriquir_spotify", limit=10)
 
     c1.refresh_from_db()
     c2.refresh_from_db()
@@ -287,10 +293,10 @@ def test_rate_limit_writes_cooldown_and_exits_cleanly(auth_present, client_mock)
     assert c2.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_FOUND
     assert c3.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_ATTEMPTED
     # Cooldown file written with a future timestamp.
-    assert COOLDOWN_FILE.exists()
+    assert cooldown.exists()
     from datetime import datetime
 
-    resume_at = datetime.fromisoformat(COOLDOWN_FILE.read_text().strip())
+    resume_at = datetime.fromisoformat(cooldown.read_text().strip())
     assert resume_at > datetime.now()
 
 

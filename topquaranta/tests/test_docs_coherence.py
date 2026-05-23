@@ -88,6 +88,32 @@ def test_generic_ingesta_falls_back_to_pipeline(script, cfg):
     assert doc == "docs/architecture/pipeline.md"
 
 
+def test_enriquir_spotify_resolves_to_pipeline(script, cfg):
+    """`enriquir_spotify` is metadata enrichment of the ISRC cache,
+    not a playlist operation. It must fall through to the generic
+    `ingesta/ -> pipeline.md` entry, NOT trip the Spotify-specific
+    paths that resolve to `playlists.md`."""
+    doc = script.resolve(
+        "ingesta/management/commands/enriquir_spotify.py",
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert doc == "docs/architecture/pipeline.md"
+
+
+def test_recalcular_dispersio_spotify_resolves_to_pipeline(script, cfg):
+    """`recalcular_dispersio_spotify` recomputes the
+    `spotify_artist_dispersio` signal that feeds the RF verification
+    classifier documented at pipeline.md §4. It is not part of the
+    playlist publication surface."""
+    doc = script.resolve(
+        "ingesta/management/commands/recalcular_dispersio_spotify.py",
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert doc == "docs/architecture/pipeline.md"
+
+
 def test_excluded_prefix_returns_none(script, cfg):
     """Excluded prefixes never resolve to a doc, even if a later
     mapping entry would match. `scripts/` is the canonical example."""

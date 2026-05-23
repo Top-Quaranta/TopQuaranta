@@ -468,10 +468,27 @@ class Command(BaseCommand):
                 chunk = entries[(page - 1) * 10 : page * 10]
                 tags = []
                 for i, e in enumerate(chunk):
-                    x, y = _row_xy(i, len(chunk))
-                    t = _tag(e.get("artista_instagram_url"), x=x, y=y)
-                    if t:
-                        tags.append(t)
+                    # Tag the principal AND every collaborator with an
+                    # instagram_url. The principal anchors at the entry's
+                    # row position; collaborators offset slightly so the
+                    # tappable bubbles don't overlap. Principal first to
+                    # respect the per-image cap if we ever run out.
+                    base_x, base_y = _row_xy(i, len(chunk))
+                    urls = e.get("artistes_instagram_urls")
+                    if not urls:
+                        # Backward compat: fall back to the single-URL
+                        # field when the payload was built by an older
+                        # code path that did not populate the list.
+                        single = e.get("artista_instagram_url")
+                        urls = [single] if single else []
+                    for j, url in enumerate(urls):
+                        # Three-step horizontal nudge for collabs so they
+                        # don't sit exactly on top of the principal's
+                        # bubble. Y unchanged so they stay near the row.
+                        nudge_dx = (j % 3) * 0.10 - 0.10
+                        t = _tag(url, x=base_x + nudge_dx, y=base_y)
+                        if t and t not in tags:
+                            tags.append(t)
                 out.append(tags[:20])  # respect per-image cap
         elif tipus == SocialPost.TIPUS_NOUS_ALBUMS:
             items = data.get("items") or []

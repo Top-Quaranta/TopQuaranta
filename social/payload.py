@@ -41,6 +41,40 @@ def _instagram_url(artista) -> str:
     return getattr(artista, "instagram_url", "") or ""
 
 
+def _instagram_urls_for_canco(canco) -> list[str]:
+    """Return Instagram URLs for the principal artist + every
+    collaborator that has one, in canonical order. Artistes without
+    an instagram_url are silently skipped (no broken tags).
+
+    Used by the publicar_social.IG tagger so every artist on a track
+    gets a `user_tags` entry on the slide where their entry was
+    drawn. Mirrors `Canco.artistes_col_ordered` so the visual order
+    matches the renderer caption.
+    """
+    if canco is None:
+        return []
+    out: list[str] = []
+    principal = canco.artista
+    if principal is not None:
+        u = _instagram_url(principal)
+        if u:
+            out.append(u)
+    # Collaborators in stable insertion order.
+    try:
+        cols = canco.artistes_col_ordered()
+    except Exception:
+        # Defensive: a Canco fixture without the helper (unlikely
+        # in prod) falls back to the unordered manager.
+        cols = canco.artistes_col.all()
+    seen = set(out)
+    for a in cols:
+        u = _instagram_url(a)
+        if u and u not in seen:
+            out.append(u)
+            seen.add(u)
+    return out
+
+
 def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
     """Build the top entries (chart order) + previous-week positions
     so the renderer can draw arrows. Returns None if the requested
@@ -87,7 +121,14 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 "artistes_noms": artistes_noms,
                 "artista_nom": artista.nom if artista else "—",  # DEPRECATED
                 "artista_slug": artista.slug if artista else None,
+                # Principal-only URL kept for backward compatibility
+                # (renderer + caption code still reads this single field).
                 "artista_instagram_url": _instagram_url(artista),
+                # Every artist on the track (principal + collabs) that
+                # has an instagram_url, in canonical insertion order.
+                # The publicar_social tagger reads this list to attach
+                # one `user_tags` payload per artist per slide.
+                "artistes_instagram_urls": _instagram_urls_for_canco(canco),
                 "cover_url": getattr(album, "imatge_url", None) or None,
             }
         )

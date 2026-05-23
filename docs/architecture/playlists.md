@@ -92,7 +92,7 @@ activate after this PR merges:
    (`SpotifyMetadata.spotify_id`) only contains tracks Process B has
    already resolved. Coverage will climb as Process B walks the
    backlog over the following days.
-3. Open the 5 playlists at https://open.spotify.com/playlist/{id} and
+3. Open the 5 playlists at `https://open.spotify.com/playlist/<id>` and
    confirm the tracks look right.
 4. Uncomment the `0 10 * * 6 ... --freq weekly` line in
    `deploy/cron.topquaranta` and push via the normal Mac -> PR -> CI

@@ -170,15 +170,48 @@ def artistes_list(request: Request) -> Response:
     # in the CAT top doesn't outweigh a track in 9 distinct top tracks.
     sort_raw = (request.GET.get("sort") or "").strip()
     # Opt-in `n_top` annotation: distinct count of every TopSetmanal
-    # row across the artist's cançons. Used by the "artistes sense
-    # Instagram" workflow (Fase 2, 2026-05-18) to prioritise by
-    # historical chart presence. Gated by `?include_n_top=1` so the
-    # general list endpoint stays cheap.
+    # row across the artist's cançons, including BOTH the cançons
+    # where this artist is principal AND those where they appear as
+    # a collaborator (FASE 2 of the Sprint Triple, 2026-05-23).
+    #
+    # The earlier annotation counted only `cancons__rankings`
+    # (principal-only) which under-weighted artists that collaborate
+    # heavily but rarely lead. Tagging them on Instagram is just as
+    # valuable; the queue should rank them accordingly.
+    #
+    # Implementation: subquery per path with COUNT(DISTINCT
+    # TopSetmanal.id) to avoid the Cartesian inflation that two
+    # LEFT JOIN annotations would produce. Gated by `?include_n_top=1`
+    # so the general list endpoint stays cheap.
     include_n_top = request.GET.get("include_n_top") == "1"
     if include_n_top or sort_raw == "-n_top":
-        qs = qs.annotate(
-            n_top=Count("cancons__rankings", distinct=True),
+        from django.db.models import Subquery
+        from django.db.models.functions import Coalesce
+
+        from ranking.models import TopSetmanal
+
+        principal_n = Subquery(
+            TopSetmanal.objects.filter(canco__artista=OuterRef("pk"))
+            .order_by()
+            .values("canco__artista")
+            .annotate(n=Count("id", distinct=True))
+            .values("n")[:1],
+            output_field=IntegerField(),
         )
+        collab_n = Subquery(
+            TopSetmanal.objects.filter(canco__artistes_col=OuterRef("pk"))
+            .order_by()
+            .values("canco__artistes_col")
+            .annotate(n=Count("id", distinct=True))
+            .values("n")[:1],
+            output_field=IntegerField(),
+        )
+        # `Coalesce(..., 0)` so the Subquery returning NULL (no rows)
+        # contributes 0 to the sum rather than poisoning it.
+        qs = qs.annotate(
+            n_top_principal=Coalesce(principal_n, 0),
+            n_top_collab=Coalesce(collab_n, 0),
+        ).annotate(n_top=F("n_top_principal") + F("n_top_collab"))
 
     if sort_raw == "cancons_tops_desc":
         qs = (

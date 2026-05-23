@@ -27,8 +27,17 @@ import pytest
 from django.core.management import CommandError, call_command
 
 from ingesta.clients.spotify import RateLimitedError
+from ingesta.management.commands.enriquir_spotify import COOLDOWN_FILE
 from music.models import Album, Artista, Canco, SpotifyMetadata, SpotifyPlaylist
 from ranking.models import SenyalDiari, TopProvisional
+
+
+@pytest.fixture(autouse=True)
+def clean_cooldown_file():
+    """Ensure no cooldown file leaks between tests."""
+    COOLDOWN_FILE.unlink(missing_ok=True)
+    yield
+    COOLDOWN_FILE.unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -250,9 +259,10 @@ def test_public_ordering_by_latest_senyaldiari_playcount(auth_present, client_mo
 
 
 @pytest.mark.django_db
-def test_rate_limit_aborts_cleanly_saves_partial(auth_present, client_mock):
-    """RateLimitedError mid-run -> CommandError raised, but the cançons
-    processed before the error are persisted (per-Canço transaction)."""
+def test_rate_limit_writes_cooldown_and_exits_cleanly(auth_present, client_mock):
+    """RateLimitedError mid-run -> cooldown file written, exit 0 (no
+    CommandError), but the cançons processed before the error are
+    persisted (per-Canço transaction)."""
     a = Artista.objects.create(nom="EXEMPLE A7", lastfm_nom="EXEMPLE A7")
     al = Album.objects.create(artista=a, nom="EXEMPLE Al7")
     c1 = _make_canco(a, al, 400, ml=0.9)
@@ -266,8 +276,8 @@ def test_rate_limit_aborts_cleanly_saves_partial(auth_present, client_mock):
 
     client_mock.search_isrc.side_effect = search_side_effect
 
-    with pytest.raises(CommandError):
-        call_command("enriquir_spotify", limit=10)
+    # No CommandError raised — exits cleanly so tq-health doesn't alert.
+    call_command("enriquir_spotify", limit=10)
 
     c1.refresh_from_db()
     c2.refresh_from_db()
@@ -276,6 +286,12 @@ def test_rate_limit_aborts_cleanly_saves_partial(auth_present, client_mock):
     assert c1.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_FOUND
     assert c2.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_FOUND
     assert c3.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_ATTEMPTED
+    # Cooldown file written with a future timestamp.
+    assert COOLDOWN_FILE.exists()
+    from datetime import datetime
+
+    resume_at = datetime.fromisoformat(COOLDOWN_FILE.read_text().strip())
+    assert resume_at > datetime.now()
 
 
 @pytest.mark.django_db

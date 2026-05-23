@@ -348,6 +348,47 @@ Canonical home: **`docs/policies/conventions.md`**. Summary
 See `docs/policies/conventions.md` for the rationale, examples, and
 links to the post-mortems each rule traces back to.
 
+### Docs gates (FASE 2, hard CI checks)
+
+Three independent CI checks under `.github/workflows/ci-docs.yml`,
+each its own job-id so branch protection can require them
+individually. The canonical config they all read is
+**`docs/policies/docs-map.yml`** (single source of truth for the
+prefix-to-doc mapping, the exclude list and the size thresholds;
+shared with the planned pre-commit hook).
+
+- **`docs-coherence`** is a HARD gate: a PR that touches a mapped
+  subsystem without updating its doc fails. Test files
+  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`) and
+  Django migrations (`*/migrations/*`) are filtered out before
+  resolution: they are implementation churn, not architecture, and
+  do not trigger the gate.
+- Override (excepcional): one line in the PR body, format
+  `docs-reviewed: <doc-path> : <raó>`. CI verifies the doc exists
+  on disk, is the doc the mapping resolved for the triggered
+  subsystem, and the reason is non-empty. Accepted overrides add
+  the `docs-review-skipped` label for audit. By default, update
+  the doc; do not use the override as a shortcut.
+- **`docs-novelty`** is a HARD gate: a new top-level code
+  directory (Django app or any directory with at least one `*.py`)
+  must appear in `docs-map.yml` under `mapping:` (with its doc) or
+  `exclude:` (with a `reason:`). New top-level Python work must
+  make the docs decision explicit.
+- **`docs-size`** is a HARD gate: docs under `size.scope`
+  (`docs/architecture/`, `docs/ops/`) must respect
+  `size.threshold_lines` (400). When a doc grows past the
+  threshold, split it per `docs-maintenance.md` Rule 3 (split by
+  sub-area, keep the original as an index) rather than
+  compressing. Update every `# Spec:` backlink and the
+  `docs-map.yml` entries that pointed at the old path.
+- ML feature ordering: new features go at the **END** of
+  `FEATURE_NAMES` in `music/ml.py`, never in the middle. Required
+  by the load-time alignment check (`music/ml.py::_get_clf`) that
+  blocks a model trained on N features from being served once
+  `FEATURE_NAMES` has N+1. See the 2026-05-23 incident postmortem
+  in `docs/ops/runbook.md` and ADR-equivalent comments inside
+  `music/ml.py`.
+
 ## 11. Workflow
 
 Edits happen **locally on the Mac** (via Claude Code in the worktree, or

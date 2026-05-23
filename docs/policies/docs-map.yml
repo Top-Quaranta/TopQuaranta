@@ -1,0 +1,133 @@
+# Canonical mapping between code paths and the architecture/ops docs
+# that document them. Single source of truth shared by:
+#
+#   - `.github/workflows/ci-docs.yml` (docs-coherence job), via
+#     `scripts/check_docs_coherence.py`. Soft signal only today:
+#     labels the PR `needs-docs-review`, does not block merge.
+#   - A pre-commit hook (planned, FASE 2).
+#
+# Format chosen: YAML. Justification: the mapping is human-edited and
+# benefits from per-entry comments and inline rationale (which JSON
+# would force into ad-hoc `_doc` keys, as `deploy/cron-meta.json`
+# already has to). YAML matches the surrounding tooling
+# (`.pre-commit-config.yaml`, GitHub workflows). The CI cost is one
+# `pip install pyyaml --quiet` in the docs-coherence step.
+#
+# # Spec: docs/policies/docs-maintenance.md
+
+# ---------------------------------------------------------------------
+# mapping: ordered list of {prefix, doc}. Longest matching prefix wins
+# at resolution time, so the specific entry beats the generic one
+# (e.g. `ingesta/clients/spotify.py` resolves to `playlists.md`, not
+# the generic `ingesta/ → pipeline.md`). The order in this file is
+# only for human readability; the resolver sorts by descending prefix
+# length.
+# ---------------------------------------------------------------------
+mapping:
+  # Django apps (1-to-1 with INSTALLED_APPS where possible)
+  - prefix: social/
+    doc: docs/architecture/social.md
+  - prefix: comptes/
+    doc: docs/architecture/comptes.md
+  - prefix: music/
+    doc: docs/architecture/models.md
+  - prefix: ranking/
+    doc: docs/architecture/algorithm.md
+  - prefix: analytics/
+    doc: docs/architecture/analytics.md
+
+  # web/ split: the more specific staff/SEO docs win over the generic
+  # api-versioning doc for files under their subtrees.
+  - prefix: web/api/staff/
+    doc: docs/architecture/staff.md
+  - prefix: web/seo/
+    doc: docs/architecture/seo.md
+  - prefix: web/api/
+    doc: docs/architecture/api-versioning.md
+
+  # ingesta/ granular split: the Spotify subsystem has its own
+  # architectural doc (`playlists.md`) separate from the broader
+  # ingestion pipeline (`pipeline.md`). The specific file paths win.
+  - prefix: ingesta/clients/spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/actualitzar_playlists_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/autoritzar_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/configurar_spotify_playlists.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/enriquir_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/management/commands/recalcular_dispersio_spotify.py
+    doc: docs/architecture/playlists.md
+  - prefix: ingesta/
+    doc: docs/architecture/pipeline.md
+
+  # SPA frontend
+  - prefix: web-react/
+    doc: docs/architecture/frontend.md
+
+  # Infrastructure + ops scripts
+  - prefix: bin/
+    doc: docs/ops/runbook.md
+  - prefix: deploy/
+    doc: docs/ops/infra.md
+  - prefix: topquaranta/
+    doc: docs/ops/infra.md
+
+# ---------------------------------------------------------------------
+# exclude: prefixes that never trip the docs-coherence check. A PR
+# touching only excluded prefixes resolves to no doc and gets no
+# label. Each entry must carry a `reason` so the exemption is
+# auditable.
+# ---------------------------------------------------------------------
+exclude:
+  - prefix: scripts/
+    reason: >-
+      Ad-hoc analysis scripts and migration helpers. No fixed
+      architectural contract; accepting graveyard status until a
+      piece grows enough to deserve its own doc.
+  - prefix: vendor/
+    reason: >-
+      Design tokens vendored from the mm-design repo. Source of
+      truth lives upstream; touching files here means re-vendoring,
+      not changing the contract.
+
+# ---------------------------------------------------------------------
+# size: doc-size thresholds. Not enforced by a CI gate yet (FASE 2);
+# centralised here so the future check has a single config to read.
+#
+#   threshold_lines     hard ceiling for docs under `scope`.
+#   exempt_permanent    paths that never count against the ceiling.
+#   grandfathered       paths that currently exceed the ceiling but
+#                       are allowed temporarily until split per
+#                       `docs-maintenance.md` Rule 3. Each entry
+#                       names the current line count so a drift
+#                       (further growth) is visible at next review.
+# ---------------------------------------------------------------------
+size:
+  threshold_lines: 400
+  scope:
+    - docs/architecture/
+    - docs/ops/
+  exempt_permanent:
+    - path: docs/history/roadmap.md
+      reason: >-
+        Historical sprint log. Grows by design; Rule 3 archives
+        completed sprints quarterly, but the live file stays long.
+  grandfathered:
+    - path: docs/ops/runbook.md
+      current_lines: 747
+      reason: >-
+        Schedule a split (Rule 3) into per-area runbooks
+        (deploy, ML, social, ingest).
+    - path: docs/architecture/pipeline.md
+      current_lines: 531
+      reason: >-
+        Split candidates: Last.fm signal, MusicBrainz reconciliation,
+        Whisper LID.
+    - path: docs/architecture/models.md
+      current_lines: 425
+      reason: >-
+        Split candidates: domain models (music/), ranking models
+        (ranking/), social models (social/).

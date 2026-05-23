@@ -904,6 +904,18 @@ def estat(request: Request) -> Response:
     apv = HistorialRevisio.objects.filter(decisio="aprovada").count()
     rej = HistorialRevisio.objects.filter(decisio="rebutjada").count()
     ml["class_balance"] = {"aprovades": apv, "rebutjades": rej}
+    # Misalignment banner (2026-05-23 incident guard). When set, the
+    # frontend surfaces a red banner so an operator notices in
+    # minutes instead of waiting to spot the f-number labels on the
+    # importances panel. See `music.ml.model_misaligned`.
+    from music.ml import model_misaligned as _model_misaligned
+
+    misaligned_info = _model_misaligned()
+    if misaligned_info is not None:
+        ml["misaligned"] = True
+        ml["misaligned_info"] = misaligned_info
+    else:
+        ml["misaligned"] = False
 
     for row in (
         Canco.objects.values("ml_classe").annotate(n=Count("pk")).order_by("ml_classe")

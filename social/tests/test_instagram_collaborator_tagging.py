@@ -203,3 +203,72 @@ def test_slide_tags_skips_artists_without_handle():
     out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 2, data)
     handles = [t["username"] for t in out[1]]
     assert handles == ["visible"]
+
+
+def test_slide_tags_principal_first_round_robin_protects_all_entries():
+    """Worst-case from prod 2026-05-23: one cançó with 1 principal +
+    25 collabs would, under the naive flat-list algorithm, consume
+    all 20 tag slots and starve the other 9 entries of their
+    principal. With principal-first round-robin every entry that has
+    a handle keeps its principal, and the remaining budget feeds
+    collabs of the verbose entry."""
+    # Entry 0: 1 principal + 25 collabs (well above the 20 cap on its own).
+    big_entry = _entry(
+        ["https://instagram.com/big_principal"]
+        + [f"https://instagram.com/collab_{i:02d}" for i in range(25)]
+    )
+    # Entries 1..9: principal only, no collabs.
+    small_entries = [
+        _entry([f"https://instagram.com/solo_{i:02d}"]) for i in range(1, 10)
+    ]
+    data = {"entries": [big_entry, *small_entries]}
+    out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 2, data)
+    tags = out[1]
+    assert len(tags) <= 20, "cap violated"
+    handles = [t["username"] for t in tags]
+
+    # 1. Every entry's principal IS present (10 of them).
+    assert "big_principal" in handles
+    for i in range(1, 10):
+        assert (
+            f"solo_{i:02d}" in handles
+        ), f"solo_{i:02d} missing - the verbose entry monopolised the budget"
+
+    # 2. The 10 remaining slots are filled with collabs of the big
+    #    entry (the only one that has any).
+    collab_handles = [h for h in handles if h.startswith("collab_")]
+    assert len(collab_handles) == 10
+    # 3. Total budget exhausted exactly.
+    assert len(tags) == 20
+
+
+def test_slide_tags_round_robin_when_multiple_entries_have_collabs():
+    """Two entries with collabs: budget shared via round-robin so
+    every entry gets its principal AND its first collab before any
+    entry gets its second collab."""
+    a = _entry(
+        [
+            "https://instagram.com/a_p",
+            "https://instagram.com/a_c1",
+            "https://instagram.com/a_c2",
+        ]
+    )
+    b = _entry(
+        [
+            "https://instagram.com/b_p",
+            "https://instagram.com/b_c1",
+            "https://instagram.com/b_c2",
+        ]
+    )
+    data = {"entries": [a, b]}
+    out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 2, data)
+    handles = [t["username"] for t in out[1]]
+    # Principals first.
+    assert handles[0] == "a_p"
+    assert handles[1] == "b_p"
+    # Then 1st collab of every entry before any 2nd collab.
+    assert handles[2] == "a_c1"
+    assert handles[3] == "b_c1"
+    # Then 2nd collabs.
+    assert handles[4] == "a_c2"
+    assert handles[5] == "b_c2"

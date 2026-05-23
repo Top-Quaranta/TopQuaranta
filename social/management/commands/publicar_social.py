@@ -466,30 +466,70 @@ class Command(BaseCommand):
             entries = data.get("entries") or []
             for page in range(1, n_slides):
                 chunk = entries[(page - 1) * 10 : page * 10]
-                tags = []
-                for i, e in enumerate(chunk):
-                    # Tag the principal AND every collaborator with an
-                    # instagram_url. The principal anchors at the entry's
-                    # row position; collaborators offset slightly so the
-                    # tappable bubbles don't overlap. Principal first to
-                    # respect the per-image cap if we ever run out.
-                    base_x, base_y = _row_xy(i, len(chunk))
-                    urls = e.get("artistes_instagram_urls")
+                # Build the tag list with a principal-first, then
+                # round-robin-over-collabs strategy so a single cançó
+                # with many collaborators can never monopolise the
+                # 20-tags-per-image Meta cap and starve other entries
+                # of their principal tag. Concretely:
+                #
+                #   Pass 1: principal of every entry (up to 10 tags).
+                #   Pass 2: 1st collab of every entry that has one.
+                #   Pass 3: 2nd collab of every entry that has one.
+                #   ...
+                #
+                # Each pass stops as soon as the budget is exhausted.
+                # `tags[:20]` at the end is now defensive (the
+                # algorithm already caps by construction) but kept
+                # for safety.
+                #
+                # Caught at the 2026-05-23 audit on a real worst-case
+                # ("La Gent de la Mediterrània" has 23 collaborators
+                # with Instagram handles); without round-robin that
+                # one entry would have consumed all 20 slots.
+                CAP = 20
+                tags: list[dict] = []
+
+                def _entry_urls(entry: dict) -> list[str]:
+                    """Resolve the per-entry handle list, accepting
+                    both the new payload (`artistes_instagram_urls`)
+                    and the legacy single-URL fallback."""
+                    urls = entry.get("artistes_instagram_urls")
                     if not urls:
-                        # Backward compat: fall back to the single-URL
-                        # field when the payload was built by an older
-                        # code path that did not populate the list.
-                        single = e.get("artista_instagram_url")
+                        single = entry.get("artista_instagram_url")
                         urls = [single] if single else []
-                    for j, url in enumerate(urls):
-                        # Three-step horizontal nudge for collabs so they
-                        # don't sit exactly on top of the principal's
-                        # bubble. Y unchanged so they stay near the row.
-                        nudge_dx = (j % 3) * 0.10 - 0.10
-                        t = _tag(url, x=base_x + nudge_dx, y=base_y)
+                    return [u for u in urls if u]
+
+                chunk_urls = [_entry_urls(e) for e in chunk]
+                # Pass 1: principals (collab_idx = 0).
+                for i, urls in enumerate(chunk_urls):
+                    if len(tags) >= CAP:
+                        break
+                    if not urls:
+                        continue
+                    base_x, base_y = _row_xy(i, len(chunk))
+                    t = _tag(urls[0], x=base_x, y=base_y)
+                    if t and t not in tags:
+                        tags.append(t)
+                # Pass 2+: round-robin over collabs by index.
+                max_extra = max((len(u) - 1 for u in chunk_urls), default=0)
+                for collab_idx in range(1, max_extra + 1):
+                    if len(tags) >= CAP:
+                        break
+                    for i, urls in enumerate(chunk_urls):
+                        if len(tags) >= CAP:
+                            break
+                        if collab_idx >= len(urls):
+                            continue
+                        base_x, base_y = _row_xy(i, len(chunk))
+                        # Three-step horizontal nudge keyed on
+                        # collab_idx so adjacent collab bubbles in the
+                        # same row don't overlap each other or the
+                        # principal at base_x.
+                        nudge_dx = (collab_idx % 3) * 0.10 - 0.10
+                        t = _tag(urls[collab_idx], x=base_x + nudge_dx, y=base_y)
                         if t and t not in tags:
                             tags.append(t)
-                out.append(tags[:20])  # respect per-image cap
+                out.append(tags[:CAP])  # defensive cap
         elif tipus == SocialPost.TIPUS_NOUS_ALBUMS:
             items = data.get("items") or []
             # 1 slide per album (renderer caps at 9; n_slides may be

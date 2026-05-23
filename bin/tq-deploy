@@ -68,6 +68,27 @@ if [ "$(id -un)" != "topquaranta" ]; then
     exit 64
 fi
 
+# Mark a deploy as in progress so a background `entrenar_model()`
+# triggered by `recalcular_ml_si_cal` during the window doesn't write
+# a joblib against a half-updated codebase. The Python guard in
+# `music.ml.entrenar_model` checks this exact path and bails. We
+# create the directory under /var/run (tmpfs on Linux) so a hard
+# crash leaves no stale lock after reboot. See the 2026-05-23
+# incident postmortem: a thread that started before the deploy
+# finished training with 49 features at the moment new workers
+# expected 50, hiding the regression in the heuristic fallback for
+# ~1.5 h.
+DEPLOY_LOCK_DIR=/var/run/topquaranta
+DEPLOY_LOCK_FILE="$DEPLOY_LOCK_DIR/deploy.lock"
+if [ ! -d "$DEPLOY_LOCK_DIR" ]; then
+    sudo mkdir -p "$DEPLOY_LOCK_DIR" 2>/dev/null || true
+    sudo chown topquaranta:topquaranta "$DEPLOY_LOCK_DIR" 2>/dev/null || true
+fi
+date -Iseconds > "$DEPLOY_LOCK_FILE" 2>/dev/null || true
+# Best-effort cleanup of the lock on any exit path. trap chains so
+# we don't clobber any pre-existing EXIT handler.
+trap 'rm -f "$DEPLOY_LOCK_FILE" 2>/dev/null || true' EXIT
+
 echo "→ Cleaning worktree before pull (idempotent)"
 # Why: Claude-driven sessions occasionally land artefacts on the
 # server worktree (regenerated migrations, ad-hoc preview scripts,

@@ -1093,6 +1093,22 @@ export default function EstatPage() {
           Machine Learning
         </h2>
 
+        {/* Misalignment banner. When the loaded RF model's feature
+            count diverges from FEATURE_NAMES, every inference falls
+            back to the heuristic. We surface that loudly here so the
+            operator notices in minutes, not hours. */}
+        {ml?.misaligned && (
+          <div className="bg-tq-danger text-white rounded-lg p-3 mb-3 text-sm">
+            <strong className="uppercase tracking-widest text-xs">
+              Model misaligned
+            </strong>
+            <span className="ml-2">
+              Inferencia caient al heuristic.{' '}
+              {ml.misaligned_info?.msg || 'Re-entrena el model.'}
+            </span>
+          </div>
+        )}
+
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
           <BigNumber
             label="Features totals"

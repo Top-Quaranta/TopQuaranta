@@ -711,3 +711,37 @@ o bé deixar que black descobreixi els fitxers per ell mateix:
 `git checkout HEAD -- foo.json` i re-aplica el diff manualment.
 La integritat del fitxer es valida amb `python -c "import json;
 json.load(open('foo.json'))"`.
+
+### Inserir features ML noves: SEMPRE al final de FEATURE_NAMES
+
+Convencio establerta despres de l'incident del 2026-05-23 (PR #75):
+inserir `spotify_artist_dispersio` al MIG de la llista
+(entre el bloc MB i el TF-IDF tail) va exposar una finestra de race
+entre `tq-deploy` i el thread background de `recalcular_ml_si_cal`.
+
+El thread va fer `fit()` amb el codi pre-deploy (49 features), va
+escriure `ml_model.joblib`, i poc despres gunicorn va recarregar amb
+el codi nou (50 features). El RF es va quedar amb 49 columnes mentre
+el codi en passava 50. Cada inferencia llencava `ValueError`,
+atrapada per `pre_classificar` que cau al heuristic fallback. La
+desalineacio va durar ~1.5 h fins que algu va notar els f-numbers al
+panell `/staff/estat`.
+
+**Regla**: les features noves al RF s'afegeixen sempre al FINAL de
+`music.ml.FEATURE_NAMES` (i del vector que retornen `_build_features`
+i `_build_features_from_historial`). Mai al mig. Aixi un model
+antic carregat sota codi nou conserva els indexs 0..N-1 alineats
+amb els seus noms; nomes la nova columna queda en buit fins al
+proxim retrain.
+
+**Salvaguardes que la cobreixen** (totes al mateix PR de l'incident):
+- `_get_clf` valida `clf.n_features_in_ == len(FEATURE_NAMES)` cada
+  cop que carrega el joblib. Si no coincideix marca
+  `_model_cache["misaligned"]=True` i ho exposa via
+  `music.ml.model_misaligned()`.
+- `/staff/estat` retorna `ml.misaligned=True` i el frontend dibuixa
+  un banner vermell.
+- `entrenar_model()` consulta `DEPLOY_LOCK_PATH`
+  (`/var/run/topquaranta/deploy.lock`); si el lock existeix, NO
+  entrena i deixa el retrain al proper cicle.
+- `bin/tq-deploy` toca el lock al principi i el neteja al EXIT (trap).

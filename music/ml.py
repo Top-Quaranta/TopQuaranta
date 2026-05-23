@@ -60,6 +60,24 @@ LAST_RECALC_FILE = "/tmp/tq_last_ml_recalc"
 #
 # and cuts TF-IDF from 200 → 60 features (more than enough capacity for
 # a char-n-gram signal from <5 k distinct titles). Total dim: 76.
+# CONVENTION (2026-05-23 incident postmortem): new features go at
+# the END of this list, after the TF-IDF tail (or just before it
+# if they're structured and need to live next to the structured
+# block). NEVER insert in the middle.
+#
+# Rationale: an in-the-middle insertion shifts every later index by
+# one. If a deploy lands while a background retrain is running, the
+# retrain can write joblib with the old feature count while new code
+# expects the new count, producing a silent off-by-one alignment
+# bug. Appending at the end keeps old indices stable, so even when a
+# stale model loads under new code the structured columns 0..N-1
+# still match their names.
+#
+# `spotify_artist_dispersio` (added 2026-05-23) violates this rule
+# because it sits between `mb` features and the TF-IDF tail. It is
+# kept where it is (moving it now would only open a different,
+# silent alignment window between deploy and retrain). Future
+# additions: end of list.
 FEATURE_NAMES = [
     "isrc_es",
     "isrc_international",
@@ -122,7 +140,61 @@ _model_cache: dict = {
     "clf": None,
     "tfidf_mtime": None,
     "tfidf": None,
+    # Misalignment flag: set True when the loaded RF model's
+    # `n_features_in_` does not match `len(FEATURE_NAMES)`. While set,
+    # `pre_classificar` will silently fall back to the heuristic at
+    # every inference (sklearn would raise on the predict call) — the
+    # whole point of this flag is to surface the degraded state to
+    # the staff dashboard / tq-health so it gets detected in minutes,
+    # not in the hours-later "why is the panel showing f-numbers?"
+    # debugging session that triggered this guard (2026-05-23
+    # incident, see PR #75 -> retrain race with deploy).
+    "misaligned": False,
+    "misaligned_msg": "",
 }
+
+
+# Lock file checked by `entrenar_model` to refuse training while a
+# deploy is in progress. The deploy script (`bin/tq-deploy`) touches
+# this path at the start of the run and removes it at the end. If a
+# background retrain triggered by `recalcular_ml_si_cal` lands during
+# the deploy window, it sees the lock and aborts cleanly so the
+# model joblib is never written with a half-updated codebase.
+#
+# Path chosen under `/var/run/topquaranta/` (tmpfs on Linux, gone on
+# reboot) so a crashed deploy does not leave a stale lock that
+# blocks the next legitimate retrain indefinitely. The directory is
+# created by tq-deploy on demand.
+DEPLOY_LOCK_PATH = Path("/var/run/topquaranta/deploy.lock")
+
+
+def _is_deploy_in_progress() -> bool:
+    """True iff `tq-deploy` has signalled it is mid-run via the
+    lock file. Defensive: filesystem errors fall through as 'not in
+    progress' so a permissions glitch never permanently blocks
+    retraining."""
+    try:
+        return DEPLOY_LOCK_PATH.exists()
+    except OSError:
+        return False
+
+
+def model_misaligned() -> dict | None:
+    """Public accessor for the misalignment flag.
+
+    Returns `None` when the model is healthy (or no model loaded
+    yet), or a dict with diagnostic info when misaligned. The /staff/
+    estat endpoint and tq-health both call this to surface a
+    degraded-state banner in seconds instead of waiting for an
+    operator to notice the heuristic fallback by looking at the
+    panel's f-number labels."""
+    if not _model_cache.get("misaligned"):
+        return None
+    return {
+        "msg": _model_cache.get("misaligned_msg") or "",
+        "expected_features": len(FEATURE_NAMES),
+        "model_features": getattr(_model_cache.get("clf"), "n_features_in_", None),
+    }
 
 
 def _get_tfidf():
@@ -138,15 +210,48 @@ def _get_tfidf():
 
 
 def _get_clf():
-    """Return the cached RF classifier, reloading when the joblib file changes."""
+    """Return the cached RF classifier, reloading when the joblib file
+    changes. Validates the model's feature count against FEATURE_NAMES
+    on every reload and flags `_model_cache['misaligned']` if they
+    disagree, so the staff dashboard and tq-health can surface the
+    degraded state in real time."""
     if not MODEL_PATH.exists():
+        # No model on disk: clear any stale misalignment flag (the
+        # heuristic fallback is the explicit design when there's no
+        # joblib yet, not a degraded state).
+        _model_cache["misaligned"] = False
+        _model_cache["misaligned_msg"] = ""
         return None
     mtime = MODEL_PATH.stat().st_mtime
     if _model_cache["clf_mtime"] != mtime:
         import joblib
 
-        _model_cache["clf"] = joblib.load(MODEL_PATH)
+        clf = joblib.load(MODEL_PATH)
+        _model_cache["clf"] = clf
         _model_cache["clf_mtime"] = mtime
+        # Validate immediately on (re)load. sklearn's RandomForestClassifier
+        # exposes `n_features_in_` since v0.24 (we're on >= 1.0).
+        expected = len(FEATURE_NAMES)
+        actual = getattr(clf, "n_features_in_", None)
+        if actual is not None and actual != expected:
+            _model_cache["misaligned"] = True
+            _model_cache["misaligned_msg"] = (
+                f"RF model trained with {actual} features but "
+                f"FEATURE_NAMES has {expected}. Inference falls back to "
+                "the heuristic. Run `entrenar_model()` to realign."
+            )
+            # Logged at ERROR (not WARNING) so it surfaces in error
+            # log scrapers and email alerts immediately. The previous
+            # behaviour (sklearn raising at predict-time, caught by the
+            # broad except in pre_classificar, logged WARNING) was the
+            # silent path that hid the 2026-05-23 incident for hours.
+            logger.error(
+                "[ml] RF model MISALIGNED at load: %s",
+                _model_cache["misaligned_msg"],
+            )
+        else:
+            _model_cache["misaligned"] = False
+            _model_cache["misaligned_msg"] = ""
     return _model_cache["clf"]
 
 
@@ -500,7 +605,26 @@ def entrenar_model() -> bool:
     """
     Train TF-IDF vectorizer + RandomForestClassifier from HistorialRevisio.
     Saves both to disk. Returns True if trained.
+
+    Refuses to run while `tq-deploy` is in progress (DEPLOY_LOCK_PATH
+    exists). A background retrain started just before a deploy could
+    otherwise fit() against the old codebase and then write joblib at
+    the moment new workers expect the new feature shape, leaving the
+    classifier silently misaligned (caught 2026-05-23 with the
+    spotify_artist_dispersio feature: model on disk had 49 features,
+    new code expected 50; every inference fell through to the heuristic
+    fallback for ~1.5 h until the staff dashboard surfaced the f-number
+    labels and someone noticed).
     """
+    if _is_deploy_in_progress():
+        logger.warning(
+            "[ml] entrenar_model() refused: %s exists (deploy in progress). "
+            "The retrain will be picked up on the next recalcular_ml_si_cal "
+            "tick once the deploy completes.",
+            DEPLOY_LOCK_PATH,
+        )
+        return False
+
     import joblib
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.feature_extraction.text import TfidfVectorizer

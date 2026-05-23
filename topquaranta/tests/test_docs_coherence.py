@@ -154,3 +154,36 @@ def test_web_api_staff_beats_web_api(script, cfg):
         cfg["exclude"],
     )
     assert doc == "docs/architecture/staff.md"
+
+
+def test_web_seo_matches_both_dir_and_hypothetical_file(script, cfg):
+    """The SEO prefix is `web/seo` without trailing slash so it
+    captures both `web/seo/<file>.py` (today) and a hypothetical
+    future `web/seo.py`. Both must resolve to `seo.md`."""
+    assert (
+        script.resolve("web/seo/meta.py", cfg["mapping"], cfg["exclude"])
+        == "docs/architecture/seo.md"
+    )
+    assert (
+        script.resolve("web/seo.py", cfg["mapping"], cfg["exclude"])
+        == "docs/architecture/seo.md"
+    )
+
+
+def test_web_generic_falls_back_to_web_md(script, cfg):
+    """A `web/` file that is neither api/ nor seo/ must resolve to
+    the generic `web.md` (error handlers, RSS feeds, sitemaps)."""
+    for path in ("web/feeds.py", "web/sitemaps.py", "web/views/__init__.py"):
+        assert (
+            script.resolve(path, cfg["mapping"], cfg["exclude"])
+            == "docs/architecture/web.md"
+        ), f"{path} should resolve to web.md"
+
+
+def test_web_api_still_beats_web_generic(script, cfg):
+    """Adding the `web/` fallback must not steal traffic from the
+    more specific `web/api/` entry."""
+    assert (
+        script.resolve("web/api/top_views.py", cfg["mapping"], cfg["exclude"])
+        == "docs/architecture/api-versioning.md"
+    )

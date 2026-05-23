@@ -37,13 +37,19 @@ mapping:
     doc: docs/architecture/analytics.md
 
   # web/ split: the more specific staff/SEO docs win over the generic
-  # api-versioning doc for files under their subtrees.
+  # api-versioning doc for files under their subtrees, and the
+  # ultra-generic `web/` fallback catches the leftover surface
+  # (error handlers, RSS feeds, sitemaps, legal versions).
+  # `web/seo` (no trailing slash) matches both `web/seo/<file>` and
+  # a hypothetical future `web/seo.py`.
   - prefix: web/api/staff/
     doc: docs/architecture/staff.md
-  - prefix: web/seo/
+  - prefix: web/seo
     doc: docs/architecture/seo.md
   - prefix: web/api/
     doc: docs/architecture/api-versioning.md
+  - prefix: web/
+    doc: docs/architecture/web.md
 
   # ingesta/ granular split: the Spotify subsystem has its own
   # architectural doc (`playlists.md`) separate from the broader
@@ -119,15 +125,22 @@ size:
     - path: docs/ops/runbook.md
       current_lines: 747
       reason: >-
-        Schedule a split (Rule 3) into per-area runbooks
-        (deploy, ML, social, ingest).
+        Exceeds the local 400 threshold. Rule 3's split row in
+        docs-maintenance.md only covers docs/architecture/<X>.md,
+        so a runbook split is a discretionary cleanup, not an
+        automatic decay sweep. Candidates: deploy, ML, social,
+        ingest sub-runbooks.
     - path: docs/architecture/pipeline.md
       current_lines: 531
       reason: >-
-        Split candidates: Last.fm signal, MusicBrainz reconciliation,
-        Whisper LID.
+        Over Rule 3's hard 500-line ceiling for
+        docs/architecture/<X>.md. Schedule a split at the next
+        decay sweep into per-source files (Last.fm signal,
+        MusicBrainz reconciliation, Whisper LID).
     - path: docs/architecture/models.md
       current_lines: 425
       reason: >-
-        Split candidates: domain models (music/), ranking models
-        (ranking/), social models (social/).
+        Over the local 400 threshold but still under Rule 3's
+        500-line ceiling, so no decay-sweep obligation yet.
+        Split candidates if it grows: domain (music/), ranking
+        (ranking/), social (social/).

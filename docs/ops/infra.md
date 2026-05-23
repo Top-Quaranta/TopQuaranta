@@ -73,6 +73,61 @@ project its own write surface. TopQuaranta keeps the global block
 and its own sites; other projects ship snippets that survive any
 TQ deploy because TQ never reads or writes the conf.d directory.
 
+## Project configuration (`topquaranta/`)
+
+The Django project package at `topquaranta/` is not "infra" in the
+Caddy sense but lives in this doc because it pins the environment
+the runtime depends on: settings split, WSGI/ASGI entry points,
+URL roots, and the `.env` contract.
+
+### Settings split
+
+```
+topquaranta/settings/
+├── base.py          Shared base. INSTALLED_APPS, middleware, auth,
+│                    DRF, axes, otp, paths.
+├── production.py    Used by management commands on the server.
+│                    Reads DATABASE_URL, SECRET_KEY, etc. from .env.
+├── web_server.py    Used by the gunicorn unit. Inherits production
+│                    + the production-only middleware (HSTS, secure
+│                    cookies, ALLOWED_HOSTS lockdown).
+├── local.py         Developer overrides (not committed). Optional.
+└── test.py          SQLite in-memory, no external services, pytest
+                     defaults. Pinned via `pytest.ini` (--ds=).
+```
+
+The convention is that anything user-facing reads
+`DJANGO_SETTINGS_MODULE=topquaranta.settings.web_server`; cron and
+ad-hoc shells use `topquaranta.settings.production`; pytest is
+hard-pinned via `addopts = --ds=topquaranta.settings.test` so an
+inherited shell env can never flip the suite to production
+settings.
+
+### Entry points
+
+| File | Role |
+|---|---|
+| `topquaranta/urls.py` | Root URL conf. Mounts `web.api.urls`, `comptes.urls`, the RSS feeds, the SEO views, and the sitemap. |
+| `topquaranta/wsgi.py` | gunicorn entry point (HTTP). |
+| `topquaranta/asgi.py` | ASGI handle (not used today; reserved for any future channels work). |
+
+### `.env` contract
+
+Loaded via `python-decouple`. Always accessed through
+`from django.conf import settings`. Required keys:
+
+```
+DJANGO_SECRET_KEY
+DJANGO_SETTINGS_MODULE
+ALLOWED_HOSTS
+DATABASE_URL
+LASTFM_API_KEY / LASTFM_API_SECRET
+SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET / SPOTIFY_REDIRECT_URI
+```
+
+Plus optional service keys for Brevo, Resend, Hetzner Cloud, CDMON
+DNS, Google Search Console, etc. (see `CLAUDE.md §8`).
+
 ## Quick checklist when onboarding a new project
 
 - Add an A record at the DNS provider pointing the new hostname at

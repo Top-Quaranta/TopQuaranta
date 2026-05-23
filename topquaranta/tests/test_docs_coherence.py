@@ -1,12 +1,10 @@
-"""Behaviour pin for `scripts/check_docs_coherence.py`.
+"""Behaviour pins for `scripts/check_docs_coherence.py`.
 
-FASE 1 of the docs gates centralises the prefix-to-doc mapping in
-`docs/policies/docs-map.yml` and moves the docs-coherence logic from
-a hardcoded bash array into this Python script. The behaviour MUST
-stay identical to the bash version: soft signal only, label on
-miss, no exit-code change. These tests pin that contract so a later
-sprint cannot accidentally turn the check into a hard gate without
-the diff explicitly saying so.
+FASE 2 turned the gate from soft (label-only) into hard (exit !=0
+on uncovered miss). The PR body can carry one or more
+`docs-reviewed: <doc> : <reason>` override lines; the verifier
+checks that the named doc exists on disk and matches a doc the
+mapping resolved for one of the touched subsystems.
 """
 
 # Spec: docs/policies/docs-maintenance.md
@@ -24,9 +22,6 @@ SCRIPT_PATH = REPO_ROOT / "scripts" / "check_docs_coherence.py"
 
 
 def _load_script_module():
-    """Import the script as a module without requiring `scripts/`
-    to be on the Python path. The script is callable as a CLI and
-    as a library; tests use the library API."""
     spec = importlib.util.spec_from_file_location("check_docs_coherence", SCRIPT_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["check_docs_coherence"] = mod
@@ -44,9 +39,12 @@ def cfg(script):
     return script.load_map()
 
 
+# ---------------------------------------------------------------------
+# Mapping sanity
+# ---------------------------------------------------------------------
+
+
 def test_yaml_loads_and_has_expected_keys(cfg):
-    """Sanity: the canonical map exists and parses; the top-level
-    shape is what the resolver expects."""
     assert "mapping" in cfg
     assert "exclude" in cfg
     assert cfg["mapping"], "mapping must not be empty"
@@ -55,9 +53,6 @@ def test_yaml_loads_and_has_expected_keys(cfg):
 
 
 def test_all_mapped_docs_exist_on_disk(cfg):
-    """Every doc referenced by the mapping must point to a real
-    file. A rename in `docs/` without updating `docs-map.yml` is a
-    silent regression and must fail CI."""
     missing = [
         entry["doc"]
         for entry in cfg["mapping"]
@@ -66,33 +61,22 @@ def test_all_mapped_docs_exist_on_disk(cfg):
     assert not missing, f"docs-map.yml points at missing files: {missing}"
 
 
+# ---------------------------------------------------------------------
+# Resolver: longest-prefix-match + exclude semantics
+# ---------------------------------------------------------------------
+
+
 def test_longest_prefix_wins_for_spotify(script, cfg):
-    """The whole point of granular paths under `ingesta/`: a Spotify
-    client file must resolve to `playlists.md`, not the generic
-    `pipeline.md`."""
-    doc = script.resolve(
-        "ingesta/clients/spotify.py",
-        cfg["mapping"],
-        cfg["exclude"],
-    )
+    doc = script.resolve("ingesta/clients/spotify.py", cfg["mapping"], cfg["exclude"])
     assert doc == "docs/architecture/playlists.md"
 
 
 def test_generic_ingesta_falls_back_to_pipeline(script, cfg):
-    """A non-Spotify ingesta file must still hit the broader doc."""
-    doc = script.resolve(
-        "ingesta/clients/lastfm.py",
-        cfg["mapping"],
-        cfg["exclude"],
-    )
+    doc = script.resolve("ingesta/clients/lastfm.py", cfg["mapping"], cfg["exclude"])
     assert doc == "docs/architecture/pipeline.md"
 
 
 def test_enriquir_spotify_resolves_to_pipeline(script, cfg):
-    """`enriquir_spotify` is metadata enrichment of the ISRC cache,
-    not a playlist operation. It must fall through to the generic
-    `ingesta/ -> pipeline.md` entry, NOT trip the Spotify-specific
-    paths that resolve to `playlists.md`."""
     doc = script.resolve(
         "ingesta/management/commands/enriquir_spotify.py",
         cfg["mapping"],
@@ -102,10 +86,6 @@ def test_enriquir_spotify_resolves_to_pipeline(script, cfg):
 
 
 def test_recalcular_dispersio_spotify_resolves_to_pipeline(script, cfg):
-    """`recalcular_dispersio_spotify` recomputes the
-    `spotify_artist_dispersio` signal that feeds the RF verification
-    classifier documented at pipeline.md §4. It is not part of the
-    playlist publication surface."""
     doc = script.resolve(
         "ingesta/management/commands/recalcular_dispersio_spotify.py",
         cfg["mapping"],
@@ -115,77 +95,21 @@ def test_recalcular_dispersio_spotify_resolves_to_pipeline(script, cfg):
 
 
 def test_excluded_prefix_returns_none(script, cfg):
-    """Excluded prefixes never resolve to a doc, even if a later
-    mapping entry would match. `scripts/` is the canonical example."""
-    doc = script.resolve(
-        "scripts/some_ad_hoc.py",
-        cfg["mapping"],
-        cfg["exclude"],
-    )
+    doc = script.resolve("scripts/some_ad_hoc.py", cfg["mapping"], cfg["exclude"])
     assert doc is None
 
 
 def test_unmapped_path_returns_none(script, cfg):
-    """A path that matches no mapping entry returns None (no label,
-    no warning)."""
-    doc = script.resolve(
-        "README.md",
-        cfg["mapping"],
-        cfg["exclude"],
-    )
+    doc = script.resolve("README.md", cfg["mapping"], cfg["exclude"])
     assert doc is None
 
 
-def test_miss_flagged_when_code_changes_without_doc(script, cfg):
-    """The canonical soft-signal case: PR touches `social/foo.py`,
-    not `docs/architecture/social.md`. Must show up as a miss."""
-    misses = script.find_coupled_misses(
-        ["social/captions.py", "music/models.py"],
-        cfg["mapping"],
-        cfg["exclude"],
-    )
-    docs = {d for _, d in misses}
-    assert "docs/architecture/social.md" in docs
-    assert "docs/architecture/models.md" in docs
-
-
-def test_no_miss_when_doc_is_also_in_diff(script, cfg):
-    """If the PR DOES touch the doc, the corresponding code change
-    does not trip the check."""
-    misses = script.find_coupled_misses(
-        ["social/captions.py", "docs/architecture/social.md"],
-        cfg["mapping"],
-        cfg["exclude"],
-    )
-    assert misses == []
-
-
-def test_excluded_path_does_not_trigger(script, cfg):
-    """A PR that touches only excluded paths must produce zero
-    misses (`needs-docs-review` would be wrong)."""
-    misses = script.find_coupled_misses(
-        ["scripts/dump_something.py", "vendor/mm-design/tokens.css"],
-        cfg["mapping"],
-        cfg["exclude"],
-    )
-    assert misses == []
-
-
 def test_web_api_staff_beats_web_api(script, cfg):
-    """The mapping has both `web/api/` and `web/api/staff/`. A file
-    under staff must resolve to `staff.md`, not `api-versioning.md`."""
-    doc = script.resolve(
-        "web/api/staff/estat.py",
-        cfg["mapping"],
-        cfg["exclude"],
-    )
+    doc = script.resolve("web/api/staff/estat.py", cfg["mapping"], cfg["exclude"])
     assert doc == "docs/architecture/staff.md"
 
 
 def test_web_seo_matches_both_dir_and_hypothetical_file(script, cfg):
-    """The SEO prefix is `web/seo` without trailing slash so it
-    captures both `web/seo/<file>.py` (today) and a hypothetical
-    future `web/seo.py`. Both must resolve to `seo.md`."""
     assert (
         script.resolve("web/seo/meta.py", cfg["mapping"], cfg["exclude"])
         == "docs/architecture/seo.md"
@@ -197,19 +121,348 @@ def test_web_seo_matches_both_dir_and_hypothetical_file(script, cfg):
 
 
 def test_web_generic_falls_back_to_web_md(script, cfg):
-    """A `web/` file that is neither api/ nor seo/ must resolve to
-    the generic `web.md` (error handlers, RSS feeds, sitemaps)."""
     for path in ("web/feeds.py", "web/sitemaps.py", "web/views/__init__.py"):
         assert (
             script.resolve(path, cfg["mapping"], cfg["exclude"])
             == "docs/architecture/web.md"
-        ), f"{path} should resolve to web.md"
+        )
 
 
 def test_web_api_still_beats_web_generic(script, cfg):
-    """Adding the `web/` fallback must not steal traffic from the
-    more specific `web/api/` entry."""
     assert (
         script.resolve("web/api/top_views.py", cfg["mapping"], cfg["exclude"])
         == "docs/architecture/api-versioning.md"
     )
+
+
+# ---------------------------------------------------------------------
+# Miss detection
+# ---------------------------------------------------------------------
+
+
+def test_miss_flagged_when_code_changes_without_doc(script, cfg):
+    misses = script.find_coupled_misses(
+        ["social/captions.py", "music/models.py"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    docs = {d for _, d in misses}
+    assert "docs/architecture/social.md" in docs
+    assert "docs/architecture/models.md" in docs
+
+
+def test_no_miss_when_doc_is_also_in_diff(script, cfg):
+    misses = script.find_coupled_misses(
+        ["social/captions.py", "docs/architecture/social.md"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
+
+
+def test_excluded_path_does_not_trigger(script, cfg):
+    misses = script.find_coupled_misses(
+        ["scripts/dump_something.py", "vendor/mm-design/tokens.css"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
+
+
+# ---------------------------------------------------------------------
+# Implementation-churn filter: tests + migrations + conftest do not
+# trip the coherence gate. A PR that only touches them must not
+# require a docs override.
+# ---------------------------------------------------------------------
+
+
+def test_test_file_under_mapped_subsystem_is_not_a_miss(script, cfg):
+    """`social/tests/test_x.py` lives under social/ (mapped to
+    social.md) but is implementation churn, not architecture."""
+    misses = script.find_coupled_misses(
+        ["social/tests/test_renderer.py"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
+
+
+def test_django_migration_under_mapped_subsystem_is_not_a_miss(script, cfg):
+    """`music/migrations/0099_foo.py` is autogenerated; no doc update
+    should be required."""
+    misses = script.find_coupled_misses(
+        ["music/migrations/0099_add_field.py"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
+
+
+def test_conftest_under_mapped_subsystem_is_not_a_miss(script, cfg):
+    misses = script.find_coupled_misses(
+        ["comptes/conftest.py"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
+
+
+def test_topquaranta_tests_only_is_not_a_miss(script, cfg):
+    """The case that broke PR #82: this whole repo's docs-gate test
+    suite lives under `topquaranta/tests/`, mapped to infra.md, but
+    is pure test work."""
+    misses = script.find_coupled_misses(
+        [
+            "topquaranta/tests/test_docs_coherence.py",
+            "topquaranta/tests/test_docs_novelty.py",
+            "topquaranta/tests/test_docs_size.py",
+        ],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
+
+
+def test_source_code_under_mapped_subsystem_still_triggers(script, cfg):
+    """The positive case must not regress: changing real source code
+    of a mapped subsystem still requires the doc to move."""
+    misses = script.find_coupled_misses(
+        ["social/captions.py"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == [("social/captions.py", "docs/architecture/social.md")]
+
+
+def test_mixed_diff_only_keeps_real_source_misses(script, cfg):
+    """Source + tests together: only the source counts."""
+    misses = script.find_coupled_misses(
+        [
+            "social/captions.py",
+            "social/tests/test_captions.py",
+            "music/migrations/0099_add.py",
+        ],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == [("social/captions.py", "docs/architecture/social.md")]
+
+
+def test_is_implementation_churn_unit(script):
+    """Pin the predicate directly so the filename rules stay
+    explicit (any pytest-discovery edge case shows here, not in a
+    failing end-to-end test)."""
+    assert script._is_implementation_churn("music/tests/test_x.py")
+    assert script._is_implementation_churn("music/migrations/0001_x.py")
+    assert script._is_implementation_churn("music/conftest.py")
+    assert script._is_implementation_churn("music/tests_helpers/test_y.py")
+    assert script._is_implementation_churn("test_top_level.py")
+    assert script._is_implementation_churn("music/factory_test.py")
+    # negatives: real source under a mapped subsystem must NOT match
+    assert not script._is_implementation_churn("music/models.py")
+    assert not script._is_implementation_churn("music/ml.py")
+    assert not script._is_implementation_churn("social/captions.py")
+    # `testimoni.py` is not a test file. Filename rule requires
+    # `test_` prefix or `_test.py` suffix.
+    assert not script._is_implementation_churn("music/testimoni.py")
+
+
+# ---------------------------------------------------------------------
+# Override parser
+# ---------------------------------------------------------------------
+
+
+def test_parse_overrides_extracts_single_line(script):
+    body = (
+        "## Summary\n"
+        "Refactor.\n\n"
+        "docs-reviewed: docs/architecture/social.md : "
+        "internal refactor, no conceptual change\n"
+    )
+    overrides = script.parse_overrides(body)
+    assert overrides == {
+        "docs/architecture/social.md": ("internal refactor, no conceptual change")
+    }
+
+
+def test_parse_overrides_handles_multiple_lines(script):
+    body = (
+        "docs-reviewed: docs/architecture/social.md : x\n"
+        "docs-reviewed: docs/architecture/models.md : y\n"
+    )
+    assert script.parse_overrides(body) == {
+        "docs/architecture/social.md": "x",
+        "docs/architecture/models.md": "y",
+    }
+
+
+def test_parse_overrides_allows_colon_in_reason(script):
+    body = (
+        "docs-reviewed: docs/architecture/social.md : "
+        "see ADR 0008: detectors expanded\n"
+    )
+    assert script.parse_overrides(body) == {
+        "docs/architecture/social.md": "see ADR 0008: detectors expanded"
+    }
+
+
+def test_parse_overrides_drops_empty_reason(script):
+    body = "docs-reviewed: docs/architecture/social.md :   \n"
+    assert script.parse_overrides(body) == {}
+
+
+def test_parse_overrides_returns_empty_on_no_body(script):
+    assert script.parse_overrides("") == {}
+    assert script.parse_overrides(None) == {}
+
+
+# ---------------------------------------------------------------------
+# Override validator (does what the CI gate enforces)
+# ---------------------------------------------------------------------
+
+
+def test_override_covers_miss_when_doc_matches_and_exists(script):
+    misses = [("social/captions.py", "docs/architecture/social.md")]
+    overrides = {"docs/architecture/social.md": "refactor intern, no conceptual"}
+    remaining, accepted, errors = script.validate_overrides(misses, overrides)
+    assert remaining == []
+    assert accepted == [
+        (
+            "docs/architecture/social.md",
+            "refactor intern, no conceptual",
+        )
+    ]
+    assert errors == []
+
+
+def test_override_rejected_when_doc_does_not_match_any_miss(script):
+    misses = [("social/captions.py", "docs/architecture/social.md")]
+    overrides = {"docs/architecture/models.md": "wrong doc, this is models not social"}
+    remaining, accepted, errors = script.validate_overrides(misses, overrides)
+    assert remaining == misses  # still uncovered
+    assert accepted == []
+    assert errors and "does not match any doc" in errors[0]
+
+
+def test_override_rejected_when_doc_does_not_exist_on_disk(script, tmp_path):
+    misses = [("social/captions.py", "docs/architecture/social.md")]
+    overrides = {"docs/architecture/social.md": "valid reason"}
+    # Pretend the repo root has no such file.
+    remaining, accepted, errors = script.validate_overrides(
+        misses, overrides, repo_root=tmp_path
+    )
+    assert remaining == misses
+    assert accepted == []
+    assert errors and "does not exist on disk" in errors[0]
+
+
+def test_override_partial_coverage_leaves_uncovered_misses(script):
+    misses = [
+        ("social/captions.py", "docs/architecture/social.md"),
+        ("music/models.py", "docs/architecture/models.md"),
+    ]
+    overrides = {"docs/architecture/social.md": "covered"}
+    remaining, accepted, errors = script.validate_overrides(misses, overrides)
+    assert remaining == [("music/models.py", "docs/architecture/models.md")]
+    assert accepted == [("docs/architecture/social.md", "covered")]
+    assert errors == []
+
+
+# ---------------------------------------------------------------------
+# End-to-end: stdin + PR_BODY through main()
+# ---------------------------------------------------------------------
+
+
+def _run_main(script, monkeypatch, changed_files: list[str], body: str) -> int:
+    """Drive the script's main() with synthetic stdin + body."""
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n".join(changed_files) + "\n"))
+    monkeypatch.setenv("PR_BODY", body)
+    return script.main()
+
+
+def test_main_passes_when_no_misses(script, monkeypatch, capsys):
+    rc = _run_main(
+        script,
+        monkeypatch,
+        ["docs/README.md", "MANIFEST.md"],
+        "",
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "No subsystem/doc coupling" in out
+
+
+def test_main_passes_when_code_and_doc_touched_together(script, monkeypatch, capsys):
+    rc = _run_main(
+        script,
+        monkeypatch,
+        ["social/captions.py", "docs/architecture/social.md"],
+        "",
+    )
+    assert rc == 0
+
+
+def test_main_fails_on_miss_without_override(script, monkeypatch, capsys):
+    rc = _run_main(script, monkeypatch, ["social/captions.py"], "Summary line.")
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "needs-docs-review" in out
+    assert "docs-review-skipped" not in out
+    assert "no doc update, no override" in out
+
+
+def test_main_passes_with_valid_override(script, monkeypatch, capsys):
+    body = (
+        "docs-reviewed: docs/architecture/social.md : "
+        "internal refactor, no conceptual change\n"
+    )
+    rc = _run_main(script, monkeypatch, ["social/captions.py"], body)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "needs-docs-review" in out
+    assert "docs-review-skipped" in out
+    assert "override accepted" in out
+
+
+def test_main_fails_with_override_for_wrong_doc(script, monkeypatch, capsys):
+    body = "docs-reviewed: docs/architecture/models.md : i meant social\n"
+    rc = _run_main(script, monkeypatch, ["social/captions.py"], body)
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "override rejected" in out
+    assert "does not match any doc" in out
+
+
+def test_main_fails_with_override_for_nonexistent_doc(script, monkeypatch, capsys):
+    body = "docs-reviewed: docs/architecture/social.md : ok\n"
+    # We need a miss whose doc IS not on disk: ask the resolver to
+    # return a phantom mapping by mocking it. Simpler approach: keep
+    # the real mapping but craft the override to name a non-existent
+    # path AND make the path one of the misses by stubbing.
+    import importlib
+
+    cm = importlib.import_module("check_docs_coherence")
+    real_find = cm.find_coupled_misses
+    cm.find_coupled_misses = lambda changed, mapping, exclude: [
+        ("social/captions.py", "docs/architecture/no-such-doc.md")
+    ]
+    try:
+        body = "docs-reviewed: docs/architecture/no-such-doc.md : ok\n"
+        rc = _run_main(script, monkeypatch, ["social/captions.py"], body)
+        out = capsys.readouterr().out
+        assert rc == 1
+        assert "does not exist on disk" in out
+    finally:
+        cm.find_coupled_misses = real_find
+
+
+def test_main_fails_with_empty_reason(script, monkeypatch, capsys):
+    body = "docs-reviewed: docs/architecture/social.md :    \n"
+    rc = _run_main(script, monkeypatch, ["social/captions.py"], body)
+    out = capsys.readouterr().out
+    assert rc == 1
+    # Empty reason was dropped by the parser, so the failure mode is
+    # the same as "no override": the message says no override exists.
+    assert "no doc update, no override" in out

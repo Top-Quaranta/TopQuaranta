@@ -24,7 +24,7 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.core.management import CommandError, call_command
+from django.core.management import call_command
 
 from ingesta.clients.spotify import RateLimitedError
 from ingesta.management.commands.enriquir_spotify import COOLDOWN_FILE
@@ -298,6 +298,58 @@ def test_rate_limit_writes_cooldown_and_exits_cleanly(
 
     resume_at = datetime.fromisoformat(cooldown.read_text().strip())
     assert resume_at > datetime.now()
+
+
+@pytest.mark.django_db
+def test_rate_limit_cooldown_clamped_to_max(auth_present, client_mock, tmp_path):
+    """Spotify occasionally hands out absurd Retry-After values
+    (>1 day). MAX_COOLDOWN_S caps the cooldown so the cron does not
+    silence itself for weeks on a single 429. We respect Spotify's
+    own back-off up to that cap but no further."""
+    from datetime import datetime, timedelta
+
+    from ingesta.management.commands.enriquir_spotify import MAX_COOLDOWN_S
+
+    a = Artista.objects.create(nom="EXEMPLE A_clamp", lastfm_nom="EXEMPLE A_clamp")
+    al = Album.objects.create(artista=a, nom="EXEMPLE Al_clamp")
+    _make_canco(a, al, 9000, ml=0.9)
+
+    # 200000s = ~55h, well above the 86400s (24h) cap.
+    absurd_retry_after = 200000
+    assert absurd_retry_after > MAX_COOLDOWN_S, "test fixture must exceed cap"
+
+    def search_side_effect(isrc):
+        raise RateLimitedError(absurd_retry_after, "/search")
+
+    client_mock.search_isrc.side_effect = search_side_effect
+
+    cooldown = tmp_path / "enriquir_spotify.cooldown"
+    # The command stamps `resume_at` in naive UTC (via datetime.now(tz=utc)
+    # .replace(tzinfo=None)). Use the same convention here so the
+    # 5s skew window is honest about clock differences.
+    from datetime import timezone as dt_tz
+
+    def _utc_naive():
+        return datetime.now(tz=dt_tz.utc).replace(tzinfo=None)
+
+    before = _utc_naive()
+    with patch("ingesta.management.commands.enriquir_spotify.COOLDOWN_FILE", cooldown):
+        call_command("enriquir_spotify", limit=10)
+    after = _utc_naive()
+
+    assert cooldown.exists()
+    resume_at = datetime.fromisoformat(cooldown.read_text().strip())
+
+    # The cooldown stamp must equal `now + MAX_COOLDOWN_S` (within the
+    # test's clock skew window), NOT `now + absurd_retry_after`.
+    expected_cap = before + timedelta(seconds=MAX_COOLDOWN_S)
+    # 5s tolerance for the time spent inside call_command.
+    assert abs((resume_at - expected_cap).total_seconds()) < 5, (
+        f"resume_at={resume_at} expected~{expected_cap} "
+        f"(should NOT honour absurd_retry_after={absurd_retry_after}s)"
+    )
+    # Sanity: the un-capped resume_at would be far in the future.
+    assert resume_at < after + timedelta(seconds=MAX_COOLDOWN_S + 5)
 
 
 @pytest.mark.django_db

@@ -55,6 +55,16 @@ logger = logging.getLogger(__name__)
 
 COOLDOWN_FILE = Path("/var/log/topquaranta/status/enriquir_spotify.cooldown")
 
+# Maximum cooldown we will honour from Spotify's Retry-After header.
+# Empirically Spotify's rate-limit windows are persistent (the ban
+# survives the per-minute bucket reset), and probing /search during
+# an active cooldown extends it. Clamping to 24h means: respect any
+# value Spotify gives us up to one day, and treat anything beyond
+# that as an absurd outlier we still cap. We deliberately do NOT
+# clamp aggressively (e.g. 1h) because reintenting earlier than
+# Spotify asks tends to re-trigger or worsen the abuse-pattern flag.
+MAX_COOLDOWN_S = 86400
+
 
 class Command(BaseCommand):
     help = "Enrich Cançons with Spotify metadata (Process B)."
@@ -155,10 +165,13 @@ class Command(BaseCommand):
         except RateLimitedError as exc:
             # Spotify asked us to back off for hours. Write a cooldown
             # file so subsequent cron ticks skip silently, and exit 0
-            # so the watchdog does NOT flip status=FAIL.
+            # so the watchdog does NOT flip status=FAIL. Cap at
+            # MAX_COOLDOWN_S to ignore absurd values without
+            # under-cutting Spotify's own back-off signal.
             aborted = True
+            effective_cooldown_s = min(exc.retry_after_s, MAX_COOLDOWN_S)
             resume_at = datetime.now(tz=dt_tz.utc).replace(tzinfo=None) + timedelta(
-                seconds=exc.retry_after_s
+                seconds=effective_cooldown_s
             )
             try:
                 COOLDOWN_FILE.write_text(resume_at.isoformat())

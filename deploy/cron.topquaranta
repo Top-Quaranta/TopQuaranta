@@ -112,12 +112,22 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # :30 every hour -> Process B (Spotify enrichment). One-shot per
 # Canço: search ISRC -> fetch track + artist -> persist
-# SpotifyMetadata. Throttled (0.5s default per call) so the
-# per-minute /search budget stays clear. --limit 200 means a fresh
-# backlog of ~1500 cançons fills in ~7-8 ticks. NOT
-# --target-playlists in regime; that flag is for the operator's
-# first cold-cache run only.
-30 * * * *  topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 200 --throttle 0.5 >> /var/log/topquaranta/playlists.log 2>&1
+# SpotifyMetadata. Throttled so the per-minute /search budget stays
+# clear and the per-tick runtime stays under any reasonable cron
+# slot.
+#
+# Calibration 2026-05-23 (post-incident, see ADR-0013):
+#   --limit 50    cap of 50 candidates/tick -> 150 API calls worst
+#                 case (search + track + artist per canco).
+#   --throttle 1.0 1 req/s ceiling -> 60 req/min, well below the
+#                 ~180 req/min that Spotify hands new Dev Mode apps
+#                 on /search. The previous 0.5s caused repeated
+#                 24h Retry-After windows during cold-cache runs.
+# Effective backlog drain: 50 canco/h -> 1200/day -> ~5 days for
+# the current 3700 not_attempted pool. Acceptable since the cache
+# warms incrementally and most playlists already cover their top
+# candidates from the initial seed.
+30 * * * *  topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 50 --throttle 1.0 >> /var/log/topquaranta/playlists.log 2>&1
 
 # 22:30 → Pull engagement metrics from each social platform
 # (Mastodon, Bluesky, Instagram, Telegram). Per-post counters for the

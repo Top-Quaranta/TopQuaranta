@@ -89,8 +89,19 @@ jobs:
     # one the mapping resolved for the touched subsystem, (c) the
     # reason is non-empty. When the override is used the workflow
     # adds the `docs-review-skipped` label so reviewers can filter.
+    #
+    # `permissions.pull-requests: write` is required for the
+    # `gh pr edit --add-label` calls below. The default GITHUB_TOKEN
+    # has read-only PR access, which silently swallowed the label
+    # writes (visible in CI logs as `'<label>' not found` because
+    # the request is rejected with "Resource not accessible by
+    # integration"). The label-add lines used `|| true` so the
+    # check did not fail, but the audit labels never landed.
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:

@@ -367,8 +367,13 @@ shared with the planned pre-commit hook).
   `docs-reviewed: <doc-path> : <raó>`. CI verifies the doc exists
   on disk, is the doc the mapping resolved for the triggered
   subsystem, and the reason is non-empty. Accepted overrides add
-  the `docs-review-skipped` label for audit. By default, update
-  the doc; do not use the override as a shortcut.
+  the `docs-review-skipped` label for audit.
+- Update the doc when the change alters what the doc DESCRIBES
+  (new endpoint, route, model, command, channel; changed data flow
+  or contract; renamed concept; new invariant). Use the override
+  only when you touch a mapped subsystem but the doc stays
+  accurate (internal refactor, typo, log line, style edit). Full
+  criteria + examples at `docs/policies/docs-maintenance.md`.
 - **`docs-novelty`** is a HARD gate: a new top-level code
   directory (Django app or any directory with at least one `*.py`)
   must appear in `docs-map.yml` under `mapping:` (with its doc) or

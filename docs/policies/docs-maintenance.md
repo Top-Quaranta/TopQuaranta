@@ -71,6 +71,42 @@ Editing the PR body to add an override re-triggers the check
 (`types: [..., edited]` on `pull_request`), so you can fix an
 override without pushing an empty commit.
 
+#### When to update the doc vs when to override
+
+Closing both bad doors at once: the override is not a shortcut for
+"I did not want to write docs today", and an unrelated doc edit is
+not a way to silence the gate.
+
+**Update the doc** when the PR alters what the doc DESCRIBES.
+Concrete triggers:
+
+- a new public surface (a new API endpoint, route, view, page,
+  background command, cron job, channel, model, or pipeline stage),
+- a change to existing data flow, contract, or schema (the diagram
+  in the doc would now lie),
+- a new model field that other parts of the system are expected to
+  read (an externally-visible attribute),
+- a removed or renamed concept that the doc still names,
+- a new constraint, invariant, or assumption the doc was supposed
+  to track.
+
+**Use the override (excepcional)** when you touch a mapped
+subsystem but the doc's content stays accurate. Concrete examples:
+
+- internal refactor with identical public behaviour (renaming a
+  private helper, extracting a function, splitting a module),
+- typo fix or comment-only change in a source file,
+- adding a log line, a metric counter, or a debug branch,
+- style-only edits (whitespace, import order, type-hint cosmetics),
+- adding a one-off detail to an existing cell of an existing table
+  in code that the doc summarises at a higher level.
+
+Doubt: if you cannot point to a sentence in the doc that would
+become wrong without your change, you probably don't need to update
+the doc, but you still need the override because the gate cannot
+read your mind. Write the override line; the `<reason>` should
+explain in one sentence why the doc stays valid.
+
 ### Rule 3 — Quarterly decay sweep
 
 Four times a year (15 March, 15 June, 15 September, 15 December),

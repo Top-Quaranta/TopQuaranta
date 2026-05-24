@@ -59,12 +59,10 @@
     "description": "Process A weekly slice: mirrors the 5 weekly top playlists from TopSetmanal (PPCC + CAT + VAL + BAL + ALT). Same cache-only contract as the daily run."
   },
   "enriquir_spotify": {
-    "frequency_label": "Cada hora :30",
-    "max_age_hours": 3,
+    "frequency_label": "Cada nit 03:00",
+    "max_age_hours": 26,
     "skip_concern": 1,
-    "silenced": true,
-    "silenced_reason": "Pending first manual run with --target-playlists --throttle 1.0 to seed cache before regime cron starts.",
-    "description": "Process B: Spotify enrichment. Search ISRC -> fetch track + artist -> persist SpotifyMetadata. Throttled (0.5s default); --limit 200 per tick covers a fresh backlog in ~7-8 ticks."
+    "description": "Process B: Spotify enrichment. Search ISRC -> fetch track + artist -> persist SpotifyMetadata. Nightly cadence (moved from hourly 2026-05-24 after repeated Dev-Mode quota bans); --limit 50 covers the ~21 new Cançons/day with ample headroom."
   },
   "tq-restore-test": {
     "frequency_label": "Mensual (dia 1, 04:30)",

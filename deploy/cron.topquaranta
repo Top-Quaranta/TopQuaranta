@@ -123,24 +123,34 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # at /staff/social/spotify/.
 0 10 * * 6  topquaranta   /home/topquaranta/bin/tq-run actualitzar_playlists_spotify --freq weekly >> /var/log/topquaranta/playlists.log 2>&1
 
-# :30 every hour -> Process B (Spotify enrichment). One-shot per
+# 03:00 nightly -> Process B (Spotify enrichment). One-shot per
 # Canço: search ISRC -> fetch track + artist -> persist
 # SpotifyMetadata. Throttled so the per-minute /search budget stays
 # clear and the per-tick runtime stays under any reasonable cron
 # slot.
 #
-# Calibration 2026-05-23 (post-incident, see ADR-0013):
-#   --limit 50    cap of 50 candidates/tick -> 150 API calls worst
-#                 case (search + track + artist per canco).
-#   --throttle 1.0 1 req/s ceiling -> 60 req/min, well below the
-#                 ~180 req/min that Spotify hands new Dev Mode apps
-#                 on /search. The previous 0.5s caused repeated
-#                 24h Retry-After windows during cold-cache runs.
-# Effective backlog drain: 50 canco/h -> 1200/day -> ~5 days for
-# the current 3700 not_attempted pool. Acceptable since the cache
-# warms incrementally and most playlists already cover their top
-# candidates from the initial seed.
-30 * * * *  topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 50 --throttle 1.0 >> /var/log/topquaranta/playlists.log 2>&1
+# Cadence change (2026-05-24): moved from hourly to nightly daily.
+# Observed real volume: ~21 new Cançons/day (rolling 14d average);
+# the prior hourly cron made 24 runs x up to 150 calls/day worst
+# case for 1.2k candidate budget vs 21 actual new tracks/day. The
+# 57x over-provisioning was draining the historical not_attempted
+# backlog (3.3k rows) but also kept tripping Spotify's daily quota,
+# producing 18h Retry-After windows roughly once per day. Slot moved
+# to 03:00 UTC so the enrichment finishes before the 04:00 Whisper
+# run and well before the first `actualitzar_playlists_spotify`
+# tick at 04:15, so the day's playlists see the freshly-enriched
+# spotify_ids on the first sync of the day.
+#
+# Budget under the new cadence:
+#   --limit 50    cap of 50 candidates/tick -> 150 API calls/day
+#                 worst case (search + track + artist per canco).
+#   --throttle 1.0 1 req/s ceiling -> 60 req/min during the ~3 min
+#                 it takes a 50-candidate batch.
+# Backlog drain at 50/day is slow (~67 days for 3.3k). We raise
+# --limit only after observing several consecutive days without a
+# 429, not preemptively. See docs/architecture/playlists.md
+# (Process B) and ADR-0013 for the A/B split.
+0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 50 --throttle 1.0 >> /var/log/topquaranta/playlists.log 2>&1
 
 # 22:30 → Pull engagement metrics from each social platform
 # (Mastodon, Bluesky, Instagram, Telegram). Per-post counters for the

@@ -223,18 +223,18 @@ def _compute_qualitat(artista: Artista) -> dict:
         )
     )
 
-    # 2. Deezer net — 0 rebuigs album_incorrecte sobre les seves cançons
+    # 2. Deezer net — 0 rebuigs desvincular_album sobre les seves cançons
     from music.models import HistorialRevisio
 
     n_rebutjats = HistorialRevisio.objects.filter(
         artista_nom=artista.nom,
         decisio="rebutjada",
-        motiu="album_incorrecte",
+        motiu="desvincular_album",
     ).count()
     indicators.append(
         _indicator(
             "deezer_net",
-            "Deezer net (sense rebuigs «àlbum incorrecte»)",
+            "Deezer net (sense àlbums desvinculats per homònim)",
             "success" if n_rebutjats == 0 else "warning",
             (
                 "Cap rebuig per «àlbum incorrecte»."

@@ -286,8 +286,9 @@ Import from `music/constants.py`:
 - `ML_CLASSE_A_THRESHOLD`, `ML_CLASSE_B_THRESHOLD`, `MIN_TRAINING_SAMPLES`,
   `MIN_NEW_DECISIONS`
 - `DEEZER_RATE_LIMIT`, `LASTFM_RATE_LIMIT`, `MAX_API_RETRIES`
-- `MOTIUS_REBUIG` — 4 valid reject reasons: `no_catala`, `artista_incorrecte`,
-  `album_incorrecte`, `no_musica`. Semantics in `CLAUDE_STAFF.md §5`.
+- `MOTIUS_REBUIG` — 3 action-based reject codes: `desvincular_canco`,
+  `desvincular_album`, `desvincular_artista`. Renamed 2026-05-25 from
+  cause-based codes; semantics in `docs/architecture/staff.md §5`.
 
 ## 8. Environment (.env)
 

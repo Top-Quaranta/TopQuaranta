@@ -81,7 +81,7 @@ def sollicitud(db, gestor, artista):
         canco_deezer_id=99,
         canco_isrc="X0000000001",
         decisio="rebutjada",
-        motiu="no_catala",
+        motiu="desvincular_canco",
     )
     return SolicitudRevisio.objects.create(
         gestor=gestor,
@@ -94,7 +94,7 @@ def sollicitud(db, gestor, artista):
                 "isrc": "X0000000001",
                 "nom": "T-rej",
                 "album_nom": "EP",
-                "motiu": "no_catala",
+                "motiu": "desvincular_canco",
             }
         ],
     )
@@ -163,7 +163,7 @@ def test_detall_inflates_pendents_and_rebutjades(client_staff, sollicitud):
     assert len(body["pendents"]) == 2
     assert all("nom" in p for p in body["pendents"])
     assert len(body["rebutjades"]) == 1
-    assert body["rebutjades"][0]["motiu"] == "no_catala"
+    assert body["rebutjades"][0]["motiu"] == "desvincular_canco"
     assert body["rebutjades"][0]["reconsiderada"] is False
     assert body["rebutjades"][0]["historial_present"] is True
 
@@ -214,7 +214,7 @@ def test_reconsiderar_rejects_unrelated_historial(client_staff, sollicitud):
         canco_nom="other",
         artista_nom="x",
         decisio="rebutjada",
-        motiu="no_catala",
+        motiu="desvincular_canco",
     )
     r = client_staff.post(
         f"/api/v1/staff/sollicituds-revisio/{sollicitud.pk}/reconsiderar-rebutjada/",

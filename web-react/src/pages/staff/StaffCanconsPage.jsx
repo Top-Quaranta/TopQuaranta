@@ -28,11 +28,14 @@ import FilterPanel from '../../components/staff/FilterPanel'
 // Mirror of music.constants.MOTIUS_REBUIG (label/value pairs). Keep
 // this in sync when the backend list changes — the bulk-action
 // endpoint rejects anything outside this set with "Motiu invàlid".
+// Renamed 2026-05-25 from cause-based to action-based codes (see
+// the constants docstring). Order matters: the safest action
+// (canço-level descart) is first; the most destructive
+// (perfil Deezer wipe) is last.
 const MOTIUS = [
-  ['no_catala',          'No és en català'],
-  ['artista_incorrecte', "El perfil Deezer no és el nostre artista"],
-  ['album_incorrecte',   'Àlbum incorrecte'],
-  ['no_musica',          'No és música'],
+  ['desvincular_canco',   'Descartar la cançó (idioma, no és música, etc.)'],
+  ['desvincular_album',   "Desvincular l'àlbum (homònim al perfil Deezer correcte)"],
+  ['desvincular_artista', 'Desvincular el perfil Deezer (no és el nostre artista)'],
 ]
 
 // Default filter values — also used by the FilterPanel "Restablir"
@@ -70,7 +73,7 @@ export default function StaffCanconsPage() {
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
   const [sel, setSel] = useState(new Set())
-  const [motiu, setMotiu] = useState('no_catala')
+  const [motiu, setMotiu] = useState('desvincular_canco')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 

@@ -36,17 +36,18 @@ const ESTAT_LABEL = {
   resolta: 'Resolta',
 }
 
+// Action-based motiu codes (see music.constants.MOTIUS_REBUIG).
+// Tones reflect blast radius: cançó-level (default) < album-level
+// (warning) < perfil-Deezer-level (danger).
 const MOTIU_TONE = {
-  no_catala: 'default',
-  album_incorrecte: 'warning',
-  artista_incorrecte: 'warning',
-  no_musica: 'danger',
+  desvincular_canco: 'default',
+  desvincular_album: 'warning',
+  desvincular_artista: 'danger',
 }
 const MOTIU_LABEL = {
-  no_catala: 'No és en català',
-  album_incorrecte: 'Àlbum incorrecte',
-  artista_incorrecte: 'Artista incorrecte',
-  no_musica: 'No és música',
+  desvincular_canco: 'Cançó descartada',
+  desvincular_album: 'Àlbum desvinculat (homònim)',
+  desvincular_artista: 'Perfil Deezer desvinculat',
 }
 
 function fmtDate(iso) {

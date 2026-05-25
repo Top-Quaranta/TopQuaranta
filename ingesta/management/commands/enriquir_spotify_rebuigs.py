@@ -62,6 +62,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
+from ingesta.clients.spotify_backfill_controller import (
+    adjust_for_run,
+    load_state,
+    save_state,
+)
 from music.models import Canco, HistorialRevisio, SpotifyAuth, SpotifyMetadata
 
 logger = logging.getLogger(__name__)
@@ -84,12 +89,16 @@ class Command(BaseCommand):
         parser.add_argument(
             "--limit",
             type=int,
-            default=50,
+            default=None,
             help=(
-                "Maximum cançons to enrich this run. Default 50 -> "
-                "up to ~150 Spotify API calls (search + track + "
-                "artist per cançó). Safe against the daily quota "
-                "that banned us at ~3 600/day."
+                "Manual override of the daily limit (cançons). When "
+                "omitted, the AIMD controller in "
+                "`ingesta.clients.spotify_backfill_controller` "
+                "picks the limit based on observed bans (starts at "
+                "200, ramps +200 every 3 ban-free days up to a hard "
+                "ceiling of 800, drops on any ban). Pass --limit to "
+                "force a value for THIS run only; the controller "
+                "state is left untouched in that case."
             ),
         )
         parser.add_argument(
@@ -130,7 +139,30 @@ class Command(BaseCommand):
         if not auth:
             raise CommandError("No SpotifyAuth row. Run the staff OAuth flow first.")
 
-        limit = opts["limit"]
+        # AIMD controller decides the daily limit. The controller
+        # inspects both cooldown files (this command's and
+        # `enriquir_spotify`'s) so a ban observed by the maintenance
+        # enrichment converges the backfill's limit too. A manual
+        # `--limit` override skips the controller for this run and
+        # leaves the persisted state untouched.
+        manual_limit = opts["limit"]
+        if manual_limit is None:
+            state = adjust_for_run(load_state())
+            save_state(state)
+            limit = state.limit_actual
+            self.stdout.write(
+                f"[enriquir_spotify_rebuigs] AIMD controller -> "
+                f"limit={limit} (dies_sense_ban={state.dies_sense_ban}, "
+                f"last_safe={state.last_safe_limit}, "
+                f"last_ban_at={state.last_ban_at})"
+            )
+        else:
+            limit = manual_limit
+            self.stdout.write(
+                f"[enriquir_spotify_rebuigs] manual override "
+                f"--limit={limit}; controller state unchanged"
+            )
+
         throttle = opts["throttle"]
         shortlist_only = opts["shortlist_only"]
         client = UserSpotifyClient(auth, throttle_s=throttle)

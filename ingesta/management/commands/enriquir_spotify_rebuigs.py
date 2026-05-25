@@ -71,7 +71,13 @@ from music.models import Canco, HistorialRevisio, SpotifyAuth, SpotifyMetadata
 
 logger = logging.getLogger(__name__)
 
-COOLDOWN_FILE = Path("/var/log/topquaranta/status/enriquir_spotify_rebuigs.cooldown")
+# Legacy per-command cooldown path. Reads still happen via
+# `spotify_metadata_cooldown.LEGACY_PATHS` for the transition
+# window so a live ban from the old binary keeps being honoured.
+# New writes go to the shared `spotify_metadata.cooldown`.
+LEGACY_COOLDOWN_FILE = Path(
+    "/var/log/topquaranta/status/enriquir_spotify_rebuigs.cooldown"
+)
 # Same 24h cap as enriquir_spotify. Spotify's long Retry-After
 # windows tend to land between 18h and 24h on Dev-Mode quotas; we
 # honour the value when it falls under this cap and refuse to wait
@@ -118,22 +124,26 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        # Cooldown gate — silent skip when Spotify is still asking us
-        # to back off from the previous Retry-After window.
-        if COOLDOWN_FILE.exists():
-            try:
-                resume_at = datetime.fromisoformat(COOLDOWN_FILE.read_text().strip())
-                if datetime.now(tz=dt_tz.utc).replace(tzinfo=None) < resume_at:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"[enriquir_spotify_rebuigs] cooldown active "
-                            f"until {resume_at.isoformat()}. Skipping."
-                        )
-                    )
-                    return
-            except (ValueError, OSError):
-                pass
-            COOLDOWN_FILE.unlink(missing_ok=True)
+        # Cooldown gate. Reads the SHARED metadata cooldown (plus
+        # the legacy per-command files during the transition). If
+        # the maintenance enrichment was banned, we must skip too:
+        # both commands hit `/v1/search`, `/v1/tracks` and
+        # `/v1/artists`, which share a single Spotify quota
+        # bucket, and probing during an active ban is documented
+        # to extend the window.
+        from ingesta.clients import spotify_metadata_cooldown as cd
+
+        resume_at = cd.active_resume_at()
+        if resume_at is not None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[enriquir_spotify_rebuigs] Spotify metadata "
+                    f"cooldown active until {resume_at.isoformat()}. "
+                    f"Skipping."
+                )
+            )
+            return
+        cd.clear_expired()
 
         auth = SpotifyAuth.load()
         if not auth:
@@ -184,16 +194,17 @@ class Command(BaseCommand):
                 if outcome == "found":
                     found += 1
         except RateLimitedError as exc:
+            from ingesta.clients import spotify_metadata_cooldown as cd
+
             aborted = True
             effective = min(exc.retry_after_s, MAX_COOLDOWN_S)
             resume_at = datetime.now(tz=dt_tz.utc).replace(tzinfo=None) + timedelta(
                 seconds=effective
             )
             try:
-                COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
-                COOLDOWN_FILE.write_text(resume_at.isoformat())
+                cd.write(resume_at)
             except OSError:
-                logger.warning("Could not write cooldown file %s", COOLDOWN_FILE)
+                logger.warning("Could not write cooldown file %s", cd.SHARED_PATH)
             self.stdout.write(
                 self.style.WARNING(
                     f"[enriquir_spotify_rebuigs] rate limited; cooldown "

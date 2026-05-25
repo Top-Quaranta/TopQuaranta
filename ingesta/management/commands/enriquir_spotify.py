@@ -53,7 +53,11 @@ from ranking.models import SenyalDiari
 
 logger = logging.getLogger(__name__)
 
-COOLDOWN_FILE = Path("/var/log/topquaranta/status/enriquir_spotify.cooldown")
+# Legacy per-command cooldown path. Reads still happen via
+# `spotify_metadata_cooldown.LEGACY_PATHS` for the transition
+# window so a live ban from the old binary keeps being honoured.
+# New writes go to the shared `spotify_metadata.cooldown`.
+LEGACY_COOLDOWN_FILE = Path("/var/log/topquaranta/status/enriquir_spotify.cooldown")
 
 # Maximum cooldown we will honour from Spotify's Retry-After header.
 # Empirically Spotify's rate-limit windows are persistent (the ban
@@ -105,24 +109,25 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        # ── Cooldown gate: skip silently if a previous run set a
-        # cooldown (Retry-After was too long). The cron fires every
-        # 30 min; we don't want 4+ wasted runs per cooldown window.
-        cooldown_file = COOLDOWN_FILE
-        if cooldown_file.exists():
-            try:
-                resume_at = datetime.fromisoformat(cooldown_file.read_text().strip())
-                if datetime.now(tz=dt_tz.utc).replace(tzinfo=None) < resume_at:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"[enriquir_spotify] Spotify cooldown active "
-                            f"until {resume_at.isoformat()}. Skipping."
-                        )
-                    )
-                    return
-            except (ValueError, OSError):
-                pass  # corrupt file — fall through and delete it
-            cooldown_file.unlink(missing_ok=True)
+        # Cooldown gate. The metadata-read bucket (`/v1/search`,
+        # `/v1/tracks`, `/v1/artists`) is shared with the backfill
+        # command (`enriquir_spotify_rebuigs`), so both honour the
+        # same shared cooldown file plus the legacy per-command
+        # files (transition). Skip silently when any ban is still
+        # active; an active ban is documented to be extended by
+        # probing during its window.
+        from ingesta.clients import spotify_metadata_cooldown as cd
+
+        resume_at = cd.active_resume_at()
+        if resume_at is not None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[enriquir_spotify] Spotify metadata cooldown "
+                    f"active until {resume_at.isoformat()}. Skipping."
+                )
+            )
+            return
+        cd.clear_expired()
 
         auth = SpotifyAuth.load()
         if not auth:
@@ -163,20 +168,23 @@ class Command(BaseCommand):
                 elif outcome == "not_found":
                     not_found += 1
         except RateLimitedError as exc:
-            # Spotify asked us to back off for hours. Write a cooldown
-            # file so subsequent cron ticks skip silently, and exit 0
-            # so the watchdog does NOT flip status=FAIL. Cap at
+            # Spotify asked us to back off for hours. Write the
+            # shared metadata cooldown so the backfill command and
+            # this command both skip subsequent runs. Exit 0 so the
+            # watchdog does NOT flip status=FAIL. Cap at
             # MAX_COOLDOWN_S to ignore absurd values without
             # under-cutting Spotify's own back-off signal.
+            from ingesta.clients import spotify_metadata_cooldown as cd
+
             aborted = True
             effective_cooldown_s = min(exc.retry_after_s, MAX_COOLDOWN_S)
             resume_at = datetime.now(tz=dt_tz.utc).replace(tzinfo=None) + timedelta(
                 seconds=effective_cooldown_s
             )
             try:
-                COOLDOWN_FILE.write_text(resume_at.isoformat())
+                cd.write(resume_at)
             except OSError:
-                logger.warning("Could not write cooldown file %s", COOLDOWN_FILE)
+                logger.warning("Could not write cooldown file %s", cd.SHARED_PATH)
             self.stdout.write(
                 self.style.WARNING(
                     f"[enriquir_spotify] Spotify rate limited; "

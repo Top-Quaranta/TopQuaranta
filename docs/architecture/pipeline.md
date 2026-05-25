@@ -407,6 +407,42 @@ Manual overrides via `--limit <N>` bypass the controller for one
 run and leave the persisted state untouched. Use them for
 sanity-test runs or one-off pushes, never as a daily setting.
 
+### Shared metadata cooldown (`spotify_metadata_cooldown`)
+
+The maintenance enrichment and the rebuig backfill both call the
+same Spotify endpoints (`/v1/search`, `/v1/tracks`, `/v1/artists`)
+and share a single Spotify quota bucket. Until 2026-05-25 each
+command kept its own cooldown file, so a ban seen by maintenance
+left the backfill free to keep probing — which the Spotify docs
+warn extends the ban window. The shared module
+`ingesta/clients/spotify_metadata_cooldown.py` consolidates the
+state:
+
+- **Single canonical file** at
+  `/var/log/topquaranta/status/spotify_metadata.cooldown`. Both
+  commands write to it on `RateLimitedError` and check it before
+  the first API call.
+- **Legacy fallback reads** of
+  `enriquir_spotify.cooldown` and `enriquir_spotify_rebuigs
+  .cooldown` keep an old-binary ban honoured during the
+  transition. New writes never touch the legacy paths, so they
+  drain naturally as their `resume_at` passes.
+- **`active_resume_at`** returns the latest unexpired `resume_at`
+  across every file. The longest pending back-off wins
+  (conservative against silently shrinking the window).
+- **`clear_expired`** prunes files whose `resume_at` is in the
+  past on every successful run, so the AIMD controller's mtime-
+  based ban detection does not re-look fresh after every
+  filesystem touch.
+- **Playlist sync is OUT.** `actualitzar_playlists_spotify` hits
+  `/v1/playlists/<id>/items`, a separate bucket. Empirically the
+  playlist sync ran successfully during the 2026-05-24 metadata
+  ban without extending it; routing playlist writes through the
+  shared cooldown would cause spurious skips of work Spotify
+  allows. The test
+  `test_playlist_sync_does_not_reference_metadata_cooldown`
+  pins that boundary.
+
 Classes: `A ≥ 0.7`, `B 0.4–0.7`, `C < 0.4`. Stored on `Canco.ml_classe` +
 `ml_confianca`. Model files: `music/ml_model.joblib` + `ml_tfidf.joblib`.
 Both cached in-memory with mtime-based invalidation.

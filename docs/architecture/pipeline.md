@@ -372,6 +372,41 @@ daily budget. Until coverage fills out, the per-pair ratio falls
 back to per-deezer or per-name automatically — same FEATURE_NAMES
 slot, no MISALIGNED flag.
 
+### Backfill rate controller (AIMD)
+
+`ingesta/clients/spotify_backfill_controller.py` implements an
+additive-increase / multiplicative-decrease controller that
+chooses the daily limit `enriquir_spotify_rebuigs` runs at. The
+shape matches TCP congestion control: ramp up slowly, drop hard
+on the first sign of trouble.
+
+State persists at `/var/log/topquaranta/status/
+enriquir_spotify_rebuigs.controller.json`. Each daily run:
+
+  1. Looks at the two cooldown files
+     (`enriquir_spotify.cooldown` for maintenance and
+     `enriquir_spotify_rebuigs.cooldown` for the backfill itself)
+     plus the persisted `last_ban_at` (24 h memory) to decide
+     whether a ban has been observed.
+  2. If a ban is fresh: drop to `last_safe_limit` if any (the
+     most recent limit that survived `DAYS_BEFORE_BUMP = 3` days
+     unbanned); otherwise halve, with `MIN_LIMIT = 50` as the
+     floor. Reset the day counter.
+  3. If no ban: increment the day counter. After 3 ban-free
+     days, promote the current limit to `last_safe_limit` and
+     bump it by `BUMP = 200`, capped at `MAX_DAILY_LIMIT = 800`.
+
+Volume reasoning for the constants: each backfill cançó costs
+up to 3 Spotify API calls (search + track + artist). Hard
+ceiling 800 cançons/day → 2 400 backfill calls + ~150
+maintenance ≈ 2 550 calls/day, well under the ~3 600/day that
+triggered the 2026-05-24 ban. Initial limit 200 → 600 + 150 =
+750 calls/day, comfortably safe.
+
+Manual overrides via `--limit <N>` bypass the controller for one
+run and leave the persisted state untouched. Use them for
+sanity-test runs or one-off pushes, never as a daily setting.
+
 Classes: `A ≥ 0.7`, `B 0.4–0.7`, `C < 0.4`. Stored on `Canco.ml_classe` +
 `ml_confianca`. Model files: `music/ml_model.joblib` + `ml_tfidf.joblib`.
 Both cached in-memory with mtime-based invalidation.

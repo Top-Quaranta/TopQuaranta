@@ -27,7 +27,7 @@ import pytest
 from django.core.management import call_command
 
 from ingesta.clients.spotify import RateLimitedError
-from ingesta.management.commands.enriquir_spotify import COOLDOWN_FILE
+from ingesta.clients.spotify_metadata_cooldown import SHARED_PATH as COOLDOWN_FILE
 from music.models import Album, Artista, Canco, SpotifyMetadata, SpotifyPlaylist
 from ranking.models import SenyalDiari, TopProvisional
 
@@ -281,7 +281,7 @@ def test_rate_limit_writes_cooldown_and_exits_cleanly(
     # Redirect the cooldown file to tmp_path so the test works on CI
     # (no /var/log/topquaranta/ there).
     cooldown = tmp_path / "enriquir_spotify.cooldown"
-    with patch("ingesta.management.commands.enriquir_spotify.COOLDOWN_FILE", cooldown):
+    with patch("ingesta.clients.spotify_metadata_cooldown.SHARED_PATH", cooldown):
         # No CommandError raised — exits cleanly so tq-health doesn't alert.
         call_command("enriquir_spotify", limit=10)
 
@@ -333,7 +333,7 @@ def test_rate_limit_cooldown_clamped_to_max(auth_present, client_mock, tmp_path)
         return datetime.now(tz=dt_tz.utc).replace(tzinfo=None)
 
     before = _utc_naive()
-    with patch("ingesta.management.commands.enriquir_spotify.COOLDOWN_FILE", cooldown):
+    with patch("ingesta.clients.spotify_metadata_cooldown.SHARED_PATH", cooldown):
         call_command("enriquir_spotify", limit=10)
     after = _utc_naive()
 

@@ -72,7 +72,14 @@ logger = logging.getLogger(__name__)
 STATE_PATH = Path(
     "/var/log/topquaranta/status/enriquir_spotify_rebuigs.controller.json"
 )
+# Cooldown files the controller scans to detect fresh bans.
+# Includes the shared metadata cooldown (the canonical post-
+# 2026-05-25 location) PLUS the two legacy per-command files,
+# so a ban written by an older binary running concurrently is
+# still observed. The order does not matter; the resolver picks
+# the most recent mtime across the set.
 COOLDOWN_PATHS = (
+    Path("/var/log/topquaranta/status/spotify_metadata.cooldown"),
     Path("/var/log/topquaranta/status/enriquir_spotify.cooldown"),
     Path("/var/log/topquaranta/status/enriquir_spotify_rebuigs.cooldown"),
 )

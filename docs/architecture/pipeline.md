@@ -339,7 +339,18 @@ A/B 5-fold CV proved the smaller cap matched ROC-AUC and improved F1
   signal; estructurals dominate at 95.6 %, TF-IDF only 4.4 %.
 
 Top 5 features by importance (2026-04-25 retrain, max_features=30):
-1. `ratio_rebuig_artista` (20.0%) — Bayesian-smoothed (k=5, prior=0.5)
+1. `ratio_rebuig_par_artist` (20.0%) — Bayesian-smoothed (k=5,
+   prior=0.5). Renamed 2026-05-25 from `ratio_rebuig_artista` (by
+   name only). The new key is the most-specific available among
+   `(artista_deezer_id, artista_spotify_id)`,
+   `artista_deezer_id` alone, then `artista_nom` as legacy
+   fallback. Disambiguates Deezer-collapsed homonyms (canonical
+   `Aion` and `Jim` cases) so the wrong-Aion's rejections stop
+   penalising the real-Aion's catalogue. Position at index 8 of
+   `FEATURE_NAMES` preserved across the rename: length stays 50,
+   so the RF on disk keeps loading; quality degrades silently
+   at that index until the next `entrenar_model()` learns the
+   new splits.
 2. `whisper_p_ca` (17.8%) — Whisper LID confidence the track is català
 3. `ratio_rebuig_registrant` (10.7%)
 4. `whisper_p_en` (9.8%)
@@ -350,6 +361,16 @@ Bayesian smoothing on the three `ratio_rebuig_*` features: returns
 decisions can't collapse to 0 or 1 from one or two calls. Prevents
 feedback loops where an early false rebuig biases the model
 permanently.
+
+Per-pair coverage of historical decisions: `HistorialRevisio`
+stores `artista_spotify_id` as a snapshot from migration 0085
+onwards. New decisions fill it from the canço's `SpotifyMetadata`
+at decision time. Legacy rejection rows (essentially 0 % enriched
+as of 2026-05-25) are filled in by the dedicated drain command
+`enriquir_spotify_rebuigs` (see section 5 below) on a separate
+daily budget. Until coverage fills out, the per-pair ratio falls
+back to per-deezer or per-name automatically — same FEATURE_NAMES
+slot, no MISALIGNED flag.
 
 Classes: `A ≥ 0.7`, `B 0.4–0.7`, `C < 0.4`. Stored on `Canco.ml_classe` +
 `ml_confianca`. Model files: `music/ml_model.joblib` + `ml_tfidf.joblib`.

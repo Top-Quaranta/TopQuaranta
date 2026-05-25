@@ -1204,6 +1204,14 @@ class HistorialRevisio(models.Model):
     artista_deezer_nb_album = models.IntegerField(null=True, blank=True)
     artista_nom_deezer = models.CharField(max_length=255, blank=True)
     artista_nom_similitud = models.FloatField(null=True, blank=True)
+    # Snapshot of the principal Spotify artist id at decision time
+    # (read from `SpotifyMetadata.spotify_artist_id` of the canço).
+    # Empty when the canço had no enrichment yet; the backfill
+    # command at `backfill_artista_spotify_id_in_historial` fills
+    # legacy rows once Process B catches up. Keyed by the per-pair
+    # rejection-ratio feature in `music.ml`; see
+    # `docs/architecture/pipeline.md` section 4.
+    artista_spotify_id = models.CharField(max_length=50, blank=True, db_index=True)
 
     ml_classe_decisio = models.CharField(
         max_length=1,

@@ -1,14 +1,16 @@
 """Auto-unlink of Deezer IDs when every track of an artist has been
-rejected as a homonym.
+rejected via `desvincular_artista`.
 
 Behaviour pinned:
-  1. Artist with all tracks rejected `artista_incorrecte` and 0 active
-     → all ArtistaDeezer rows deleted.
-  2. Artist with mixed motius (some `no_catala`, some `artista_incorrecte`)
-     → no auto-unlink (human review needed).
+  1. Artist with all tracks rejected `desvincular_artista` and 0
+     active → all ArtistaDeezer rows deleted.
+  2. Artist with mixed motius (some `desvincular_canco`, some
+     `desvincular_artista`) → no auto-unlink (human review needed).
   3. Artist with at least one active track left → no auto-unlink.
-  4. Auto-unlink + no MBID + signal → artist desaproved.
-  5. Auto-unlink + has MBID → artist stays approved.
+  4. After unlink, the artista lands on `pendent_review=True,
+     aprovat=False` regardless of MBID. The MBID does not factor
+     in: new releases come from Deezer and the operator still needs
+     to find the correct Deezer profile.
 """
 
 from datetime import date
@@ -77,7 +79,7 @@ def test_no_unlink_when_active_tracks_remain(artist_with_track):
 
 
 @pytest.mark.django_db
-def test_unlink_then_signal_desaprova_when_no_mbid(artist_with_track):
+def test_unlink_queues_for_pendent_review_when_no_mbid(artist_with_track):
     a = artist_with_track
     assert a.aprovat is True
     assert a.musicbrainz_id is None
@@ -86,12 +88,18 @@ def test_unlink_then_signal_desaprova_when_no_mbid(artist_with_track):
     rebutjar_canco(c, "desvincular_artista")
 
     a.refresh_from_db()
-    # ArtistaDeezer was the sole anchor; signal must have desaprovat.
+    # ArtistaDeezer was the sole anchor; the signal desaproves and
+    # then the service overrides to pendent_review=True.
     assert a.aprovat is False
+    assert a.pendent_review is True
+    assert not ArtistaDeezer.objects.filter(artista=a).exists()
 
 
 @pytest.mark.django_db
-def test_unlink_keeps_aprovat_when_artist_has_mbid(artist_with_track):
+def test_unlink_queues_for_pendent_review_even_with_mbid(artist_with_track):
+    """MBID does not exempt: new releases come from Deezer, so the
+    operator still needs to find the correct Deezer profile and the
+    artista belongs in pendents."""
     a = artist_with_track
     a.musicbrainz_id = "abcdef00-1111-2222-3333-444444444444"
     a.save()
@@ -100,6 +108,6 @@ def test_unlink_keeps_aprovat_when_artist_has_mbid(artist_with_track):
     rebutjar_canco(c, "desvincular_artista")
 
     a.refresh_from_db()
-    # Deezer gone, but MBID still present → keep approved.
-    assert a.aprovat is True
+    assert a.aprovat is False
+    assert a.pendent_review is True
     assert not ArtistaDeezer.objects.filter(artista=a).exists()

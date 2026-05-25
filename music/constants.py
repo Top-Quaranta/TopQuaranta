@@ -218,19 +218,19 @@ SCORE_BATCH_SIZE = 500
 # historical HistorialRevisio.motiu values: `artista_incorrecte`
 # -> `desvincular_artista`, `album_incorrecte` -> `desvincular_album`,
 # `no_catala` + `no_musica` -> `desvincular_canco`.
+#
+# IMPORTANT: the human label MUST name only the action, never the
+# cause. Including the cause ("homonim", "no és en català", ...)
+# brings back the same ambiguity the rename was meant to kill: the
+# operator reads the label, infers a meaning that does not match
+# what the action actually does, and we end up needing another doc
+# to undo the confusion. All cause / when-to-use prose lives in
+# `docs/architecture/staff.md` section 5; this list stays
+# action-only.
 MOTIUS_REBUIG = [
-    (
-        "desvincular_canco",
-        "Descartar la cançó (no és en català, no és música, etc.)",
-    ),
-    (
-        "desvincular_album",
-        "Desvincular l'àlbum (és d'un homònim al perfil Deezer correcte)",
-    ),
-    (
-        "desvincular_artista",
-        "Desvincular el perfil Deezer (no és el nostre artista)",
-    ),
+    ("desvincular_canco", "Desvincular la cançó"),
+    ("desvincular_album", "Desvincular l'àlbum"),
+    ("desvincular_artista", "Desvincular l'artista"),
 ]
 MOTIUS_VALIDS = {m[0] for m in MOTIUS_REBUIG}
 

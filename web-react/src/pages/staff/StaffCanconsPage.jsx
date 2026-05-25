@@ -25,17 +25,15 @@ import {
 import { Field } from '../../components/staff/StaffTable'
 import FilterPanel from '../../components/staff/FilterPanel'
 
-// Mirror of music.constants.MOTIUS_REBUIG (label/value pairs). Keep
-// this in sync when the backend list changes — the bulk-action
-// endpoint rejects anything outside this set with "Motiu invàlid".
-// Renamed 2026-05-25 from cause-based to action-based codes (see
-// the constants docstring). Order matters: the safest action
-// (canço-level descart) is first; the most destructive
-// (perfil Deezer wipe) is last.
+// Mirror of music.constants.MOTIUS_REBUIG (label/value pairs).
+// Action-only labels — cause / when-to-use lives in
+// docs/architecture/staff.md section 5 and must NOT be duplicated
+// here. Order: cançó (safest) first, artista (most destructive)
+// last.
 const MOTIUS = [
-  ['desvincular_canco',   'Descartar la cançó (idioma, no és música, etc.)'],
-  ['desvincular_album',   "Desvincular l'àlbum (homònim al perfil Deezer correcte)"],
-  ['desvincular_artista', 'Desvincular el perfil Deezer (no és el nostre artista)'],
+  ['desvincular_canco',   'Desvincular la cançó'],
+  ['desvincular_album',   "Desvincular l'àlbum"],
+  ['desvincular_artista', "Desvincular l'artista"],
 ]
 
 // Default filter values — also used by the FilterPanel "Restablir"

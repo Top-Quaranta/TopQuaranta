@@ -36,18 +36,18 @@ const ESTAT_LABEL = {
   resolta: 'Resolta',
 }
 
-// Action-based motiu codes (see music.constants.MOTIUS_REBUIG).
-// Tones reflect blast radius: cançó-level (default) < album-level
-// (warning) < perfil-Deezer-level (danger).
+// Action-only labels — cause / when-to-use lives in
+// docs/architecture/staff.md section 5. Tones reflect blast
+// radius: cançó (default) < àlbum (warning) < artista (danger).
 const MOTIU_TONE = {
   desvincular_canco: 'default',
   desvincular_album: 'warning',
   desvincular_artista: 'danger',
 }
 const MOTIU_LABEL = {
-  desvincular_canco: 'Cançó descartada',
-  desvincular_album: 'Àlbum desvinculat (homònim)',
-  desvincular_artista: 'Perfil Deezer desvinculat',
+  desvincular_canco: 'Cançó desvinculada',
+  desvincular_album: 'Àlbum desvinculat',
+  desvincular_artista: 'Artista desvinculat',
 }
 
 function fmtDate(iso) {

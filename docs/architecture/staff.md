@@ -179,40 +179,95 @@ every message in the media-group (Telegram has no group-level delete).
 
 ## 5. Accions post-rebuig — semantics
 
-Renamed on 2026-05-25 from cause-based names (`no_catala`,
-`album_incorrecte`, `artista_incorrecte`, `no_musica`) to
-action-based names. The old codes kept getting misread: notably
-`album_incorrecte` was assumed to mean "the album is wrong but the
-artist is right" when the real meaning is "the album is from a
-homonym artist that Deezer collapsed under the right Deezer
-profile". The new codes name the concrete action each value
-triggers, so the name itself locks the contract.
-
 `music.constants.MOTIUS_VALIDS` = `{desvincular_canco,
 desvincular_album, desvincular_artista}`. The motiu decides which
 service function the bulk-action endpoint calls.
 
-| Codi | Funció trucada | Què fa exactament | Quan és segur |
-|---|---|---|---|
-| `desvincular_canco` | `rebutjar_canco(canco)` | Posa `verificada=False, activa=False`. La fila resta al DB per auditoria però desapareix de pendents i rankings. **Cap altra dada es toca.** | Cançó d'idioma diferent, podcast, sample, entrevista, qualsevol descart a nivell de cançó. Unifica els antics `no_catala` i `no_musica`. |
-| `desvincular_album` | `rebutjar_album(album)` | **Esborra físicament** totes les cançons no verificades de l'àlbum + marca `Album.descartat=True`. **L'`ArtistaDeezer` de l'artista NO es toca**: l'àlbum era d'un homònim col·lapsat per Deezer sota el perfil correcte. | Àlbum d'homònim Deezer (cas canònic: el `wrong-Aion`'s album aparegut sota el perfil del `Aion` català). Blast radius acotat a l'àlbum. |
-| `desvincular_artista` | `rebutjar_artista(artista)` | **Esborra físicament** totes les cançons no verificades + buida `ArtistaDeezer` (tots els Deezer IDs de l'artista) + marca `Album.descartat=True` per a tots els seus àlbums. El signal `unapprove_on_last_deezer_removed` (`music/signals.py`) llavors fa `aprovat=False, pendent_review=False` si l'artista no té MBID; si en té, segueix aprovat però sense Deezer. **L'artista NO torna a pendents automàticament.** | Perfil Deezer del tot erroni (cap cançó pertany al nostre artista). Acció destructiva: si l'artista té cançons verificades d'altres Deezer IDs, perd l'única forma d'ingesta nova. |
+This doc is **the only place** that documents the cause and the
+when-to-use prose. The choices list in `music.constants.MOTIUS_REBUIG`,
+the model field choices in `HistorialRevisio.MOTIUS`, the
+front-end button labels and badge labels are intentionally
+**action-only** (e.g. just "Desvincular l'àlbum"). The old habit
+of stuffing the cause into the label ("Àlbum incorrecte",
+"desvincular l'àlbum (homònim)") brought back the same ambiguity
+the rename was meant to kill, so the cause stays exclusively here.
 
-Totes tres escriuen `HistorialRevisio` amb `artista_nom` = main
-artist de la cançó. Els col·laboradors (`artistes_col`) NO es
-persisteixen al log de decisions, així que rebutjar una cançó amb Juan
-Magan com a col·lab no penalitza Juan Magan en classificacions
-futures.
+### `desvincular_canco`
 
-### Compatibilitat de dades històriques
+**Action.** `rebutjar_canco(canco)` sets `verificada=False,
+activa=False`. The row remains in the DB for audit purposes but
+disappears from pendents and rankings. No other state changes.
 
-La migració `music.0083_rename_motius_to_actions` reescriu les
-files existents 1-a-1: `artista_incorrecte → desvincular_artista`
-(1.567 files), `album_incorrecte → desvincular_album` (9.164
-files), `no_catala` + `no_musica` → `desvincular_canco` (1.275 + 4
-= 1.279 files unificades). El senyal d'idioma viu a
-`Canco.whisper_*`, no al motiu de rebuig, així que la unificació no
-perd informació pel classificador RF.
+**When to use.** The cançó itself should not be in our catalogue:
+not Catalan, podcast or audiobook, sample, interview, instrumental
+filler, miscategorised content. The artista and album stay intact;
+only this one track is dropped.
+
+### `desvincular_album`
+
+**Action.** `rebutjar_album(album)` physically deletes every
+unverified cançó of the album and sets `Album.descartat=True`. The
+artista's `ArtistaDeezer` rows are **not touched**.
+
+**When to use.** Deezer has attached, under our artista's correct
+Deezer profile, an entire album that in fact belongs to a
+**different artist who happens to share the name with ours**. The
+artist on this album is the homonym, not the album itself. The
+Deezer profile stays linked because new releases of our artista
+will still land under that profile correctly. The cleanest test is
+Spotify: open the canonical Spotify profile of our artista; if the
+album does not appear there but does appear under a different
+Spotify artist with the same name, it is an `desvincular_album`
+case. The blast radius is contained to this album.
+
+### `desvincular_artista`
+
+**Action.** `rebutjar_artista(artista)` physically deletes every
+unverified cançó + clears every `ArtistaDeezer` row of the artista
++ sets `Album.descartat=True` on every album of the artista.
+The `unapprove_on_last_deezer_removed` signal in
+`music/signals.py` then runs; immediately afterwards
+`rebutjar_artista` explicitly overrides the artista to
+`aprovat=False, pendent_review=True` regardless of MBID. The
+artista lands in the pendents queue so the operator can search for
+the correct Deezer profile. MBID does not factor in: new releases
+come from Deezer, and without a Deezer profile the artista has no
+source for new material until the operator finds one.
+
+**When to use.** The Deezer profile that ended up linked to our
+artista is entirely wrong — no cançó on it belongs to our artista.
+Typically a freshly-discovered artista that the auto-matcher mapped
+to the wrong Deezer ID, and every track ingested so far has been a
+homonym's. This action is destructive of every unverified track
+the artista currently has under that profile. Verified cançons
+(`verificada=True`) survive but stop receiving updates from the
+Deezer pipeline; that is acceptable for the catalan-side `Crim`
+case where the artista keeps living off MusicBrainz, but it should
+be rare.
+
+### Common contract
+
+All three write `HistorialRevisio` with `artista_nom` set to the
+canço's main artist. Collaborators in `Canco.artistes_col` are
+**not** persisted to the decision log, so rejecting a track that
+features Juan Magan as a collaborator does not contaminate Juan
+Magan's own future classification.
+
+### Data migrations
+
+`music.0083_rename_motius_to_actions` rewrote historical
+`HistorialRevisio.motiu` values from cause-based codes
+(`no_catala`, `album_incorrecte`, `artista_incorrecte`,
+`no_musica`) to the action-based codes documented above. The
+`no_catala` (1 275) + `no_musica` (4) rows both collapsed into
+`desvincular_canco` (1 279 unified); the language signal lives on
+`Canco.whisper_*` features for the RF classifier and is not lost.
+
+`music.0084_requeue_desvincular_artista_victims` brought back to
+`pendent_review=True` the 63 historical Artistas that the previous
+`desvincular_artista` flow had left in limbo (no Deezer, no MBID,
+no pendent flag). Same shape as what the current code does
+inline.
 
 ## 6. Invariants enforced by signals
 

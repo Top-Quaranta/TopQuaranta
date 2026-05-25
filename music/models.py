@@ -1169,15 +1169,16 @@ class HistorialRevisio(models.Model):
     # For `decisio="aprovada"`: `ok` (manual approval) or
     # `auto_ml` (RF auto-approval). For `decisio="rebutjada"`: one
     # of the action codes in `music.constants.MOTIUS_REBUIG`. See
-    # that constant's docstring for the contract each value implies.
-    # Renamed from cause-based names on 2026-05-25; migration
-    # `0096_rename_motius_to_actions` carries the historical data.
+    # the contract each value implies in
+    # `docs/architecture/staff.md` section 5; do not duplicate the
+    # prose here. Action-only labels keep the choices list short
+    # and unambiguous; cause/when-to-use lives in the doc.
     MOTIUS = [
         ("ok", "Aprovada"),
         ("auto_ml", "Aprovada per ML"),
-        ("desvincular_canco", "Descartar la cançó"),
-        ("desvincular_album", "Desvincular l'àlbum (homònim)"),
-        ("desvincular_artista", "Desvincular el perfil Deezer"),
+        ("desvincular_canco", "Desvincular la cançó"),
+        ("desvincular_album", "Desvincular l'àlbum"),
+        ("desvincular_artista", "Desvincular l'artista"),
     ]
 
     canco_deezer_id = models.BigIntegerField(null=True, blank=True)

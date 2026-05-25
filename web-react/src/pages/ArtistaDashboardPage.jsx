@@ -934,20 +934,18 @@ function EditarTab({ slug, data, onReload }) {
 // ───────────────────────── Tab: Cançons ──────────────────────────
 
 
-// Motiu → Badge tone. Maps the three action codes documented in
-// `HistorialRevisio.MOTIUS` (see music.constants.MOTIUS_REBUIG).
-// Tone reflects the blast radius of the action: cançó-level
-// (default), àlbum-level (warning), perfil-Deezer-level (danger).
-// Keep this table in sync with backend.
+// Action-only labels — cause / when-to-use lives in
+// docs/architecture/staff.md section 5. Tone reflects the blast
+// radius: cançó (default), àlbum (warning), artista (danger).
 const MOTIU_TONE = {
   desvincular_canco: 'default',
   desvincular_album: 'warning',
   desvincular_artista: 'danger',
 }
 const MOTIU_LABEL = {
-  desvincular_canco: 'Cançó descartada',
-  desvincular_album: 'Àlbum desvinculat (homònim)',
-  desvincular_artista: 'Perfil Deezer desvinculat',
+  desvincular_canco: 'Cançó desvinculada',
+  desvincular_album: 'Àlbum desvinculat',
+  desvincular_artista: 'Artista desvinculat',
 }
 
 function CanconsTab({ slug, onSollicitudCreated }) {

@@ -120,13 +120,20 @@ def _try_auto_unlink_homonym_deezer(
         )
         return True
 
-    # Single-profile path (legacy): wipe the only link. The
-    # post_delete signal handles desaprovació if there's also no
-    # MBID anchor left.
+    # Single-profile path: wipe the only link. The post_delete signal
+    # on ArtistaDeezer runs (`unapprove_on_last_deezer_removed`) and
+    # would normally either keep the artista aprovat (if MBID) or
+    # drop it to `aprovat=False, pendent_review=False` (limbo). The
+    # explicit override below forces `pendent_review=True,
+    # aprovat=False` regardless of MBID: we have just lost our only
+    # Deezer source for new releases, the operator still needs to
+    # find the right Deezer profile, and that work belongs in the
+    # pendents queue.
     artista.deezer_ids.all().delete()
+    Artista.objects.filter(pk=artista.pk).update(aprovat=False, pendent_review=True)
     logger.info(
-        "Auto-unlinked the only Deezer ID from artist '%s' (pk=%s) — "
-        "every Cançó rejected as desvincular_artista.",
+        "Auto-unlinked the only Deezer ID from artist '%s' (pk=%s) "
+        "and queued for pendent review.",
         artista.nom,
         artista.pk,
     )
@@ -261,9 +268,21 @@ def rebutjar_album(album: Album, motiu: str) -> int:
 
 
 def rebutjar_artista(artista: Artista, motiu: str) -> int:
-    """
-    Reject an artist: delete all unverified tracks, clear the Deezer
-    M2M, mark all albums as descartat.
+    """Reject an artista: delete all unverified tracks, clear the
+    Deezer M2M, mark all albums as descartat, and explicitly queue
+    the artista for `pendent_review`.
+
+    The pendent_review override (2026-05-25) replaces the previous
+    "limbo" outcome where the post_delete signal on ArtistaDeezer
+    set `aprovat=False, pendent_review=False` only when no MBID
+    anchored the artista. Even with an MBID, after a
+    `desvincular_artista` action the artista has lost its only
+    Deezer source for new releases and the operator still needs to
+    find the correct Deezer profile; that work belongs in the
+    pendents queue, regardless of MBID. The signal still runs (no
+    way to suppress it cheaply) but the explicit `update()` below
+    overrides whatever state it left.
+
     Returns number of tracks deleted.
     """
     cancons = Canco.objects.filter(artista=artista, verificada=False)
@@ -272,8 +291,10 @@ def rebutjar_artista(artista: Artista, motiu: str) -> int:
     deleted = cancons.count()
     cancons.delete()
 
-    # R10: ArtistaDeezer is the sole source of truth; clearing it is enough.
+    # R10: ArtistaDeezer is the sole source of truth; clearing it
+    # is enough to detach the Deezer pipeline.
     artista.deezer_ids.all().delete()
     Album.objects.filter(artista=artista).update(descartat=True)
+    Artista.objects.filter(pk=artista.pk).update(aprovat=False, pendent_review=True)
 
     return deleted

@@ -46,8 +46,8 @@ def test_unlink_when_all_rejected_as_homonym(artist_with_track):
     c1 = _make_canco(a, "T1")
     c2 = _make_canco(a, "T2")
 
-    rebutjar_canco(c1, "artista_incorrecte")
-    rebutjar_canco(c2, "artista_incorrecte")
+    rebutjar_canco(c1, "desvincular_artista")
+    rebutjar_canco(c2, "desvincular_artista")
 
     assert not ArtistaDeezer.objects.filter(artista=a).exists()
 
@@ -58,8 +58,8 @@ def test_no_unlink_when_motius_mixed(artist_with_track):
     c1 = _make_canco(a, "T1")
     c2 = _make_canco(a, "T2")
 
-    rebutjar_canco(c1, "no_catala")
-    rebutjar_canco(c2, "artista_incorrecte")
+    rebutjar_canco(c1, "desvincular_canco")
+    rebutjar_canco(c2, "desvincular_artista")
 
     # The mix means we can't be certain the Deezer ID is wrong.
     assert ArtistaDeezer.objects.filter(artista=a).count() == 1
@@ -71,7 +71,7 @@ def test_no_unlink_when_active_tracks_remain(artist_with_track):
     c1 = _make_canco(a, "T1")
     _alive = _make_canco(a, "T2")
 
-    rebutjar_canco(c1, "artista_incorrecte")
+    rebutjar_canco(c1, "desvincular_artista")
 
     assert ArtistaDeezer.objects.filter(artista=a).count() == 1
 
@@ -83,7 +83,7 @@ def test_unlink_then_signal_desaprova_when_no_mbid(artist_with_track):
     assert a.musicbrainz_id is None
 
     c = _make_canco(a, "Only")
-    rebutjar_canco(c, "artista_incorrecte")
+    rebutjar_canco(c, "desvincular_artista")
 
     a.refresh_from_db()
     # ArtistaDeezer was the sole anchor; signal must have desaprovat.
@@ -97,7 +97,7 @@ def test_unlink_keeps_aprovat_when_artist_has_mbid(artist_with_track):
     a.save()
 
     c = _make_canco(a, "Only")
-    rebutjar_canco(c, "artista_incorrecte")
+    rebutjar_canco(c, "desvincular_artista")
 
     a.refresh_from_db()
     # Deezer gone, but MBID still present → keep approved.

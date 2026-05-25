@@ -21,7 +21,7 @@ def rebutjar_canco(canco: Canco, motiu: str) -> None:
     Reject a single track: record historial, set verificada=False and activa=False.
     The track stays in DB for audit but won't appear in pending lists or rankings.
 
-    Side effect when motiu == "artista_incorrecte":
+    Side effect when motiu == "desvincular_artista":
     `_try_auto_unlink_homonym_deezer` may detach the wrong Deezer
     profile from the artist. The function is multi-profile aware:
     when the artista has several `ArtistaDeezer` rows (autoedit +
@@ -35,7 +35,7 @@ def rebutjar_canco(canco: Canco, motiu: str) -> None:
     canco.verificada = False
     canco.activa = False
     canco.save(update_fields=["verificada", "activa"])
-    if motiu == "artista_incorrecte" and artista is not None:
+    if motiu == "desvincular_artista" and artista is not None:
         _try_auto_unlink_homonym_deezer(artista, canco=canco)
 
 
@@ -77,7 +77,7 @@ def _try_auto_unlink_homonym_deezer(
     )
     if not motius:
         return False
-    if any(m != "artista_incorrecte" for m in motius):
+    if any(m != "desvincular_artista" for m in motius):
         return False
     deezer_links = list(artista.deezer_ids.all())
     if not deezer_links:
@@ -126,7 +126,7 @@ def _try_auto_unlink_homonym_deezer(
     artista.deezer_ids.all().delete()
     logger.info(
         "Auto-unlinked the only Deezer ID from artist '%s' (pk=%s) — "
-        "every Cançó rejected as artista_incorrecte.",
+        "every Cançó rejected as desvincular_artista.",
         artista.nom,
         artista.pk,
     )
@@ -150,8 +150,9 @@ def processar_collaboradors_pendents(canco: Canco) -> int:
     are only created when staff (or ML auto-approval) confirms the
     canco belongs in our catalog. See `Canco.contributors_raw`
     docstring for context (2026-05-07 audit: 76 % of song rebuigs
-    are `album_incorrecte`; deferring pendent creation eliminates
-    that share of the staff-review queue noise).
+    were `album_incorrecte` (now `desvincular_album`); deferring
+    pendent creation eliminates that share of the staff-review
+    queue noise).
     """
     raw = list(canco.contributors_raw or [])
     if not raw:

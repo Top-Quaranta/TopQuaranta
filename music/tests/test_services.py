@@ -66,12 +66,12 @@ class TestRebutjarCanco:
     def test_marks_unverified_inactive_and_logs_historial(self):
         a = _mk_artista()
         c = _mk_canco(a, verificada=True)
-        rebutjar_canco(c, "no_catala")
+        rebutjar_canco(c, "desvincular_canco")
         c.refresh_from_db()
         assert c.verificada is False
         assert c.activa is False
         assert HistorialRevisio.objects.filter(
-            artista_nom=a.nom, decisio="rebutjada", motiu="no_catala"
+            artista_nom=a.nom, decisio="rebutjada", motiu="desvincular_canco"
         ).exists()
 
     def test_motiu_artista_incorrecte_triggers_unlink_attempt(self):
@@ -80,7 +80,7 @@ class TestRebutjarCanco:
         c = _mk_canco(a)
         # Only one Cançó, rejected for artista_incorrecte → eligible
         # for auto-unlink (no other active tracks; only motiu present).
-        rebutjar_canco(c, "artista_incorrecte")
+        rebutjar_canco(c, "desvincular_artista")
         a.refresh_from_db()
         assert a.deezer_ids.count() == 0  # unlinked
 
@@ -88,7 +88,7 @@ class TestRebutjarCanco:
         a = _mk_artista()
         ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
         c = _mk_canco(a)
-        rebutjar_canco(c, "no_catala")
+        rebutjar_canco(c, "desvincular_canco")
         assert a.deezer_ids.count() == 1
 
 
@@ -118,8 +118,8 @@ class TestTryAutoUnlink:
         c1 = _mk_canco(a, nom="T1")
         c2 = _mk_canco(a, nom="T2")
         # Two rejections, different motius → defer.
-        rebutjar_canco(c1, "artista_incorrecte")
-        rebutjar_canco(c2, "no_catala")
+        rebutjar_canco(c1, "desvincular_artista")
+        rebutjar_canco(c2, "desvincular_canco")
         # The first call may have unlinked already; restore for test.
         if a.deezer_ids.count() == 0:
             ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
@@ -132,7 +132,7 @@ class TestTryAutoUnlink:
         ArtistaDeezer.objects.create(artista=a, deezer_id=222)
         album = _mk_album(a, source_deezer_id=222)
         c = _mk_canco(a, album=album)
-        rebutjar_canco(c, "artista_incorrecte")
+        rebutjar_canco(c, "desvincular_artista")
         a.refresh_from_db()
         ids = sorted(a.deezer_ids.values_list("deezer_id", flat=True))
         assert ids == [111]  # 222 unlinked, 111 kept
@@ -143,7 +143,7 @@ class TestTryAutoUnlink:
         ArtistaDeezer.objects.create(artista=a, deezer_id=222)
         album = _mk_album(a, source_deezer_id=None)  # unknown
         c = _mk_canco(a, album=album)
-        rebutjar_canco(c, "artista_incorrecte")
+        rebutjar_canco(c, "desvincular_artista")
         a.refresh_from_db()
         # Both kept — defer to staff.
         assert a.deezer_ids.count() == 2
@@ -155,7 +155,7 @@ class TestTryAutoUnlink:
         # Source doesn't match any of the linked profiles.
         album = _mk_album(a, source_deezer_id=999)
         c = _mk_canco(a, album=album)
-        rebutjar_canco(c, "artista_incorrecte")
+        rebutjar_canco(c, "desvincular_artista")
         a.refresh_from_db()
         # Both kept — can't unlink something that's not there.
         assert a.deezer_ids.count() == 2
@@ -303,7 +303,7 @@ class TestProcessarCollaboradorsPendents:
                 {"deezer_id": 7777, "name": "Wrong Featuring", "role": "secondary"}
             ],
         )
-        rebutjar_canco(c, "album_incorrecte")
+        rebutjar_canco(c, "desvincular_album")
         # No pendent created from the contributors_raw.
         assert not Artista.objects.filter(nom="Wrong Featuring").exists()
         assert not ArtistaDeezer.objects.filter(deezer_id=7777).exists()
@@ -322,7 +322,7 @@ class TestRebutjarAlbum:
         _mk_canco(a, album=album, nom="U2", verificada=False)
         verified = _mk_canco(a, album=album, nom="V", verificada=True)
 
-        deleted = rebutjar_album(album, "no_musica")
+        deleted = rebutjar_album(album, "desvincular_canco")
         album.refresh_from_db()
         verified.refresh_from_db()
 
@@ -331,7 +331,7 @@ class TestRebutjarAlbum:
         assert verified.verificada is True  # untouched
         assert (
             HistorialRevisio.objects.filter(
-                artista_nom=a.nom, decisio="rebutjada", motiu="no_musica"
+                artista_nom=a.nom, decisio="rebutjada", motiu="desvincular_canco"
             ).count()
             == 2
         )
@@ -347,7 +347,7 @@ class TestRebutjarArtista:
         _mk_canco(a, album=album1, nom="U", verificada=False)
         verified = _mk_canco(a, album=album2, nom="V", verificada=True)
 
-        deleted = rebutjar_artista(a, "no_catala")
+        deleted = rebutjar_artista(a, "desvincular_canco")
         a.refresh_from_db()
         album1.refresh_from_db()
         album2.refresh_from_db()

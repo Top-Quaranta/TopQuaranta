@@ -310,7 +310,7 @@ def cancons_accio(request: Request) -> Response:
     msgs: list[str] = []
     if action == "rebutjar":
         with transaction.atomic():
-            if motiu == "artista_incorrecte":
+            if motiu == "desvincular_artista":
                 artista_ids = set(qs.values_list("artista_id", flat=True))
                 for a in Artista.objects.filter(pk__in=artista_ids):
                     n = rebutjar_artista(a, motiu)
@@ -322,7 +322,7 @@ def cancons_accio(request: Request) -> Response:
                         cancons_afectades=n,
                     )
                     msgs.append(f"{n} cançons de {a.nom}")
-            elif motiu == "album_incorrecte":
+            elif motiu == "desvincular_album":
                 album_ids = set(qs.values_list("album_id", flat=True))
                 for al in Album.objects.filter(pk__in=album_ids):
                     n = rebutjar_album(al, motiu)

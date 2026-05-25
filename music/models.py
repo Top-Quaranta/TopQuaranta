@@ -1165,12 +1165,19 @@ class HistorialRevisio(models.Model):
         ("aprovada", "Aprovada"),
         ("rebutjada", "Rebutjada"),
     ]
+    # `motiu` records the action that resolved this HR row.
+    # For `decisio="aprovada"`: `ok` (manual approval) or
+    # `auto_ml` (RF auto-approval). For `decisio="rebutjada"`: one
+    # of the action codes in `music.constants.MOTIUS_REBUIG`. See
+    # that constant's docstring for the contract each value implies.
+    # Renamed from cause-based names on 2026-05-25; migration
+    # `0096_rename_motius_to_actions` carries the historical data.
     MOTIUS = [
-        ("ok", "En català i correcte"),
-        ("no_catala", "La cançó no és en català"),
-        ("artista_incorrecte", "El perfil Deezer no és el nostre artista"),
-        ("album_incorrecte", "L'àlbum sencer no pertany al nostre artista"),
-        ("no_musica", "No és música (podcast, audiollibre...)"),
+        ("ok", "Aprovada"),
+        ("auto_ml", "Aprovada per ML"),
+        ("desvincular_canco", "Descartar la cançó"),
+        ("desvincular_album", "Desvincular l'àlbum (homònim)"),
+        ("desvincular_artista", "Desvincular el perfil Deezer"),
     ]
 
     canco_deezer_id = models.BigIntegerField(null=True, blank=True)

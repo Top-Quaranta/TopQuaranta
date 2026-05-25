@@ -229,7 +229,15 @@ and confidence — this allows the ML model to be retrained from its own history
   `artista_deezer_nb_fan`, `artista_deezer_nb_album`, `artista_nom_deezer`,
   `artista_nom_similitud`
 - **ML snapshot:** `ml_classe_decisio`, `ml_confianca_decisio`
-- **Decision:** `decisio` (aprovada/rebutjada), `motiu` (see `Canco.MOTIUS`)
+- **Decision:** `decisio` (aprovada/rebutjada), `motiu` — action code
+  from `music.constants.MOTIUS_REBUIG` (for rebuigs:
+  `desvincular_canco`, `desvincular_album`, `desvincular_artista`)
+  or `ok` / `auto_ml` for approvals. Each value names the exact
+  action the rebuig triggered; full semantics at
+  `docs/architecture/staff.md §5`. Renamed 2026-05-25 from
+  cause-based codes (`no_catala`, `album_incorrecte`,
+  `artista_incorrecte`, `no_musica`) via migration
+  `music.0083_rename_motius_to_actions`.
 - `created_at`
 
 ---

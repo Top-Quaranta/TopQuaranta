@@ -265,7 +265,7 @@ def _top_artistes_backlog(limit: int = 15) -> list[dict]:
 
 def _homonym_suspects_details() -> list[dict]:
     """Pairs (artist, deezer_id) that look like an unresolved homonym
-    collision: a Cançó was rejected as `artista_incorrecte` while
+    collision: a Cançó was rejected as `desvincular_artista` while
     pointing at this specific Deezer artist ID, AND that same Deezer
     ID is *still* linked to an artist of the same name with verified
     tracks.
@@ -283,7 +283,7 @@ def _homonym_suspects_details() -> list[dict]:
     rejected = (
         HistorialRevisio.objects.filter(
             decisio="rebutjada",
-            motiu="artista_incorrecte",
+            motiu="desvincular_artista",
             artista_deezer_id__isnull=False,
         )
         .values("artista_nom", "artista_deezer_id")

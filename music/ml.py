@@ -87,7 +87,13 @@ FEATURE_NAMES = [
     "deezer_nom_similitud",
     "nom_artista_len",
     "nb_decisions_artista",
-    "ratio_rebuig_artista",
+    # Renamed 2026-05-25 from `ratio_rebuig_artista` (by-name only).
+    # The new key is the most-specific available among
+    # (deezer_id, spotify_artist_id), deezer_id alone, or name as
+    # legacy fallback. Same FEATURE_NAMES index, same length=50,
+    # so the existing RF keeps loading; quality degrades silently
+    # at this index until the next retrain learns the new splits.
+    "ratio_rebuig_par_artist",
     "ratio_rebuig_isrc_prefix",
     "mes_llancament",
     "ratio_rebuig_registrant",
@@ -299,15 +305,58 @@ def _smoothed(rej: int, total: int) -> float:
     return (rej + RATIO_PRIOR_K * RATIO_PRIOR_P) / (total + RATIO_PRIOR_K)
 
 
-def _get_rejection_ratio(artista_nom: str) -> tuple[int, float]:
+def _get_rejection_ratio(
+    artista_nom: str,
+    artista_deezer_id: int | None = None,
+    artista_spotify_id: str = "",
+) -> tuple[int, float]:
+    """Smoothed rejection ratio for the artist-key that owns this canço.
+
+    Replaces the legacy by-name grouping with the most specific key
+    available so Deezer-collapsed homonyms (the canonical `Aion` /
+    `Jim` cases) stop polluting each other's ratio. Precedence:
+
+      1. (deezer_id, spotify_artist_id) — both present. Cleanest
+         separation: same Deezer profile but different Spotify
+         profile (different real-world artist with same name).
+      2. deezer_id alone — when SpotifyMetadata for the candidate
+         is missing. Already separates Deezer-distinct homonyms
+         (Aion-1 vs Aion-2 at Deezer level).
+      3. artista_nom — legacy fallback for HR rows that have neither
+         deezer_id nor spotify_artist_id snapshotted. Covers the
+         oldest decisions where the snapshot was incomplete.
+
+    Returns (total, ratio). The total reflects rows under the chosen
+    key only; cold-start (total == 0) yields the 0.5 prior.
+
+    FEATURE_NAMES position (index 8, "ratio_rebuig_par_artist") is
+    preserved across the rename of the legacy by-name version on
+    2026-05-25; length 50 stays. The RF on disk was trained on the
+    by-name semantics, so until the next `entrenar_model()` run the
+    classifier sees the new value at the same index with the old
+    learned splits — silently degraded, not misaligned. Retrain
+    triggers automatically once 5 new decisions pile up via
+    `recalcular_ml_si_cal()`.
+    """
     from music.models import HistorialRevisio
 
-    total = HistorialRevisio.objects.filter(artista_nom=artista_nom).count()
+    qs = HistorialRevisio.objects.all()
+    if artista_deezer_id is not None and artista_spotify_id:
+        qs = qs.filter(
+            artista_deezer_id=artista_deezer_id,
+            artista_spotify_id=artista_spotify_id,
+        )
+    elif artista_deezer_id is not None:
+        qs = qs.filter(artista_deezer_id=artista_deezer_id)
+    elif artista_nom:
+        qs = qs.filter(artista_nom=artista_nom)
+    else:
+        return (0, 0.5)
+
+    total = qs.count()
     if total == 0:
         return (0, 0.5)
-    rej = HistorialRevisio.objects.filter(
-        artista_nom=artista_nom, decisio="rebutjada"
-    ).count()
+    rej = qs.filter(decisio="rebutjada").count()
     return (total, _smoothed(rej, total))
 
 
@@ -395,7 +444,20 @@ def _build_features(canco) -> list[float]:
     isrc = canco.isrc or ""
     es, _digital, intl, empty = _isrc_category(isrc)
     artista = canco.artista
-    nb_decisions, ratio_reb = _get_rejection_ratio(artista.nom)
+    # Pull the candidate's own enriched spotify_artist_id so the pair
+    # key includes it when available. Missing enrichment (the canço
+    # is fresh-from-Deezer, Process B hasn't reached it yet) falls
+    # through to deezer-only grouping, then to by-name (see
+    # `_get_rejection_ratio`).
+    candidate_sp = ""
+    sm = getattr(canco, "spotify", None)
+    if sm is not None and sm.spotify_artist_id:
+        candidate_sp = sm.spotify_artist_id
+    nb_decisions, ratio_reb = _get_rejection_ratio(
+        artista.nom,
+        artista_deezer_id=artista.deezer_id_principal,
+        artista_spotify_id=candidate_sp,
+    )
 
     return (
         [
@@ -466,10 +528,23 @@ def _build_features_from_historial(rec) -> list[float]:
     es, _digital, intl, empty = _isrc_category(isrc)
     prefix = isrc[:2].upper() if len(isrc) >= 2 else ""
 
-    # Artist-level smoothed rejection ratio, excluding self.
-    others = HistorialRevisio.objects.filter(artista_nom=rec.artista_nom).exclude(
-        pk=rec.pk
-    )
+    # Per-pair smoothed rejection ratio, excluding self. Mirrors the
+    # precedence in `_get_rejection_ratio`: (deezer, spotify) ->
+    # deezer alone -> name as legacy fallback. Self-exclusion keeps
+    # the training row from leaking its own label into its own
+    # feature.
+    others = HistorialRevisio.objects.exclude(pk=rec.pk)
+    if rec.artista_deezer_id is not None and rec.artista_spotify_id:
+        others = others.filter(
+            artista_deezer_id=rec.artista_deezer_id,
+            artista_spotify_id=rec.artista_spotify_id,
+        )
+    elif rec.artista_deezer_id is not None:
+        others = others.filter(artista_deezer_id=rec.artista_deezer_id)
+    elif rec.artista_nom:
+        others = others.filter(artista_nom=rec.artista_nom)
+    else:
+        others = others.none()
     total_others = others.count()
     if total_others > 0:
         ratio_reb = _smoothed(others.filter(decisio="rebutjada").count(), total_others)

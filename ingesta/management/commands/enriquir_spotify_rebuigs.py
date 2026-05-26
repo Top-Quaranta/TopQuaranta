@@ -59,7 +59,7 @@ from datetime import timezone as dt_tz
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import models, transaction
 
 from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
 from ingesta.clients.spotify_backfill_controller import (
@@ -122,6 +122,31 @@ class Command(BaseCommand):
                 "fall-through to the wider rebuig universe."
             ),
         )
+        parser.add_argument(
+            "--include-orfes",
+            action="store_true",
+            help=(
+                "Enable the orphan flow: HR rows whose Canco was "
+                "deleted by rebutjar_album/rebutjar_artista but still "
+                "carry an ISRC. Runs one /v1/search per distinct "
+                "ISRC and writes the resolved spotify_artist_id back "
+                "to every HR row with that ISRC. Behind a flag while "
+                "we validate it; the production cron does NOT pass "
+                "this until the operator says so."
+            ),
+        )
+        parser.add_argument(
+            "--include-pendents",
+            action="store_true",
+            help=(
+                "Enable the pendents tail: Cançons with "
+                "verificada=False, activa=True that carry an ISRC "
+                "and have no SpotifyMetadata yet. Last tier of the "
+                "cascade. Behind a flag while we validate it; the "
+                "production cron does NOT pass this until the "
+                "operator says so."
+            ),
+        )
 
     def handle(self, *args, **opts):
         # Cooldown gate. Reads the SHARED metadata cooldown (plus
@@ -175,24 +200,77 @@ class Command(BaseCommand):
 
         throttle = opts["throttle"]
         shortlist_only = opts["shortlist_only"]
+        include_orfes = opts["include_orfes"]
+        include_pendents = opts["include_pendents"]
         client = UserSpotifyClient(auth, throttle_s=throttle)
 
-        candidates = self._select_candidates(limit=limit, shortlist_only=shortlist_only)
+        # Cascade: live shortlist alive -> orphans shortlist ->
+        # rest of rebuigs (alive + orphans) -> pendents. Each tier
+        # only fills what the previous one left in the budget. The
+        # AIMD limit caps total items processed regardless of
+        # cascade tier; orphan items cost ~1 API call each vs ~3
+        # for live items, so a tier shift toward orphans is
+        # automatically more conservative on the quota.
+        remaining = limit
+        live_alive_cancons = self._select_candidates_alive(
+            limit=remaining, shortlist_only=shortlist_only
+        )
+        remaining = max(0, remaining - len(live_alive_cancons))
+
+        orfe_shortlist_isrcs: list[str] = []
+        orfe_rest_isrcs: list[str] = []
+        if include_orfes and remaining > 0:
+            orfe_shortlist_isrcs = self._select_orfe_isrcs(
+                limit=remaining, shortlist_only=True
+            )
+            remaining = max(0, remaining - len(orfe_shortlist_isrcs))
+            if not shortlist_only and remaining > 0:
+                # Skip the ISRCs we already queued from the shortlist.
+                seen = set(orfe_shortlist_isrcs)
+                orfe_rest_isrcs = [
+                    isrc
+                    for isrc in self._select_orfe_isrcs(
+                        limit=remaining + len(seen),
+                        shortlist_only=False,
+                    )
+                    if isrc not in seen
+                ][:remaining]
+                remaining = max(0, remaining - len(orfe_rest_isrcs))
+
+        pendent_cancons: list[Canco] = []
+        if include_pendents and remaining > 0:
+            pendent_cancons = self._select_pendents(limit=remaining)
+
         self.stdout.write(
-            f"[enriquir_spotify_rebuigs] {len(candidates)} candidates "
+            f"[enriquir_spotify_rebuigs] cascade "
             f"(limit={limit}, throttle={throttle}, "
-            f"shortlist_only={shortlist_only})"
+            f"shortlist_only={shortlist_only}, "
+            f"include_orfes={include_orfes}, "
+            f"include_pendents={include_pendents}): "
+            f"live_alive={len(live_alive_cancons)} "
+            f"orfe_shortlist={len(orfe_shortlist_isrcs)} "
+            f"orfe_rest={len(orfe_rest_isrcs)} "
+            f"pendents={len(pendent_cancons)}"
         )
 
-        processed = 0
-        found = 0
+        live_done = orfe_done_found = pendent_done = 0
+        live_found = pendent_found = 0
         aborted = False
         try:
-            for canco in candidates:
+            for canco in live_alive_cancons:
                 outcome = self._enrich_one(client, canco)
-                processed += 1
+                live_done += 1
                 if outcome == "found":
-                    found += 1
+                    live_found += 1
+            for isrc in orfe_shortlist_isrcs + orfe_rest_isrcs:
+                outcome = self._enrich_orfe_isrc(client, isrc)
+                if outcome == "found":
+                    orfe_done_found += 1
+            for canco in pendent_cancons:
+                outcome = self._enrich_one(client, canco)
+                pendent_done += 1
+                if outcome == "found":
+                    pendent_found += 1
         except RateLimitedError as exc:
             from ingesta.clients import spotify_metadata_cooldown as cd
 
@@ -212,13 +290,19 @@ class Command(BaseCommand):
                 )
             )
 
+        n_orfe = len(orfe_shortlist_isrcs) + len(orfe_rest_isrcs)
         self.stdout.write(
-            f"[enriquir_spotify_rebuigs] done: processed={processed} "
-            f"found={found} aborted={aborted}"
+            f"[enriquir_spotify_rebuigs] done: "
+            f"live(processed={live_done} found={live_found}) "
+            f"orfe(processed={n_orfe} found={orfe_done_found}) "
+            f"pendent(processed={pendent_done} found={pendent_found}) "
+            f"aborted={aborted}"
         )
 
     # ── candidate selection ────────────────────────────────────────
-    def _select_candidates(self, *, limit: int, shortlist_only: bool) -> list[Canco]:
+    def _select_candidates_alive(
+        self, *, limit: int, shortlist_only: bool
+    ) -> list[Canco]:
         """Pull up to `limit` rebuig cançons missing SpotifyMetadata.
 
         Priority:
@@ -299,6 +383,112 @@ class Command(BaseCommand):
                     break
 
         return result[:limit]
+
+    def _select_orfe_isrcs(self, *, limit: int, shortlist_only: bool) -> list[str]:
+        """Return up to `limit` distinct ISRCs for the orphan flow.
+
+        An "orphan" HR row has a non-empty `canco_isrc`, an empty
+        `artista_spotify_id`, no `Canco` row matching its
+        `canco_deezer_id` (the cançó was deleted by
+        `rebutjar_album` / `rebutjar_artista`), and either
+        `spotify_lookup_at IS NULL` or older than 30 days.
+
+        Returns ISRCs deduplicated (one search per ISRC, not one
+        per HR row), oldest HR `created_at` first so the long
+        historical tail drains first.
+        """
+        from datetime import timedelta
+
+        from django.db.models import Exists, OuterRef
+        from django.utils import timezone
+
+        cutoff = timezone.now() - timedelta(days=30)
+        qs = (
+            HistorialRevisio.objects.filter(
+                decisio="rebutjada",
+                artista_spotify_id="",
+            )
+            .exclude(canco_isrc="")
+            .exclude(canco_deezer_id__isnull=True)
+            .filter(
+                models.Q(spotify_lookup_at__isnull=True)
+                | models.Q(spotify_lookup_at__lt=cutoff)
+            )
+            .annotate(
+                has_canco=Exists(
+                    Canco.objects.filter(deezer_id=OuterRef("canco_deezer_id"))
+                )
+            )
+            .filter(has_canco=False)
+        )
+        if shortlist_only:
+            shortlist = set(
+                HistorialRevisio.objects.filter(
+                    decisio="rebutjada", motiu="desvincular_album"
+                )
+                .exclude(artista_deezer_id__isnull=True)
+                .values_list("artista_deezer_id", flat=True)
+                .distinct()
+            )
+            qs = qs.filter(artista_deezer_id__in=shortlist)
+
+        seen: list[str] = []
+        for isrc in qs.order_by("created_at").values_list("canco_isrc", flat=True):
+            if isrc not in seen:
+                seen.append(isrc)
+            if len(seen) >= limit:
+                break
+        return seen
+
+    def _select_pendents(self, *, limit: int) -> list[Canco]:
+        """Cançons with `verificada=False, activa=True` carrying an
+        ISRC and no SpotifyMetadata yet. Last tier of the cascade.
+
+        Ordered by most-recent `created_at` first so we enrich
+        what is freshest in the queue and likely to surface in
+        ranking soon, rather than backfilling the deepest
+        historical tail (the rebuig flows already drain that).
+        """
+        return list(
+            Canco.objects.filter(verificada=False, activa=True)
+            .exclude(isrc="")
+            .exclude(isrc__isnull=True)
+            .exclude(spotify__enrichment_status=SpotifyMetadata.STATUS_FOUND)
+            .order_by("-created_at")[:limit]
+        )
+
+    # ── per-orphan-ISRC ────────────────────────────────────────────
+    def _enrich_orfe_isrc(self, client: UserSpotifyClient, isrc: str) -> str:
+        """Single-call enrichment for an orphan ISRC: one
+        `/v1/search?q=isrc:<X>`, extract the principal
+        spotify_artist_id from the response, write it back to
+        every matching HR row.
+
+        No `Canco` or `SpotifyMetadata` rows are created here;
+        the only persistent effect is the HR update plus the
+        `spotify_lookup_at` stamp (regardless of found / not
+        found, so the candidate query does not re-issue this
+        search for the next 30 days).
+
+        Returns `found` or `not_found`.
+        """
+        from django.utils import timezone
+
+        sp_artist_id = client.search_isrc_principal_artist(isrc)
+        now = timezone.now()
+        with transaction.atomic():
+            qs = HistorialRevisio.objects.filter(canco_isrc=isrc)
+            if sp_artist_id:
+                qs.filter(artista_spotify_id="").update(
+                    artista_spotify_id=sp_artist_id,
+                    spotify_lookup_at=now,
+                )
+                # Rows that already had artista_spotify_id keep it;
+                # only the stamp moves so we do not re-try them.
+                qs.exclude(artista_spotify_id="").update(spotify_lookup_at=now)
+            else:
+                qs.update(spotify_lookup_at=now)
+        return "found" if sp_artist_id else "not_found"
 
     # ── per-candidate ───────────────────────────────────────────────
     def _enrich_one(self, client: UserSpotifyClient, canco: Canco) -> str:

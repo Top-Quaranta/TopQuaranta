@@ -407,6 +407,45 @@ Manual overrides via `--limit <N>` bypass the controller for one
 run and leave the persisted state untouched. Use them for
 sanity-test runs or one-off pushes, never as a daily setting.
 
+### Cascade (alive -> orfes -> rest -> pendents)
+
+`enriquir_spotify_rebuigs` walks four tiers in priority order
+within a single run; each tier only fills what the previous left
+in the AIMD budget:
+
+1. **Live shortlist alive** — Cançons that still exist in the DB
+   whose `artista_deezer_id` carries at least one
+   `desvincular_album` HR row. Three calls per cançó (search +
+   track + artist) and the full `SpotifyMetadata` is persisted,
+   so the playlist sync can use the resulting `spotify_id`.
+2. **Orphan flow shortlist** — HR rows whose `canco_deezer_id`
+   no longer has a matching Canco (deleted by `rebutjar_album` /
+   `rebutjar_artista`) but still carries an ISRC. One `/v1/search`
+   per distinct ISRC; the principal `spotify_artist_id` from the
+   response is written back to every HR row carrying that ISRC.
+   No `Canco` or `SpotifyMetadata` rows are created. Every HR row
+   gets `spotify_lookup_at` stamped (found or not), and the
+   candidate query excludes rows looked up within the last 30
+   days so a not-found ISRC is not re-searched on every nightly
+   run. Behind `--include-orfes`.
+3. **Rest of rebuigs** — when `--shortlist-only` is OFF, tiers 1
+   and 2 widen beyond the `desvincular_album` shortlist to any
+   rebuig HR row with an ISRC.
+4. **Pendents** — Cançons with `verificada=False, activa=True`
+   and an ISRC that have not been classified yet. Most-recent
+   `created_at` first so the freshest queue items reach the
+   playlists first. Behind `--include-pendents`.
+
+The AIMD budget caps total items processed in a run, not API
+calls. Tier 1 and tier 4 cost ~3 calls/item; tier 2 costs ~1.
+A run that shifts toward orphans is automatically more
+conservative on the metadata quota.
+
+`--include-orfes` and `--include-pendents` are off by default and
+the production cron does not pass them. They are validated
+manually via `tq-run enriquir_spotify_rebuigs ...` before any
+schedule change.
+
 ### Shared metadata cooldown (`spotify_metadata_cooldown`)
 
 The maintenance enrichment and the rebuig backfill both call the

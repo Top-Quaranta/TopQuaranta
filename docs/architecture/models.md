@@ -233,7 +233,9 @@ and confidence — this allows the ML model to be retrained from its own history
   by the per-pair rejection-ratio feature in
   `music/ml.py`; backfilled for legacy rows by the dedicated
   drain command `enriquir_spotify_rebuigs` once Process B
-  enriches them.)
+  enriches them.), `spotify_lookup_at` (added 2026-05-26,
+  migration 0086 — stamp of the last orphan-flow ISRC lookup so
+  not-found ISRCs are not re-searched for 30 days)
 - **ML snapshot:** `ml_classe_decisio`, `ml_confianca_decisio`
 - **Decision:** `decisio` (aprovada/rebutjada), `motiu` — action code
   from `music.constants.MOTIUS_REBUIG` (for rebuigs:

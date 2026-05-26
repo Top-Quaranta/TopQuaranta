@@ -309,11 +309,19 @@ class Command(BaseCommand):
         Returns the outcome string of the SpotifyMetadata write
         (`found` / `not_found` / `error`)."""
         sm, _ = SpotifyMetadata.objects.get_or_create(canco=canco)
-        spotify_id = client.search_isrc(canco.isrc)
-        if not spotify_id:
+        # `search_isrc` returns a Spotify URI (`spotify:track:<id>`),
+        # while `get_track` and the rest of the persistence layer
+        # expect the bare ID. Mirrors the strip the maintenance
+        # command does at `enriquir_spotify.py::_enrich_one`. Without
+        # this strip the next call returns 400 Bad Request and the
+        # backfill cannot enrich a single cançó (caught on the first
+        # wet run on 2026-05-26).
+        uri = client.search_isrc(canco.isrc)
+        if not uri:
             sm.enrichment_status = SpotifyMetadata.STATUS_NOT_FOUND
             sm.save(update_fields=["enrichment_status", "updated_at"])
             return "not_found"
+        spotify_id = uri.rsplit(":", 1)[-1]
 
         track = client.get_track(spotify_id)
         if not track:

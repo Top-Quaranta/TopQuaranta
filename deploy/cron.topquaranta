@@ -186,7 +186,7 @@ PATH=/usr/local/bin:/usr/bin:/bin
 #
 # See docs/architecture/pipeline.md section 4 ("Backfill rate
 # controller") for the full controller contract.
-0 5 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify_rebuigs --shortlist-only >> /var/log/topquaranta/playlists.log 2>&1
+0 5 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify_rebuigs --shortlist-only --include-orfes >> /var/log/topquaranta/playlists.log 2>&1
 
 # 22:30 → Pull engagement metrics from each social platform
 # (Mastodon, Bluesky, Instagram, Telegram). Per-post counters for the

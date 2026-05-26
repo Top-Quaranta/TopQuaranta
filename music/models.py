@@ -1212,6 +1212,25 @@ class HistorialRevisio(models.Model):
     # rejection-ratio feature in `music.ml`; see
     # `docs/architecture/pipeline.md` section 4.
     artista_spotify_id = models.CharField(max_length=50, blank=True, db_index=True)
+    # Stamped by `enriquir_spotify_rebuigs` orphan flow every time
+    # an ISRC lookup is attempted for this row, regardless of
+    # whether Spotify returned a match. The candidate query
+    # excludes rows looked up within the last 30 days so a
+    # not-found ISRC is not re-searched on every nightly run.
+    # NULL = never attempted. See migration 0086.
+    spotify_lookup_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Set by the rebuig backfill (`enriquir_spotify_rebuigs`) "
+            "every time the orphan flow runs an ISRC lookup against "
+            "Spotify for this row. NULL = never attempted. The "
+            "candidate query excludes rows looked up within the "
+            "last 30 days, regardless of whether the previous "
+            "attempt resolved the artist or not."
+        ),
+    )
 
     ml_classe_decisio = models.CharField(
         max_length=1,

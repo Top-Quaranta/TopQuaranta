@@ -64,6 +64,12 @@
     "skip_concern": 1,
     "description": "Process B: Spotify enrichment. Search ISRC -> fetch track + artist -> persist SpotifyMetadata. Nightly cadence (moved from hourly 2026-05-24 after repeated Dev-Mode quota bans); --limit 50 covers the ~21 new Cançons/day with ample headroom."
   },
+  "enriquir_spotify_rebuigs": {
+    "frequency_label": "Cada nit 05:00",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "description": "Process B backfill: enrich historical rebuig cançons so the per-(deezer_id, spotify_artist_id) ML rejection-ratio feature gains coverage on Deezer-collapsed homonym profiles. Limit chosen by the AIMD controller (state at /var/log/topquaranta/status/enriquir_spotify_rebuigs.controller.json); shortlist-only mode prioritises deezer profiles with at least one desvincular_album rebuig."
+  },
   "tq-restore-test": {
     "frequency_label": "Mensual (dia 1, 04:30)",
     "max_age_hours": 840,

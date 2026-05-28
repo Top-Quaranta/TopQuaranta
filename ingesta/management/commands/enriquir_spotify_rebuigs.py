@@ -336,6 +336,23 @@ class Command(BaseCommand):
             .values_list("deezer_id", flat=True)
         )
 
+        # Pre-filter set of deezer_ids that still have a *surviving*
+        # non-FOUND Canço. This must be applied to the HR scan BEFORE
+        # the `limit` cap, otherwise the tier starves: ~95 % of the
+        # shortlist HR rows point to cançons already deleted by
+        # `rebutjar_album`/`rebutjar_artista`, so iterating oldest-
+        # first and capping at `limit` fills the budget entirely with
+        # dead deezer_ids and the surviving candidates (which sit far
+        # down the created_at order) are never reached. Filtering on
+        # this set up front guarantees the cap is spent on enrichable
+        # rows only. (Bug: 2026-05-28 the cron logged live_alive=0
+        # while 192 live candidates existed beyond the cap.)
+        alive_song_dzids = set(
+            Canco.objects.exclude(
+                spotify__enrichment_status=SpotifyMetadata.STATUS_FOUND
+            ).values_list("deezer_id", flat=True)
+        )
+
         hr_priority = (
             HistorialRevisio.objects.filter(
                 decisio="rebutjada",
@@ -344,7 +361,12 @@ class Command(BaseCommand):
             .exclude(canco_isrc="")
             .exclude(canco_deezer_id__isnull=True)
             .exclude(canco_deezer_id__in=enriched_dz)
-            .order_by("created_at")
+            .filter(canco_deezer_id__in=alive_song_dzids)
+            # Secondary sort on pk to make the selection deterministic
+            # across runs: created_at has large same-timestamp batches
+            # (staff bulk actions), and without a tiebreak which rows
+            # land inside the cap varied run-to-run.
+            .order_by("created_at", "pk")
         )
         priority_dzids: list[int] = []
         for dz in hr_priority.values_list("canco_deezer_id", flat=True):
@@ -366,7 +388,11 @@ class Command(BaseCommand):
                 .exclude(canco_isrc="")
                 .exclude(canco_deezer_id__isnull=True)
                 .exclude(canco_deezer_id__in=enriched_dz)
-                .order_by("created_at")
+                # Same surviving-Canço pre-filter and pk tiebreak as
+                # the priority scan above, for the same starvation and
+                # determinism reasons.
+                .filter(canco_deezer_id__in=alive_song_dzids)
+                .order_by("created_at", "pk")
             )
             for dz in hr_fallback.values_list("canco_deezer_id", flat=True):
                 if dz in seen:

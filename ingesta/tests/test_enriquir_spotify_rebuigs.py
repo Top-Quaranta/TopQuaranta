@@ -330,3 +330,136 @@ def test_cascade_alive_consumes_budget_before_orfes(auth_present, client_mock):
     assert sm.enrichment_status == SpotifyMetadata.STATUS_FOUND
     # Orphan tier did not run.
     client_mock.search_isrc_principal_artist.assert_not_called()
+
+
+# ──────────────── Live-tier starvation (regression) ──────────────────
+
+
+def _make_dead_shortlist_hr(idx: int, isrc: str, created_at):
+    """An HR rebuig on the shortlist whose `canco_deezer_id` has NO
+    surviving Canco (the cançó was deleted by
+    `rebutjar_album`/`rebutjar_artista`). These dominate the real
+    shortlist universe (~95 %)."""
+    hr = HistorialRevisio.objects.create(
+        canco_nom=f"DEAD {idx}",
+        artista_nom=f"DEAD artist {idx}",
+        artista_deezer_id=700000 + idx,
+        canco_deezer_id=700000 + idx,  # no Canco carries this deezer_id
+        canco_isrc=isrc,
+        decisio="rebutjada",
+        motiu="desvincular_album",
+    )
+    HistorialRevisio.objects.filter(pk=hr.pk).update(created_at=created_at)
+    return hr
+
+
+def _make_alive_shortlist_hr(idx: int, isrc: str, created_at):
+    """An HR rebuig on the shortlist whose `canco_deezer_id` points to
+    a surviving, non-FOUND Canco (an enrichable live candidate)."""
+    a = Artista.objects.create(nom=f"ALIVE {idx}", aprovat=False, pendent_review=True)
+    al = Album.objects.create(artista=a, nom=f"ALIVE Al {idx}")
+    dz = 800000 + idx
+    Canco.objects.create(
+        artista=a,
+        album=al,
+        nom=f"ALIVE {idx}",
+        isrc=isrc,
+        deezer_id=dz,
+        verificada=False,
+        activa=True,
+        data_llancament=date(2026, 1, 1),
+    )
+    hr = HistorialRevisio.objects.create(
+        canco_nom=f"ALIVE {idx}",
+        artista_nom=a.nom,
+        artista_deezer_id=810000 + idx,
+        canco_deezer_id=dz,
+        canco_isrc=isrc,
+        decisio="rebutjada",
+        motiu="desvincular_album",
+    )
+    HistorialRevisio.objects.filter(pk=hr.pk).update(created_at=created_at)
+    return dz
+
+
+@pytest.mark.django_db
+def test_live_tier_not_starved_by_deleted_cancons():
+    """Regression for the 2026-05-28 `live_alive=0` bug.
+
+    500 oldest shortlist HR rows point to deleted cançons, then 50
+    point to surviving non-FOUND cançons. Capping at limit=400 used
+    to fill the budget entirely with dead deezer_ids and return 0;
+    with the surviving-Canço pre-filter the 50 live candidates are
+    selected regardless of the cap."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from ingesta.management.commands.enriquir_spotify_rebuigs import Command
+
+    base = timezone.now() - timedelta(days=10)
+    for i in range(500):
+        _make_dead_shortlist_hr(
+            idx=i, isrc=f"ZZDEAD{i:06d}", created_at=base + timedelta(seconds=i)
+        )
+    for i in range(50):
+        _make_alive_shortlist_hr(
+            idx=i,
+            isrc=f"ZZLIVE{i:06d}",
+            created_at=base + timedelta(seconds=1000 + i),
+        )
+
+    result = Command()._select_candidates_alive(limit=400, shortlist_only=True)
+
+    assert len(result) == 50
+    # Every returned cançó is a surviving, non-FOUND row.
+    for c in result:
+        assert 800000 <= c.deezer_id < 800050
+
+
+@pytest.mark.django_db
+def test_live_tier_selection_is_deterministic_under_created_at_ties():
+    """With a pk tiebreak, two consecutive selections over a pool of
+    identical-`created_at` rows return the same capped set of ids."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from ingesta.management.commands.enriquir_spotify_rebuigs import Command
+
+    ts = timezone.now() - timedelta(days=5)
+    for i in range(100):
+        _make_alive_shortlist_hr(idx=2000 + i, isrc=f"ZZTIE{i:06d}", created_at=ts)
+
+    r1 = Command()._select_candidates_alive(limit=50, shortlist_only=True)
+    r2 = Command()._select_candidates_alive(limit=50, shortlist_only=True)
+
+    ids1 = sorted(c.deezer_id for c in r1)
+    ids2 = sorted(c.deezer_id for c in r2)
+    assert len(r1) == 50
+    assert ids1 == ids2
+
+
+@pytest.mark.django_db
+def test_live_tier_no_regression_when_alive_pool_within_cap():
+    """When every live candidate already fits inside the cap, the
+    pre-filter changes nothing: all of them are returned."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from ingesta.management.commands.enriquir_spotify_rebuigs import Command
+
+    base = timezone.now() - timedelta(days=3)
+    expected = set()
+    for i in range(10):
+        dz = _make_alive_shortlist_hr(
+            idx=3000 + i,
+            isrc=f"ZZOK{i:06d}",
+            created_at=base + timedelta(seconds=i),
+        )
+        expected.add(dz)
+
+    result = Command()._select_candidates_alive(limit=400, shortlist_only=True)
+
+    assert {c.deezer_id for c in result} == expected

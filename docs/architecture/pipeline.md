@@ -418,6 +418,16 @@ in the AIMD budget:
    `desvincular_album` HR row. Three calls per cançó (search +
    track + artist) and the full `SpotifyMetadata` is persisted,
    so the playlist sync can use the resulting `spotify_id`.
+   The HR scan pre-filters `canco_deezer_id` against the set of
+   surviving non-FOUND Cançons *before* the budget cap is applied,
+   and tiebreaks the `created_at` ordering with `pk`. The
+   pre-filter is required because ~95 % of shortlist HR rows point
+   to cançons already deleted by `rebutjar_album`/`rebutjar_artista`;
+   without it the cap was spent entirely on dead deezer_ids and the
+   tier starved to 0 even when live candidates existed (2026-05-28
+   `live_alive=0` incident). The `pk` tiebreak makes the capped
+   selection deterministic across runs given large same-`created_at`
+   batches.
 2. **Orphan flow shortlist** — HR rows whose `canco_deezer_id`
    no longer has a matching Canco (deleted by `rebutjar_album` /
    `rebutjar_artista`) but still carries an ISRC. One `/v1/search`

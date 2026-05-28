@@ -7,10 +7,16 @@
     <title>TopQuaranta — Rànquing de música en català</title>
     <meta name="description" content="El rànquing setmanal de música en català als Països Catalans. Mesurem què sona per demostrar que la nostra música no para de créixer." />
 
+    <!-- Self-hosted fonts: preload the two latin variable faces that
+         carry the above-the-fold text LCP (Playfair h1 on home,
+         Roboto body/subtitle). `crossorigin` is required for font
+         preload even same-origin. latin-ext loads on demand for
+         Catalan edge glyphs. See src/index.css + frontend.md. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/playfair-display-latin.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/roboto-latin.woff2" />
+
     <!-- Sprint S Bloc D (CWV): pre-establish TLS to origins we hit
          on every page so requests start immediately on first paint. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn-images.dzcdn.net" />
     <link rel="dns-prefetch" href="https://cdn.bsky.app" />
 

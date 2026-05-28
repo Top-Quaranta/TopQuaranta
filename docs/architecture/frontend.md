@@ -134,3 +134,32 @@ page tree (`pages/staff/*`), the legal pages, and the public
 CancoPage ranking chart (`components/CancoChart.jsx`). So an anonymous
 visitor's first byte pays for the public surface only and recharts is
 no longer in the entry `modulepreload` list.
+
+## Fonts
+
+Self-hosted (OFL), served from `public/fonts/*` on our own origin.
+Replaced the Google Fonts `@import` (which added a 3-hop critical
+chain — external CSS → `fonts.googleapis.com` CSS → `fonts.gstatic.com`
+woff2 — with no preload, delaying the text LCP on home/top per LCP
+audit Task 1).
+
+- **Families:** Playfair Display (headings) + Roboto (body). Both are
+  **variable** fonts, so one woff2 per family+subset covers all weights
+  via a `font-weight` range (Playfair `400 800`, Roboto `300 700`).
+- **Subsets:** `latin` + `latin-ext` only (latin-ext carries Catalan
+  edge glyphs such as `ŀ`). No italic axis — italics stay synthetic,
+  identical to before. Four files total (~132 kB; latin 38/43 kB,
+  latin-ext 21/29 kB).
+- `@font-face` blocks live in `src/index.css` with `font-display: swap`
+  and the Google unicode-ranges preserved.
+- **Preloaded** in `index.html` (`<link rel="preload" as="font"
+  crossorigin>`): the two `latin` faces (`playfair-display-latin.woff2`,
+  `roboto-latin.woff2`) — the above-the-fold text LCP. `latin-ext`
+  loads on demand.
+- `mm-design/tokens/typography.css` is intentionally NOT imported in
+  `main.jsx`: its only effect was a Google Fonts `@import` (its
+  `--mm-font-*`/`--mm-text-*` tokens are unused here). `colors.css` and
+  `spacing.css` are still imported.
+- The Django auth templates (`comptes/_base_auth.html`) still use Google
+  Fonts — a separate, self-contained surface — so the shared Caddy CSP
+  keeps `fonts.googleapis.com` / `fonts.gstatic.com` allowed.

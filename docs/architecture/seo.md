@@ -69,8 +69,20 @@ with a tenth of the work.
 
 Hard rules, mirrored across SSR views, sitemaps, and IndexNow notify:
 
-* **Artista** — only `aprovat=True`. When un-approved, SSR returns 404
-  → Google de-indexes within hours.
+* **Artista** — only `aprovat=True`. When un-approved (or
+  non-existent), SSR returns 404. An *approved* artiste with **no
+  verified active cançó** is NOT a 404: it is served **200 + `noindex,
+  follow`** (a thin page, `seo/artista_thin.html`, with a generated
+  description and minimal `MusicGroup` JSON-LD). Rationale: returning
+  404 for these made Google re-crawl previously-indexed URLs as errors
+  (~4.8k/week) and discard accumulated authority; 200 + noindex
+  de-indexes cleanly and the directive **drops automatically** the
+  moment the artiste gains an indexable cançó. The `Meta.robots` field
+  carries the directive; the thin/index decision lives in
+  `web/seo/views.py::_artista_has_indexable`. Bio descriptions are run
+  through `meta.clean_lastfm_bio`, which strips the
+  "Read more on Last.fm" boilerplate so the placeholder never reaches a
+  `<meta description>`.
 * **Album** — parent artiste approved AND `descartat=False`.
 * **Canco** — `verificada=True, activa=True`.
 * **Territori / Comarca / Dècada** — only when the aggregation has

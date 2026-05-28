@@ -228,25 +228,56 @@ def artistes_list_seo(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _artista_has_indexable(a: Artista) -> bool:
+    """True iff the artiste has ≥1 verified active cançó (the
+    indexability gate shared by the SEO view and the sitemap)."""
+    return Canco.objects.filter(artista=a, verificada=True, activa=True).exists()
+
+
+def _render_artista_thin(request: HttpRequest, a: Artista) -> HttpResponse:
+    """200 + noindex thin page for an approved artiste with no
+    indexable cançó. Minimal JSON-LD (no discography) and a generated,
+    placeholder-free description (see meta.for_artista(thin=True))."""
+    blocks = [
+        jsonld.artista_jsonld(a, minimal=True),
+        jsonld.breadcrumbs_jsonld(
+            [("Inici", "/"), ("Artistes", "/artistes"), (a.nom, f"/artista/{a.slug}")]
+        ),
+    ]
+    return render(
+        request,
+        "seo/artista_thin.html",
+        {
+            "meta": meta.for_artista(a, thin=True),
+            "jsonld_blocks": blocks,
+            "artista": a,
+        },
+    )
+
+
 @require_safe
 @_vary_ua
 @condition(last_modified_func=_artista_lm)
 def artista_seo(request: HttpRequest, slug: str) -> HttpResponse:
-    """`/artista/<slug>` — full artiste page. 404 when un-approved or
-    when the artiste has no verified active cançó, so de-indexing is
-    automatic. The empty-discography case is a ghost page in Google's
-    eyes and matches what the public profile would render: nothing
-    indexable."""
+    """`/artista/<slug>` — full artiste page.
+
+    404 when un-approved or non-existent. An *approved* artiste with no
+    verified active cançó is served as a 200 + noindex thin page (not a
+    404): returning 404 made Google re-crawl previously-indexed URLs as
+    errors (~4.8k/week) and lose accumulated authority. 200 + noindex
+    de-indexes cleanly, and the noindex drops automatically the moment
+    the artiste gains an indexable cançó (audit flags #3/#6)."""
     a = get_object_or_404(
         Artista.objects.prefetch_related(
             "localitats__municipi__territori",
             "deezer_ids",
-        )
-        .filter(cancons__verificada=True, cancons__activa=True)
-        .distinct(),
+        ),
         slug=slug,
         aprovat=True,
     )
+    if not _artista_has_indexable(a):
+        return _render_artista_thin(request, a)
+
     albums = list(
         Album.objects.filter(artista=a, descartat=False).order_by("-data_llancament")
     )
@@ -870,9 +901,13 @@ def seo_api(request: HttpRequest, entity: str, slug: str = "") -> JsonResponse:
         )
         if not a:
             return JsonResponse({"error": "not_found"}, status=404)
-        m = meta.for_artista(a)
+        # Mirror the SSR view: approved-but-no-indexable-cançó artistes
+        # get thin meta (noindex) + minimal JSON-LD so the SPA <head>
+        # matches the bot path.
+        thin = not _artista_has_indexable(a)
+        m = meta.for_artista(a, thin=thin)
         blocks = [
-            jsonld.artista_jsonld(a),
+            jsonld.artista_jsonld(a, minimal=thin),
             jsonld.breadcrumbs_jsonld(
                 [
                     ("Inici", "/"),

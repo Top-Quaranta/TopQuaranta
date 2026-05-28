@@ -1,0 +1,26 @@
+{% extends "seo/_base.html" %}
+{# Thin page for an approved artiste with no indexable cançó yet.
+   Served 200 + noindex (see web/seo/views.py::_render_artista_thin and
+   meta.for_artista(thin=True)) so Google de-indexes cleanly instead of
+   treating a previously-indexed URL as a 404. #}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › <a href="/artistes">Artistes</a> › {{ artista.nom }}
+</nav>
+<h1>{{ artista.nom }}</h1>
+<p class="meta-line">{{ meta.description }}</p>
+
+{% if artista.localitats.all %}
+<p>
+  <strong>D'on és:</strong>
+  {% for loc in artista.localitats.all %}{% if loc.municipi %}{{ loc.municipi.nom }} ({{ loc.municipi.comarca }}){% else %}{{ loc.localitat_manual }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
+</p>
+{% endif %}
+
+{% if artista.genere %}<p><strong>Gènere:</strong> {{ artista.genere }}</p>{% endif %}
+
+<p>
+  Encara no hi ha cançons d'aquest artista al rànquing setmanal. Si en
+  tens informació, <a href="/comunitat">contacta'ns</a>.
+</p>
+{% endblock %}

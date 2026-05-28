@@ -64,6 +64,7 @@ export function SeoHead({ entity, slug = '', fallback = null }) {
     <Helmet>
       <title>{meta.title}</title>
       <meta name="description" content={meta.description} />
+      {meta.robots ? <meta name="robots" content={meta.robots} /> : null}
       <link rel="canonical" href={meta.canonical_url} />
       <link rel="alternate" hrefLang="ca" href={meta.canonical_url} />
       <link rel="alternate" hrefLang="x-default" href={meta.canonical_url} />

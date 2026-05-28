@@ -21,11 +21,10 @@ import datetime
 from typing import Any
 
 from django.conf import settings
-from django.utils.html import strip_tags
 
 from music.models import Album, Artista, Canco
 
-from .meta import CANONICAL_HOST, SITE_NAME, TERRITORI_NOMS
+from .meta import CANONICAL_HOST, SITE_NAME, TERRITORI_NOMS, clean_lastfm_bio
 
 
 def _abs(path: str) -> str:
@@ -106,11 +105,26 @@ def website_jsonld() -> dict[str, Any]:
     }
 
 
-def artista_jsonld(a: Artista) -> dict[str, Any]:
+def artista_jsonld(a: Artista, *, minimal: bool = False) -> dict[str, Any]:
     """`MusicGroup` works for both bands and solo artists per
     schema.org guidance. Includes top albums (`album`) and top
     tracks (`track`) when available so Google can show a richer
-    knowledge panel."""
+    knowledge panel.
+
+    `minimal=True` emits only name + url (no albums/tracks/description)
+    for the thin artiste page (approved, no indexable cançó yet) so the
+    structured data doesn't point Google at non-existent discography.
+    """
+    if minimal:
+        return {
+            "@context": "https://schema.org",
+            "@type": "MusicGroup",
+            "@id": f"{CANONICAL_HOST}/artista/{a.slug}#group",
+            "name": a.nom,
+            "url": f"{CANONICAL_HOST}/artista/{a.slug}",
+            "inLanguage": "ca",
+        }
+
     territori_nom = ""
     locs = a.localitats.select_related("municipi__territori").all()
     if locs:
@@ -148,8 +162,9 @@ def artista_jsonld(a: Artista) -> dict[str, Any]:
     }
     # Same bio fallback as meta.for_artista. Keeps schema.org description
     # and meta description in sync (Rich Results Test complains when they
-    # diverge).
-    bio_for_schema = a.bio or strip_tags(a.lastfm_bio_summary or "").strip()
+    # diverge). `clean_lastfm_bio` drops the "Read more on Last.fm"
+    # boilerplate so it never leaks into structured data.
+    bio_for_schema = (a.bio or "").strip() or clean_lastfm_bio(a.lastfm_bio_summary)
     if bio_for_schema:
         data["description"] = bio_for_schema[:600]
     if a.genere:

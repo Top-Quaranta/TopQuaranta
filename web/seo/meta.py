@@ -31,6 +31,21 @@ LOCALE = "ca_ES"
 #     short meta strings.
 TERRITORI_NOMS = {**_TERRITORI_NOMS_BASE, "PPCC": "Global", "ALT": "Altres"}
 
+# Robots directives. Default = fully indexable. NOINDEX is used for
+# thin pages (e.g. an approved artista with no indexable cançó yet):
+# returning 200 + noindex keeps Google from re-crawling them as 404s
+# while preserving any accumulated authority, and the directive drops
+# automatically the moment the page gains indexable content.
+DEFAULT_ROBOTS = (
+    "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+)
+NOINDEX_ROBOTS = "noindex, follow"
+
+# Last.fm returns "Read more on Last.fm" as the entire bio when an
+# artist has no real biography, and appends it as boilerplate to real
+# ones. Either way it's noise in a <meta description>.
+_LASTFM_BOILERPLATE = "Read more on Last.fm"
+
 
 @dataclass
 class Meta:
@@ -57,9 +72,27 @@ class Meta:
     keywords: list[str] | None = None
     locale: str = LOCALE
     site_name: str = SITE_NAME
+    robots: str = DEFAULT_ROBOTS
 
     def asdict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def clean_lastfm_bio(raw: str | None) -> str:
+    """Strip HTML and the Last.fm "Read more on Last.fm" boilerplate.
+
+    Returns "" when nothing meaningful is left (i.e. the bio was only
+    the placeholder), so callers can fall back to a generated
+    description instead of emitting the placeholder verbatim.
+    """
+    text = strip_tags(raw or "").strip()
+    if not text:
+        return ""
+    # Remove a trailing boilerplate phrase (real bios append it after
+    # the actual text; empty bios are *only* the phrase).
+    if text.endswith(_LASTFM_BOILERPLATE):
+        text = text[: -len(_LASTFM_BOILERPLATE)].rstrip(" .…")
+    return text.strip()
 
 
 def _trim(text: str, n: int = 160) -> str:
@@ -126,42 +159,67 @@ def for_artistes_list() -> Meta:
     )
 
 
-def for_artista(a: Artista) -> Meta:
-    territori_nom = ""
+def for_artista(a: Artista, *, thin: bool = False) -> Meta:
+    """Build artiste metadata.
+
+    `thin=True` is the approved-but-no-indexable-cançó case: the SEO
+    view renders a 200 + noindex page instead of a 404 (see
+    web/seo/views.py::artista_seo). The description is generated
+    programmatically and the page is flagged noindex.
+    """
+    territoris: list[str] = []
     loc_qs = a.localitats.select_related("municipi__territori").all()
     if loc_qs:
         codes = {ll.municipi.territori_id for ll in loc_qs if ll.municipi}
-        nicies = [TERRITORI_NOMS.get(c, c) for c in codes]
-        if nicies:
-            territori_nom = " · " + ", ".join(sorted(set(nicies)))
+        territoris = sorted({TERRITORI_NOMS.get(c, c) for c in codes})
+    territori_suffix = (" · " + ", ".join(territoris)) if territoris else ""
+
+    genere = (a.genere or "").strip()
+
+    if thin:
+        # No indexable content yet — generate a clean programmatic
+        # description (never the Last.fm placeholder) and noindex.
+        bits = ["Artista del catàleg de TopQuaranta."]
+        if territoris:
+            bits.append(f"Música en català de {', '.join(territoris)}.")
+        if genere:
+            bits.append(f"Gènere: {genere}.")
+        bits.append(
+            "Encara no hi ha cançons al rànquing; si en tens informació, "
+            "contacta'ns."
+        )
+        return Meta(
+            title=f"{a.nom} — Música en català · TopQuaranta",
+            description=_trim(" ".join(bits)),
+            canonical_url=f"{CANONICAL_HOST}/artista/{a.slug}",
+            og_image=f"{CANONICAL_HOST}/og/artista/{a.slug}.png",
+            og_type="profile",
+            keywords=[a.nom, f"{a.nom} música", "música en català"],
+            robots=NOINDEX_ROBOTS,
+        )
 
     n_cancons = a.cancons.filter(verificada=True, activa=True).count()
 
     # Bio fallback chain. As of 2026-05 every approved Artista row has
-    # `bio=""` (no editorial bios written yet), but 1948/1989 of them
-    # carry a non-empty `lastfm_bio_summary` from the Last.fm ingest.
-    # Use that as the description when our own bio is empty, so 98% of
-    # /artista/ SEO pages stop emitting the templated generic line that
-    # GSC was likely flagging as thin/duplicate content. strip_tags
-    # because Last.fm bios occasionally include <a> tags and we don't
-    # want raw HTML in <meta description>.
-    fallback_bio = strip_tags(a.lastfm_bio_summary or "").strip()
+    # `bio=""` (no editorial bios written yet), but most carry a
+    # `lastfm_bio_summary` from the Last.fm ingest. `clean_lastfm_bio`
+    # strips HTML *and* the "Read more on Last.fm" boilerplate, so a
+    # placeholder-only bio falls through to the generated line instead
+    # of emitting the placeholder verbatim (audit flag #3).
+    fallback_bio = clean_lastfm_bio(a.lastfm_bio_summary)
     desc = (
-        a.bio
+        (a.bio or "").strip()
         or fallback_bio
-        or f"{a.nom} és un artista de música en català{territori_nom}. "
+        or f"{a.nom} és un artista de música en català{territori_suffix}. "
         + (f"Té {n_cancons} cançons verificades a TopQuaranta. " if n_cancons else "")
         + "Coneix-li la discografia, el top setmanal i els enllaços per escoltar-lo."
     )
-    # Pick the OG image. Priority:
-    # 1) Dynamic card (always — generated on-the-fly from latest data).
-    og_image = f"{CANONICAL_HOST}/og/artista/{a.slug}.png"
 
     return Meta(
         title=f"{a.nom} — Música en català · TopQuaranta",
         description=_trim(desc),
         canonical_url=f"{CANONICAL_HOST}/artista/{a.slug}",
-        og_image=og_image,
+        og_image=f"{CANONICAL_HOST}/og/artista/{a.slug}.png",
         og_type="profile",
         keywords=[
             a.nom,

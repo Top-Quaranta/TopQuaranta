@@ -29,8 +29,8 @@
   <meta name="twitter:image" content="{{ meta.og_image }}">
 
   <meta name="theme-color" content="#facc15">
-  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
-  <meta name="googlebot" content="index, follow">
+  <meta name="robots" content="{{ meta.robots }}">
+  <meta name="googlebot" content="{{ meta.robots }}">
 
   {# ── Schema.org structured data ── #}
   {% for block in jsonld_blocks %}

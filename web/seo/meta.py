@@ -44,6 +44,14 @@ class Meta:
     description: str
     canonical_url: str
     og_image: str  # absolute URL
+    # Real pixel dimensions of `og_image`. Default matches the dynamic
+    # OG card generator (web/seo/ogimage.py emits 1200×630 PNGs).
+    # Pages that fall back to a raw Deezer cover override these with
+    # the cover's real size (Deezer `cover_xl` is square 1000×1000),
+    # so social scrapers (Twitter/Facebook/WhatsApp) don't crop or
+    # mis-scale the preview against a wrong declared aspect ratio.
+    og_image_width: int = 1200
+    og_image_height: int = 630
     og_type: str = "website"  # website | article | music.album | …
     twitter_card: str = "summary_large_image"
     keywords: list[str] | None = None
@@ -172,12 +180,20 @@ def for_album(al: Album) -> Meta:
         + ". Tracklist complet, info de cada cançó i enllaços per escoltar-lo a "
         "Spotify, Deezer, YouTube Music i Apple Music."
     )
-    og_image = al.imatge_url or f"{CANONICAL_HOST}/og/album/{al.slug}.png"
+    # Deezer cover (cover_xl, square 1000×1000) is the better social
+    # card for an album; fall back to the dynamic 1200×630 generator
+    # only when no cover is stored. Declare the matching dimensions.
+    if al.imatge_url:
+        og_image, og_w, og_h = al.imatge_url, 1000, 1000
+    else:
+        og_image, og_w, og_h = f"{CANONICAL_HOST}/og/album/{al.slug}.png", 1200, 630
     return Meta(
         title=f"{al.nom} — {artist_nom} · TopQuaranta",
         description=_trim(desc),
         canonical_url=f"{CANONICAL_HOST}/album/{al.slug}",
         og_image=og_image,
+        og_image_width=og_w,
+        og_image_height=og_h,
         og_type="music.album",
         keywords=[al.nom, artist_nom, "àlbum en català"],
     )
@@ -194,14 +210,20 @@ def for_canco(c: Canco) -> Meta:
     )
     # Album cover is a far better card image than a generic page card,
     # because it's what social previews already expect for a song.
-    og_image = (
-        c.album.imatge_url if c.album_id else None
-    ) or f"{CANONICAL_HOST}/og/canco/{c.slug}.png"
+    # Deezer cover_xl is square 1000×1000; fall back to the dynamic
+    # 1200×630 generator only when the song carries no album cover.
+    cover = c.album.imatge_url if c.album_id else None
+    if cover:
+        og_image, og_w, og_h = cover, 1000, 1000
+    else:
+        og_image, og_w, og_h = f"{CANONICAL_HOST}/og/canco/{c.slug}.png", 1200, 630
     return Meta(
         title=f"{c.nom} — {artist_nom} · TopQuaranta",
         description=_trim(desc),
         canonical_url=f"{CANONICAL_HOST}/canco/{c.slug}",
         og_image=og_image,
+        og_image_width=og_w,
+        og_image_height=og_h,
         og_type="music.song",
         keywords=[c.nom, artist_nom, "cançó en català"],
     )

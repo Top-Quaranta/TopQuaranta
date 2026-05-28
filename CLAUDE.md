@@ -403,6 +403,22 @@ your editor). GitHub is canonical. Commits are authored by
 At the end of each session, update `docs/history/roadmap.md` to reflect
 reality.
 
+**Cicle de git estàndard (cada PR de Claude Code):** mantenir SEMPRE el
+main local sincronitzat amb `origin/main`. Checklist obligatòria:
+
+1. **Inici de sessió, abans de tocar res:** comprovar que `git status`
+   està net. Si hi ha canvis locals no committats, ATURAR-SE i preguntar
+   al Miquel. Si està net, executar `git fetch && git checkout main &&
+   git pull`. Mai crear una branca sense aquest pas previ.
+2. **Crear la branca de feature des del main local** ja actualitzat (no
+   des d'`origin/main`: amb el pas 1 són equivalents, i així el flux és
+   uniforme).
+3. **Treball → commit → push → PR → squash-merge** a GitHub.
+4. **Després del squash-merge, OBLIGATORI:** `git checkout main &&
+   git pull` per descarregar el commit de merge. Aquest era el pas que
+   es saltava i deixava el main local enrere.
+5. **Cleanup:** `git branch -d <feature-branch>` al final.
+
 **Deploy pipeline (GitHub Actions, since 2026-05-11):**
 
 1. Edit at the Mac → `git commit` → `git push origin main`.

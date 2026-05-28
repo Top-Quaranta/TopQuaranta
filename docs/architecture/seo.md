@@ -163,6 +163,14 @@ entity, cached on disk under `/var/cache/topquaranta/og/<kind>/<slug>-<stamp>.pn
 Cache key includes `updated_at` so when an entity changes the OG image
 URL changes too — every social share gets the latest card.
 
+**Declared dimensions.** `Meta.og_image_width` / `og_image_height`
+carry the real pixel size of `og_image` and are emitted as
+`og:image:width` / `og:image:height` by both the SSR template and the
+SPA `SeoHead`. Default is 1200×630 (the dynamic generator). Album and
+cançó pages prefer the raw Deezer cover (`cover_xl`, square
+**1000×1000**) as the card and declare 1000×1000 accordingly, so
+social scrapers don't crop/mis-scale against a wrong aspect ratio.
+
 ## SPA parity
 
 `react-helmet-async` is wrapped around the App tree. Each public page

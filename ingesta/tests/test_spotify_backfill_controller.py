@@ -38,6 +38,18 @@ def _touch_cooldown(path: Path, when: datetime) -> None:
     os.utime(path, (ts, ts))
 
 
+def _write_cooldown(path: Path, *, mtime: datetime, resume: datetime) -> None:
+    """Write a cooldown file with an explicit resume_at and mtime so
+    a test can model an *expired-resume* sentinel that is still on
+    disk (detect_recent_ban keys on mtime, not resume_at)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(resume.isoformat())
+    ts = mtime.timestamp()
+    import os
+
+    os.utime(path, (ts, ts))
+
+
 # ---------------------------------------------------------------------
 # adjust_for_run: AI side (no ban) and MD side (ban)
 # ---------------------------------------------------------------------
@@ -161,8 +173,102 @@ def test_persisted_last_ban_forgotten_after_24h(tmp_path):
         last_ban_at="2026-05-23T03:00:00",
     )
     cooldown = tmp_path / "spotify.cooldown"
-    now = datetime(2026, 5, 25, 12, 0, 0)
+    now = datetime(2026, 5, 25, 12, 0, 0)  # last_ban ~57h ago > 48h window
     assert detect_recent_ban(s, cooldown_paths=(cooldown,), now=now) is None
+
+
+# ---------------------------------------------------------------------
+# Ban-before-cleanup ordering fix (AIMD never-decreases bug).
+# Models the real daily-tick scenario: a ban on day N (Retry-After
+# 18-24h) observed by the controller on day N+1, BEFORE clear_expired
+# prunes the just-expired sentinel.
+# ---------------------------------------------------------------------
+
+
+def test_A_active_cooldown_triggers_decrease(tmp_path):
+    """Cooldown active (resume in the future, mtime fresh) → adjust
+    applies the multiplicative decrease and records last_ban_at."""
+    cd = tmp_path / "spotify_metadata.cooldown"
+    now = datetime(2026, 5, 30, 5, 0, 0)
+    _write_cooldown(
+        cd, mtime=now - timedelta(hours=1), resume=now + timedelta(hours=10)
+    )
+    s = ControllerState(
+        limit_actual=400, last_safe_limit=200, last_run_at="2026-05-29T05:00:00"
+    )
+    s = adjust_for_run(s, now=now, cooldown_paths=(cd,))
+    assert s.limit_actual == 200
+    assert s.last_ban_at is not None
+    assert s.dies_sense_ban == 0
+
+
+def test_B_expired_resume_but_file_present_still_decreases(tmp_path):
+    """The crux of the ordering fix. A sentinel whose Retry-After has
+    already expired is STILL detected as long as the FILE is on disk
+    at adjust time (detect_recent_ban keys on mtime, not resume_at).
+    This is the real day-N+1 case: ban written 29/05 05:15, resume
+    30/05 03:00 (already past at the 30/05 05:00 tick), file not yet
+    pruned because adjust now runs before clear_expired."""
+    cd = tmp_path / "spotify_metadata.cooldown"
+    now = datetime(2026, 5, 30, 5, 0, 0)
+    _write_cooldown(
+        cd,
+        mtime=now - timedelta(hours=23, minutes=45),  # 29/05 05:15
+        resume=now - timedelta(hours=2),  # 30/05 03:00, already expired
+    )
+    s = ControllerState(
+        limit_actual=400, last_safe_limit=200, last_run_at="2026-05-29T05:00:00"
+    )
+    s = adjust_for_run(s, now=now, cooldown_paths=(cd,))
+    assert s.limit_actual == 200
+    assert s.last_ban_at is not None
+    assert s.dies_sense_ban == 0
+
+
+def test_C_expired_long_ago_no_memory_advances_clean(tmp_path):
+    """No cooldown file present and last_ban_at older than the 48h
+    window → not counted; the day counter advances as a clean day."""
+    cd = tmp_path / "spotify_metadata.cooldown"  # absent
+    now = datetime(2026, 5, 30, 5, 0, 0)
+    s = ControllerState(
+        limit_actual=200,
+        last_run_at="2026-05-29T05:00:00",
+        last_ban_at=(now - timedelta(hours=50)).isoformat(),
+    )
+    s = adjust_for_run(s, now=now, cooldown_paths=(cd,))
+    assert s.dies_sense_ban == 1
+    assert s.limit_actual == 200  # unchanged
+
+
+def test_D_no_cooldown_no_memory_advances_clean(tmp_path):
+    """No cooldown, no ban history → clean run, day counter advances."""
+    cd = tmp_path / "spotify_metadata.cooldown"  # absent
+    now = datetime(2026, 5, 30, 5, 0, 0)
+    s = ControllerState(limit_actual=200, last_run_at="2026-05-29T05:00:00")
+    s = adjust_for_run(s, now=now, cooldown_paths=(cd,))
+    assert s.last_ban_at is None
+    assert s.dies_sense_ban == 1
+
+
+def test_E_regression_persisted_ban_within_48h_still_decreases(tmp_path):
+    """Regression for the never-decreases bug. A ban ~30h old whose
+    sentinel was already pruned (e.g. by the maintenance command's
+    own clear_expired) must STILL suppress the limit. The old 24h
+    memory window forgot it, letting `dies_sense_ban` advance and the
+    limit bump back up the day after a long-Retry-After ban; the 48h
+    window keeps the decrease sticky."""
+    cd = tmp_path / "spotify_metadata.cooldown"  # pruned / absent
+    now = datetime(2026, 5, 30, 5, 0, 0)
+    s = ControllerState(
+        limit_actual=400,
+        last_safe_limit=200,
+        last_run_at="2026-05-29T05:00:00",
+        last_ban_at=(now - timedelta(hours=30)).isoformat(),
+    )
+    s = adjust_for_run(s, now=now, cooldown_paths=(cd,))
+    assert s.last_ban_at is not None
+    assert s.limit_actual == 200  # decreased, NOT bumped
+    assert s.dies_sense_ban == 0
 
 
 # ---------------------------------------------------------------------

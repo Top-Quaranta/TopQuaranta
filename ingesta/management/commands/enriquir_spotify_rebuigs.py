@@ -149,37 +149,22 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        # Cooldown gate. Reads the SHARED metadata cooldown (plus
-        # the legacy per-command files during the transition). If
-        # the maintenance enrichment was banned, we must skip too:
-        # both commands hit `/v1/search`, `/v1/tracks` and
-        # `/v1/artists`, which share a single Spotify quota
-        # bucket, and probing during an active ban is documented
-        # to extend the window.
         from ingesta.clients import spotify_metadata_cooldown as cd
 
-        resume_at = cd.active_resume_at()
-        if resume_at is not None:
-            self.stdout.write(
-                self.style.WARNING(
-                    f"[enriquir_spotify_rebuigs] Spotify metadata "
-                    f"cooldown active until {resume_at.isoformat()}. "
-                    f"Skipping."
-                )
-            )
-            return
-        cd.clear_expired()
-
-        auth = SpotifyAuth.load()
-        if not auth:
-            raise CommandError("No SpotifyAuth row. Run the staff OAuth flow first.")
-
-        # AIMD controller decides the daily limit. The controller
-        # inspects both cooldown files (this command's and
-        # `enriquir_spotify`'s) so a ban observed by the maintenance
-        # enrichment converges the backfill's limit too. A manual
-        # `--limit` override skips the controller for this run and
-        # leaves the persisted state untouched.
+        # AIMD controller runs FIRST — BEFORE the cooldown gate and
+        # BEFORE `clear_expired()`. Ordering is load-bearing: a ban's
+        # Retry-After runs 18–24h, longer than the gap to the next
+        # daily tick, so the cooldown sentinel has typically just
+        # EXPIRED by the time this cron fires again. If we pruned it
+        # first (the old order), `detect_recent_ban` would find no
+        # file, `last_ban_at` would stay null, no multiplicative
+        # decrease would happen, and `dies_sense_ban` would keep
+        # climbing — bumping the limit back up the day after a ban.
+        # By adjusting before any cleanup, a just-expired sentinel is
+        # still on disk and its mtime is seen. We `save_state` here so
+        # the decrease persists even if this run then aborts on an
+        # active cooldown below. A manual `--limit` override skips the
+        # controller and leaves the persisted state untouched.
         manual_limit = opts["limit"]
         if manual_limit is None:
             state = adjust_for_run(load_state())
@@ -197,6 +182,32 @@ class Command(BaseCommand):
                 f"[enriquir_spotify_rebuigs] manual override "
                 f"--limit={limit}; controller state unchanged"
             )
+
+        # Cooldown gate. Reads the SHARED metadata cooldown (plus the
+        # legacy per-command files during the transition). If the
+        # maintenance enrichment was banned, we must skip too: both
+        # commands hit `/v1/search`, `/v1/tracks` and `/v1/artists`,
+        # which share a single Spotify quota bucket, and probing
+        # during an active ban is documented to extend the window.
+        # The controller has already recorded + persisted the decrease
+        # above, so skipping here loses nothing.
+        resume_at = cd.active_resume_at()
+        if resume_at is not None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[enriquir_spotify_rebuigs] Spotify metadata "
+                    f"cooldown active until {resume_at.isoformat()}. "
+                    f"Skipping."
+                )
+            )
+            return
+        # Prune expired sentinels only AFTER the controller has had a
+        # chance to observe them.
+        cd.clear_expired()
+
+        auth = SpotifyAuth.load()
+        if not auth:
+            raise CommandError("No SpotifyAuth row. Run the staff OAuth flow first.")
 
         throttle = opts["throttle"]
         shortlist_only = opts["shortlist_only"]

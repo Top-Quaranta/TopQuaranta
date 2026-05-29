@@ -386,8 +386,25 @@ enriquir_spotify_rebuigs.controller.json`. Each daily run:
   1. Looks at the two cooldown files
      (`enriquir_spotify.cooldown` for maintenance and
      `enriquir_spotify_rebuigs.cooldown` for the backfill itself)
-     plus the persisted `last_ban_at` (24 h memory) to decide
+     plus the persisted `last_ban_at` (**48 h** memory) to decide
      whether a ban has been observed.
+
+  > **Ordering invariant (2026-05-30):** `handle()` runs
+  > `adjust_for_run()` **before** `clear_expired()`, so the
+  > controller checks for recent bans BEFORE expired cooldown
+  > sentinels are pruned. A Spotify Retry-After runs 18–24 h —
+  > longer than the gap to the next daily tick — so by the time the
+  > cron fires again the sentinel has usually just expired. The old
+  > order pruned it first, `detect_recent_ban` found nothing,
+  > `last_ban_at` stayed null, no multiplicative-decrease fired, and
+  > the limit bumped back up the day after a ban (the 24/05 and
+  > 29/05 bans were both lost). Detection keys on the sentinel's
+  > **mtime** (not its `resume_at`), so an expired-but-present file
+  > still counts; the 48 h `last_ban_at` memory covers the case
+  > where the maintenance command pruned the sentinel before the
+  > backfill tick. The decrease is `save_state`d before the
+  > cooldown-active early return, so it persists even when the run
+  > then aborts.
   2. If a ban is fresh: drop to `last_safe_limit` if any (the
      most recent limit that survived `DAYS_BEFORE_BUMP = 3` days
      unbanned); otherwise halve, with `MIN_LIMIT = 50` as the

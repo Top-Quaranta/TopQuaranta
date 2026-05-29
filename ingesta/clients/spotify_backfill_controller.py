@@ -186,6 +186,19 @@ def detect_recent_ban(
     (when its own next tick finds it expired); for that case the
     controller's `last_ban_at` carries the memory across the
     deletion until the next ramp-up cycle resets it.
+
+    The persisted-memory window is **48h**, not 24h. Spotify's
+    Retry-After on a Dev-Mode ban runs 18–24h, so a ban observed on
+    one daily tick is still the relevant signal on the *next* tick
+    even after the cooldown sentinel was pruned. A 24h window left
+    that next tick uncovered (the ban is ~24h old by then, right on
+    the boundary), letting `dies_sense_ban` advance and the limit
+    bump back up the day after a ban — the AIMD decrease never
+    stuck. 48h covers a full daily-cron gap with margin.
+    NOTE: this memory path only fires when no cooldown FILE is
+    visible; `handle()` now calls `adjust_for_run` BEFORE
+    `clear_expired`, so a just-expired sentinel is normally still on
+    disk and caught by the mtime check above.
     """
     last_run = _isoparse(state.last_run_at)
     last_ban = _isoparse(state.last_ban_at)
@@ -203,13 +216,14 @@ def detect_recent_ban(
     if fresh_ban is not None:
         return fresh_ban
     # Fall through to the persisted memory: if a ban is still
-    # within today's window (<24h ago), treat it as recent so
-    # convergence doesn't bounce back up immediately after the
-    # observing run.
+    # within the recent-ban window (<48h ago — covers Retry-After up
+    # to ~24h plus a full daily-cron gap), treat it as recent so
+    # convergence doesn't bounce back up the day after the observing
+    # run.
     if last_ban is None:
         return None
     cutoff_now = now or _utcnow()
-    if (cutoff_now - last_ban).total_seconds() < 24 * 3600:
+    if (cutoff_now - last_ban).total_seconds() < 48 * 3600:
         return last_ban
     return None
 

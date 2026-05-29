@@ -1,8 +1,10 @@
 # Self-hosted covers (`portades`)
 
-> Status: **Fase 1 — ingestion only** (2026-05-30). Caddy serving,
-> SPA consumption and SSR head wiring are later phases and are NOT
-> live yet. Nothing reads these files in production today.
+> Status: **Fase 2 — ingestion + provisioning + serving** (2026-05-30).
+> The pipeline downloads/transcodes covers (Fase 1) and Caddy now
+> serves them at `/portades/*`. SPA consumption (Fase 3) and SSR head
+> wiring (Fase 4) are still pending — no page references these URLs in
+> production yet.
 
 ## Why
 
@@ -90,6 +92,53 @@ all --limit 200` → `/var/log/topquaranta/portades.log`. Metadata in
 `deploy/cron-meta.json`. (Activated on the next deploy; first run
 02:00 UTC.)
 
+### `--limit` semantics
+
+`--limit N` caps the number of **new downloads** per run, NOT the
+number of candidates scanned: an already-present cover (its 500px webp
+sentinel exists) is skipped **without consuming the budget**. So a
+re-run does NOT do nothing — it advances to the next N covers that
+still need generating. This is intentional: the nightly cron drains
+the backlog ~N/night, never reprocessing what's done. `--force`
+bypasses the skip (re-downloads + overwrites atomically) and DOES
+consume budget. (Surfaced in the Fase 1 manual validation, where a
+plain re-run with the same `--limit` fetched the next batch rather
+than reporting all-skipped.)
+
+## Provisioning
+
+`PORTADES_ROOT` (`/var/topquaranta/portades`) lives under `/var`, which
+the `topquaranta` user cannot create itself, so the cron would fail
+with `EACCES` on first write. It is created **automatically on deploy**
+by `bin/tq-sync-infra` (idempotent `install -d -o topquaranta -g
+topquaranta -m 755`), alongside the Caddyfile/cron/systemd sync — no
+manual `mkdir` required. World-readable (755) so Caddy can serve it.
+
+## Serving
+
+Caddy (`deploy/Caddyfile`, host `www.topquaranta.cat`) serves the
+covers from disk:
+
+```
+https://www.topquaranta.cat/portades/<entitat>/<deezer_id>-<mida>.<format>
+e.g. https://www.topquaranta.cat/portades/album/12345-500.webp
+```
+
+- `handle @portades` (`path /portades/*`) → `root */var/topquaranta` +
+  `file_server`; the on-disk `portades/` subdir matches the URL prefix,
+  so no rewrite.
+- **`Cache-Control: public, max-age=31536000, immutable`** — filenames
+  are content-addressed, so a generated variant never changes.
+- Explicit `Content-Type` per extension (`image/avif|webp|jpeg`) — the
+  global `X-Content-Type-Options: nosniff` makes the browser trust it,
+  and Go's mime table doesn't reliably know `.avif`.
+- **No compression**: images aren't in Caddy's default `encode`
+  content-type allowlist, so the host-level `encode zstd gzip` leaves
+  them untouched.
+- **No directory listing** (no `browse`).
+- **Native 404** when a variant hasn't been generated yet — the Fase 3
+  frontend will fall back to the Deezer URL.
+
 ## Dependencies
 
 - **Pillow** — already pulled by `qrcode[pil]` / `cairosvg`.
@@ -100,5 +149,5 @@ all --limit 200` → `/var/log/topquaranta/portades.log`. Metadata in
 
 ## Not in this phase
 
-Caddy serving (Fase 2), SPA consumption (Fase 3), SSR head/`og:image`
-(Fase 4), model changes. See `pipeline.md` for the broader ingest map.
+SPA consumption (Fase 3), SSR head/`og:image` (Fase 4), model changes.
+See `pipeline.md` for the broader ingest map.

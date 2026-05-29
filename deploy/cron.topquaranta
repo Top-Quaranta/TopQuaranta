@@ -55,6 +55,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # Nightly pipeline (UTC) — each step feeds the next
 # ─────────────────────────────────────────────────────────────────────
 
+# 02:00 → Self-hosted cover pipeline (Fase 1). Downloads Deezer
+# covers and transcodes them to webp/avif/jpg variants under
+# PORTADES_ROOT. No DB writes; state is the filesystem. Caps at 200
+# entities/run, throttled ~0.4s between downloads. Caddy serving +
+# SPA consumption land in later phases. See docs/architecture/portades.md.
+0 2 * * *   topquaranta   /home/topquaranta/bin/tq-run descarregar_portades --entitat all --limit 200 >> /var/log/topquaranta/portades.log 2>&1
+
 # 03:00 → PostgreSQL backup. Tiered retention in /home/topquaranta/backups/
 0 3 * * *   postgres      /home/topquaranta/bin/tq-backup >> /var/log/topquaranta/backup.log 2>&1
 

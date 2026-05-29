@@ -51,6 +51,21 @@ SOCIAL_PROFILES = (
 # automatically to /tmp/tq_social if the path is unwriteable.
 SOCIAL_CACHE_DIR = "/var/cache/topquaranta/social"
 
+# Self-hosted cover pipeline (Fase 1, 2026-05-30). Deezer covers are
+# downloaded once and transcoded into small webp/avif/jpg variants
+# served from our own origin (Caddy wiring + SPA consumption land in
+# later phases). Files live at
+# `<PORTADES_ROOT>/<entitat>/<deezer_id>-<mida>.<format>` — state is
+# derived from the filesystem, no DB column. See
+# docs/architecture/portades.md.
+PORTADES_ROOT = "/var/topquaranta/portades"
+PORTADES_VARIANTS = [250, 500]  # square px sides
+PORTADES_FORMATS = ["avif", "webp", "jpg"]
+# Deezer serves every cover under the same path with a `WxH` segment;
+# we normalise the stored URL to this square size as the transcode
+# source (cover_xl is 1000×1000; 2000+ returns 403).
+PORTADES_DEEZER_SOURCE_SIZE = 1000
+
 # Instagram credentials. Empty/test value forces DRY_RUN in the
 # client (no real API calls; PNGs still rendered).
 INSTAGRAM_ACCESS_TOKEN = ""

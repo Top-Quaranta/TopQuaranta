@@ -122,3 +122,15 @@ for log in "${POSTGRES_LOGS[@]}"; do
         echo "  fixed owner on $log (postgres:postgres)"
     fi
 done
+
+# Self-hosted cover root (Fase 2). PORTADES_ROOT lives under /var,
+# which the topquaranta user cannot create itself, so the
+# `descarregar_portades` cron (runs as topquaranta) would otherwise
+# fail with EACCES on first write. `install -d` is idempotent: it
+# creates the dir + parents with the given owner/mode, no-op if it
+# already exists with them. Caddy serves /portades/* from here
+# (see deploy/Caddyfile); world-readable (755) so caddy can read.
+if ! sudo test -d /var/topquaranta/portades; then
+    sudo install -d -o topquaranta -g topquaranta -m 755 /var/topquaranta/portades
+    echo "  provisioned /var/topquaranta/portades (topquaranta:topquaranta 755)"
+fi

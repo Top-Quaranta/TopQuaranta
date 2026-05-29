@@ -61,6 +61,33 @@ www.topquaranta.cat {
 		header Content-Type "image/svg+xml"
 	}
 
+	# Self-hosted covers (Fase 2). PORTADES_ROOT is
+	# /var/topquaranta/portades; `root */var/topquaranta` + the
+	# `/portades/*` request path resolves to it without a rewrite.
+	# Filenames are content-addressed (<deezer_id>-<mida>.<format>) so
+	# a generated variant never changes → 1-year `immutable` cache.
+	# Images are not in Caddy's default `encode` content-type
+	# allowlist, so the host-level `encode zstd gzip` does NOT
+	# recompress them. Explicit Content-Type per extension because the
+	# global `X-Content-Type-Options: nosniff` makes the browser trust
+	# the header verbatim and Go's mime table doesn't always know
+	# `.avif`. `file_server` returns a native 404 when the variant
+	# hasn't been generated yet (the Fase 3 frontend falls back to the
+	# Deezer URL). No `browse`, so no directory listing.
+	# See docs/architecture/portades.md.
+	@portades path /portades/*
+	@portades_avif path /portades/*.avif
+	@portades_webp path /portades/*.webp
+	@portades_jpg path /portades/*.jpg
+	handle @portades {
+		root * /var/topquaranta
+		header Cache-Control "public, max-age=31536000, immutable"
+		header @portades_avif Content-Type "image/avif"
+		header @portades_webp Content-Type "image/webp"
+		header @portades_jpg Content-Type "image/jpeg"
+		file_server
+	}
+
 	# Legacy URL pattern from before the React flip (pre-April 2026).
 	# Google still has thousands of these URLs in its index and re-crawls
 	# them weekly, generating bogus "URL duplicate without canonical" and

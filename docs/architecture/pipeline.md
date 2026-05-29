@@ -28,6 +28,11 @@
                                      RankingProvisional / RankingSetmanal
 ```
 
+> Related: the **self-hosted cover pipeline** (`ingesta/portades/` +
+> `descarregar_portades`) downloads and transcodes Deezer covers to
+> webp/avif variants on our own origin. It is documented separately at
+> [`portades.md`](portades.md) (Fase 1 = ingestion only).
+
 ## 2. API clients (`ingesta/clients/`)
 
 All clients import `DEEZER_RATE_LIMIT`, `LASTFM_RATE_LIMIT`, `MAX_API_RETRIES`

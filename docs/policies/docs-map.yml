@@ -72,6 +72,11 @@ mapping:
     doc: docs/architecture/playlists.md
   - prefix: ingesta/management/commands/configurar_spotify_playlists.py
     doc: docs/architecture/playlists.md
+  # Self-hosted cover pipeline (Fase 1, 2026-05-30) — its own doc.
+  - prefix: ingesta/portades
+    doc: docs/architecture/portades.md
+  - prefix: ingesta/management/commands/descarregar_portades.py
+    doc: docs/architecture/portades.md
   - prefix: ingesta/
     doc: docs/architecture/pipeline.md
 

@@ -123,8 +123,7 @@ class Command(BaseCommand):
             # ArtistaDeezer); resolve the principal id per row. Only
             # artistes with a stored image are candidates.
             arts = (
-                Artista.objects.exclude(imatge_url="")
-                .prefetch_related("deezer_ids")
+                Artista.objects.exclude(imatge_url="").prefetch_related("deezer_ids")
                 # chunk_size is required by Django when .iterator() follows
                 # prefetch_related().
                 .iterator(chunk_size=500)

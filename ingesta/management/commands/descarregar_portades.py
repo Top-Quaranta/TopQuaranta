@@ -125,7 +125,9 @@ class Command(BaseCommand):
             arts = (
                 Artista.objects.exclude(imatge_url="")
                 .prefetch_related("deezer_ids")
-                .iterator()
+                # chunk_size is required by Django when .iterator() follows
+                # prefetch_related().
+                .iterator(chunk_size=500)
             )
             for a in arts:
                 dz = a.deezer_id_principal

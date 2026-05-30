@@ -588,10 +588,20 @@ No external services. Everything is file-based on the server.
 - **Per-command status files** (`/var/log/topquaranta/status/<tag>.status`):
   written by `tq-run`. Contain `status=OK|FAIL`, `exit_code`, `last_run`
   (ISO-8601), and the last 20 lines of output.
-- **`/home/topquaranta/bin/tq-health`**: prints a summary table and exits
-  non-zero if any command is FAIL, STALE (past its expected cadence), or if
-  there are any Django ERROR-level entries logged today. Safe to pipe to a
-  notifier or to read manually when inspecting the server.
+- **`/home/topquaranta/bin/tq-health`**: gathers the facts (status files +
+  `cron-meta.json`, disk, web smoke, Spotify sub-checks, pending migrations,
+  today's Django errors) in shell, then delegates the PRESENTATION to
+  `analytics/health_report.py` (pure stdlib, runs without Django). Exits
+  non-zero if any command is FAIL/STALE/STUCK past its cadence, disk ≥90%,
+  a web check fails, a Spotify sub-check is WARN/CRIT, a migration is
+  pending, or there are Django ERRORs today. The rendered report has:
+  a one-line **executive summary** (🟢 Tot OK / 🔴 N anomalies), an
+  **Anomalies** block (only genuinely-escalating items; `[silenced]`
+  known-issues stay in their group and don't turn the header red), **crons
+  grouped** by logical area, **Sistema** + **Spotify** sections, and a
+  **legend**. Timestamps render in **CEST** (UTC stays in logs/files).
+  `--email-on-fail` mails the report to admin only when something escalates,
+  with signature dedup so a persistent failure doesn't spam hourly.
 
 ## 6. Artist discovery
 

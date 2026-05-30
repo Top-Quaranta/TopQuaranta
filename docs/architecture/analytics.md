@@ -238,6 +238,19 @@ Both crons appear in `/staff/estat` via `CRON_META` entries. A miss
 shows `STUCK(Nh, Nskips)` in red and triggers the `tq-health`
 watchdog email at the next hourly tick.
 
+### Health-report renderer (`analytics/health_report.py`)
+
+Pure-stdlib module (no Django) that owns the PRESENTATION of the
+`tq-health` report. `bin/tq-health` gathers the raw facts in shell and
+pipes them here; this module classifies each cron (OK/STALE/STUCK/
+SKIP/FAIL/WAITING + watchdog/silenced, mirroring the old inline bash so
+the exit code is unchanged), groups them by logical area
+(`CRON_GROUPS`; unknown crons fall into "Altres"), renders an executive
+summary + Anomalies block + Sistema/Spotify sections + a legend, and
+localises timestamps to **CEST** (UTC stays in logs). It lives in the
+analytics app purely for code organisation; it does not touch the DB.
+See `pipeline.md` §7. Tested at `analytics/tests/test_health_report.py`.
+
 ### Pruning
 
 We never delete from these tables. At current scale (~thousands of

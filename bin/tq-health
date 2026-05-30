@@ -1,19 +1,22 @@
 #!/bin/bash
 # Health summary of the TopQuaranta pipeline.
 #
-# Reads /var/log/topquaranta/status/*.status (written by tq-run) and prints
-# the status of each expected command. Also peeks at the errors.log for
-# recent ERROR-level log records.
+# Gathers the raw facts (cron status files + cron-meta.json, disk, web
+# smoke, Spotify sub-checks, pending migrations, recent Django errors)
+# in shell, then hands them to `analytics/health_report.py` which does
+# the classification + presentation: one-line executive summary, an
+# Anomalies section, crons grouped by logical area, CEST timestamps,
+# and a legend. The Python renderer owns the exit code (`overall`):
 #
-# Exit code:
 #   0  all OK
-#   1  at least one command is stale or failed, or there are recent errors
+#   1  at least one anomaly (stale/failed cron, disk, web, Spotify,
+#      pending migration, or recent errors)
+#
+# --email-on-fail: only mail the report to admin when overall=1, with
+# signature-based dedup so a persistent failure doesn't spam hourly.
 
 set -u
 
-# --email-on-fail: capture the report and only mail it to admin if
-# overall=1 (something stale or failed). Designed for hourly cron
-# without spamming when everything is healthy.
 EMAIL_ON_FAIL=0
 EMAIL_TO="${TQ_HEALTH_EMAIL:-admin@topquaranta.cat}"
 for arg in "$@"; do
@@ -22,358 +25,186 @@ for arg in "$@"; do
     esac
 done
 
+APP_DIR=/home/topquaranta/app
 STATUS_DIR=/var/log/topquaranta/status
 ERRORS_LOG=/var/log/topquaranta/errors.log
+META_FILE="$APP_DIR/deploy/cron-meta.json"
+PY="$APP_DIR/.venv/bin/python"
 NOW=$(date +%s)
 
-# Capture all output if --email-on-fail so we can mail it later.
-if (( EMAIL_ON_FAIL )); then
-    REPORT=$(mktemp)
-    exec 3>&1 1>"$REPORT"
-fi
-
-# Per-command metadata — pulled from `deploy/cron-meta.json` so this
-# script and `web/api/staff/estat.py` share a single source of truth.
-# Caught 2026-05-08: `detectar_anomalies_senyal` was added to the
-# JSON + estat but missing from a hardcoded list here, so the
-# watchdog ignored it for one day. The JSON-source closes that drift.
-#
-# Names must match the management command's name (which `tq-run`
-# uses as the status filename). Keep `cron-meta.json` in sync with
-# `deploy/cron.topquaranta`.
-META_FILE=/home/topquaranta/app/deploy/cron-meta.json
-if [[ ! -f "$META_FILE" ]] || ! command -v jq >/dev/null 2>&1; then
-    echo "ERROR: $META_FILE missing or jq not installed."
-    echo "       Install jq (apt install jq) and ensure the JSON exists."
+# tq-health runs from /home/topquaranta/bin/ on prod but is sourced
+# from the repo in dev/CI; resolve both the health-scripts dir and the
+# renderer module against whichever layout exists.
+SP_DIR=""
+for cand in "$APP_DIR/scripts/health" "$(dirname "$0")/../scripts/health"; do
+    [[ -d "$cand" ]] && { SP_DIR="$cand"; break; }
+done
+RENDER=""
+for cand in "$APP_DIR/analytics/health_report.py" "$(dirname "$0")/../analytics/health_report.py"; do
+    [[ -f "$cand" ]] && { RENDER="$cand"; break; }
+done
+if [[ ! -f "$META_FILE" || -z "$RENDER" ]]; then
+    echo "ERROR: cron-meta.json or analytics/health_report.py missing." >&2
     exit 2
 fi
 
-declare -A MAX_AGE_HOURS=()
-declare -A SILENCED=()
-# `_doc` is a leading-underscore key used for in-file documentation
-# (JSON has no comments) — skip it when iterating.
-while IFS=$'\t' read -r name max_age silenced_reason; do
-    [[ -z "$name" || "$name" == _* ]] && continue
-    MAX_AGE_HOURS[$name]=$max_age
-    if [[ -n "$silenced_reason" && "$silenced_reason" != "null" ]]; then
-        SILENCED[$name]="$silenced_reason"
-    fi
-done < <(
-    jq -r '
-        to_entries[]
-        | select(.key | startswith("_") | not)
-        | [
-            .key,
-            .value.max_age_hours,
-            (if .value.silenced then (.value.silenced_reason // "") else "" end)
-          ]
-        | @tsv
-    ' "$META_FILE"
-)
-
-overall=0
-printf "%-32s  %-12s  %s\n" "COMMAND" "STATUS" "LAST RUN"
-printf "%-32s  %-12s  %s\n" "-------" "------" "--------"
-
-for cmd in "${!MAX_AGE_HOURS[@]}"; do
-    f="$STATUS_DIR/$cmd.status"
-    if [[ ! -f "$f" ]]; then
-        # Treat "never ran" as informational, not a failure. The JSON
-        # source carries weekly/monthly/quarterly crons whose first
-        # execution may be days or months after registration; if we
-        # treated those as a hard fail we'd email every hour for a
-        # week. Once a cron has run once, the status file exists and
-        # the regular STALE path takes over.
-        printf "%-32s  %-12s  %s\n" "$cmd" "WAITING" "(awaiting first run)"
-        continue
-    fi
-    status=$(grep '^status=' "$f" | cut -d= -f2)
-    last=$(grep '^last_run=' "$f" | cut -d= -f2-)
-    last_ts=$(date -d "$last" +%s 2>/dev/null || echo 0)
-    age_h=$(( (NOW - last_ts) / 3600 ))
-    max_h=${MAX_AGE_HOURS[$cmd]}
-    skips=$(grep '^consecutive_skips=' "$f" | cut -d= -f2)
-    skips=${skips:-0}
-    fails=$(grep '^consecutive_failures=' "$f" | cut -d= -f2)
-    fails=${fails:-0}
-
-    # Order matters: STALE (last_run too old) is the most informative
-    # signal. SKIPPED_BY_LOCK alone is fine — it means a long run is
-    # in progress; only when it persists past MAX_AGE_HOURS does it
-    # become STALE. Pre-2026-05-01 the bug was that lock-skip was
-    # written as status=OK with last_run=now, masking stale state.
-    silenced=${SILENCED[$cmd]:-}
-
-    # Watchdog (FASE F, 2026-05-22): consecutive_skips and
-    # consecutive_failures escalate past the `silenced=true` flag once
-    # they cross a threshold. silenced=true is for *expected* skips
-    # (re-OAuth pending, planned maintenance), not for letting a
-    # persistent regression slide. Two thresholds:
-    #   >= 3   → WARN, append [watchdog WARN]
-    #   >= 10  → CRIT, append [watchdog CRIT] and force overall=1 even
-    #             when silenced
-    # Caught at the start of the playlists revival sprint:
-    # `actualitzar_playlists_spotify` had been silently FAILing daily
-    # for over a month behind `silenced=true`, with nobody alerted.
-    persistent=$(( skips > fails ? skips : fails ))
-    watchdog_tag=""
-    if (( persistent >= 10 )); then
-        watchdog_tag=" [watchdog CRIT, ${persistent} consecutive]"
-        overall=1  # always escalate at CRIT, even if silenced.
-    elif (( persistent >= 3 )); then
-        watchdog_tag=" [watchdog WARN, ${persistent} consecutive]"
-        if [[ -n "$silenced" ]]; then overall=1; fi  # silenced WARN still escalates.
-    fi
-
-    if [[ $age_h -gt $max_h ]]; then
-        if [[ "$status" == "SKIPPED_BY_LOCK" ]] && (( skips > 0 )); then
-            display="STUCK(${age_h}h, ${skips}skips)"
-        else
-            display="STALE(${age_h}h)"
-        fi
-        if [[ -z "$silenced" ]]; then overall=1; else display="$display [silenced]"; fi
-    elif [[ "$status" == "SKIPPED_BY_LOCK" ]]; then
-        display="SKIP(${skips})"
-    elif [[ "$status" != "OK" ]]; then
-        display="FAIL"
-        if [[ -z "$silenced" ]]; then overall=1; else display="FAIL [silenced]"; fi
-    else
-        display="OK(${age_h}h)"
-    fi
-    display="${display}${watchdog_tag}"
-    printf "%-32s  %-12s  %s\n" "$cmd" "$display" "$last"
-done
-
-# ── Disk space ────────────────────────────────────────────────────────
-# Hetzner CX22 is 38 GB. Whisper HF cache is 3 GB and backups grow
-# ~19 MB/day; without monitoring the box silently fills (we hit 99 %
-# 2026-05-04 mid-Python-upgrade, almost bricked the server). Alert
-# when free drops below 10 %.
-echo
-DISK_USE=$(df / --output=pcent | tail -1 | tr -d ' %')
+# ── Disk ───────────────────────────────────────────────────────────────
+DISK_PCT=$(df / --output=pcent | tail -1 | tr -d ' %')
 DISK_AVAIL=$(df -h / --output=avail | tail -1 | tr -d ' ')
-if [[ "$DISK_USE" -ge 90 ]]; then
-    echo "Disk: ${DISK_USE}% used, ${DISK_AVAIL} free  ⚠ ALERT (>90%)"
-    overall=1
-elif [[ "$DISK_USE" -ge 80 ]]; then
-    echo "Disk: ${DISK_USE}% used, ${DISK_AVAIL} free  (warn — clean cache or rotate logs soon)"
-else
-    echo "Disk: ${DISK_USE}% used, ${DISK_AVAIL} free"
-fi
 
-# ── Web surface smoke ─────────────────────────────────────────────────
-# Catches "we deployed and the site is broken" within the hour without
-# waiting for users to complain. Three layers, ordered so the cheapest
-# fail surfaces first:
-#   1. SPA index.html via Caddy (public URL): 200 + has the
-#      <div id="root"> mount point + has a <link rel="stylesheet">
-#      referencing a hashed asset.
-#   2. Hashed CSS asset: 200 (catches a broken `npm run build` where
-#      Vite emitted index.html with a stale asset reference).
-#   3. Backend JSON API via gunicorn directly (skips Caddy): /api/v1/
-#      ranking/ returns 200 + body parses + has at least one row
-#      (catches a backend regression where the SPA loads but every
-#      page is empty).
-# The SPA layer goes through Caddy (TLS + DNS + reverse-proxy), the
-# API layer hits gunicorn straight so we can isolate which side is
-# broken when a regression hits.
-echo
+# ── Web surface smoke ──────────────────────────────────────────────────
+# 1) SPA shell via Caddy (TLS + Vite dist), 2) hashed CSS asset,
+# 3) JSON API straight to gunicorn so a Caddy misconfig can't mask a
+# backend regression.
 PUBLIC_BASE="${TQ_HEALTH_WEB_PUBLIC:-https://www.topquaranta.cat}"
 BACKEND_BASE="${TQ_HEALTH_WEB_BACKEND:-http://127.0.0.1:8083}"
-WEB_OK=1
 
-# 1. SPA shell via the public URL — this exercises Caddy + TLS + Vite dist.
 spa_body=$(curl -fsSk --max-time 10 "$PUBLIC_BASE/" 2>/dev/null || true)
 if [[ -z "$spa_body" ]]; then
-    echo "Web SPA shell:                           ⚠ no response from $PUBLIC_BASE/"
-    WEB_OK=0
-elif ! grep -q 'id="root"' <<< "$spa_body"; then
-    echo "Web SPA shell:                           ⚠ /  served but no <div id=\"root\"> mount"
-    WEB_OK=0
+    WEB_SPA_OK=0; WEB_SPA_DETAIL="cap resposta de $PUBLIC_BASE/"
+elif ! grep -q 'id="root"' <<<"$spa_body"; then
+    WEB_SPA_OK=0; WEB_SPA_DETAIL="servit sense <div id=root> (build trencat?)"
 else
-    css_path=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.css' <<< "$spa_body" | head -1)
+    css_path=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.css' <<<"$spa_body" | head -1)
     if [[ -z "$css_path" ]]; then
-        echo "Web SPA shell:                           ⚠ /  served but no hashed CSS link found (broken Vite build?)"
-        WEB_OK=0
+        WEB_SPA_OK=0; WEB_SPA_DETAIL="sense link CSS hashed (build Vite trencat?)"
     else
-        # 2. Hashed CSS asset reachable.
-        css_status=$(curl -fsSk --max-time 5 -o /dev/null -w "%{http_code}" "$PUBLIC_BASE$css_path" 2>/dev/null || echo "000")
-        if [[ "$css_status" == "200" ]]; then
-            echo "Web SPA shell:                           OK ($css_path → 200)"
+        css_status=$(curl -fsSk --max-time 5 -o /dev/null -w "%{http_code}" "$PUBLIC_BASE$css_path" 2>/dev/null || echo 000)
+        if [[ "$css_status" == 200 ]]; then
+            WEB_SPA_OK=1; WEB_SPA_DETAIL="OK ($css_path → 200)"
         else
-            echo "Web SPA shell:                           ⚠ CSS $css_path → $css_status (stale dist? collectstatic missing?)"
-            WEB_OK=0
+            WEB_SPA_OK=0; WEB_SPA_DETAIL="CSS $css_path → $css_status (dist stale?)"
         fi
     fi
 fi
 
-# 3. JSON API content sanity — go to gunicorn directly so a Caddy
-# misconfig doesn't mask a backend regression.
 top_body=$(curl -fsS --max-time 10 "$BACKEND_BASE/api/v1/top/?territori=PPCC" 2>/dev/null || true)
 if [[ -z "$top_body" ]]; then
-    echo "Web /api/v1/top/?territori=PPCC:         ⚠ no response from gunicorn :8083"
-    WEB_OK=0
-elif ! grep -qE '"entries"|"posicio"' <<< "$top_body"; then
-    echo "Web /api/v1/top/?territori=PPCC:         ⚠ 200 but body lacks expected keys (entries/posicio)"
-    WEB_OK=0
+    WEB_TOP_OK=0; WEB_TOP_DETAIL="cap resposta de gunicorn :8083"
+elif ! grep -qE '"entries"|"posicio"' <<<"$top_body"; then
+    WEB_TOP_OK=0; WEB_TOP_DETAIL="200 però sense entries/posicio"
 else
-    echo "Web /api/v1/top/?territori=PPCC:         OK"
+    WEB_TOP_OK=1; WEB_TOP_DETAIL="OK"
 fi
 
 stats_body=$(curl -fsS --max-time 10 "$BACKEND_BASE/api/v1/stats/" 2>/dev/null || true)
 if [[ -z "$stats_body" ]]; then
-    echo "Web /api/v1/stats/:                      ⚠ no response"
-    WEB_OK=0
-elif ! grep -q '"cancons_verificades"' <<< "$stats_body"; then
-    echo "Web /api/v1/stats/:                      ⚠ 200 but no cancons_verificades key"
-    WEB_OK=0
+    WEB_STATS_OK=0; WEB_STATS_DETAIL="cap resposta"
+elif ! grep -q '"cancons_verificades"' <<<"$stats_body"; then
+    WEB_STATS_OK=0; WEB_STATS_DETAIL="200 però sense cancons_verificades"
 else
-    echo "Web /api/v1/stats/:                      OK"
+    WEB_STATS_OK=1; WEB_STATS_DETAIL="OK"
 fi
 
-if (( WEB_OK == 0 )); then overall=1; fi
+# ── Spotify integration (Premium weekly-cached + playlist coverage) ────
+_sev() { case "$1" in 0) echo OK ;; 1) echo WARN ;; *) echo CRIT ;; esac; }
+_msg() { "$PY" -c "
+import json, sys
+try:
+    print(json.loads(sys.stdin.read().splitlines()[-1]).get('message', ''))
+except Exception as exc:
+    print('(no parsejable) %s' % exc)
+" 2>/dev/null; }
 
-# ── Spotify integration health (FASE F, 2026-05-22).
-# Two sub-checks: Premium subscription on the app owner (weekly,
-# cached) and coverage of the matched / total ratio on every
-# SpotifyPlaylist row (daily). Both wrapped in scripts/health/ so
-# the Python core is testable in isolation; this section just
-# threads their exit codes into the overall health.
-echo
-# tq-health runs from /home/topquaranta/bin/ on prod but is sourced
-# from /home/topquaranta/app/ in the repo. `SP_DIR` resolves to
-# whichever exists so we can run the same script in either layout.
-SP_DIR=""
-for cand in /home/topquaranta/app/scripts/health "$(dirname "$0")/../scripts/health"; do
-    if [[ -d "$cand" ]]; then SP_DIR="$cand"; break; fi
-done
-
+PREMIUM_SEV="?"; PREMIUM_MSG="(check no disponible)"; PREMIUM_OK=1
 if [[ -n "$SP_DIR" && -x "$SP_DIR/spotify_premium_active.sh" ]]; then
-    out=$("$SP_DIR/spotify_premium_active.sh" 2>&1)
-    sc=$?
-    case "$sc" in
-        0) prefix="OK  " ;;
-        1) prefix="WARN" ;;
-        *) prefix="CRIT" ;;
-    esac
-    # The wrapper prints one JSON line; tq-health collapses it to a
-    # short headline so the table-style report stays scannable.
-    summary=$(echo "$out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read().splitlines()[-1])
-    print(d.get('message', ''))
-except Exception as exc:
-    print(f'(unparsed) {exc}')
-" 2>/dev/null)
-    echo "Spotify Premium:                          $prefix  $summary"
-    if (( sc != 0 )); then overall=1; fi
+    out=$("$SP_DIR/spotify_premium_active.sh" 2>&1); sc=$?
+    PREMIUM_SEV=$(_sev "$sc"); PREMIUM_MSG=$(printf '%s' "$out" | _msg)
+    [[ "$sc" == 0 ]] && PREMIUM_OK=1 || PREMIUM_OK=0
 fi
 
+COVERAGE_SEV="?"; COVERAGE_MSG="(check no disponible)"; COVERAGE_OK=1
 if [[ -n "$SP_DIR" && -x "$SP_DIR/spotify_playlist_coverage.sh" ]]; then
-    out=$("$SP_DIR/spotify_playlist_coverage.sh" 2>&1)
-    sc=$?
-    case "$sc" in
-        0) prefix="OK  " ;;
-        1) prefix="WARN" ;;
-        *) prefix="CRIT" ;;
-    esac
-    summary=$(echo "$out" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read().splitlines()[-1])
-    print(d.get('message', ''))
-except Exception as exc:
-    print(f'(unparsed) {exc}')
-" 2>/dev/null)
-    echo "Spotify playlist coverage:                $prefix  $summary"
-    if (( sc != 0 )); then overall=1; fi
+    out=$("$SP_DIR/spotify_playlist_coverage.sh" 2>&1); sc=$?
+    COVERAGE_SEV=$(_sev "$sc"); COVERAGE_MSG=$(printf '%s' "$out" | _msg)
+    [[ "$sc" == 0 ]] && COVERAGE_OK=1 || COVERAGE_OK=0
 fi
 
-# ── Pending Django migrations (added 2026-05-07 after the
-# Album.label deploy ordering bug — caught a 30-email inbox flood
-# when code was reloaded before the migration adding the column was
-# applied. Surfacing pending migrations in tq-health gives the
-# operator at least one cron tick to catch the desync before user
-# requests start hitting `column does not exist` 500s).
-echo
-PY=/home/topquaranta/app/.venv/bin/python
-if (cd /home/topquaranta/app && \
-    DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
+# ── Pending Django migrations ──────────────────────────────────────────
+if (cd "$APP_DIR" && DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
     "$PY" manage.py migrate --check >/dev/null 2>&1); then
-    echo "DB migrations:                           OK (schema matches code)"
+    MIGRATIONS_OK=1
 else
-    echo "DB migrations:                           ⚠ pending — run tq-deploy or migrate"
-    overall=1
+    MIGRATIONS_OK=0
 fi
 
-# ── Recent errors from Django LOGGING (errors_file handler in base.py).
-echo
+# ── Recent Django errors (errors_file handler in base.py) ──────────────
+ERRORS_COUNT=0; ERRORS_LAST=""
 if [[ -f "$ERRORS_LOG" ]]; then
     today=$(date +%Y-%m-%d)
-    # grep -c prints "0" and exits 1 when there are no matches; using
-    # `|| echo 0` here would *append* another "0" and break `[[ -gt ]]`.
-    # Use `|| true` to keep grep's "0" output and neutralise the exit code.
-    n=$(grep -c "^\[$today" "$ERRORS_LOG" 2>/dev/null || true)
-    n=${n:-0}
-    if (( n > 0 )); then
-        echo "Django errors today ($today): $n"
-        echo "  Last 3:"
-        grep "^\[$today" "$ERRORS_LOG" | tail -3 | sed 's/^/    /'
-        overall=1
-    else
-        echo "Django errors today: 0"
+    ERRORS_COUNT=$(grep -c "^\[$today" "$ERRORS_LOG" 2>/dev/null || true)
+    ERRORS_COUNT=${ERRORS_COUNT:-0}
+    if (( ERRORS_COUNT > 0 )); then
+        ERRORS_LAST=$(grep "^\[$today" "$ERRORS_LOG" | tail -3)
     fi
-else
-    echo "(errors log not present yet: $ERRORS_LOG)"
 fi
 
+# ── Assemble extras JSON (env-var passing avoids shell quoting hell) ───
+EXTRAS=$(
+    DISK_PCT="$DISK_PCT" DISK_AVAIL="$DISK_AVAIL" \
+    WEB_SPA_OK="$WEB_SPA_OK" WEB_SPA_DETAIL="$WEB_SPA_DETAIL" \
+    WEB_TOP_OK="$WEB_TOP_OK" WEB_TOP_DETAIL="$WEB_TOP_DETAIL" \
+    WEB_STATS_OK="$WEB_STATS_OK" WEB_STATS_DETAIL="$WEB_STATS_DETAIL" \
+    PREMIUM_SEV="$PREMIUM_SEV" PREMIUM_MSG="$PREMIUM_MSG" PREMIUM_OK="$PREMIUM_OK" \
+    COVERAGE_SEV="$COVERAGE_SEV" COVERAGE_MSG="$COVERAGE_MSG" COVERAGE_OK="$COVERAGE_OK" \
+    MIGRATIONS_OK="$MIGRATIONS_OK" ERRORS_COUNT="$ERRORS_COUNT" ERRORS_LAST="$ERRORS_LAST" \
+    "$PY" -c '
+import json, os
+def b(k): return os.environ.get(k) == "1"
+print(json.dumps({
+    "disk": {"used_pct": int(os.environ.get("DISK_PCT") or 0), "avail": os.environ.get("DISK_AVAIL", "")},
+    "web": [
+        {"label": "Web SPA shell", "ok": b("WEB_SPA_OK"), "detail": os.environ.get("WEB_SPA_DETAIL", "")},
+        {"label": "Web /api/v1/top", "ok": b("WEB_TOP_OK"), "detail": os.environ.get("WEB_TOP_DETAIL", "")},
+        {"label": "Web /api/v1/stats", "ok": b("WEB_STATS_OK"), "detail": os.environ.get("WEB_STATS_DETAIL", "")},
+    ],
+    "spotify": {
+        "premium": {"severity": os.environ.get("PREMIUM_SEV", ""), "message": os.environ.get("PREMIUM_MSG", ""), "ok": b("PREMIUM_OK")},
+        "coverage": {"severity": os.environ.get("COVERAGE_SEV", ""), "message": os.environ.get("COVERAGE_MSG", ""), "ok": b("COVERAGE_OK")},
+    },
+    "migrations_ok": b("MIGRATIONS_OK"),
+    "errors": {"count": int(os.environ.get("ERRORS_COUNT") or 0),
+               "last": [l for l in os.environ.get("ERRORS_LAST", "").split(chr(10)) if l]},
+}))
+'
+)
+
+# ── Render + classify (Python owns the exit code) ──────────────────────
+REPORT=$("$PY" "$RENDER" --status-dir "$STATUS_DIR" --meta-file "$META_FILE" \
+    --extras-json "$EXTRAS" --now "$NOW")
+overall=$?
+
 if (( EMAIL_ON_FAIL )); then
-    # Restore stdout so the rest of the script can still print.
-    exec 1>&3 3>&-
     if (( overall != 0 )); then
-        # Signature-based dedup (2026-05-07): without this the cron
-        # fires every hour and sends the same alert email each time
-        # for as long as a failure persists — the inbox fills up
-        # with copies of an alert the operator already saw. Caught
-        # when 15 historical MB-cron errors kept counting toward
-        # "errors today" for hours after the underlying process was
-        # killed and the issue resolved.
-        #
-        # Hash the failure summary; only email when the hash CHANGES.
-        # That means:
-        #   - first time something breaks → email fires (state set).
-        #   - same broken state next hour → silent (state unchanged).
-        #   - new failure appears OR count of errors grows →
-        #     hash changes → fresh email.
-        #   - everything recovers → next OK run wipes the state file
-        #     so the NEXT failure (whenever it happens) emails again.
-        bad=$(grep -E "STALE|STUCK|FAIL|NO_STATUS" "$REPORT" | head -3 | tr '\n' ' | ')
-        sig_input="$bad|errors=${n:-0}"
-        SIG_FILE=/var/log/topquaranta/status/_health.alert_sig
+        # Signature-based dedup (2026-05-07): only email when the
+        # failure summary CHANGES, so a persistent failure doesn't
+        # refill the inbox every hour. The Anomalies section still
+        # carries STALE/STUCK/FAIL tokens, so this grep keeps working.
+        bad=$(grep -E "STALE|STUCK|FAIL" <<<"$REPORT" | head -3 | tr '\n' ' | ')
+        sig_input="$bad|errors=${ERRORS_COUNT}"
+        SIG_FILE="$STATUS_DIR/_health.alert_sig"
         current_sig=$(printf '%s' "$sig_input" | sha256sum | cut -d' ' -f1)
         last_sig=$(cat "$SIG_FILE" 2>/dev/null || echo "")
         if [[ "$current_sig" != "$last_sig" ]]; then
-            cd /home/topquaranta/app
+            cd "$APP_DIR"
             DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
-                /home/topquaranta/app/.venv/bin/python -c "
-import sys
-import django
+                "$PY" -c "
+import sys, django
 django.setup()
 from django.core.mail import mail_admins
 body = sys.stdin.read()
-subject = '[TopQuaranta] Pipeline alert: ' + ${bad@Q}
-mail_admins(subject, body)
-" < "$REPORT" 2>/dev/null \
+mail_admins('[TopQuaranta] Pipeline alert: ' + ${bad@Q}, body)
+" <<<"$REPORT" 2>/dev/null \
                 && echo "$current_sig" > "$SIG_FILE" \
-                || cat "$REPORT" >&2  # fall back to stderr if mail fails
+                || printf '%s\n' "$REPORT" >&2  # fall back to stderr if mail fails
         fi
     else
-        # Everything's OK — clear the signature so the NEXT failure
+        # Everything OK — clear the signature so the NEXT failure
         # (whenever it appears) gets a fresh alert.
-        rm -f /var/log/topquaranta/status/_health.alert_sig
+        rm -f "$STATUS_DIR/_health.alert_sig"
     fi
-    rm -f "$REPORT"
+else
+    printf '%s\n' "$REPORT"
 fi
 
-exit $overall
+exit "$overall"

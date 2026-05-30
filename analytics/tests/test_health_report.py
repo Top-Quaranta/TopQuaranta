@@ -1,0 +1,218 @@
+"""Tests for the health-report renderer + the Premium cache-hit fix.
+
+The renderer is pure stdlib (no Django), so these run without a DB.
+
+# Spec: docs/architecture/pipeline.md
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import subprocess
+from pathlib import Path
+
+from analytics import health_report as hr
+
+UTC = dt.timezone.utc
+_BASE = dt.datetime(2026, 5, 30, 6, 15, tzinfo=UTC)
+NOW = int(_BASE.timestamp())
+
+
+def _iso(hours_ago: float) -> str:
+    return (_BASE - dt.timedelta(hours=hours_ago)).isoformat()
+
+
+def _c(**kw):
+    defaults = dict(
+        name="x",
+        status="OK",
+        last_run_iso=_iso(1),
+        max_age_h=2,
+        skips=0,
+        fails=0,
+        silenced=False,
+        now_ts=NOW,
+    )
+    defaults.update(kw)
+    return hr.classify_cron(**defaults)
+
+
+# ── classify_cron ────────────────────────────────────────────────────
+
+
+def test_classify_ok():
+    r = _c(status="OK", last_run_iso=_iso(1), max_age_h=2)
+    assert r["state"] == "OK"
+    assert not r["escalates"] and not r["is_anomaly"]
+    assert r["display"].startswith("OK(")
+
+
+def test_classify_stale_escalates():
+    r = _c(status="OK", last_run_iso=_iso(40), max_age_h=26)
+    assert r["state"] == "STALE"
+    assert r["escalates"] and r["is_anomaly"]
+
+
+def test_classify_stale_silenced_does_not_escalate():
+    r = _c(status="OK", last_run_iso=_iso(40), max_age_h=26, silenced=True)
+    assert r["state"] == "STALE"
+    assert not r["escalates"]  # silenced: known/expected, no email
+    assert "[silenced]" in r["display"]
+
+
+def test_classify_stuck_lock():
+    r = _c(status="SKIPPED_BY_LOCK", last_run_iso=_iso(40), max_age_h=26, skips=5)
+    assert r["state"] == "STUCK"
+    assert "5skips" in r["display"] and r["escalates"]
+
+
+def test_classify_skip_within_threshold():
+    r = _c(status="SKIPPED_BY_LOCK", last_run_iso=_iso(1), max_age_h=26, skips=2)
+    assert r["state"] == "SKIP" and not r["escalates"]
+
+
+def test_classify_fail():
+    r = _c(status="ERROR", last_run_iso=_iso(1), max_age_h=26)
+    assert r["state"] == "FAIL" and r["escalates"]
+
+
+def test_classify_waiting():
+    r = _c(status=None)
+    assert r["state"] == "WAITING" and not r["escalates"]
+
+
+def test_classify_watchdog_crit_escalates_even_silenced():
+    r = _c(status="OK", last_run_iso=_iso(1), max_age_h=26, skips=10, silenced=True)
+    assert r["escalates"]
+    assert "watchdog CRIT" in r["display"]
+
+
+# ── render ───────────────────────────────────────────────────────────
+
+
+def _all_ok_extras():
+    return {
+        "disk": {"used_pct": 42, "avail": "12G"},
+        "web": [{"label": "Web SPA shell", "ok": True, "detail": "OK"}],
+        "spotify": {
+            "premium": {"severity": "OK", "message": "Premium OK", "ok": True},
+            "coverage": {"severity": "OK", "message": "coverage fine", "ok": True},
+        },
+        "migrations_ok": True,
+        "errors": {"count": 0, "last": []},
+    }
+
+
+def test_render_all_ok_header_and_legend():
+    crons = [
+        _c(name="obtenir_novetats", status="OK", last_run_iso=_iso(0), max_age_h=2)
+    ]
+    text, overall = hr.render(crons, _all_ok_extras(), NOW)
+    assert overall == 0
+    assert text.splitlines()[0].startswith("🟢 Tot OK")
+    assert "LLEGENDA" in text
+    assert "Ingesta i metadata" in text  # group header present
+    assert "CEST" in text  # timestamps localised
+
+
+def test_render_mixed_anomalies_header_and_section():
+    crons = [
+        _c(name="obtenir_novetats", status="OK", last_run_iso=_iso(0), max_age_h=2),
+        _c(
+            name="enriquir_spotify_rebuigs",
+            status="OK",
+            last_run_iso=_iso(40),
+            max_age_h=26,
+        ),  # STALE → escalates
+        _c(name="calcular_top", status=None),  # WAITING
+    ]
+    extras = _all_ok_extras()
+    extras["spotify"]["coverage"] = {
+        "severity": "CRIT",
+        "message": "no-verif coverage low",
+        "ok": False,
+    }
+    text, overall = hr.render(crons, extras, NOW)
+    assert overall == 1
+    assert text.splitlines()[0].startswith("🔴")
+    assert "ANOMALIES" in text
+    assert "enriquir_spotify_rebuigs" in text
+    assert "STALE" in text
+    # The CRIT coverage is reflected in the executive summary / system.
+    assert "coverage" in text.lower()
+
+
+def test_render_disk_alert_escalates():
+    extras = _all_ok_extras()
+    extras["disk"] = {"used_pct": 95, "avail": "1G"}
+    text, overall = hr.render([_c(name="x")], extras, NOW)
+    assert overall == 1
+    assert "Disc: 95%" in text
+
+
+def test_render_silenced_stale_not_red_header():
+    crons = [
+        _c(
+            name="actualitzar_playlists_spotify",
+            status="FAIL",
+            last_run_iso=_iso(40),
+            max_age_h=4,
+            silenced=True,
+        )
+    ]
+    text, overall = hr.render(crons, _all_ok_extras(), NOW)
+    # Silenced failure: visible in its group with [silenced] but does
+    # NOT flip the header / overall.
+    assert overall == 0
+    assert text.splitlines()[0].startswith("🟢")
+    assert "[silenced]" in text
+
+
+# ── relative_age / cest ──────────────────────────────────────────────
+
+
+def test_relative_age():
+    assert hr.relative_age(0) == "fa 0h"
+    assert hr.relative_age(5) == "fa 5h"
+    assert hr.relative_age(50) == "fa 2d 2h"
+
+
+def test_cest_label_today_yesterday():
+    assert "avui" in hr.cest_label(_iso(1), NOW)
+    assert "ahir" in hr.cest_label(_iso(28), NOW)
+
+
+# ── Premium cache-hit fix: emits valid JSON, no " (cached …)" suffix ──
+
+
+def test_premium_cache_hit_emits_valid_json(tmp_path):
+    script = (
+        Path(__file__).resolve().parents[2]
+        / "scripts"
+        / "health"
+        / "spotify_premium_active.sh"
+    )
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    payload = {
+        "severity": "OK",
+        "message": "Premium OK for 31abc (product=premium)",
+        "payload": {"product": "premium"},
+    }
+    # Cache line format: "EXITCODE\tMESSAGE_JSON" (fresh mtime → hit).
+    (cache_dir / "spotify_premium.cache").write_text(f"0\t{json.dumps(payload)}\n")
+    out = subprocess.run(
+        ["bash", str(script)],
+        env={**os.environ, "TQ_HEALTH_CACHE_DIR": str(cache_dir)},
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0
+    line = out.stdout.strip().splitlines()[-1]
+    # Must parse cleanly (the bug appended " (cached Xs ago)" → broke this).
+    parsed = json.loads(line)
+    assert parsed["message"] == payload["message"]
+    assert "cache_age_seconds" in parsed
+    assert "(cached" not in line

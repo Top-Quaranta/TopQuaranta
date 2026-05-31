@@ -224,6 +224,16 @@ def territori_ordinal(codi: str) -> str:
 _ORDINAL_SUFFIX = {1: "r", 2: "n", 3: "r", 4: "t"}
 
 
+def dies_str(n: int) -> str:
+    """Catalan day-count with correct singular/plural agreement.
+
+    `dies_str(1)` → "1 dia"; `dies_str(n)` → "{n} dies" for any other n
+    (including 0, which takes the plural in Catalan: "0 dies"). Replaces
+    the hardcoded `{dies} dies` pattern in the narrative banks, which read
+    "1 dies" for day-old debuts."""
+    return f"{n} dia" if n == 1 else f"{n} dies"
+
+
 def ordinal_ca(n: int) -> str:
     """Return the Catalan ordinal abbreviation for `n` (1-99).
 

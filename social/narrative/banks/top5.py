@@ -81,6 +81,26 @@ WITH_LEADER_LONG_TEMPLATES: list[str] = [
 ]
 
 
+def _dedup_artist_names(entries: list[dict]) -> list[str]:
+    """Artist names from `entries`, deduplicated by first occurrence.
+
+    The SHORT register lists plain artist names ("X, Y i Z"); an artist
+    with 2+ songs in the top 5 must be named ONCE, not repeated (the
+    pre-2026-05-31 bug rendered "Max Navarro, Ouineta i Max Navarro").
+    Order follows first appearance. The LONG register is NOT deduped: it
+    lists distinct songs with positions, so the same artist legitimately
+    recurs for different cançons."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for e in entries:
+        nom = e.get("artista_nom") or "—"
+        if nom in seen:
+            continue
+        seen.add(nom)
+        out.append(nom)
+    return out
+
+
 def _detall(entry: dict) -> str:
     """Render a long-form mention for one entry: «canço» de A al N-è.
 
@@ -108,7 +128,7 @@ def pick_short(
     if leader is None:
         if not others:
             return ""
-        artistes = llista_amb_i([(e.get("artista_nom") or "—") for e in others])
+        artistes = llista_amb_i(_dedup_artist_names(others))
         tpl = (rng or random).choice(COMPLETING_SHORT_TEMPLATES)
         return tpl.format(artistes=artistes)
     # Case B
@@ -117,7 +137,7 @@ def pick_short(
     if not others:
         # Nothing else to mention; just give the leader its line.
         return f"Al cim continua «{leader_canco}», {apostrof_de(leader_artista)}."
-    artistes = llista_amb_i([(e.get("artista_nom") or "—") for e in others])
+    artistes = llista_amb_i(_dedup_artist_names(others))
     tpl = (rng or random).choice(WITH_LEADER_SHORT_TEMPLATES)
     return tpl.format(
         leader_canco=leader_canco,

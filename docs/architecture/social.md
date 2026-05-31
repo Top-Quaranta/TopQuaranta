@@ -83,6 +83,26 @@ Instagram i Telegram. La conversió cobreix `banks/hero.py`,
 `banks/top5.py` i tots els `posicio_anterior_str` / `posicio_nova_str`
 que emeten els detectors.
 
+### Concordança de comptes i dedup top-5 (2026-05-31)
+
+Dos fixos editorials petits:
+
+- **`dies_str(n)`** (`social.narrative.utils`) — concordança
+  singular/plural: `dies_str(1)` → "1 dia", la resta → "{n} dies" (inclòs
+  "0 dies"). Les plantilles de `banks/hero.py` usen `{dies_str}` en lloc
+  del patró antic `{dies} dies`, que llegia "1 dies" en debuts d'un dia.
+  `scenarios.detect_a6_canco_recent` ompla `dies_str`; `registry.pick_phrase`
+  el deriva de `dies` si l'escenari només porta el comptador cru.
+  *(Altres plurals hardcoded — `{streak} setmanes`, `{mesos} mesos`,
+  `{pujada} llocs`, `{n_cancons} cançons` — són latents però segurs: els
+  detectors garanteixen ≥2, així que mai surt el singular. No tocats.)*
+- **Dedup top-5** — `banks/top5.py::_dedup_artist_names` elimina noms
+  d'artista repetits (per primera ocurrència) al registre SHORT, que
+  llista noms plans ("X, Y i Z"). Abans, un artista amb 2+ cançons al top
+  5 sortia N cops ("Max Navarro, Ouineta i Max Navarro"). El registre
+  LONG NO es dedupa: llista cançons distintes amb posició, on un mateix
+  artista hi recorre legítimament.
+
 ### Etiquetes territorials (2026-05-31)
 
 `social.narrative.utils` té TRES mapes (abans un de sol,

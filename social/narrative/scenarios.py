@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from social.narrative.utils import (
+    dies_str,
     ordinal_ca,
     territori_label,
     territori_ordinal,
@@ -272,6 +273,7 @@ def detect_a6_canco_recent(
     data["posicio"] = best.posicio
     data["posicio_ordinal"] = ordinal_ca(int(best.posicio))
     data["dies"] = dies
+    data["dies_str"] = dies_str(dies)
     return Scenario("a6_canco_recent", 11 - best.posicio, data)
 
 

@@ -78,12 +78,12 @@ stored image (or without a principal Deezer id) are skipped.
 tq-run descarregar_portades --entitat {album,cancio,artista,all} --limit N [--force]
 ```
 
-- `--entitat all` iterates album → cancio → artista.
+- `--entitat all` splits the budget across album → cancio → artista
+  (see below) and prints a per-entity `found/failed/skipped` summary.
 - Skips entities whose 500px webp already exists (disk check, **no
   download**) unless `--force`.
-- `--limit` caps the number PROCESSED this run (across entitats).
-- Throttles ~0.4 s between downloads; logs progress every 50 and a
-  final `found/failed/skipped` line.
+- `--limit` caps the number PROCESSED (new downloads) this run.
+- Throttles ~0.4 s between downloads; logs progress every 50.
 
 ### Cron
 
@@ -104,6 +104,19 @@ bypasses the skip (re-downloads + overwrites atomically) and DOES
 consume budget. (Surfaced in the Fase 1 manual validation, where a
 plain re-run with the same `--limit` fetched the next batch rather
 than reporting all-skipped.)
+
+### Budget split across entitats (`--entitat all`)
+
+With `--entitat all` the budget is divided evenly — `limit // 3` per
+entity — and iterated album → cancio → artista, **with fall-through**:
+when an entity runs out of candidates before spending its share, the
+unused budget rolls into the **next** entity, and the **last** entity
+absorbs whatever remains (so the integer-division remainder is never
+wasted and the full `limit` is used when candidates exist). Without
+this the album iteration alone consumed the whole budget and `cancio/`
+/ `artista/` never got covers (validated 2026-05-30: album had 1260
+files, the other two dirs didn't exist). Single-entity mode
+(`--entitat album`) is unchanged: the one entity gets the full `limit`.
 
 ## Provisioning
 

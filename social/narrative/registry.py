@@ -23,7 +23,7 @@ from typing import Optional
 
 from social.narrative.banks import phrase_id
 from social.narrative.banks.hero import HERO
-from social.narrative.utils import territori_label, territori_ordinal
+from social.narrative.utils import dies_str, territori_label, territori_ordinal
 
 
 def filter_unused(
@@ -98,6 +98,11 @@ def pick_phrase(
         data.setdefault("territori_ordinal", territori_ordinal(territori))
     except KeyError:
         pass
+    # Derive the agreement-correct day string from a raw `dies` count when
+    # the scenario supplied `dies` but not `dies_str` (hand-built data /
+    # legacy fixtures predating dies_str).
+    if "dies" in data and "dies_str" not in data:
+        data["dies_str"] = dies_str(int(data["dies"]))
     try:
         text = template.format(**data)
     except KeyError:

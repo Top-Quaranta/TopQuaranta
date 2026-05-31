@@ -83,6 +83,27 @@ Instagram i Telegram. La conversió cobreix `banks/hero.py`,
 `banks/top5.py` i tots els `posicio_anterior_str` / `posicio_nova_str`
 que emeten els detectors.
 
+### Etiquetes territorials (2026-05-31)
+
+`social.narrative.utils` té DOS mapes (abans un de sol, `_TERRITORI_LABELS`,
+amb errors de concordança):
+
+- **`TERRITORI_DE`** — forma genitiu, per a contextos "Top …" / "al Nè …"
+  / "el cim …" (l'`{territori_label}` que insereixen les plantilles).
+  Porta la preposició + article correctes: `de Catalunya`, `del País
+  Valencià`, **`de les Illes Balears`** (mai "Illes" sol), `de l'Alguer`,
+  `de la Franja`. PPCC és `Global` SENSE preposició.
+- **`TERRITORI_SHORT`** — forma curta per a pills de stories, OG i
+  hashtags: `Catalunya`, `País Valencià`, **`Balears`**, `Global`.
+  `social/captions.py::TERRITORI_NOM` és un àlies d'aquest (renderer).
+
+`territori_label()` retorna `TERRITORI_DE`; `territori_short()` retorna
+`TERRITORI_SHORT`. **PPCC mai apareix com a text d'usuari** ("Països
+Catalans" no s'usa enlloc visible; el hashtag `#PaïsosCatalans` s'ha
+eliminat). Cas conegut pendent: "al {ordinal} Global" (p.ex. "al 1r
+Global") sona estrany perquè "Global" és adjectiu; flaggejat per a
+reformulació editorial.
+
 ### `@username` a Instagram (ADR-0007)
 
 El composer d'IG-feed reescriu `Scenario.data["artista"]` (i les

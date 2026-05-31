@@ -147,25 +147,51 @@ def llista_amb_i(items: list[str]) -> str:
     return ", ".join(items[:-1]) + f" i {items[-1]}"
 
 
-_TERRITORI_LABELS = {
-    "PPCC": "Global",  # public-facing rename — see CLAUDE.md §5
+# Genitive form — the territori name as it slots AFTER a noun
+# ("Top …", "al Nè …", "el cim …", "el rànquing …"), i.e. carrying the
+# implicit "de" with the correct article/contraction. Never a bare
+# "Illes" or article-less "País Valencià". PPCC is "Global" with NO
+# preposition (an adjective-like label, not a proper place name — see
+# CLAUDE.md §5; "Països Catalans" is never user-visible).
+TERRITORI_DE = {
+    "PPCC": "Global",
+    "CAT": "de Catalunya",
+    "VAL": "del País Valencià",
+    "BAL": "de les Illes Balears",
+    "AND": "d'Andorra",
+    "CNO": "de Catalunya Nord",
+    "FRA": "de la Franja",
+    "ALG": "de l'Alguer",
+    "CAR": "del Carxe",
+    "ALT": "d'altres territoris",
+}
+
+# Short standalone form — story pills, OG titles, hashtags. Bare name
+# (with its leading article where the name carries one).
+TERRITORI_SHORT = {
+    "PPCC": "Global",
     "CAT": "Catalunya",
     "VAL": "País Valencià",
-    "BAL": "Illes",
+    "BAL": "Balears",
     "AND": "Andorra",
     "CNO": "Catalunya Nord",
-    "FRA": "Franja",
-    "ALG": "Alguer",
-    "ALT": "Altres",
+    "FRA": "la Franja",
+    "ALG": "l'Alguer",
+    "CAR": "el Carxe",
+    "ALT": "altres",
 }
 
 
 def territori_label(codi: str) -> str:
-    """Single source of truth for the user-facing territori name.
-    Unknown codes fall through to the raw code (defensive — the
-    composer should never crash because a new territori was added
-    upstream without updating this map)."""
-    return _TERRITORI_LABELS.get(codi, codi)
+    """Genitive form for narrative phrases ("Top …", "al Nè …"). Unknown
+    codes fall through to the raw code (defensive — a new territori
+    added upstream must never crash a compose)."""
+    return TERRITORI_DE.get(codi, codi)
+
+
+def territori_short(codi: str) -> str:
+    """Short standalone label (story pills, OG, hashtags)."""
+    return TERRITORI_SHORT.get(codi, codi)
 
 
 # Catalan ordinal forms (ADR-0006). Used to replace `#N` positional

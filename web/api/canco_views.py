@@ -30,6 +30,12 @@ from ranking.models import (
 )
 from web.api.serializers import album_card, artista_minimal, canco_card
 
+# Public display name: the PPCC aggregate renders as "Global" (Sprint I
+# bis), never "Països Catalans" — which the canonical `TERRITORI_NOMS`
+# still carries as the internal name. Other territories keep their full
+# canonical name.
+_TERRITORI_DISPLAY = {**TERRITORI_NOMS, "PPCC": "Global"}
+
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -144,7 +150,7 @@ def _entry_from_provisional(rp):
     """
     return {
         "territori": rp.territori,
-        "nom_territori": TERRITORI_NOMS.get(rp.territori, rp.territori),
+        "nom_territori": _TERRITORI_DISPLAY.get(rp.territori, rp.territori),
         "posicio": rp.posicio,
         "escoltes_setmanals": rp.escoltes_setmanals or 0,
         "senyal_disponible": True,
@@ -234,7 +240,7 @@ def _theoretical_entry(canco, territori, cfg):
     base_score = weekly_plays * age * past_top
     return {
         "territori": territori,
-        "nom_territori": TERRITORI_NOMS.get(territori, territori),
+        "nom_territori": _TERRITORI_DISPLAY.get(territori, territori),
         "posicio": None,
         "escoltes_setmanals": int(weekly_plays),
         "senyal_disponible": senyal_disponible,

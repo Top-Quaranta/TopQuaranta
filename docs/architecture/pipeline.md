@@ -404,8 +404,12 @@ enriquir_spotify_rebuigs.controller.json`. Each daily run:
   > `last_ban_at` stayed null, no multiplicative-decrease fired, and
   > the limit bumped back up the day after a ban (the 24/05 and
   > 29/05 bans were both lost). Detection keys on the sentinel's
-  > **mtime** (not its `resume_at`), so an expired-but-present file
-  > still counts; the 48 h `last_ban_at` memory covers the case
+  > **mtime** — read as **UTC-naive** (`fromtimestamp(..., tz=utc)`) to
+  > match `_utcnow()` / `last_run_at` / `last_ban_at`; plain
+  > `fromtimestamp()` returns server-local (CEST) time and stored a ban
+  > 2 h in the future (fixed 2026-05-30) — not its `resume_at`, so an
+  > expired-but-present file still counts; the 48 h `last_ban_at`
+  > memory covers the case
   > where the maintenance command pruned the sentinel before the
   > backfill tick. The decrease is `save_state`d before the
   > cooldown-active early return, so it persists even when the run

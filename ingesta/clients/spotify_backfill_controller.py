@@ -207,7 +207,17 @@ def detect_recent_ban(
         if not cf.exists():
             continue
         try:
-            mtime = datetime.fromtimestamp(cf.stat().st_mtime).replace(microsecond=0)
+            # UTC-naive to match `_utcnow()` / `last_run_at` / the value
+            # we persist to `last_ban_at`. Plain `fromtimestamp()` returns
+            # SERVER-LOCAL time (Europe/Madrid = CEST), which stored a
+            # ban 2h in the future and made the "recent ban" window and
+            # `last_ban_at` timezone-inconsistent (validated 2026-05-30:
+            # last_ban_at was 07:15:58 for an 05:15:58Z ban).
+            mtime = (
+                datetime.fromtimestamp(cf.stat().st_mtime, tz=timezone.utc)
+                .replace(tzinfo=None)
+                .replace(microsecond=0)
+            )
         except OSError:
             continue
         if last_run is None or mtime > last_run:

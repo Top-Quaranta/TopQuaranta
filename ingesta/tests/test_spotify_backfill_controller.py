@@ -10,7 +10,9 @@ ban signal so they do not touch the production paths.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import os
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -27,14 +29,20 @@ from ingesta.clients.spotify_backfill_controller import (
 )
 
 
+def _utc_epoch(dt: datetime) -> float:
+    """Epoch for a naive datetime treated as UTC. `detect_recent_ban`
+    reads mtimes as UTC-naive, so the helpers must set them the same way
+    — otherwise the round-trip skews by the machine's UTC offset and the
+    tests would only pass on a UTC host."""
+    return dt.replace(tzinfo=timezone.utc).timestamp()
+
+
 def _touch_cooldown(path: Path, when: datetime) -> None:
     """Write a cooldown file with a future resume_at + set mtime
-    to `when`."""
+    to `when` (treated as UTC, matching the controller)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text((when + timedelta(hours=12)).isoformat())
-    ts = when.timestamp()
-    import os
-
+    ts = _utc_epoch(when)
     os.utime(path, (ts, ts))
 
 
@@ -44,9 +52,7 @@ def _write_cooldown(path: Path, *, mtime: datetime, resume: datetime) -> None:
     disk (detect_recent_ban keys on mtime, not resume_at)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(resume.isoformat())
-    ts = mtime.timestamp()
-    import os
-
+    ts = _utc_epoch(mtime)
     os.utime(path, (ts, ts))
 
 
@@ -175,6 +181,34 @@ def test_persisted_last_ban_forgotten_after_24h(tmp_path):
     cooldown = tmp_path / "spotify.cooldown"
     now = datetime(2026, 5, 25, 12, 0, 0)  # last_ban ~57h ago > 48h window
     assert detect_recent_ban(s, cooldown_paths=(cooldown,), now=now) is None
+
+
+def test_detect_recent_ban_mtime_is_utc_naive_not_local(tmp_path, monkeypatch):
+    """Regression for the CEST/UTC skew (validated in prod 2026-05-30).
+
+    The cooldown mtime must be read as UTC-naive — matching `_utcnow()`,
+    `last_run_at` and the value we persist to `last_ban_at` — not
+    server-local time. We force a non-UTC process timezone
+    (Europe/Madrid = UTC+2), so a buggy `fromtimestamp()` would return a
+    ban 2h in the future; the fix must return the true UTC instant."""
+    monkeypatch.setenv("TZ", "Europe/Madrid")
+    time.tzset()
+    try:
+        cooldown = tmp_path / "spotify_metadata.cooldown"
+        cooldown.write_text("2026-05-30T03:00:00")  # resume value irrelevant
+        # Ban moment: 05:15:58 UTC. Pin the file mtime to that instant.
+        ban_utc = datetime(2026, 5, 29, 5, 15, 58, tzinfo=timezone.utc)
+        epoch = ban_utc.timestamp()
+        os.utime(cooldown, (epoch, epoch))
+        s = ControllerState(last_run_at="2026-05-29T04:00:00")
+        detected = detect_recent_ban(
+            s, cooldown_paths=(cooldown,), now=datetime(2026, 5, 29, 6, 0, 0)
+        )
+        # Must be 05:15:58 UTC-naive, NOT 07:15:58 (CEST/local).
+        assert detected == datetime(2026, 5, 29, 5, 15, 58)
+    finally:
+        monkeypatch.delenv("TZ", raising=False)
+        time.tzset()
 
 
 # ---------------------------------------------------------------------

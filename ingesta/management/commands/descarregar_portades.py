@@ -65,37 +65,70 @@ class Command(BaseCommand):
             raise CommandError("--limit must be positive")
 
         entitats = ENTITATS if entitat == "all" else (entitat,)
-        found = failed = skipped = 0
-        processed = 0
+        n = len(entitats)
+        # Split the budget evenly (limit // n) across entitats, but with
+        # fall-through: when an entity runs out of candidates before
+        # spending its budget, the unused part rolls into the NEXT
+        # entity's budget, and the LAST entity absorbs whatever is left
+        # (so the integer-division remainder is never wasted and the
+        # full `limit` is used when candidates exist). Without this the
+        # album iteration alone consumed the whole budget and cancio /
+        # artista never got covers (validated 2026-05-30). Single-entity
+        # mode (n == 1) is unchanged: the one entity gets the full limit.
+        base = limit // n
+        carry = 0
+        remaining_total = limit
+        stats: dict[str, tuple[int, int, int]] = {}
 
-        for ent in entitats:
-            for deezer_id, source_url in self._iter_candidates(ent):
-                if processed >= limit:
-                    break
-                # Skip already-present unless forced (read-only disk check,
-                # no download).
-                if not force and exists(ent, deezer_id):
-                    skipped += 1
-                    continue
-                processed += 1
-                ok = download_and_convert(ent, deezer_id, source_url)
-                if ok:
-                    found += 1
-                else:
-                    failed += 1
-                if processed % PROGRESS_EVERY == 0:
-                    self.stdout.write(
-                        f"[descarregar_portades] {ent}: progress "
-                        f"processed={processed} found={found} failed={failed}"
-                    )
-                time.sleep(THROTTLE_S)
-            if processed >= limit:
-                break
+        for i, ent in enumerate(entitats):
+            if i == n - 1:
+                budget = remaining_total  # last absorbs the remainder
+            else:
+                budget = min(base + carry, remaining_total)
+            found, failed, skipped, processed = self._process_entity(ent, budget, force)
+            carry = budget - processed  # unused budget → next entity
+            remaining_total -= processed
+            stats[ent] = (found, failed, skipped)
 
+        summary = "; ".join(
+            f"{e}: found={stats[e][0]} failed={stats[e][1]} skipped={stats[e][2]}"
+            for e in entitats
+        )
         self.stdout.write(
             f"[descarregar_portades] done (entitat={entitat}, limit={limit}, "
-            f"force={force}): found={found} failed={failed} skipped={skipped}"
+            f"force={force}): {summary}"
         )
+
+    def _process_entity(
+        self, ent: str, budget: int, force: bool
+    ) -> tuple[int, int, int, int]:
+        """Process up to `budget` NEW downloads for one entity. Returns
+        (found, failed, skipped, processed). Skips (already-present) do
+        NOT consume the budget — only actual downloads do."""
+        found = failed = skipped = processed = 0
+        if budget <= 0:
+            return found, failed, skipped, processed
+        for deezer_id, source_url in self._iter_candidates(ent):
+            if processed >= budget:
+                break
+            # Skip already-present unless forced (read-only disk check,
+            # no download).
+            if not force and exists(ent, deezer_id):
+                skipped += 1
+                continue
+            processed += 1
+            ok = download_and_convert(ent, deezer_id, source_url)
+            if ok:
+                found += 1
+            else:
+                failed += 1
+            if processed % PROGRESS_EVERY == 0:
+                self.stdout.write(
+                    f"[descarregar_portades] {ent}: progress "
+                    f"processed={processed}/{budget} found={found} failed={failed}"
+                )
+            time.sleep(THROTTLE_S)
+        return found, failed, skipped, processed
 
     # ── candidate selection ─────────────────────────────────────────
     def _iter_candidates(self, entitat: str):

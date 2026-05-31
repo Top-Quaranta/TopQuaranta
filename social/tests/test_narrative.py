@@ -284,6 +284,7 @@ def test_short_phrases_fit_under_120_chars():
         "mesos": 8,
         "pujada": 15,
         "territori_label": "Global",
+        "territori_ordinal": "del top general",
     }
     for code, by_length in HERO.items():
         for i, tpl in enumerate(by_length["short"]):
@@ -335,6 +336,7 @@ def test_phrases_interpolate_with_diverse_artist_names():
         "mesos": 8,
         "pujada": 15,
         "territori_label": "Global",
+        "territori_ordinal": "del top general",
     }
     for code, by_length in HERO.items():
         for length in ("short", "medium", "long"):
@@ -393,6 +395,7 @@ def _fake_scenario():
             "posicio": 3,
             "posicio_ordinal": "3r",
             "territori_label": "Global",
+            "territori_ordinal": "del top general",
         },
     )
 
@@ -423,6 +426,7 @@ def test_bluesky_never_exceeds_300_with_long_artist_names():
             "canco": "Camins (En Directe a Cap Roig, Agost 2025)",
             "streak": 10,
             "territori_label": "Global",
+            "territori_ordinal": "del top general",
         },
     )
     out = c_bluesky.compose(
@@ -583,6 +587,7 @@ def test_pick_phrase_is_deterministic_with_rng():
             "canco": "Cim",
             "streak": 4,
             "territori_label": "Global",
+            "territori_ordinal": "del top general",
         },
     )
     rng = random.Random(42)

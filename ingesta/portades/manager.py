@@ -5,7 +5,7 @@ Layout (state lives entirely on disk — no DB column):
     <PORTADES_ROOT>/<entitat>/<deezer_id>-<mida>.<format>
     e.g. /var/topquaranta/portades/album/12345-500.webp
 
-`entitat` ∈ {album, cancio, artista}; `mida` ∈ settings.PORTADES_VARIANTS;
+`entitat` ∈ {album, canco, artista}; `mida` ∈ settings.PORTADES_VARIANTS;
 `format` ∈ settings.PORTADES_FORMATS.
 
 A cover is considered present when its 500 px webp variant exists
@@ -40,7 +40,7 @@ except Exception:  # noqa: BLE001
 
 from PIL import Image, ImageOps
 
-ENTITATS = ("album", "cancio", "artista")
+ENTITATS = ("album", "canco", "artista")
 
 # Quality per format. AVIF/WebP are perceptually fine well below JPEG's
 # bitrate for these flat album-art images.

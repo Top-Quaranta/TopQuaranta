@@ -25,7 +25,9 @@ This phase builds the **download + transcode pipeline only**.
 e.g.  /var/topquaranta/portades/album/12345-500.webp
 ```
 
-- `entitat` ∈ `album` | `cancio` | `artista`
+- `entitat` ∈ `album` | `canco` | `artista` (the cançó slug was
+  renamed `cancio` → `canco` on 2026-05-31 for consistent
+  accent-free naming, before any `canco/` files existed on disk)
 - `mida` ∈ `PORTADES_VARIANTS` (250, 500 px — square)
 - `format` ∈ `PORTADES_FORMATS` (avif, webp, jpg)
 
@@ -51,7 +53,7 @@ from the largest cover even if only a 500px URL was stored.
 | Entity | deezer_id | image URL |
 |---|---|---|
 | album | `Album.deezer_id` | `Album.imatge_url` |
-| cancio | `Canco.deezer_id` | `Canco.album.imatge_url` (the album cover) |
+| canco  | `Canco.deezer_id` | `Canco.album.imatge_url` (the album cover) |
 | artista | `Artista.deezer_id_principal` | `Artista.imatge_url` |
 
 Note: `Artista.imatge_url` is the *custom/uploaded* image — Deezer
@@ -76,10 +78,10 @@ stored image (or without a principal Deezer id) are skipped.
 ## Command — `descarregar_portades`
 
 ```
-tq-run descarregar_portades --entitat {album,cancio,artista,all} --limit N [--force]
+tq-run descarregar_portades --entitat {album,canco,artista,all} --limit N [--force]
 ```
 
-- `--entitat all` splits the budget across album → cancio → artista
+- `--entitat all` splits the budget across album → canco → artista
   (see below) and prints a per-entity `found/failed/skipped` summary.
 - Skips entities whose 500px webp already exists (disk check, **no
   download**) unless `--force`.
@@ -109,12 +111,12 @@ than reporting all-skipped.)
 ### Budget split across entitats (`--entitat all`)
 
 With `--entitat all` the budget is divided evenly — `limit // 3` per
-entity — and iterated album → cancio → artista, **with fall-through**:
+entity — and iterated album → canco → artista, **with fall-through**:
 when an entity runs out of candidates before spending its share, the
 unused budget rolls into the **next** entity, and the **last** entity
 absorbs whatever remains (so the integer-division remainder is never
 wasted and the full `limit` is used when candidates exist). Without
-this the album iteration alone consumed the whole budget and `cancio/`
+this the album iteration alone consumed the whole budget and `canco/`
 / `artista/` never got covers (validated 2026-05-30: album had 1260
 files, the other two dirs didn't exist). Single-entity mode
 (`--entitat album`) is unchanged: the one entity gets the full `limit`.
@@ -167,7 +169,7 @@ e.g. https://www.topquaranta.cat/portades/album/12345-500.webp
 self-hosted variants: AVIF → WebP `<source>`s (250w + 500w srcset,
 `sizes="(max-width:600px) 250px, 500px"`) + a local JPG `<img>`. When a
 `deezerId` is absent, or all three local formats 404 (entity not yet
-covered — e.g. `cancio`/`artista` before the cron drains them), the
+covered — e.g. `canco`/`artista` before the cron drains them), the
 `<img>`'s `onError` falls back to the original Deezer URL via
 `deezerImg`. `priority` → `loading=eager` + `fetchpriority=high` for the
 LCP hero. URL builders `portadaUrl` / `portadaSrcset` live in

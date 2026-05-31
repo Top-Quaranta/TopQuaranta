@@ -8,7 +8,7 @@ the filesystem.
 
 Per-entity source:
   - album   → Album.deezer_id + Album.imatge_url (the Deezer cover_xl)
-  - cancio  → Canco.deezer_id + Canco.album.imatge_url (album cover)
+  - canco   → Canco.deezer_id + Canco.album.imatge_url (album cover)
   - artista → Artista.deezer_id_principal + Artista.imatge_url
 
 Entities without a deezer_id or without a stored image URL are
@@ -29,7 +29,7 @@ from music.models import Album, Artista, Canco
 
 logger = logging.getLogger(__name__)
 
-ENTITATS = ("album", "cancio", "artista")
+ENTITATS = ("album", "canco", "artista")
 # Be gentle with Deezer's CDN between downloads.
 THROTTLE_S = 0.4
 PROGRESS_EVERY = 50
@@ -43,7 +43,7 @@ class Command(BaseCommand):
             "--entitat",
             choices=(*ENTITATS, "all"),
             default="all",
-            help="Which entity to process (default: all → album, cancio, artista).",
+            help="Which entity to process (default: all → album, canco, artista).",
         )
         parser.add_argument(
             "--limit",
@@ -72,7 +72,7 @@ class Command(BaseCommand):
         # entity's budget, and the LAST entity absorbs whatever is left
         # (so the integer-division remainder is never wasted and the
         # full `limit` is used when candidates exist). Without this the
-        # album iteration alone consumed the whole budget and cancio /
+        # album iteration alone consumed the whole budget and canco /
         # artista never got covers (validated 2026-05-30). Single-entity
         # mode (n == 1) is unchanged: the one entity gets the full limit.
         base = limit // n
@@ -142,7 +142,7 @@ class Command(BaseCommand):
                 .iterator()
             )
             yield from qs
-        elif entitat == "cancio":
+        elif entitat == "canco":
             qs = (
                 Canco.objects.exclude(deezer_id__isnull=True)
                 .exclude(album__imatge_url="")

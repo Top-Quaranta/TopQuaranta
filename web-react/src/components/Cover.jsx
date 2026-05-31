@@ -9,7 +9,7 @@
  * origin (LCP win, Fase 3).
  *
  * If all three local formats 404 — the entity has no generated cover
- * yet (e.g. `cancio`/`artista` before the nightly cron drains them) —
+ * yet (e.g. `canco`/`artista` before the nightly cron drains them) —
  * the <img>'s onError swaps to the original Deezer URL, so the cover
  * still shows. Without `deezerId`, it renders a plain Deezer <img>
  * directly (no failed local requests).

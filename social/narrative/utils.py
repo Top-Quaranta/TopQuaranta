@@ -148,11 +148,16 @@ def llista_amb_i(items: list[str]) -> str:
 
 
 # Genitive form — the territori name as it slots AFTER a noun
-# ("Top …", "al Nè …", "el cim …", "el rànquing …"), i.e. carrying the
+# ("Top …", "al rànquing …", "el cim del top …"), i.e. carrying the
 # implicit "de" with the correct article/contraction. Never a bare
 # "Illes" or article-less "País Valencià". PPCC is "Global" with NO
-# preposition (an adjective-like label, not a proper place name — see
-# CLAUDE.md §5; "Països Catalans" is never user-visible).
+# preposition (an adjective-like label of "top"/"rànquing", not a proper
+# place name — see CLAUDE.md §5; "Països Catalans" is never user-visible).
+#
+# `ALT` ("Altres territoris") is DELIBERATELY OMITTED: it never surfaces
+# as a public top, so any `territori_label("ALT")` / `territori_short("ALT")`
+# call is a bug. We let the dict lookup raise a natural KeyError instead of
+# masking it with a silent fallback (2026-05-31 decision).
 TERRITORI_DE = {
     "PPCC": "Global",
     "CAT": "de Catalunya",
@@ -163,11 +168,11 @@ TERRITORI_DE = {
     "FRA": "de la Franja",
     "ALG": "de l'Alguer",
     "CAR": "del Carxe",
-    "ALT": "d'altres territoris",
 }
 
 # Short standalone form — story pills, OG titles, hashtags. Bare name
-# (with its leading article where the name carries one).
+# (with its leading article where the name carries one). `ALT` omitted for
+# the same reason as TERRITORI_DE above.
 TERRITORI_SHORT = {
     "PPCC": "Global",
     "CAT": "Catalunya",
@@ -178,20 +183,37 @@ TERRITORI_SHORT = {
     "FRA": "la Franja",
     "ALG": "l'Alguer",
     "CAR": "el Carxe",
-    "ALT": "altres",
 }
+
+# Ordinal/locative override — used when the territori label slots directly
+# after a position word ("al 1r …", "el cim …", "al podi …", "al capdamunt
+# …") with no intervening "top"/"rànquing". For those, PPCC's bare "Global"
+# reads terse ("al 1r Global"), so we substitute the genitive "del top
+# general" ("al 1r del top general"). Every other territori keeps its
+# TERRITORI_DE form, so the override is a no-op for them.
+TERRITORI_ORDINAL = {"PPCC": "del top general"}
 
 
 def territori_label(codi: str) -> str:
-    """Genitive form for narrative phrases ("Top …", "al Nè …"). Unknown
-    codes fall through to the raw code (defensive — a new territori
-    added upstream must never crash a compose)."""
-    return TERRITORI_DE.get(codi, codi)
+    """Genitive form for narrative phrases that attach to a "top"/"rànquing"
+    noun ("Top …", "al rànquing …"). Raises KeyError on an unknown/omitted
+    code (e.g. "ALT") so an erroneous invocation surfaces instead of leaking
+    a raw slug into a published caption."""
+    return TERRITORI_DE[codi]
 
 
 def territori_short(codi: str) -> str:
-    """Short standalone label (story pills, OG, hashtags)."""
-    return TERRITORI_SHORT.get(codi, codi)
+    """Short standalone label (story pills, OG, hashtags). Raises KeyError
+    on an unknown/omitted code (see `territori_label`)."""
+    return TERRITORI_SHORT[codi]
+
+
+def territori_ordinal(codi: str) -> str:
+    """Genitive form for ordinal/locative contexts ("al 1r …", "el cim …").
+    PPCC → "del top general"; every other territori falls back to its
+    TERRITORI_DE form. Raises KeyError on an unknown/omitted code via the
+    TERRITORI_DE lookup."""
+    return TERRITORI_ORDINAL.get(codi, TERRITORI_DE[codi])
 
 
 # Catalan ordinal forms (ADR-0006). Used to replace `#N` positional

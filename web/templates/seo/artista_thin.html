@@ -1,8 +1,12 @@
 {% extends "seo/_base.html" %}
-{# Thin page for an approved artiste with no indexable cançó yet.
-   Served 200 + noindex (see web/seo/views.py::_render_artista_thin and
-   meta.for_artista(thin=True)) so Google de-indexes cleanly instead of
-   treating a previously-indexed URL as a 404. #}
+{% comment %}
+  Thin page for an approved artiste with no indexable cançó yet.
+  Served 200 + noindex (see web/seo/views.py::_render_artista_thin and
+  meta.for_artista(thin=True)) so Google de-indexes cleanly instead of
+  treating a previously-indexed URL as a 404.
+  Multi-line MUST use {% comment %} — {# #} is single-line only and
+  leaks into the rendered HTML otherwise.
+{% endcomment %}
 {% block content %}
 <nav class="breadcrumbs">
   <a href="/">Inici</a> › <a href="/artistes">Artistes</a> › {{ artista.nom }}

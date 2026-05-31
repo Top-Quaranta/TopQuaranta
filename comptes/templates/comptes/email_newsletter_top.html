@@ -5,10 +5,6 @@
   {{ heading }}
 </h1>
 {% if narrative_html %}
-  {# Fase 4 reset: editorial paragraph block produced by the
-     narrative engine. Each paragraph is already wrapped in <p>
-     by `comptes/newsletter.py`. Falls back to the legacy intro
-     below when the engine couldn't produce a block. #}
   {{ narrative_html|safe }}
 {% else %}
 <p style="margin:0 0 24px;color:#d4d4d4;">

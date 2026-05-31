@@ -346,3 +346,19 @@ def test_indexnow_key_file(client):
     r = client.get("/8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b.txt")
     assert r.status_code == 200
     assert b"8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b" in r.content
+
+
+@pytest.mark.django_db
+def test_no_template_comment_leaks_in_seo_pages(client, artista):
+    """Multi-line `{# ... #}` leaks in Django (single-line only). The
+    SEO `_base.html` comment leaked into every bot-served page in
+    production (2026-05-31). Pin that no comment markers/bodies reach
+    the rendered HTML — homepage + an indexable artista (both extend
+    `_base.html`) + a thin artista (extends `artista_thin.html`)."""
+    thin = Artista.objects.create(nom="Thin Leak", slug="thin-leak", aprovat=True)
+    for url in ("/", f"/artista/{artista.slug}", f"/artista/{thin.slug}"):
+        body = client.get(url).content.decode()
+        assert "{#" not in body, f"{url}: leaked '{{#'"
+        assert "#}" not in body, f"{url}: leaked '#}}'"
+        assert "Minimal inline CSS" not in body, f"{url}: leaked _base comment"
+        assert "Thin page for" not in body, f"{url}: leaked artista_thin comment"

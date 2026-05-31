@@ -14,7 +14,7 @@ import { lazy, Suspense } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Alert from '../components/ui/Alert'
 import { albumUrl } from '../lib/urls'
-import { deezerImg } from '../lib/img'
+import Cover from '../components/Cover'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import TopBreakdownPanel from '../components/TopBreakdownPanel'
@@ -75,9 +75,13 @@ export default function CancoPage() {
       {/* Header */}
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.album?.imatge_url ? (
-          <img
-            src={deezerImg(data.album.imatge_url, 500)}
+          <Cover
+            entitat="album"
+            deezerId={data.album?.deezer_id}
+            imatgeUrl={data.album.imatge_url}
             alt=""
+            size={500}
+            priority
             className="w-full sm:w-48 h-48 object-cover rounded-md shrink-0"
           />
         ) : (

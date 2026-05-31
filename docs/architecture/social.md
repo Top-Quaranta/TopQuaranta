@@ -85,24 +85,63 @@ que emeten els detectors.
 
 ### Etiquetes territorials (2026-05-31)
 
-`social.narrative.utils` té DOS mapes (abans un de sol, `_TERRITORI_LABELS`,
-amb errors de concordança):
+`social.narrative.utils` té TRES mapes (abans un de sol,
+`_TERRITORI_LABELS`, amb errors de concordança):
 
-- **`TERRITORI_DE`** — forma genitiu, per a contextos "Top …" / "al Nè …"
-  / "el cim …" (l'`{territori_label}` que insereixen les plantilles).
-  Porta la preposició + article correctes: `de Catalunya`, `del País
-  Valencià`, **`de les Illes Balears`** (mai "Illes" sol), `de l'Alguer`,
-  `de la Franja`. PPCC és `Global` SENSE preposició.
+- **`TERRITORI_DE`** — forma genitiu, per a contextos on l'etiqueta
+  penja d'un nom "top"/"rànquing" ("Top …", "al rànquing …", "al top
+  …"). Porta la preposició + article correctes. PPCC és `Global` SENSE
+  preposició (encaixa com a adjectiu de "top": "al top Global").
 - **`TERRITORI_SHORT`** — forma curta per a pills de stories, OG i
-  hashtags: `Catalunya`, `País Valencià`, **`Balears`**, `Global`.
-  `social/captions.py::TERRITORI_NOM` és un àlies d'aquest (renderer).
+  hashtags. `social/captions.py::TERRITORI_NOM` n'és un àlies (renderer).
+- **`TERRITORI_ORDINAL`** — override per a contextos ordinal/locatius on
+  l'etiqueta penja directament d'una paraula de posició ("al 1r …", "el
+  cim …", "al podi …", "al capdamunt …") sense "top"/"rànquing" pel mig.
+  Només conté l'override de **PPCC → `del top general`** (perquè "al 1r
+  Global" sonava terse); la resta de territoris hi cau a la seva forma
+  `TERRITORI_DE`, així que és un no-op.
 
-`territori_label()` retorna `TERRITORI_DE`; `territori_short()` retorna
-`TERRITORI_SHORT`. **PPCC mai apareix com a text d'usuari** ("Països
-Catalans" no s'usa enlloc visible; el hashtag `#PaïsosCatalans` s'ha
-eliminat). Cas conegut pendent: "al {ordinal} Global" (p.ex. "al 1r
-Global") sona estrany perquè "Global" és adjectiu; flaggejat per a
-reformulació editorial.
+Els 10 territoris i les seves formes:
+
+| Slug | `TERRITORI_DE` | `TERRITORI_SHORT` | `TERRITORI_ORDINAL` |
+|---|---|---|---|
+| PPCC | Global | Global | **del top general** |
+| CAT | de Catalunya | Catalunya | (= DE) |
+| VAL | del País Valencià | País Valencià | (= DE) |
+| BAL | de les Illes Balears | Balears | (= DE) |
+| AND | d'Andorra | Andorra | (= DE) |
+| CNO | de Catalunya Nord | Catalunya Nord | (= DE) |
+| FRA | de la Franja | la Franja | (= DE) |
+| ALG | de l'Alguer | l'Alguer | (= DE) |
+| CAR | del Carxe | el Carxe | (= DE) |
+| ALT | *(omès)* | *(omès)* | *(omès)* |
+
+**`ALT`** ("Altres territoris") no es publica mai com a top, així que
+està DELIBERADAMENT fora dels tres mapes: `territori_label("ALT")` (i
+`_short` / `_ordinal`) llencen `KeyError` natural en lloc d'un fallback
+silent, per a detectar qualsevol invocació errònia (decisió 2026-05-31).
+
+Funcions: `territori_label()` → `TERRITORI_DE`; `territori_short()` →
+`TERRITORI_SHORT`; `territori_ordinal()` → `TERRITORI_ORDINAL` amb
+fallback a `TERRITORI_DE`. Les plantilles de `banks/hero.py` usen
+`{territori_label}` quan pengen de "top"/"rànquing"/"territori" i
+`{territori_ordinal}` quan pengen de "1r/cim/podi/capdamunt/{ordinal}"
+(157 de 478 plantilles). `registry.pick_phrase` reomple els dos
+placeholders des de l'argument `territori` si l'escenari no els porta.
+
+**PPCC mai apareix com a text d'usuari** en el LABEL del top: "Països
+Catalans" no s'usa enlloc visible i el hashtag `#PaïsosCatalans` s'ha
+eliminat.
+
+### Prosa geogràfica "Països Catalans" (decisió editorial 2026-05-31)
+
+El rebrand a "Global"/"del top general" aplica NOMÉS a l'etiqueta del
+**top** (el rànquing). El terme **"Països Catalans" es manté** com a
+terme cultural-geogràfic descriptiu a la prosa de homepage, pàgines
+legals i mapa (p.ex. "música en català dels Països Catalans"): allà
+descriu el territori, no un rànquing, i "Global" no hi encaixa. La
+distinció és deliberada: *label del top* → Global/General; *terme
+cultural* → Països Catalans.
 
 ### `@username` a Instagram (ADR-0007)
 

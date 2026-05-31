@@ -55,7 +55,10 @@ def test_territori_label():
     # must carry the preposition + article. PPCC stays "Global" (no prep).
     assert territori_label("PPCC") == "Global"
     assert territori_label("CAT") == "de Catalunya"
-    assert territori_label("UNKNOWN") == "UNKNOWN"  # passthrough
+    # Unknown/omitted codes now raise (no silent passthrough) so an
+    # erroneous call surfaces instead of leaking a raw slug (e.g. "ALT").
+    with pytest.raises(KeyError):
+        territori_label("UNKNOWN")
 
 
 # ── B. scenarios ───────────────────────────────────────────────────

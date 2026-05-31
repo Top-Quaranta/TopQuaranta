@@ -23,6 +23,7 @@ from typing import Optional
 from social.narrative.utils import (
     ordinal_ca,
     territori_label,
+    territori_ordinal,
     with_preposition,
 )
 
@@ -98,6 +99,7 @@ def _base_data(artista: str, canco: str, territori: str) -> dict:
         "per_artista": with_preposition(artista, "per"),
         "canco": canco,
         "territori_label": territori_label(territori),
+        "territori_ordinal": territori_ordinal(territori),
     }
 
 
@@ -503,7 +505,10 @@ def fallback_scenario(territori: str) -> Scenario:
     return Scenario(
         "fallback_no_event",
         0,
-        {"territori_label": territori_label(territori)},
+        {
+            "territori_label": territori_label(territori),
+            "territori_ordinal": territori_ordinal(territori),
+        },
     )
 
 

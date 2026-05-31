@@ -97,6 +97,37 @@ def test_no_template_comment_leaks_into_render():
     assert "Django's" not in text  # comment body must not show
 
 
+@pytest.mark.django_db
+def test_no_comment_leak_with_narrative_html():
+    """The Fase-4 `{% if narrative_html %}` true-branch carried a
+    multi-line `{# ... #}` comment that leaked into every real top
+    newsletter (Django `{# #}` is single-line only). The previous leak
+    test only exercised the `{% else %}` branch (no `narrative_html`),
+    so it missed this. Render the narrative branch and assert nothing
+    leaks — neither the markers nor the comment body.
+    """
+    from django.utils.html import strip_tags
+
+    html = render_to_string(
+        "comptes/email_newsletter_top.html",
+        {
+            "subject": "Test",
+            "heading": "Top Test",
+            "territori_nom": "Catalunya",
+            "project_week": 99,
+            "entries": [{"canco_nom": "X", "artista_nom": "Y"}],
+            "unsub_url": "https://example.com/unsub",
+            "top_url": "https://example.com/top",
+            "narrative_html": "<p>Un paràgraf editorial.</p>",
+        },
+    )
+    assert "Un paràgraf editorial." in html  # the narrative branch DID render
+    for marker in ("{#", "#}", "{ #", "Fase 4 reset", "narrative engine"):
+        assert marker not in html, f"leaked {marker!r}"
+    text = strip_tags(html)
+    assert "{#" not in text and "Fase 4 reset" not in text
+
+
 def test_renders_mixed_shape_entries():
     """Defensive: a list mixing both shapes (shouldn't happen in
     practice but proves neither path explodes)."""

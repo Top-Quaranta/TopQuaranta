@@ -136,6 +136,36 @@ def test_pick_short_with_leader_dedups():
     assert "Max Navarro i Ouineta" in text
 
 
+def test_pick_short_excludes_leader_from_listing():
+    """The 1r leader, when they also have a 2nd song in the top 5, must
+    NOT be echoed in the 'també al top 5' tail (the live BAL/Maria Jaume
+    case)."""
+    leader = _entry(1, "Sant Domingo Forever", "Maria Jaume")
+    others = [
+        _entry(2, "Amor d'Ultramar", "Maria Jaume"),  # leader again
+        _entry(4, "La Gent", "La Fúmiga"),
+        _entry(5, "Corb Marí", "Amulet"),
+    ]
+    text = top5_bank.pick_short(others, leader=leader, rng=random.Random(0))
+    # Maria Jaume named once (as the cim leader), not in the tail listing.
+    assert text.count("Maria Jaume") == 1
+    assert "La Fúmiga i Amulet" in text
+
+
+def test_pick_short_leader_only_when_tail_all_leader():
+    """If every 'other' is the leader again, fall back to the leader-only
+    line rather than an empty 'també al top 5 .'."""
+    leader = _entry(1, "Cançó A", "Maria Jaume")
+    others = [
+        _entry(2, "Cançó B", "Maria Jaume"),
+        _entry(3, "Cançó C", "Maria Jaume"),
+    ]
+    text = top5_bank.pick_short(others, leader=leader, rng=random.Random(0))
+    assert text.count("Maria Jaume") == 1
+    assert "també al top 5" not in text.lower()
+    assert "Cançó A" in text
+
+
 def test_pick_short_no_duplicates_unchanged():
     others = [
         _entry(2, "C2", "Ouineta"),

@@ -99,9 +99,12 @@ Dos fixos editorials petits:
 - **Dedup top-5** — `banks/top5.py::_dedup_artist_names` elimina noms
   d'artista repetits (per primera ocurrència) al registre SHORT, que
   llista noms plans ("X, Y i Z"). Abans, un artista amb 2+ cançons al top
-  5 sortia N cops ("Max Navarro, Ouineta i Max Navarro"). El registre
-  LONG NO es dedupa: llista cançons distintes amb posició, on un mateix
-  artista hi recorre legítimament.
+  5 sortia N cops ("Max Navarro, Ouineta i Max Navarro"). En el cas amb
+  líder (hero ≠ 1r), el nom del líder s'**exclou** del llistat "també al
+  top 5" si també hi té una segona cançó (cas real Maria Jaume al top
+  BAL); si tot el que queda és el líder, es cau a la línia només-líder. El
+  registre LONG NO es dedupa: llista cançons distintes amb posició, on un
+  mateix artista hi recorre legítimament.
 
 ### Etiquetes territorials (2026-05-31)
 

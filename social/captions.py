@@ -37,20 +37,18 @@ import logging
 from urllib.parse import urlparse
 
 from music.dates import project_week_number
+from social.narrative.utils import TERRITORI_SHORT
 
 logger = logging.getLogger(__name__)
 
-TERRITORI_NOM = {
-    "PPCC": "Global",
-    "CAT": "Catalunya",
-    "VAL": "País Valencià",
-    "BAL": "Illes Balears",
-    "AND": "Andorra",
-    "CNO": "Catalunya del Nord",
-    "FRA": "Franja de Ponent",
-    "ALG": "L'Alguer",
-    "ALT": "Altres",
-}
+# Short standalone territori label (renderer pills, OG/story titles,
+# caption headers). Single source of truth in `social.narrative.utils`
+# so the renderer and the narrative engine never drift — BAL is
+# "Balears" (not the peninsular-sounding "Illes"), PPCC is "Global"
+# (never "Països Catalans"). The genitive form ("de les Illes Balears",
+# "del País Valencià") used after "Top …"/"al Nè …" lives there too as
+# `territori_label` and is applied by the narrative composers.
+TERRITORI_NOM = TERRITORI_SHORT
 
 # Per-territori hashtag (lowercase, no spaces). Always combined with
 # the always-on triplet below.

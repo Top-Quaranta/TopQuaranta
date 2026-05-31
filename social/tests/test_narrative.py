@@ -50,8 +50,11 @@ def test_llista_amb_i():
 
 
 def test_territori_label():
+    # `territori_label` returns the GENITIVE form (2026-05-31 refactor):
+    # the `{territori_label}` placeholder follows "Top …"/"al Nè …", so it
+    # must carry the preposition + article. PPCC stays "Global" (no prep).
     assert territori_label("PPCC") == "Global"
-    assert territori_label("CAT") == "Catalunya"
+    assert territori_label("CAT") == "de Catalunya"
     assert territori_label("UNKNOWN") == "UNKNOWN"  # passthrough
 
 

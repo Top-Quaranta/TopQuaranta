@@ -18,7 +18,7 @@ from django.core.management import call_command
 from PIL import Image
 
 from ingesta.portades import manager
-from music.models import Album, Artista, ArtistaDeezer
+from music.models import Album, Artista, ArtistaDeezer, Canco
 
 
 def _png_bytes(size=(1000, 1000), color=(200, 50, 60)) -> bytes:

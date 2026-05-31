@@ -1,10 +1,11 @@
 # Self-hosted covers (`portades`)
 
-> Status: **Fase 2 — ingestion + provisioning + serving** (2026-05-30).
-> The pipeline downloads/transcodes covers (Fase 1) and Caddy now
-> serves them at `/portades/*`. SPA consumption (Fase 3) and SSR head
-> wiring (Fase 4) are still pending — no page references these URLs in
-> production yet.
+> Status: **Fase 3 — ingestion + provisioning + serving + SPA
+> consumption** (2026-05-30). The pipeline downloads/transcodes covers
+> (Fase 1), Caddy serves them at `/portades/*` (Fase 2), and the SPA's
+> **album + cançó hero covers** now consume them via `<picture>` with a
+> Deezer fallback (Fase 3). SSR head/`og:image` (Fase 4), the grid/list
+> thumbnails and the artista hero are still pending (see below).
 
 ## Why
 
@@ -160,7 +161,28 @@ e.g. https://www.topquaranta.cat/portades/album/12345-500.webp
   no system package is normally required. If building from source
   (no wheel), install `libaom-dev libavif-dev` first.
 
+## SPA consumption (Fase 3)
+
+`web-react/src/components/Cover.jsx` renders a `<picture>` over the
+self-hosted variants: AVIF → WebP `<source>`s (250w + 500w srcset,
+`sizes="(max-width:600px) 250px, 500px"`) + a local JPG `<img>`. When a
+`deezerId` is absent, or all three local formats 404 (entity not yet
+covered — e.g. `cancio`/`artista` before the cron drains them), the
+`<img>`'s `onError` falls back to the original Deezer URL via
+`deezerImg`. `priority` → `loading=eager` + `fetchpriority=high` for the
+LCP hero. URL builders `portadaUrl` / `portadaSrcset` live in
+`lib/img.js` (unit-tested).
+
+Wired so far: the **album** and **cançó** detail-page hero covers (both
+show the album cover; `Album.deezer_id` is exposed on the album detail
+and, via `album_card`, on the cançó's `album`). **Deferred:** grid/list
+thumbnails (their endpoints don't all expose `deezer_id` yet) and the
+**artista hero** (its cover is `_latest_cover`, an album cover whose
+source `deezer_id` isn't exposed) — these keep using `deezerImg` and
+will move to `Cover` when the payloads carry the id.
+
 ## Not in this phase
 
-SPA consumption (Fase 3), SSR head/`og:image` (Fase 4), model changes.
-See `pipeline.md` for the broader ingest map.
+SSR head/`og:image` (Fase 4), the `has_local_cover` API flag (to avoid
+the 3 failed local requests before the Deezer fallback when an entity
+has no cover yet), model changes. See `pipeline.md` for the ingest map.

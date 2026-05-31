@@ -8,7 +8,7 @@
  * size here — staying within sensible bounds is the caller's job.
  */
 import { describe, it, expect } from 'vitest'
-import { deezerImg } from './img'
+import { deezerImg, portadaSrcset, portadaUrl } from './img'
 
 const SAMPLE = 'https://cdn-images.dzcdn.net/images/cover/abc123/1000x1000-000000-80-0-0.jpg'
 
@@ -40,6 +40,21 @@ describe('deezerImg', () => {
   it('defaults to 500 when size is omitted', () => {
     expect(deezerImg(SAMPLE)).toBe(
       'https://cdn-images.dzcdn.net/images/cover/abc123/500x500-000000-80-0-0.jpg',
+    )
+  })
+})
+
+describe('portadaUrl', () => {
+  it('builds the deterministic self-hosted path', () => {
+    expect(portadaUrl('album', 12345, 500, 'webp')).toBe('/portades/album/12345-500.webp')
+    expect(portadaUrl('album', 9, 250, 'avif')).toBe('/portades/album/9-250.avif')
+  })
+})
+
+describe('portadaSrcset', () => {
+  it('emits the 250w + 500w variants for a format', () => {
+    expect(portadaSrcset('album', 42, 'avif')).toBe(
+      '/portades/album/42-250.avif 250w, /portades/album/42-500.avif 500w',
     )
   })
 })

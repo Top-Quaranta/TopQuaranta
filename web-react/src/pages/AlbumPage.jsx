@@ -7,8 +7,8 @@
  */
 import { Link, useParams } from 'react-router-dom'
 import Alert from '../components/ui/Alert'
+import Cover from '../components/Cover'
 import { cancoUrl } from '../lib/urls'
-import { deezerImg } from '../lib/img'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import { SeoHead } from '../lib/seoHead'
@@ -60,9 +60,13 @@ export default function AlbumPage() {
       {/* Header */}
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.imatge_url ? (
-          <img
-            src={deezerImg(data.imatge_url, 500)}
+          <Cover
+            entitat="album"
+            deezerId={data.deezer_id}
+            imatgeUrl={data.imatge_url}
             alt=""
+            size={500}
+            priority
             className="w-full sm:w-48 h-48 object-cover rounded-md shrink-0"
           />
         ) : (

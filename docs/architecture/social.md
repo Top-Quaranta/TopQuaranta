@@ -17,6 +17,8 @@ syndication and a static-PNG hosting path for Meta's media-fetcher.
 ```
 cron (publicar_social or publicar_canal)
   ↓ social/payload.py             → {entries, hero_cover_url}  for top_*
+                                    (entries/items carry album_deezer_id
+                                     for the newsletter's local-cover lookup)
                                      {items}                    for nous_*
   ↓ social/captions.py
       compose_for_channel(channel, tipus, territori, setmana, entries)

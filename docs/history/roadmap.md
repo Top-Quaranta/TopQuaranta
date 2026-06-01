@@ -3,7 +3,7 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-05-12.
+> Last updated: 2026-06-01.
 
 ---
 
@@ -27,7 +27,11 @@
 - **Distribució**: 6 canals actius o configurables — Instagram,
   Mastodon, Bluesky (carrusel 4 imatges), Telegram (media-group),
   newsletter, RSS. Esborrat remot real per a tots des de
-  `/staff/social`.
+  `/staff/social`. Renders en JPG q90 (Step 3a). Story set PPCC
+  reescrit a 7 slides editorials (intro → top 11-40 → top 4-10 →
+  podi → #1 hero amb síntesi Playfair → novetats → outro groc),
+  ordenats cap al clímax del #1 (Step 3b, 2026-06-01). Territorials
+  pendents (Step 3c). Detall a `docs/architecture/social.md`.
 - **Analytics**: suite ètica completa (K1-K4 + GoAccess) a
   `/staff/analytics`. Pageviews, UTM, KPIs de pipeline, mètriques
   socials per post i per compte, GoAccess sobre logs Caddy darrere

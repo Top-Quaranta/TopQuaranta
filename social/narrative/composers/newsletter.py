@@ -64,6 +64,9 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     label_setmana = _setmana_label(setmana)
     label_terr = territori_label(territori)
 
+    # Distinct-subject slots (audit #1/#6): hero != secondary subject.
+    scenarios = scen.select_slots(scenarios, 2)
+
     hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
     pid_hero, hero_text = pick_phrase(hero, "long", territori, CHANNEL, rng=rng)
 

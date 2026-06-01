@@ -80,6 +80,12 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     label_setmana = _setmana_label(setmana)
     label_terr = territori_label(territori)
 
+    # Pick up to 3 slots with distinct subjects (audit #1/#6): the hero,
+    # secondary and tertiary must not repeat the same song or artist. The
+    # tertiary slot is no longer systematic — it only appears when the
+    # detectors supply a third distinct subject.
+    scenarios = scen.select_slots(scenarios, 3)
+
     hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
     # ADR-0007: swap artista_nom → @handle for Instagram only. We
     # rewrite the scenario's data and the entries' artista_nom so

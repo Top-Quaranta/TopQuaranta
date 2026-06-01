@@ -64,6 +64,11 @@ HASHTAG_TERR = {
 
 HASHTAGS_BASE = ["musicaencatala", "topquaranta"]
 
+# Novetats hashtags — TitleCase + diacritics, consistent with the top
+# posts' bank (`social/narrative/banks/hashtags.py`). Audit #2: the old
+# lowercase set (#musicaencatala …) clashed with the tops' #TopQuaranta.
+HASHTAGS_NOVETATS = ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+
 MES_CA = [
     "gener",
     "febrer",
@@ -621,7 +626,7 @@ def caption_novetats(tipus: str, setmana: datetime.date, entries: list[dict]) ->
         artist_label = _artist_label(e, use_handle=True)
         body_lines.append(f"· {e['nom']} — {artist_label}")
     body = "\n".join(body_lines)
-    footer = "\n\n" + " ".join(f"#{t}" for t in HASHTAGS_BASE + ["novetats"])
+    footer = "\n\n" + " ".join(HASHTAGS_NOVETATS)
     text = header + body + footer
     if len(text) > 2200:
         max_body = 2200 - len(header) - len(footer) - 10

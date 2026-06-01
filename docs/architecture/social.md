@@ -37,7 +37,7 @@ cron (publicar_social or publicar_canal)
             social/narrative/novetats.detect_novetats → n1-n4 + fallback
             social/narrative/composers/{nous_albums,nous_singles}.compose
           else: _legacy_for(channel, tipus, …)  ← IG-story / fallback
-  ↓ social/renderer.py            → PNG slides
+  ↓ social/renderer.py            → JPEG slides (q=90)
   ↓ social/<channel>_client.py    → publish
   ↓ social.SocialPost row         status ∈ {publicat, error, omes}
   ↓ StaffAuditLog                 audit trail
@@ -285,7 +285,28 @@ Driven by `social/calendari.py`. Slots per weekday with
 the canonical `top_ppcc` cycle; territorials Sun 09:50 UTC;
 novetats slots Mon/Wed mornings.
 
-## Static PNG hosting
+## Renderer image format + PPCC feed cover (Step 3a, 2026-06-01)
+
+`social/renderer.py` outputs **JPEG quality 90** (was PNG) for every
+slide — `_path` emits `.jpg`, all `.save(...)` use `JPEG, quality=90`.
+Instagram's Graph API accepts JPEG; the logrotate prune
+(`deploy/logrotate.topquaranta`) now globs both `*.png` (legacy) and
+`*.jpg`.
+
+The **PPCC feed cover** (`_feed_portada_ppcc`) is rewritten as an
+editorial cover on ink: big "TOP 40 / SETMANA N" kicker + a teaser of
+up to 5 featured artist names (the main artist of each top-5 entry,
+de-duplicated, chart order) + logo + footer URL. Replaces the
+~85 %-empty legacy cover. Territorial covers (full-bleed album art) and
+the feed list slides 1-4 are unchanged. Sans-only (Playfair is reserved
+for the #1 story hero, landing in 3b).
+
+`social/narrative/story_synth.py::synthesize_hero(scenario)` derives a
+short uppercase headline (≤ 50 chars) per hero `scenario_code` for the
+#1 story hero slide (e.g. a13 → "TORNA AL CIM DESPRÉS DE 5 SETMANES",
+a2 → "5A SETMANA AL CIM"). Created in 3a; wired into the renderer in 3b.
+
+## Static hosting
 
 Meta's IG media-fetcher rejects rendered images served through
 Django (CSP/COOP headers cause code 9004). Caddy serves

@@ -5,9 +5,10 @@ Three render entry points:
   - `render_feed_novetats(tipus, setmana, items)`         → list[Path]
   - `render_stories_top(territori, setmana, entries)`     → list[Path]
 
-All return PNG paths under `<SOCIAL_CACHE_DIR>/renders/`. Filename
-is deterministic: `<tipus>_<territori>_<setmana>_<idx>.png`. Same
-inputs → same path → idempotent re-renders.
+All return JPEG paths (quality 90) under `<SOCIAL_CACHE_DIR>/renders/`.
+Filename is deterministic: `<tipus>_<territori>_<setmana>_<idx>.jpg`.
+Same inputs → same path → idempotent re-renders. (Step 3: PNG → JPG
+to cut file weight; Instagram's Graph API accepts JPEG.)
 
 Layout reference (Sprint I prompt, lightly adapted to mm-design):
   - Feed dimensions: 1080×1350px (4:5 portrait, Instagram's max
@@ -53,7 +54,7 @@ def _path(
 ) -> Path:
     suffix = "story" if story else "feed"
     ter = territori or "general"
-    name = f"{suffix}_{tipus}_{ter}_{setmana.isoformat()}_{idx:02d}.png"
+    name = f"{suffix}_{tipus}_{ter}_{setmana.isoformat()}_{idx:02d}.jpg"
     return _renders_dir() / name
 
 
@@ -468,33 +469,85 @@ def _feed_cover_full(url: str | None) -> Image.Image:
     return _feed_canvas()
 
 
-def _feed_portada(territori: str, setmana, hero_cover_url: str | None) -> Image.Image:
-    """Cover slide — legacy layout, modern palette.
+def _feed_portada_ppcc(setmana, featured: list[str], accent) -> Image.Image:
+    """Editorial PPCC feed cover (Step 3): ink background, big
+    "TOP 40 / SETMANA N" kicker, a teaser list of up to 5 featured
+    artist names, and the brand logo. Replaces the ~85 %-empty legacy
+    PPCC cover. Sans-only (Playfair is reserved for the #1 story hero)."""
+    from .captions import _setmana_label
 
-    Layout (same for territorial + PPCC):
-      • full-bleed cover (scale-to-cover, no black bands)
-      • territory pill top-right (icon + name, white on territory colour)
-      • brand-logo pill mid-bottom (~75% wide), filled with the
-        territory colour; logo recoloured to whichever of white/ink
-        contrasts best with that fill
-      • small "Setmana N" pill bottom-left
-    No URL pill — keeps the cover as visible as the legacy did.
+    img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
+    d = ImageDraw.Draw(img)
+
+    # Brand logo, top-left.
+    logo = svg_assets.logo_image(360)
+    if logo is not None:
+        img.paste(logo, (84, 90), logo)
+
+    # "TOP 40" — the big yellow headline.
+    f_top = fonts.sans_bold(210)
+    d.text((84, 300), "TOP 40", font=f_top, fill=colors.COLOR_YELLOW)
+
+    # "SETMANA N" under it.
+    f_wk = fonts.sans_bold(64)
+    d.text(
+        (90, 560),
+        _setmana_label(setmana).upper(),
+        font=f_wk,
+        fill=colors.COLOR_WHITE,
+    )
+
+    # Accent divider.
+    d.rounded_rectangle((90, 680, 90 + 220, 690), radius=5, fill=accent)
+
+    # Featured artists teaser.
+    f_lead = fonts.sans_bold(34)
+    d.text((90, 730), "AQUESTA SETMANA", font=f_lead, fill=accent)
+    f_name = fonts.sans_bold(52)
+    y = 800
+    for nom in featured[:5]:
+        name = _truncate(d, nom, f_name, FEED_W - 90 - 60)
+        # Accent dot + name.
+        d.ellipse((90, y + 22, 90 + 16, y + 38), fill=accent)
+        d.text((124, y), name, font=f_name, fill=colors.COLOR_WHITE)
+        y += 76
+
+    # Footer URL.
+    f_url = fonts.sans_regular(32)
+    d.text(
+        (90, FEED_H - 70), "topquaranta.cat", font=f_url, fill=colors.COLOR_TEXT_MUTED
+    )
+    return img
+
+
+def _feed_portada(
+    territori: str,
+    setmana,
+    hero_cover_url: str | None,
+    *,
+    featured: list[str] | None = None,
+) -> Image.Image:
+    """Cover slide.
+
+    Territorial: full-bleed album cover + territory pill + logo pill +
+    Setmana pill (unchanged).
+
+    PPCC (Step 3, editorial rewrite): the old PPCC cover was ~85 % empty
+    ink. Now an editorial cover on ink — big "TOP 40 / SETMANA N" kicker
+    + a teaser list of `featured` artist names — plus the existing logo
+    + Setmana pill at the bottom.
     """
-    from .captions import TERRITORI_NOM, _setmana_label
+    from .captions import _setmana_label
 
     accent = colors.terr_color(territori)
     is_ppcc = (territori or "") == "PPCC"
 
-    # ── Background ───────────────────────────────────────────────
-    # Territorial covers use the album cover of song #1; PPCC/Global
-    # covers are solid ink — the brand-tri-colour logo (yellow + red
-    # + blue) reads at maximum contrast on `tq-ink`, which is also
-    # the SPA's body background. The PPCC accent (green) stays on
-    # the rest of the global surfaces (stories, list squares).
     if is_ppcc:
-        img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
-    else:
-        img = _feed_cover_full(hero_cover_url)
+        return _feed_portada_ppcc(setmana, featured or [], accent)
+
+    from .captions import TERRITORI_NOM
+
+    img = _feed_cover_full(hero_cover_url)
     d = ImageDraw.Draw(img)
 
     # ── Territory pill, top-right (territorial only) ─────────────
@@ -732,8 +785,20 @@ def render_feed_top(
     out: list[Path] = []
     hero_cover = entries[0].get("cover_url") if entries else None
 
+    # Featured artists for the editorial PPCC cover (Step 3): the main
+    # artist of each of the top-5 entries, de-duplicated preserving
+    # chart order, capped at 5. Simple + robust; a scenario-weighted
+    # heuristic is deferred until the story scenario is threaded.
+    featured: list[str] = []
+    for e in entries[:5]:
+        nom = e.get("artista_nom") or ""
+        if nom and nom not in featured:
+            featured.append(nom)
+
     p = _path(tipus, territori, setmana, 0)
-    _feed_portada(territori, setmana, hero_cover).save(p, "PNG")
+    _feed_portada(territori, setmana, hero_cover, featured=featured).save(
+        p, "JPEG", quality=90
+    )
     out.append(p)
 
     pages = max(1, (len(entries) + 9) // 10)
@@ -749,7 +814,7 @@ def render_feed_top(
             total_pages=pages,
         )
         p = _path(tipus, territori, setmana, page)
-        slide.save(p, "PNG")
+        slide.save(p, "JPEG", quality=90)
         out.append(p)
 
     # Instagram carousel cap is 10 — drop trailing slides if needed.
@@ -1017,13 +1082,13 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
     (10 per slide, list-style)."""
     out: list[Path] = []
     p = _path(tipus, "", setmana, 0)
-    _feed_novetats_portada(tipus, setmana).save(p, "PNG")
+    _feed_novetats_portada(tipus, setmana).save(p, "JPEG", quality=90)
     out.append(p)
 
     if tipus == "nous_albums":
         for i, item in enumerate(items[:9], start=1):
             p = _path(tipus, "", setmana, i)
-            _feed_album_slide(item).save(p, "PNG")
+            _feed_album_slide(item).save(p, "JPEG", quality=90)
             out.append(p)
     else:
         # Singles: dynamic bin-packing so we never end with a slide
@@ -1045,7 +1110,7 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
             if not chunk:
                 break
             p = _path(tipus, "", setmana, page)
-            _feed_singles_slide(chunk, page, pages).save(p, "PNG")
+            _feed_singles_slide(chunk, page, pages).save(p, "JPEG", quality=90)
             out.append(p)
             offset += chunk_size
     return out[:10]
@@ -1336,15 +1401,15 @@ def render_stories_top(
     label = f"TOP {min(max_cancons, len(entries))}"
 
     p = _path(tipus, territori, setmana, 0, story=True)
-    _story_intro(territori, setmana, label_top=label).save(p, "PNG")
+    _story_intro(territori, setmana, label_top=label).save(p, "JPEG", quality=90)
     out.append(p)
 
     for i, e in enumerate(entries[:max_cancons], start=1):
         p = _path(tipus, territori, setmana, i, story=True)
-        _story_canco(territori, e).save(p, "PNG")
+        _story_canco(territori, e).save(p, "JPEG", quality=90)
         out.append(p)
 
     p = _path(tipus, territori, setmana, len(out), story=True)
-    _story_cta().save(p, "PNG")
+    _story_cta().save(p, "JPEG", quality=90)
     out.append(p)
     return out

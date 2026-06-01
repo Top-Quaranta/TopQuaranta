@@ -321,6 +321,7 @@ def _caption_top_legacy(
 # release roundups. They route to the legacy caption straight.
 
 _NARRATIVE_TIPUS = ("top_ppcc", "top_territorial")
+_NOVETATS_TIPUS = ("nous_albums", "nous_singles")
 
 _CHANNEL_MAX_CHARS = {
     "mastodon": 480,
@@ -373,7 +374,41 @@ def compose_for_channel(
     return the legacy caption shape with `phrase_ids=[]`. The
     publication never goes out empty because of an engine bug.
     """
-    # Novetats bypass the engine entirely.
+    # Novetats now run through their own narrative engine (audit #5).
+    # IG-story is not a novetats surface, so anything else falls back.
+    if tipus in _NOVETATS_TIPUS:
+        if channel == "instagram_story":
+            return {
+                "text": _legacy_for(channel, tipus, territori, setmana, entries),
+                "hashtags": [],
+                "cta": "",
+                "phrase_ids": [],
+            }
+        try:
+            from social.narrative.composers import nous_albums, nous_singles
+
+            composer = nous_albums if tipus == "nous_albums" else nous_singles
+            result = composer.compose(channel, entries, setmana=setmana, rng=rng)
+            result.setdefault("phrase_ids", [])
+            result.setdefault("hashtags", [])
+            result.setdefault("cta", "")
+            # If the engine produced nothing usable, fall back.
+            if result.get("text"):
+                return result
+        except Exception:
+            logger.exception(
+                "novetats engine failed; legacy fallback (channel=%s tipus=%s)",
+                channel,
+                tipus,
+            )
+        return {
+            "text": _legacy_for(channel, tipus, territori, setmana, entries),
+            "hashtags": [],
+            "cta": "",
+            "phrase_ids": [],
+        }
+
+    # Other non-narrative tipus bypass the engine entirely.
     if tipus not in _NARRATIVE_TIPUS:
         return {
             "text": _legacy_for(channel, tipus, territori, setmana, entries),

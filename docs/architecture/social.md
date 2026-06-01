@@ -31,7 +31,10 @@ cron (publicar_social or publicar_canal)
               ↓ top5_bank.pick_long / pick_short (ordinals per ADR-0006)
               ↓ hashtags_bank.build_hashtags
               ↓ cta_bank.pick_cta
-          else: _legacy_for(channel, tipus, …)  ← novetats path
+        ↓ elif tipus ∈ {nous_albums, nous_singles}:  ← narrative novetats
+            social/narrative/novetats.detect_novetats → n1-n4 + fallback
+            social/narrative/composers/{nous_albums,nous_singles}.compose
+          else: _legacy_for(channel, tipus, …)  ← IG-story / fallback
   ↓ social/renderer.py            → PNG slides
   ↓ social/<channel>_client.py    → publish
   ↓ social.SocialPost row         status ∈ {publicat, error, omes}
@@ -93,6 +96,42 @@ no #1 history) and `a2` (consecutive streak). Severity scales with
 the gap since the last #1 reign (min gap 2 weeks → floor 5; ≥6 weeks
 caps at 9). Its bank ships 6 variants/tier (rarer trigger) vs the
 15/tier of the original detectors.
+
+### Novetats narrative engine (2026-06-01, audit #5)
+
+`nous_albums` / `nous_singles` no longer use the skeleton
+`caption_novetats`; they run a parallel engine. `payload.build_novetats`
+batch-computes per-album flags (`artista_en_top`, `primer_release`,
+`te_collab`, `segell_compartit`, `dies`, `segell`) in
+`_novetats_flags`. `novetats.detect_novetats(items)` runs four detectors
+over those flags and always appends a `fallback_novetat`:
+
+| Code | Trigger | Severity |
+|---|---|---|
+| `n1_debut_artist_known` | release by an artist in the recent top | 6 |
+| `n2_first_release` | artist's first catalogued release | 5 |
+| `n3_collaboration` | release with a featuring (generic copy — guest names aren't stored) | 4 |
+| `n4_label_release` | label shared by ≥2 distinct top artists | 3 |
+| `fallback_novetat` | most recent release (always present) | 0 |
+
+Novetats scenarios are **album-focal** (`canco_id=None`, `artista_id`
+set), so `select_slots` dedups them by artist. `composers/novetats.py`
+is the shared composer (per-channel budget); `nous_albums.py` /
+`nous_singles.py` are thin tipus-pinning wrappers. Bank:
+`banks/novetats.py` (no territori placeholders). Hashtags are the
+TitleCase `HASHTAGS_NOVETATS`; CTAs are novetats-specific (the top
+CTAs reference a "rànquing" that a roundup isn't).
+
+### Caption density (2026-06-01, audit #4/#13)
+
+The IG-feed composer has a **density floor** `MIN_CAPTION_RATIO = 0.45`
+(~990 of 2200 chars). Below it, it upgrades phrase tiers before
+truncation — tertiary `short → medium`, then secondary `medium → long`
+— keeping any upgrade that still fits 2200. It never synthesises
+filler; a still-thin caption is `logger.warning`-ed, not padded. The
+**newsletter** now carries a third paragraph (`select_slots(…, 3)` →
+hero + secondary + tertiary + top-5 detail); it has no hard ceiling.
+A symmetric newsletter floor is deferred (proposed, not applied).
 
 Novetats hashtags are now TitleCase (`#TopQuaranta #MúsicaEnCatalà
 #Novetats` via `captions.HASHTAGS_NOVETATS`), consistent with the

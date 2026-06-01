@@ -253,7 +253,12 @@ class Command(BaseCommand):
             phrase_ids = result.get("phrase_ids") or []
         else:  # nous_*
             paths = renderer.render_feed_novetats(slot.tipus, setmana, data["items"])
-            caption = captions.caption_novetats(slot.tipus, setmana, data["items"])
+            # Novetats now run through the narrative engine (audit #5).
+            result = captions.compose_for_channel(
+                "instagram_feed", slot.tipus, "", setmana, data["items"]
+            )
+            caption = result["text"]
+            phrase_ids = result.get("phrase_ids") or []
 
         self.stdout.write(f"  · renderitzades {len(paths)} slides")
 

@@ -64,8 +64,10 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     label_setmana = _setmana_label(setmana)
     label_terr = territori_label(territori)
 
-    # Distinct-subject slots (audit #1/#6): hero != secondary subject.
-    scenarios = scen.select_slots(scenarios, 2)
+    # Distinct-subject slots (audit #1/#6 + #13): the newsletter has no
+    # length ceiling, so it carries a 3rd paragraph (hero + secondary +
+    # tertiary) when the detectors supply 3 distinct subjects.
+    scenarios = scen.select_slots(scenarios, 3)
 
     hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
     pid_hero, hero_text = pick_phrase(hero, "long", territori, CHANNEL, rng=rng)
@@ -75,16 +77,28 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     secondary_canco = ""
     if len(scenarios) >= 2:
         pid_secondary, secondary_text = pick_phrase(
-            scenarios[1], "medium", territori, CHANNEL, rng=rng
+            scenarios[1], "long", territori, CHANNEL, rng=rng
         )
         secondary_canco = scenarios[1].data.get("canco") or ""
     connector = connectors_bank.pick_connector(rng=rng) if secondary_text else ""
     if connector.endswith(","):
         secondary_text = connectors_bank.lowercase_first(secondary_text)
 
+    tertiary_text = ""
+    pid_tertiary = ""
+    tertiary_canco = ""
+    if len(scenarios) >= 3:
+        pid_tertiary, tertiary_text = pick_phrase(
+            scenarios[2], "medium", territori, CHANNEL, rng=rng
+        )
+        tertiary_canco = scenarios[2].data.get("canco") or ""
+    connector2 = connectors_bank.pick_connector(rng=rng) if tertiary_text else ""
+    if connector2.endswith(","):
+        tertiary_text = connectors_bank.lowercase_first(tertiary_text)
+
     hero_canco = hero.data.get("canco") or ""
     top5 = entries[:5]
-    skip_cancons = {c for c in (hero_canco, secondary_canco) if c}
+    skip_cancons = {c for c in (hero_canco, secondary_canco, tertiary_canco) if c}
     remaining = [e for e in top5 if e.get("canco_nom") not in skip_cancons]
     leader = next((e for e in remaining if e.get("posicio") == 1), None)
     others = (
@@ -104,6 +118,8 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
         narrative_parts.append(hero_text)
     if secondary_text:
         narrative_parts += ["", f"{connector} {secondary_text}"]
+    if tertiary_text:
+        narrative_parts += ["", f"{connector2} {tertiary_text}"]
     if top5_text:
         narrative_parts += ["", top5_text]
     narrative_part = "\n".join(narrative_parts)
@@ -125,6 +141,8 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
         phrase_ids.append(pid_hero)
     if pid_secondary:
         phrase_ids.append(pid_secondary)
+    if pid_tertiary:
+        phrase_ids.append(pid_tertiary)
 
     return {
         "text": text,

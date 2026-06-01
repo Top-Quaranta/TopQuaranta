@@ -488,6 +488,144 @@ def _fake_scenario():
     )
 
 
+def _full_scenario(code, sev, canco_id, artista_id, canco, artista):
+    """A scenario with complete data + distinct subject ids so
+    select_slots keeps it and every tier renders."""
+    return scen.Scenario(
+        code=code,
+        severity=sev,
+        data={
+            "artista": artista,
+            "de_artista": f"de {artista}",
+            "per_a_artista": f"per a {artista}",
+            "per_artista": f"per {artista}",
+            "canco": canco,
+            "streak": 4,
+            "posicio": 3,
+            "posicio_ordinal": "3r",
+            "posicio_anterior_str": "fora del top",
+            "posicio_anterior": 3,
+            "posicio_anterior_ordinal": "3r",
+            "posicio_nova_str": "al 5è",
+            "n_cancons": 4,
+            "dies": 12,
+            "dies_str": "12 dies",
+            "mesos": 8,
+            "pujada": 15,
+            "gap_setmanes": 5,
+            "gap_setmanes_str": "5 setmanes",
+            "territori_label": "Global",
+            "territori_ordinal": "del top general",
+            "canco_id": canco_id,
+            "artista_id": artista_id,
+        },
+    )
+
+
+def _three_distinct_scenarios():
+    return [
+        _full_scenario("a6_canco_recent", 9, 101, 11, "Cançó U", "Artista U"),
+        _full_scenario("a8_pujada_forta", 7, 102, 12, "Cançó D", "Artista D"),
+        _full_scenario("a7_long_runner", 5, 103, 13, "Cançó T", "Artista T"),
+    ]
+
+
+@pytest.mark.django_db
+def test_ig_density_floor_upgrades_to_min_chars():
+    """With 3 distinct subjects the IG composer should reach the 45 %
+    density floor via tier upgrades (and never exceed 2200)."""
+    out = c_ig_feed.compose(
+        _three_distinct_scenarios(),
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=_monday(2026, 5, 11),
+        rng=random.Random(0),
+    )
+    assert c_ig_feed.MIN_CHARS <= len(out["text"]) <= c_ig_feed.MAX_CHARS
+
+
+@pytest.mark.django_db
+def test_newsletter_three_paragraphs_with_three_subjects():
+    """Newsletter now carries hero + secondary + tertiary (3 paragraphs)
+    when the detectors supply 3 distinct subjects."""
+    out = c_newsletter.compose(
+        _three_distinct_scenarios(),
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=_monday(2026, 5, 11),
+        rng=random.Random(0),
+    )
+    paras = [p for p in out["narrative_part"].split("\n\n") if p.strip()]
+    # hero + secondary + tertiary + top5 detail = 4 blocks.
+    assert len(paras) >= 3
+    assert len(out["phrase_ids"]) == 3
+
+
+@pytest.mark.django_db
+def test_ig_dedup_no_repeated_subject_in_slots():
+    """Two scenarios sharing an artist → only one slot for that artist."""
+    scs = [
+        _full_scenario("a6_canco_recent", 9, 201, 21, "Cançó A", "Mateix"),
+        _full_scenario("a8_pujada_forta", 8, 202, 21, "Cançó B", "Mateix"),
+        _full_scenario("a7_long_runner", 5, 203, 23, "Cançó C", "Altre"),
+    ]
+    out = c_ig_feed.compose(
+        scs,
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=_monday(2026, 5, 11),
+        rng=random.Random(0),
+    )
+    # 2 distinct artists kept → at most 2 narrative slots.
+    assert len(out["phrase_ids"]) <= 2
+
+
+@pytest.mark.django_db
+def test_build_novetats_enriches_flags_and_composes_narrative():
+    """nous_albums with 1 known (in-top) artist + 1 brand-new artist:
+    build_novetats sets the flags and compose_for_channel produces a
+    narrative caption (not the legacy skeleton)."""
+    from social import captions, payload
+
+    pub = _monday(2026, 5, 25)
+    known = Artista.objects.create(nom="Coneguda", slug="coneguda", aprovat=True)
+    nova = Artista.objects.create(nom="Nova", slug="nova", aprovat=True)
+    al_k = Album.objects.create(
+        nom="Disc Conegut",
+        slug="disc-k",
+        artista=known,
+        descartat=False,
+        tipus="album",
+        data_llancament=pub - datetime.timedelta(days=2),
+    )
+    al_n = Album.objects.create(
+        nom="Debut",
+        slug="debut",
+        artista=nova,
+        descartat=False,
+        tipus="album",
+        data_llancament=pub - datetime.timedelta(days=1),
+    )
+    _make_canco("T1", known, al_k, "t1")
+    _make_canco("T2", nova, al_n, "t2")
+    # `known` has a recent top appearance; `nova` does not.
+    top_canco = _make_canco("Hit", known, al_k, "hit")
+    _seed(top_canco, "PPCC", pub, 1)
+
+    data = payload.build_novetats("nous_albums", pub, publish_date=pub)
+    assert data and len(data["items"]) == 2
+    by_artist = {it["artista_nom"]: it for it in data["items"]}
+    assert by_artist["Coneguda"]["artista_en_top"] is True
+    assert by_artist["Nova"]["primer_release"] is True
+
+    res = captions.compose_for_channel(
+        "instagram_feed", "nous_albums", "", pub, data["items"], rng=random.Random(0)
+    )
+    txt = res["text"]
+    assert txt and "Setmana" not in txt.split("\n")[0]  # not the skeleton header
+    assert res["hashtags"] == ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+
+
 @pytest.mark.django_db
 def test_composer_mastodon_respects_500_chars():
     out = c_mastodon.compose(

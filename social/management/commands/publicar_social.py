@@ -352,17 +352,27 @@ class Command(BaseCommand):
 
     def _publish_story(self, post, slot, territori, setmana, data, cfg, opts):
         if territori == "PPCC":
-            max_cancons = max(1, int(cfg.story_max_cancons_ppcc or 40))
+            # Step 3b: the PPCC story set is a fixed 7-slide editorial
+            # sequence (intro → 11-40 → 4-10 → podi → #1 hero → novetats
+            # → outro). `story_max_cancons_ppcc` no longer governs it.
+            novetats_items = self._story_novetats_items(setmana, opts)
+            hero_headline = self._story_hero_headline(setmana)
+            paths = renderer.render_stories_ppcc(
+                setmana,
+                data["entries"],
+                novetats_items=novetats_items,
+                hero_headline=hero_headline,
+            )
+            max_cancons = None
         else:
             max_cancons = STORY_TOP_TERRITORIAL
-
-        paths = renderer.render_stories_top(
-            slot.tipus,
-            territori,
-            setmana,
-            data["entries"],
-            max_cancons=max_cancons,
-        )
+            paths = renderer.render_stories_top(
+                slot.tipus,
+                territori,
+                setmana,
+                data["entries"],
+                max_cancons=max_cancons,
+            )
         self.stdout.write(f"  · renderitzades {len(paths)} stories")
 
         if opts["dry_run"]:
@@ -391,6 +401,7 @@ class Command(BaseCommand):
                 "stories": [p.name for p in paths],
                 "story_ids": story_ids,
                 "max_cancons": max_cancons,
+                "n_slides": len(paths),
             },
             published_at=timezone.now(),
         )
@@ -414,6 +425,54 @@ class Command(BaseCommand):
 
         _register_event("social_publicat", dim1=slot.platform, dim2=slot.tipus, n=1)
         self.stdout.write(f"  · {len(story_ids)} stories publicades.")
+
+    # ── PPCC story-set extras (Step 3b) ──────────────────────────
+
+    def _story_hero_headline(self, setmana) -> str:
+        """Short uppercase Playfair headline for the #1 hero slide,
+        derived from the strongest scenario of the week (post-dedup).
+        Falls back to a generic line on any error so the render never
+        crashes."""
+        try:
+            from social.narrative.scenarios import detect_all, fallback_scenario
+            from social.narrative.story_synth import synthesize_hero
+
+            scenarios = detect_all("PPCC", setmana)
+            scenario = scenarios[0] if scenarios else fallback_scenario("PPCC")
+            return synthesize_hero(scenario)
+        except Exception:  # noqa: BLE001 — never block a publication
+            logger.exception("hero headline synthesis failed; using generic")
+            return ""
+
+    def _story_novetats_items(self, setmana, opts, *, limit: int = 3) -> list[dict]:
+        """The 2-3 most recent releases (albums + singles merged) for the
+        novetats story slide. Reuses `payload.build_novetats`; returns an
+        empty list when there's nothing recent (the slide is then
+        skipped)."""
+        publish_date = opts.get("_target_date") or datetime.date.today()
+        merged: list[dict] = []
+        for tipus in ("nous_albums", "nous_singles"):
+            try:
+                d = payload.build_novetats(tipus, setmana, publish_date=publish_date)
+            except Exception:  # noqa: BLE001 — best-effort
+                logger.exception("build_novetats(%s) failed for story set", tipus)
+                d = None
+            if d and d.get("items"):
+                merged.extend(d["items"])
+        # Most recent first (lower `dies` = newer; None sinks to the end),
+        # de-duplicated by slug.
+        merged.sort(key=lambda it: (it.get("dies") is None, it.get("dies") or 0))
+        seen: set = set()
+        out: list[dict] = []
+        for it in merged:
+            slug = it.get("slug")
+            if slug in seen:
+                continue
+            seen.add(slug)
+            out.append(it)
+            if len(out) >= limit:
+                break
+        return out
 
     # ── helpers ──────────────────────────────────────────────────
 

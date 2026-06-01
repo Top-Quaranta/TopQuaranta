@@ -1,9 +1,12 @@
 """PIL-based image generator for the Instagram payloads.
 
-Three render entry points:
+Render entry points:
   - `render_feed_top(tipus, territori, setmana, entries)` → list[Path]
   - `render_feed_novetats(tipus, setmana, items)`         → list[Path]
   - `render_stories_top(territori, setmana, entries)`     → list[Path]
+    (territorial story sequence: intro + N cançó slides + CTA)
+  - `render_stories_ppcc(setmana, entries, …)`            → list[Path]
+    (Step 3b editorial PPCC set: 7 slides built toward the #1 climax)
 
 All return JPEG paths (quality 90) under `<SOCIAL_CACHE_DIR>/renders/`.
 Filename is deterministic: `<tipus>_<territori>_<setmana>_<idx>.jpg`.
@@ -288,6 +291,48 @@ def _placeholder_cover(size: int, text: str = "?") -> Image.Image:
 
 def _cover(url: str | None, size: int, *, fallback_letter: str = "?") -> Image.Image:
     img = fetch_cover(url) if url else None
+    if img is None:
+        return _placeholder_cover(size, fallback_letter)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def _portada_local(deezer_id, mida: int) -> Image.Image | None:
+    """Load a self-hosted portada JPG from the local store, or None.
+
+    The renderer runs on the server where `PORTADES_ROOT` is populated
+    (`ingesta.portades`, Caddy-served at `/portades/*`); on dev machines
+    the file is absent and the caller falls through to the Deezer CDN."""
+    if not deezer_id:
+        return None
+    try:
+        from ingesta.portades import manager
+
+        p = manager.path_for("album", int(deezer_id), mida, "jpg")
+    except Exception:  # noqa: BLE001 — a bad id must never crash a render
+        return None
+    if not p.is_file():
+        return None
+    try:
+        return Image.open(p).convert("RGB")
+    except Exception:  # noqa: BLE001 — corrupted file → fall through
+        logger.warning("portada decode failed for %s", p)
+        return None
+
+
+def _story_cover(
+    deezer_id, url: str | None, size: int, *, fallback_letter: str = "?"
+) -> Image.Image:
+    """Cover for the PPCC story slides (Step 3b).
+
+    Resolution order: local self-hosted portada first (the 250 px variant
+    for small slots, the 500 px one for larger covers), then the live
+    Deezer CDN URL, then a coloured placeholder tile. Unlike the
+    newsletter, the placeholder is the last resort — the documented
+    fallback is the Deezer URL, not the brand placeholder."""
+    mida = 250 if size <= 250 else 500
+    img = _portada_local(deezer_id, mida)
+    if img is None and url:
+        img = fetch_cover(url)
     if img is None:
         return _placeholder_cover(size, fallback_letter)
     return img.resize((size, size), Image.LANCZOS)
@@ -1388,6 +1433,375 @@ def _story_cta() -> Image.Image:
         fill=colors.COLOR_TEXT_MUTED,
     )
     return img
+
+
+# ── STORIES · PPCC editorial set (Step 3b) ───────────────────────────
+#
+# Seven slides, ordered to build toward the #1 climax:
+#   1. intro       — green PPCC senyera + logo + Setmana pill
+#   2. top 11-40   — 5×6 cover mosaic with a position badge per cell
+#   3. top 4-10    — 2-column cover grid, last one centred
+#   4. podi #2-3   — two 350 px covers stacked, title + artist each
+#   5. #1 hero     — big cover + synthesised Playfair headline (climax)
+#   6. novetats    — 2-3 recent releases with covers
+#   7. outro       — yellow-accent CTA (no slate card)
+#
+# Typography: Playfair Display is used ONLY on the #1 hero headline;
+# every other text on the seven slides is Roboto (sans). No trend cues.
+
+GREEN_PPCC = colors.terr_color("PPCC")
+
+
+def _story_footer_caption(d: ImageDraw.ImageDraw, text: str):
+    """Centred muted footer line (the slide 'peu')."""
+    f = fonts.sans_bold(30)
+    tw = d.textlength(text, font=f)
+    d.text(
+        ((STORY_W - tw) // 2, STORY_H - 96),
+        text,
+        font=f,
+        fill=colors.COLOR_TEXT_MUTED,
+    )
+
+
+def _pos_badge(
+    img: Image.Image,
+    x: int,
+    y: int,
+    pos,
+    *,
+    size: int = 48,
+    fill: str = GREEN_PPCC,
+    font_size: int = 26,
+):
+    """Small rounded position badge (green, white number) anchored at
+    the top-left of a cover thumbnail."""
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((x, y, x + size, y + size), radius=12, fill=fill)
+    f = fonts.sans_bold(font_size)
+    t = str(pos)
+    tw = d.textlength(t, font=f)
+    bbox = f.getbbox(t)
+    th = bbox[3] - bbox[1]
+    d.text(
+        (x + (size - tw) // 2, y + (size - th) // 2 - bbox[1]),
+        t,
+        font=f,
+        fill=colors.COLOR_WHITE,
+    )
+
+
+def _story_kicker(d: ImageDraw.ImageDraw, text: str, y: int, *, fill: str = GREEN_PPCC):
+    """Centred green section kicker (Roboto bold)."""
+    f = fonts.sans_bold(56)
+    tw = d.textlength(text, font=f)
+    d.text(((STORY_W - tw) // 2, y), text, font=f, fill=fill)
+
+
+def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
+    """Slide 2 — positions 11-40 as a 5×6 mosaic of cover thumbnails,
+    each with a position badge. Peu: 'Top 11-40 · Setmana N'."""
+    from .captions import _setmana_label
+
+    img = _story_canvas()
+    d = ImageDraw.Draw(img)
+    _story_kicker(d, "TOP 11–40", 150)
+
+    cols, rows = 5, 6
+    margin_x, gap = 60, 16
+    cell = (STORY_W - 2 * margin_x - (cols - 1) * gap) // cols  # ≈179
+    grid_top = 300
+    for idx, e in enumerate(entries[: cols * rows]):
+        r, c = divmod(idx, cols)
+        x = margin_x + c * (cell + gap)
+        y = grid_top + r * (cell + gap)
+        cover = _story_cover(
+            e.get("album_deezer_id"),
+            e.get("cover_url"),
+            cell,
+            fallback_letter=(e.get("canco_nom") or "?")[:1],
+        )
+        img.paste(_rounded(cover, 12), (x, y), _rounded(cover, 12))
+        _pos_badge(img, x + 6, y + 6, e.get("posicio", idx + 11), size=44, font_size=24)
+
+    _story_footer_caption(d, f"Top 11–40 · {_setmana_label(setmana)}")
+    return img
+
+
+def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
+    """Slide 3 — positions 4-10 as a 2-column cover grid (last centred),
+    each cover with a position badge. Mirrors the newsletter D1a 'top
+    4-10' block, adapted to a 9:16 story."""
+    from .captions import _setmana_label
+
+    img = _story_canvas()
+    d = ImageDraw.Draw(img)
+    _story_kicker(d, "TOP 4–10", 150)
+
+    items = entries[:7]
+    cover = 300
+    gap = 48
+    col_x = [
+        (STORY_W - 2 * cover - gap) // 2,
+        (STORY_W - 2 * cover - gap) // 2 + cover + gap,
+    ]
+    grid_top = 320
+    row_h = cover + gap
+    n = len(items)
+    for idx, e in enumerate(items):
+        is_last_odd = idx == n - 1 and n % 2 == 1
+        r = idx // 2
+        if is_last_odd:
+            x = (STORY_W - cover) // 2
+        else:
+            x = col_x[idx % 2]
+        y = grid_top + r * row_h
+        cov = _story_cover(
+            e.get("album_deezer_id"),
+            e.get("cover_url"),
+            cover,
+            fallback_letter=(e.get("canco_nom") or "?")[:1],
+        )
+        img.paste(_rounded(cov, 20), (x, y), _rounded(cov, 20))
+        _pos_badge(
+            img, x + 14, y + 14, e.get("posicio", idx + 4), size=64, font_size=34
+        )
+
+    _story_footer_caption(d, _setmana_label(setmana))
+    return img
+
+
+def _story_podi(entries: list[dict]) -> Image.Image:
+    """Slide 4 — positions 2 & 3 stacked: a 350 px cover each with the
+    song title (Roboto bold) and artist (Roboto regular) alongside.
+
+    Note: the Step-3 brief sketched Playfair for these titles, but the
+    project invariant reserves Playfair for the #1 hero headline only;
+    the podi titles are Roboto to honour it."""
+    img = _story_canvas()
+    d = ImageDraw.Draw(img)
+    _story_kicker(d, "EL PODI", 150)
+
+    cover = 350
+    cover_x = 80
+    text_x = cover_x + cover + 50
+    text_w = STORY_W - text_x - 60
+    f_pos = fonts.sans_bold(120)
+    f_song = fonts.sans_bold(54)
+    f_artist = fonts.sans_regular(38)
+    top0 = 360
+    row_h = cover + 110
+    for idx, e in enumerate(entries[:2]):
+        y = top0 + idx * row_h
+        cov = _story_cover(
+            e.get("album_deezer_id"),
+            e.get("cover_url"),
+            cover,
+            fallback_letter=(e.get("canco_nom") or "?")[:1],
+        )
+        img.paste(_rounded(cov, 24), (cover_x, y), _rounded(cov, 24))
+
+        pos = str(e.get("posicio", idx + 2))
+        d.text((text_x, y - 6), pos, font=f_pos, fill=GREEN_PPCC)
+        # Song title (up to 2 lines) + artist under the big number.
+        title_lines = _wrap_two_lines(d, e.get("canco_nom") or "—", f_song, text_w)[:2]
+        ty = y + 150
+        for line in title_lines:
+            d.text((text_x, ty), line, font=f_song, fill=colors.COLOR_WHITE)
+            ty += 62
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist = _join_artists(d, names, f_artist, text_w)
+        d.text((text_x, ty + 8), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
+
+    return img
+
+
+def _story_hero(entry: dict, headline: str | None) -> Image.Image:
+    """Slide 5 — the #1 climax. A synthesised Playfair headline on top,
+    a large (720 px) cover centred, the song name + artist (Roboto)
+    underneath. `headline` comes from `story_synth.synthesize_hero`;
+    an empty value falls back to a generic line."""
+    img = _story_canvas()
+    d = ImageDraw.Draw(img)
+
+    # "#1" eyebrow.
+    f_eyebrow = fonts.sans_bold(40)
+    eb = "#1 DE LA SETMANA"
+    d.text(
+        ((STORY_W - d.textlength(eb, font=f_eyebrow)) // 2, 110),
+        eb,
+        font=f_eyebrow,
+        fill=GREEN_PPCC,
+    )
+
+    # Synthesised headline — the ONLY Playfair text in the set.
+    text = (headline or "AL CIM AQUESTA SETMANA").strip() or "AL CIM AQUESTA SETMANA"
+    f_head = fonts.display_bold(72)
+    head_lines = _wrap_two_lines(d, text, f_head, STORY_W - 120)[:2]
+    hy = 200
+    for line in head_lines:
+        lw = d.textlength(line, font=f_head)
+        d.text(((STORY_W - lw) // 2, hy), line, font=f_head, fill=colors.COLOR_YELLOW)
+        hy += 92
+
+    # Big cover, centred, with a green frame so it pops on ink.
+    cover = 720
+    cy = max(hy + 40, 460)
+    cx = (STORY_W - cover) // 2
+    d.rounded_rectangle(
+        (cx - 16, cy - 16, cx + cover + 16, cy + cover + 16),
+        radius=40,
+        fill=GREEN_PPCC,
+    )
+    cov = _story_cover(
+        entry.get("album_deezer_id"),
+        entry.get("cover_url"),
+        cover,
+        fallback_letter=(entry.get("canco_nom") or "?")[:1],
+    )
+    img.paste(_rounded(cov, 28), (cx, cy), _rounded(cov, 28))
+
+    # Song + artist (Roboto) under the cover.
+    f_song = fonts.sans_bold(60)
+    f_artist = fonts.sans_regular(44)
+    song = _truncate(d, entry.get("canco_nom") or "—", f_song, STORY_W - 120)
+    ty = cy + cover + 60
+    d.text(
+        ((STORY_W - d.textlength(song, font=f_song)) // 2, ty),
+        song,
+        font=f_song,
+        fill=colors.COLOR_WHITE,
+    )
+    names = entry.get("artistes_noms") or [entry.get("artista_nom") or "—"]
+    artist_raw = _join_artists(d, names, f_artist, STORY_W - 120, max_lines=2)
+    ay = ty + 78
+    for line in artist_raw.split("\n"):
+        d.text(
+            ((STORY_W - d.textlength(line, font=f_artist)) // 2, ay),
+            line,
+            font=f_artist,
+            fill=colors.COLOR_TEXT_MUTED,
+        )
+        ay += 54
+    return img
+
+
+def _story_novetats(setmana, items: list[dict]) -> Image.Image:
+    """Slide 6 — 2-3 recent releases, each as a cover + title + artist
+    row. Same visual family as the newsletter novetats block."""
+    img = _story_canvas()
+    d = ImageDraw.Draw(img)
+    _story_kicker(d, "NOVETATS", 150)
+    f_sub = fonts.sans_regular(36)
+    sub = "Estrenes d'aquesta setmana"
+    d.text(
+        ((STORY_W - d.textlength(sub, font=f_sub)) // 2, 230),
+        sub,
+        font=f_sub,
+        fill=colors.COLOR_TEXT_MUTED,
+    )
+
+    cover = 240
+    row_x = 80
+    text_x = row_x + cover + 44
+    text_w = STORY_W - text_x - 60
+    f_title = fonts.sans_bold(50)
+    f_artist = fonts.sans_regular(40)
+    top0 = 380
+    row_h = cover + 80
+    for idx, it in enumerate(items[:3]):
+        y = top0 + idx * row_h
+        cov = _story_cover(
+            it.get("album_deezer_id"),
+            it.get("cover_url"),
+            cover,
+            fallback_letter=(it.get("nom") or "?")[:1],
+        )
+        img.paste(_rounded(cov, 20), (row_x, y), _rounded(cov, 20))
+        title_lines = _wrap_two_lines(d, it.get("nom") or "—", f_title, text_w)[:2]
+        ty = y + 40
+        for line in title_lines:
+            d.text((text_x, ty), line, font=f_title, fill=colors.COLOR_WHITE)
+            ty += 58
+        artist = _truncate(d, it.get("artista_nom") or "—", f_artist, text_w)
+        d.text((text_x, ty + 6), artist, font=f_artist, fill=GREEN_PPCC)
+
+    _story_footer_caption(d, "topquaranta.cat")
+    return img
+
+
+def _story_outro_ppcc() -> Image.Image:
+    """Slide 7 — yellow-accent outro: ink text on a yellow field, the
+    mono brand logo, and an informative (non-clickable) URL line. No
+    slate `COLOR_CARD` card (that primitive stays in use by the
+    territorial `_story_cta`)."""
+    img = Image.new("RGB", (STORY_W, STORY_H), colors.COLOR_YELLOW)
+    d = ImageDraw.Draw(img)
+
+    # Mono ink logo, centred upper third (the tri-colour logo's yellow
+    # marks would vanish on the yellow field).
+    logo_w = 560
+    logo = svg_assets.logo_image_mono(logo_w, colors.COLOR_BG)
+    if logo is not None:
+        img.paste(logo, ((STORY_W - logo.size[0]) // 2, 620), logo)
+
+    f1 = fonts.sans_bold(64)
+    line1 = "Top complet a"
+    d.text(
+        ((STORY_W - d.textlength(line1, font=f1)) // 2, 940),
+        line1,
+        font=f1,
+        fill=colors.COLOR_BG,
+    )
+    f2 = fonts.sans_bold(88)
+    line2 = "topquaranta.cat"
+    d.text(
+        ((STORY_W - d.textlength(line2, font=f2)) // 2, 1030),
+        line2,
+        font=f2,
+        fill=colors.COLOR_BG,
+    )
+    f3 = fonts.sans_regular(34)
+    line3 = "El rànquing setmanal de música en català"
+    d.text(
+        ((STORY_W - d.textlength(line3, font=f3)) // 2, 1180),
+        line3,
+        font=f3,
+        fill=colors.COLOR_BG,
+    )
+    return img
+
+
+def render_stories_ppcc(
+    setmana,
+    entries: list[dict],
+    *,
+    novetats_items: list[dict] | None = None,
+    hero_headline: str | None = None,
+) -> list[Path]:
+    """Render the 7-slide editorial PPCC story set (Step 3b).
+
+    Replaces the legacy intro + N-cançó + CTA sequence for PPCC. The
+    novetats slide is skipped when no recent releases are available, so
+    the set is 6 or 7 slides. Territorial stories keep
+    `render_stories_top`."""
+    out: list[Path] = []
+    novetats_items = novetats_items or []
+
+    def _emit(img: Image.Image):
+        p = _path("top_ppcc", "PPCC", setmana, len(out), story=True)
+        img.save(p, "JPEG", quality=90)
+        out.append(p)
+
+    _emit(_story_intro("PPCC", setmana, label_top="TOP 40"))
+    _emit(_story_top_mosaic(setmana, entries[10:40]))
+    _emit(_story_top_grid(setmana, entries[3:10]))
+    _emit(_story_podi(entries[1:3]))
+    _emit(_story_hero(entries[0] if entries else {}, hero_headline))
+    if novetats_items:
+        _emit(_story_novetats(setmana, novetats_items[:3]))
+    _emit(_story_outro_ppcc())
+    return out
 
 
 def render_stories_top(

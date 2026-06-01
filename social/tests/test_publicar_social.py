@@ -390,7 +390,10 @@ def test_story_set_counts_as_one_publication(db, cfg_phase_1, setmana_with_top):
 
     with (
         patch(
-            "social.management.commands.publicar_social.renderer.render_stories_top",
+            # Saturday → PPCC, which renders the 7-slide editorial set
+            # via render_stories_ppcc (Step 3b). Patched to fixed paths
+            # so the counter assertion stays decoupled from slide count.
+            "social.management.commands.publicar_social.renderer.render_stories_ppcc",
             return_value=fake_paths,
         ),
         patch(

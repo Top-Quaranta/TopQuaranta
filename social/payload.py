@@ -130,6 +130,9 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 # one `user_tags` payload per artist per slide.
                 "artistes_instagram_urls": _instagram_urls_for_canco(canco),
                 "cover_url": getattr(album, "imatge_url", None) or None,
+                # Deezer album id for the newsletter's local-cover lookup
+                # (`comptes.newsletter_covers.album_cover_url`).
+                "album_deezer_id": getattr(album, "deezer_id", None),
             }
         )
     return {
@@ -238,6 +241,7 @@ def build_novetats(
                 "artista_instagram_url": _instagram_url(artista),
                 "artista_territori": territori,
                 "cover_url": getattr(a, "imatge_url", None) or None,
+                "album_deezer_id": getattr(a, "deezer_id", None),
                 # narrative flags (audit #5):
                 "dies": dies,
                 "segell": (a.label or "").strip(),

@@ -1,0 +1,2 @@
+{% comment %}Trend indicator. `t` = {text, kind, color, bg}. With a bg it
+renders as a badge (DEBUT/TORNA); otherwise coloured text (↑N/↓N/→).{% endcomment %}{% if t %}{% if t.bg %}<span style="display:inline-block;background:{{ t.bg }};color:{{ t.color }};font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:0.5px;">{{ t.text }}</span>{% else %}<span style="color:{{ t.color }};font-size:13px;font-weight:700;">{{ t.text }}</span>{% endif %}{% endif %}

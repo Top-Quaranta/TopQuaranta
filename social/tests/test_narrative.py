@@ -225,6 +225,83 @@ def test_detect_all_sorts_by_severity():
 
 
 @pytest.mark.django_db
+def test_detect_a13_top1_return_with_gap_5():
+    """top1 W, pos3 W-1, top1 W-5 → a13 fires, severity 8 (gap 5 weeks)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("Divinize", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)  # this week #1
+    _seed(c, "PPCC", _monday(2026, 5, 11), 3)  # W-1 at #3 (not #1)
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)  # someone else #1 at W-1
+    _seed(c, "PPCC", _monday(2026, 4, 13), 1)  # W-5 was #1
+    s = scen.detect_a13_top1_return("PPCC", W)
+    assert s and s.code == "a13_top1_return"
+    assert s.severity == 8
+    assert s.data["gap_setmanes"] == 5
+    assert s.data["gap_setmanes_str"] == "5 setmanes"
+
+
+@pytest.mark.django_db
+def test_detect_a13_top1_return_with_gap_2():
+    """top1 W, pos2 W-1, top1 W-2 → a13 fires, severity 5 (gap 2 weeks)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)
+    _seed(c, "PPCC", _monday(2026, 5, 11), 2)  # W-1 at #2
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)
+    _seed(c, "PPCC", _monday(2026, 5, 4), 1)  # W-2 was #1
+    s = scen.detect_a13_top1_return("PPCC", W)
+    assert s and s.severity == 5
+    assert s.data["gap_setmanes"] == 2
+
+
+@pytest.mark.django_db
+def test_detect_a13_does_not_fire_on_streak():
+    """top1 W and top1 W-1 → a13 is NOT a return (a2_streak owns it)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)
+    _seed(c, "PPCC", _monday(2026, 5, 11), 1)  # #1 last week too
+    assert scen.detect_a13_top1_return("PPCC", W) is None
+    assert scen.detect_a2_streak("PPCC", W) is not None
+
+
+@pytest.mark.django_db
+def test_detect_a13_does_not_fire_without_prior_top1():
+    """top1 W, never #1 before → a13 NO (a1_outside_to_top1 owns it)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)  # first appearance, no history
+    assert scen.detect_a13_top1_return("PPCC", W) is None
+    assert scen.detect_a1_outside_to_top1("PPCC", W) is not None
+
+
+@pytest.mark.django_db
+def test_detect_a13_subject_ids_present():
+    """a13's Scenario.data carries canco_id + artista_id for dedup."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)
+    _seed(c, "PPCC", _monday(2026, 5, 4), 1)
+    s = scen.detect_a13_top1_return("PPCC", W)
+    assert s.data["canco_id"] == c.pk
+    assert s.data["artista_id"] == a.pk
+
+
+@pytest.mark.django_db
 def test_fallback_when_no_scenario():
     """Empty top → detect_all returns [] and composer should fall
     back to fallback_no_event."""
@@ -252,14 +329,19 @@ def test_hero_has_nine_codes_three_lengths_fifteen_entries_each():
         "a10_artista_first_ever",
         "a11_top5_drop_generic",
         "a12_artista_emerging",
+        "a13_top1_return",
         "fallback_no_event",
     }
     assert set(HERO.keys()) == expected_codes
     for code, by_length in HERO.items():
         for length in ("short", "medium", "long"):
             assert length in by_length, f"{code} missing {length}"
+            # The original 12 detectors + fallback ship 15 variants/tier;
+            # a13 (2026-06-01) ships 6 (its trigger is rarer). Either way
+            # at least 4 so anti-repeat has room.
+            minimum = 6 if code == "a13_top1_return" else 15
             assert (
-                len(by_length[length]) == 15
+                len(by_length[length]) >= minimum
             ), f"{code}/{length} has {len(by_length[length])} entries"
 
 
@@ -284,6 +366,8 @@ def test_short_phrases_fit_under_120_chars():
         "dies_str": "18 dies",
         "mesos": 8,
         "pujada": 15,
+        "gap_setmanes": 5,
+        "gap_setmanes_str": "5 setmanes",
         "territori_label": "Global",
         "territori_ordinal": "del top general",
     }
@@ -337,6 +421,8 @@ def test_phrases_interpolate_with_diverse_artist_names():
         "dies_str": "18 dies",
         "mesos": 8,
         "pujada": 15,
+        "gap_setmanes": 5,
+        "gap_setmanes_str": "5 setmanes",
         "territori_label": "Global",
         "territori_ordinal": "del top general",
     }

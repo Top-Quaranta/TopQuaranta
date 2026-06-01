@@ -21,11 +21,12 @@ cron (publicar_social or publicar_canal)
   ↓ social/captions.py
       compose_for_channel(channel, tipus, territori, setmana, entries)
         ↓ if tipus ∈ {top_ppcc, top_territorial}:
-            social/narrative/scenarios.detect_all → 12 detectors a1-a12 (ADR-0008)
+            social/narrative/scenarios.detect_all → 13 detectors a1-a13
+            social/narrative/scenarios.select_slots → distinct-subject slots
             social/narrative/composers/<channel>.compose
               ↓ pick_phrase(hero, long, …)     via registry (anti-repeat)
-              ↓ pick_phrase(secondary, medium, …)  if scenarios[1] exists
-              ↓ pick_phrase(tertiary, short, …)    IG-feed only (ADR-0008)
+              ↓ pick_phrase(secondary, medium, …)  slot[1] if distinct subject
+              ↓ pick_phrase(tertiary, short, …)    IG-feed only, slot[2] if distinct
               ↓ for IG: `@handle` rewrite per ADR-0007
               ↓ top5_bank.pick_long / pick_short (ordinals per ADR-0006)
               ↓ hashtags_bank.build_hashtags
@@ -48,15 +49,27 @@ cron (publicar_social or publicar_canal)
 | Telegram | `social/telegram_client.py` + `composers/telegram.py` | 1 024 | plain name | 3-5 |
 | Newsletter | `composers/newsletter.py` | unbounded | plain name | — |
 
-## Narrative engine (12 detectors)
+## Narrative engine (13 detectors)
 
 Located at `social/narrative/scenarios.py`. Each detector runs
 over the `TopSetmanal` for a given week and territory; returns at
 most one `Scenario(code, severity, data)`. `detect_all` returns
-the list sorted by severity desc; the composer picks
-`scenarios[0]` as the hero, optionally `scenarios[1]` as a
-secondary thread, and (IG feed only, ADR-0008) `scenarios[2]` as
-a tertiary thread.
+the list sorted by severity desc.
+
+### Distinct-subject slot selection (2026-06-01, audit #1/#6)
+
+`select_slots(scenarios, max_slots)` picks up to `max_slots`
+scenarios with **distinct subjects**, greedily by severity. Two
+scenarios conflict when they share a non-None `canco_id` OR a
+non-None `artista_id` (`_scenario_subject` returns the
+`(canco_id, artista_id)` tuple; `_base_data` populates both — a
+song-focal scenario carries both, the artist-focal `a5` carries
+only `artista_id`). This stops the hero/secondary/tertiary from
+repeating the same song or artist (e.g. hero `a10` "Noia de
+Porcellana 5è" + tertiary `a6` about the same song). IG feed asks
+for 3 slots; the other composers for 2. **The tertiary slot is no
+longer systematic** — a caption ends at hero+secondary (or just
+hero) when the detectors don't supply enough distinct subjects.
 
 | Code | Trigger | Severity range |
 |---|---|---|
@@ -72,7 +85,18 @@ a tertiary thread.
 | `a10_artista_first_ever` | Artist's first-ever top appearance (ADR-0008) | 8 (fixed) |
 | `a11_top5_drop_generic` | Song was top 2-5, now out of top 10 (ADR-0008) | 4-5 |
 | `a12_artista_emerging` | Artist re-appears after a one-week gap (ADR-0008) | 3 (fixed) |
+| `a13_top1_return` | Song reclaims #1 after a gap (was #1 before, not #1 at W-1) | min(9, max(5, gap_weeks+3)) |
 | `fallback_no_event` | Catch-all when nothing fires | 0 |
+
+`a13_top1_return` (2026-06-01) is distinct from `a1` (fresh #1 with
+no #1 history) and `a2` (consecutive streak). Severity scales with
+the gap since the last #1 reign (min gap 2 weeks → floor 5; ≥6 weeks
+caps at 9). Its bank ships 6 variants/tier (rarer trigger) vs the
+15/tier of the original detectors.
+
+Novetats hashtags are now TitleCase (`#TopQuaranta #MúsicaEnCatalà
+#Novetats` via `captions.HASHTAGS_NOVETATS`), consistent with the
+tops' bank (audit #2).
 
 ### Format de posicions (ADR-0006)
 

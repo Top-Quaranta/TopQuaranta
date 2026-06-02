@@ -69,3 +69,5 @@ music/ml_*.pre_whisper.joblib
 music/ml_directions*.joblib
 .secrets/
 *.bak
+CLAUDE.md
+/CLAUDE_*.md

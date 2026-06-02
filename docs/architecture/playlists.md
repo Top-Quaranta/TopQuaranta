@@ -177,6 +177,22 @@ separated:
     `/v1/search` then `/v1/tracks/{id}` and `/v1/artists/{id}`.
     Throttled (default 0.5s between calls). Writes the cache.
 
+**Manual links + hydration** (`enrichment_status='manual'`, 2026-06-02).
+Staff paste a track URL in the canço editor (`PATCH /staff/cancons/<pk>/
+{spotify_url}`, see `staff.md`): format validated, **no API call**. The id
+lands in `SpotifyMetadata.spotify_id` (mirrored to `Canco.spotify_id`) with
+status `manual`, `enriched_at=NULL`. Process A puts it in playlists instantly
+(reads `LOCKED_STATUSES = (found, manual)`). Process B **skips `/v1/search`**
+for it but still hydrates: phase 2 of `enriquir_spotify` (after the search
+pass, cap `--hydrate-limit` 50) selects `status=manual AND enriched_at IS
+NULL` and runs `get_track` + `get_artist` from the known id — filling
+`spotify_artist_id` + the rest and recomputing dispersion (hydrated manuals
+count like `found`). The id is never re-resolved. `enriched_at` is stamped on
+success or on a `get_track` 404 (bad pasted id → "failed" state in the editor,
+not retried). The `/search` queue and `enriquir_spotify_rebuigs` both exclude
+`LOCKED_STATUSES`. Fill-when-empty only; `spotify_url=""` clears to
+`not_attempted`.
+
 Source ordering inside Process B (FASE 0 "opció C compost") with a
 **pending equity floor** (2026-06-02):
   1. Pending Cançons (`verificada=False, activa=True`) ordered by

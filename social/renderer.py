@@ -1844,7 +1844,12 @@ def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
 
 def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
     """Slide 3 — positions 10→4: 2-column cover grid (#10/#9, #8/#7,
-    #6/#5) then #4 centred below."""
+    #6/#5) then #4 centred below.
+
+    Row heights are dynamic: each grid row reserves space for the taller
+    of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
+    never crowds the cover of the row below. The centred #4 is clamped so
+    it can't slide under the footer when several rows run tall."""
     img = _bg_ink()
     _header_row(img, setmana)
     body_top = _section_header(img, "ENS ACOSTEM AL CIM", 200)
@@ -1852,46 +1857,61 @@ def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
     d = ImageDraw.Draw(img)
     cover = 210
     col_gap, row_gap = 48, 40
-    left = _PAD_STD[3]
-    col_x = [left, left + cover + col_gap]
-    # The two columns are left-aligned within the content box; centre the
-    # pair block.
     pair_w = 2 * cover + col_gap
     block_left = (STORY_W - pair_w) // 2
     col_x = [block_left, block_left + cover + col_gap]
     grid_top = body_top + 40
-    row_h = cover + 78 + row_gap
+    title_lh, gap_above_title, gap_above_artist, artist_h = 34, 14, 4, 30
     f_badge = fonts.anton(46)
     f_title = fonts.bricolage_xbold(32)
     f_artist = fonts.sans_regular(25)
     subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62)
 
-    def _cell(e, x, y, pos):
-        _paste_cover(img, e, x, y, cover)
-        _number_badge(img, x, y, str(pos), font=f_badge, pad_x=21, pad_y=9)
-        ty = y + cover + 14
-        for line in _wrap_tracked(
-            d, e.get("canco_nom") or "—", f_title, cover + 30, -0.32, 2
-        ):
-            _draw_tracked(d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=-0.32)
-            ty += 34
-        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
-        artist = _truncate(d, ", ".join(names), f_artist, cover + 30)
-        _draw_tracked(d, x, ty + 4, artist, f_artist, subtle)
+    def _text_h(n_lines: int) -> int:
+        """Height of the text block under a cover for `n_lines` title."""
+        return gap_above_title + n_lines * title_lh + gap_above_artist + artist_h
 
     # Descending 10→4: grid holds #10/#9, #8/#7, #6/#5; #4 centred below.
     items = list(reversed(entries[:7]))
-    for idx, e in enumerate(items[:6]):
-        r, c = divmod(idx, 2)
-        x = col_x[c]
-        y = grid_top + r * row_h
-        _cell(e, x, y, e.get("posicio") or (10 - idx))
-    # #4 centred below, in its own row.
-    if len(items) >= 7:
+    # Pre-wrap every title (≤2 lines, ellipsised) so rows can be sized.
+    wrapped = [
+        _wrap_tracked(d, e.get("canco_nom") or "—", f_title, cover + 30, -0.32, 2)
+        for e in items
+    ]
+
+    def _cell(e, lines, x, y, pos):
+        _paste_cover(img, e, x, y, cover)
+        _number_badge(img, x, y, str(pos), font=f_badge, pad_x=21, pad_y=9)
+        ty = y + cover + gap_above_title
+        for line in lines:
+            _draw_tracked(d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=-0.32)
+            ty += title_lh
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist = _truncate(d, ", ".join(names), f_artist, cover + 30)
+        _draw_tracked(d, x, ty + gap_above_artist, artist, f_artist, subtle)
+
+    n = len(items)
+    y = grid_top
+    for r in range(3):
+        i0, i1 = r * 2, r * 2 + 1
+        if i0 >= n or i0 >= 6:
+            break
+        lines1 = wrapped[i1] if (i1 < n and i1 < 6) else None
+        row_lines = max(len(wrapped[i0]), len(lines1) if lines1 else 1)
+        _cell(
+            items[i0], wrapped[i0], col_x[0], y, items[i0].get("posicio") or (10 - i0)
+        )
+        if lines1:
+            _cell(items[i1], lines1, col_x[1], y, items[i1].get("posicio") or (10 - i1))
+        y += cover + _text_h(row_lines) + row_gap
+    # #4 centred below, clamped so its block never reaches the footer.
+    if n >= 7:
         e = items[6]
-        x = (STORY_W - cover) // 2
-        y = grid_top + 3 * row_h
-        _cell(e, x, y, e.get("posicio") or 4)
+        needed = cover + _text_h(len(wrapped[6]))
+        max_y = STORY_H - 92 - 24 - needed  # 92 footer band + 24 margin
+        _cell(
+            e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
+        )
     _footer_url(img)
     return img
 
@@ -2155,7 +2175,9 @@ def render_stories_ppcc(
     so the set is 6 or 7 slides. Territorial stories keep
     `render_stories_top`."""
     out: list[Path] = []
-    novetats_items = novetats_items or []
+    # Drop any falsy entries so a list of empty dicts can't slip through
+    # and produce a blank novetats slide.
+    novetats_items = [it for it in (novetats_items or []) if it]
 
     def _emit(img: Image.Image):
         p = _path("top_ppcc", "PPCC", setmana, len(out), story=True)
@@ -2167,6 +2189,8 @@ def render_stories_ppcc(
     _emit(_story_top_grid(setmana, entries[3:10]))
     _emit(_story_podi(entries[1:3], setmana))
     _emit(_story_hero(entries[0] if entries else {}, hero_headline))
+    # Novetats slide is omitted entirely when there are no recent
+    # releases — never generated, never uploaded (the set is then 6).
     if novetats_items:
         _emit(_story_novetats(setmana, novetats_items[:3]))
     _emit(_story_outro_ppcc(setmana))

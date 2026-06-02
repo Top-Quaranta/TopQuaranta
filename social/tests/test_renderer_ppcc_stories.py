@@ -88,6 +88,16 @@ def test_ppcc_story_set_skips_novetats_when_empty():
 
 
 @pytest.mark.django_db
+def test_ppcc_story_set_skips_novetats_when_items_falsy():
+    """A list of falsy entries (None / empty dict) must also be treated as
+    'no novetats' — the slide is neither generated nor returned."""
+    paths = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=[None, {}], hero_headline="NOU #1"
+    )
+    assert len(paths) == 6, [p.name for p in paths]
+
+
+@pytest.mark.django_db
 def test_ppcc_story_set_handles_short_top():
     """Only 5 ranked entries (the test fixture's size): no crash, the
     11-40 mosaic and 4-10 grid simply render empty, slides still produce."""
@@ -147,6 +157,36 @@ def test_mosaic_renders_30_covers_with_fallback():
             )
     img = renderer._story_top_mosaic(WK, entries)
     assert img.size == (renderer.STORY_W, renderer.STORY_H)
+
+
+# ── Top 10-4 grid — dynamic row height ──────────────────────────────
+
+
+@pytest.mark.django_db
+def test_grid_long_titles_do_not_reach_footer():
+    """Every title forced to 2 lines: dynamic row heights + the #4 clamp
+    keep the last (centred) cover out of the footer band."""
+    entries = []
+    for i in range(7):
+        e = _entries(1)[0].copy()
+        e["posicio"] = i + 4
+        e["canco_nom"] = "On T'has Ficat Aquesta Nit Que No Et Trobo Enlloc"
+        e["artistes_noms"] = ["Una Banda De Nom Ben Llarg"]
+        entries.append(e)
+    img = renderer._story_top_grid(WK, entries).convert("RGB")
+    assert img.size == (renderer.STORY_W, renderer.STORY_H)
+    # Placeholder covers paint COLOR_CARD; none may appear in the 30 px
+    # strip just above the footer (proves no cover overflowed downward).
+    cr = colors._hex_to_rgb(colors.COLOR_CARD)
+    band = img.crop(
+        (0, renderer.STORY_H - 122, renderer.STORY_W, renderer.STORY_H - 96)
+    )
+    card = sum(
+        1
+        for r, g, b in band.getdata()
+        if abs(r - cr[0]) < 20 and abs(g - cr[1]) < 20 and abs(b - cr[2]) < 20
+    )
+    assert card == 0, f"a cover bled into the footer band ({card} px)"
 
 
 # ── Outro ───────────────────────────────────────────────────────────

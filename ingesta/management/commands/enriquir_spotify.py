@@ -7,18 +7,26 @@ SpotifyMetadata. Process A (actualitzar_playlists_spotify, FASE 5)
 reads spotify_id from that table; this command is the only place
 that calls /search.
 
-Ordering (FASE 0 "opció C compost"):
-  1. Public Cançons (verificada=True, activa=True) ordered by the
-     most recent SenyalDiari.lastfm_playcount desc (proxy for "in
-     the ranking right now"), NULLs last.
-  2. Pending Cançons (verificada=False, activa=True) ordered by
-     ml_confianca desc, NULLs last. These are the tracks the
-     classifier thinks are likely to be approved soon.
+Ordering (FASE 0 "opció C compost") with a pending equity floor:
+  1. Pending Cançons (verificada=False, activa=True) ordered by
+     ml_confianca desc, NULLs last — these get a RESERVED floor of the
+     run's slots (`--pending-floor-frac`, default 0.5) so they don't
+     starve behind the verified backlog. The classifier thinks these
+     are likely to be approved soon.
+  2. Public Cançons (verificada=True, activa=True) ordered by the most
+     recent SenyalDiari.lastfm_playcount desc (proxy for "in the
+     ranking right now"), NULLs last — fill the remaining slots.
+If either pool underfills, the leftover spills to the other (pending
+first) so no API call is wasted; the batch is processed pending-first
+so the reserved floor survives a mid-run abort. Same total load.
 
-Both subsets restrict to enrichment_status="not_attempted". Cançons
-already enriched (found OR not_found) are skipped unless --retry-not-
-found is set, in which case the not_found subset is appended (oldest
-enriched_at first so we cycle through evenly).
+Candidate visibility is a LEFT JOIN on SpotifyMetadata: a Canço with NO
+row has never been attempted, so it counts exactly like
+enrichment_status="not_attempted" (the row is created lazily on
+enrichment). `isrc` must be non-NULL and non-empty. Cançons already
+enriched (found OR not_found) are skipped unless --retry-not-found is
+set, in which case the not_found subset is appended (oldest enriched_at
+first so we cycle through evenly).
 
 --target-playlists narrows the source pool to Cançons currently
 appearing in any active SpotifyPlaylist (top + no_verificades
@@ -43,7 +51,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import F, OuterRef, Subquery
+from django.db.models import F, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
@@ -107,6 +115,17 @@ class Command(BaseCommand):
                 "cold-cache period."
             ),
         )
+        parser.add_argument(
+            "--pending-floor-frac",
+            type=float,
+            default=0.5,
+            help=(
+                "Fraction of `--limit` reserved for PENDING (verificada="
+                "False) cançons each run, so they don't starve behind the "
+                "verified backlog. Default 0.5. Unused floor slots spill to "
+                "the verified pool and vice-versa, so no API call is wasted."
+            ),
+        )
 
     def handle(self, *args, **opts):
         # Cooldown gate. The metadata-read bucket (`/v1/search`,
@@ -137,6 +156,9 @@ class Command(BaseCommand):
         limit = opts["limit"]
         retry_not_found = opts["retry_not_found"]
         target_playlists = opts["target_playlists"]
+        pending_floor_frac = opts["pending_floor_frac"]
+        if not 0.0 <= pending_floor_frac <= 1.0:
+            raise CommandError("--pending-floor-frac must be in [0.0, 1.0].")
 
         client = UserSpotifyClient(auth, throttle_s=throttle)
 
@@ -144,6 +166,7 @@ class Command(BaseCommand):
             limit=limit,
             retry_not_found=retry_not_found,
             target_playlists=target_playlists,
+            pending_floor_frac=pending_floor_frac,
         )
         self.stdout.write(
             f"[enriquir_spotify] {len(candidates)} candidates "
@@ -213,12 +236,21 @@ class Command(BaseCommand):
         limit: int,
         retry_not_found: bool,
         target_playlists: bool,
+        pending_floor_frac: float = 0.5,
     ) -> list[Canco]:
-        """Build the ordered candidate list per FASE 0 "opció C" rules.
+        """Build the ordered candidate list per FASE 0 "opció C" rules,
+        with a reserved floor of slots for pending cançons.
 
         Returns a Python list (not a queryset) because we splice from
         two differently-ordered subsets (public by Last.fm playcount,
-        pending by ml_confianca). The list is truncated at `limit`.
+        pending by ml_confianca) and apply the equity floor in Python.
+        The list is truncated at `limit`.
+
+        Candidate base is a LEFT JOIN on `SpotifyMetadata`: a Canço with
+        NO row has never been attempted, so it counts exactly like
+        `not_attempted` (Option A — the row is created lazily by
+        `_enrich_one`). `isrc` must be present AND non-empty — a NULL or
+        "" ISRC can't be searched and would waste a slot / raise.
         """
         # Latest SenyalDiari.lastfm_playcount per Canço, used as the
         # ordering signal for public cançons. NULLs last keeps cançons
@@ -229,9 +261,17 @@ class Command(BaseCommand):
             .values("lastfm_playcount")[:1]
         )
 
-        base = Canco.objects.filter(
-            spotify__enrichment_status=SpotifyMetadata.STATUS_NOT_ATTEMPTED
-        ).exclude(isrc="")
+        # LEFT JOIN: no SpotifyMetadata row OR a not_attempted one. Keep
+        # every other condition that was here before (the isrc gate, plus
+        # the verificada/activa split below) — we only widen the join.
+        base = (
+            Canco.objects.filter(
+                Q(spotify__isnull=True)
+                | Q(spotify__enrichment_status=SpotifyMetadata.STATUS_NOT_ATTEMPTED)
+            )
+            .filter(isrc__isnull=False)
+            .exclude(isrc="")
+        )
         if target_playlists:
             # Restrict to the Cançons currently selected by Process A
             # for any active playlist. We compute the union of:
@@ -249,19 +289,26 @@ class Command(BaseCommand):
             F("ml_confianca").desc(nulls_last=True), "-created_at"
         )
 
-        # Materialise both head segments up to `limit` so we don't
-        # over-fetch.
-        public = list(public_qs[:limit])
-        result = list(public)
-        remaining = limit - len(public)
-        if remaining > 0:
-            seen_pks = {c.pk for c in public}
-            for c in pending_qs[: remaining + len(seen_pks)]:
-                # The intersection guard handles the rare case where a
-                # Canço changes verificada flag mid-run; cheap O(1) hit.
-                if c.pk in seen_pks:
+        # Equity floor: reserve up to `floor` slots for pending (the
+        # bottleneck) so they never starve behind the verified backlog.
+        # Verified fill the remaining slots. If either pool underfills,
+        # the leftover spills to the other (pending leftovers first) so
+        # no API slot is wasted. Same total load (<= limit calls).
+        floor = min(limit, round(limit * pending_floor_frac))
+        pending_all = list(pending_qs[:limit])
+        public_all = list(public_qs[:limit])
+        pend_take = pending_all[:floor]
+        ver_take = public_all[: limit - len(pend_take)]
+        # Pending-first batch order so the reserved floor is processed
+        # even if a mid-run RateLimitedError aborts the rest.
+        result = pend_take + ver_take
+        if len(result) < limit:
+            seen_pks = {c.pk for c in result}
+            for c in pending_all[len(pend_take) :] + public_all[len(ver_take) :]:
+                if c.pk in seen_pks:  # guard mid-run verificada flips
                     continue
                 result.append(c)
+                seen_pks.add(c.pk)
                 if len(result) >= limit:
                     break
 
@@ -325,7 +372,11 @@ class Command(BaseCommand):
         in a transaction so a mid-batch abort never leaves a partial
         update.
         """
-        sm = canco.spotify  # OneToOne reverse accessor
+        # Lazy row creation (Option A): a candidate may have no
+        # SpotifyMetadata row yet (LEFT-JOIN visibility). get_or_create
+        # gives it one in its default `not_attempted` state before we
+        # write the outcome below.
+        sm, _ = SpotifyMetadata.objects.get_or_create(canco=canco)
         now = timezone.now()
 
         # Step 1: search by ISRC.

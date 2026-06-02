@@ -177,15 +177,34 @@ separated:
     `/v1/search` then `/v1/tracks/{id}` and `/v1/artists/{id}`.
     Throttled (default 0.5s between calls). Writes the cache.
 
-Source ordering inside Process B (FASE 0 "opció C compost"):
-  1. Public Cançons (`verificada=True, activa=True`) ordered by
-     the latest `SenyalDiari.lastfm_playcount desc`, NULLs last.
-  2. Pending Cançons (`verificada=False, activa=True`) ordered by
-     `ml_confianca desc`, NULLs last.
+Source ordering inside Process B (FASE 0 "opció C compost") with a
+**pending equity floor** (2026-06-02):
+  1. Pending Cançons (`verificada=False, activa=True`) ordered by
+     `ml_confianca desc`, NULLs last — given a RESERVED floor of the
+     run's slots (`--pending-floor-frac`, default 0.5).
+  2. Public Cançons (`verificada=True, activa=True`) ordered by the
+     latest `SenyalDiari.lastfm_playcount desc`, NULLs last — fill the
+     rest.
+If either pool underfills, the leftover spills to the other (pending
+first); the batch is processed pending-first so the reserved floor
+survives a mid-run abort. Without the floor, pending starved behind the
+verified backlog (audit 2026-06-02: 1.5 k verified `not_attempted`
+ahead of ~290 pending → pending got 0 slots/run, so the no_verificades
+playlists stayed ~17 % covered).
+
+Candidate **visibility is a LEFT JOIN** on `SpotifyMetadata`: a Canço
+with no row has never been attempted, so it counts exactly like
+`not_attempted` (the row is created lazily by `_enrich_one` via
+`get_or_create`). Before this, ~420 cançons ingested after the one-shot
+backfill (migration 0080) had no row and were invisible to the
+inner-join candidate query. `isrc` must be non-NULL and non-empty.
 
 Flags:
-  * `--limit N` caps per-run work (default 200).
-  * `--throttle FLOAT` overrides the per-call sleep (default 0.5).
+  * `--limit N` caps per-run work (default 200; the cron uses 50).
+  * `--throttle FLOAT` overrides the per-call sleep (default 0.5; cron
+    1.0). The 50/day cap is the safe anti-429 rate — unchanged here.
+  * `--pending-floor-frac FLOAT` (default 0.5) reserves that fraction of
+    `--limit` for pending cançons.
   * `--retry-not-found` cycles through previously-not-found
     cançons after the main pool is exhausted.
   * `--target-playlists` narrows the pool to Cançons currently

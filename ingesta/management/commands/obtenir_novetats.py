@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from ingesta.caducitat import caducitat_cutoff, is_caducat
 from ingesta.clients import deezer
 from ingesta.clients.deezer import _parse_date
 from music.constants import DIES_CADUCITAT
@@ -522,6 +523,25 @@ class Command(BaseCommand):
             ):
                 album.data_llancament = album_date
                 album.save(update_fields=["data_llancament"])
+
+        # DIES_CADUCITAT guard at the creation frontier — see
+        # `ingesta/caducitat.py` for the full rationale (June 2026:
+        # Tres Fan Ball 1994/1997/2005/2013 albums recreating ~38
+        # pendents every ~30 days). Evaluated *after* the "Fix album
+        # date" block above so we read the rewound (track-effective)
+        # date, not the artist-albums-level summary.
+        cutoff = caducitat_cutoff()
+        if is_caducat(album.data_llancament, cutoff):
+            logger.info(
+                "Skipping track «%s» (deezer_id=%s album=%s data_llancament=%s) — "
+                "older than DIES_CADUCITAT (%s).",
+                track_data.get("title", "?"),
+                dz_id,
+                album.pk,
+                album.data_llancament.isoformat(),
+                cutoff.isoformat(),
+            )
+            return False
 
         try:
             canco = Canco.objects.create(

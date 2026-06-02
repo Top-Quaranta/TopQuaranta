@@ -12,7 +12,7 @@ fontconfig.
 | `BricolageGrotesque-ExtraBold.ttf` | [google/fonts/ofl/bricolagegrotesque](https://github.com/google/fonts/tree/main/ofl/bricolagegrotesque) | [SIL Open Font License 1.1](https://openfontlicense.org/) |
 | `InstrumentSerif-Italic.ttf` | [google/fonts/ofl/instrumentserif](https://github.com/google/fonts/tree/main/ofl/instrumentserif) | [SIL Open Font License 1.1](https://openfontlicense.org/) |
 
-The PPCC story redesign (Step 3c) added Anton, Bricolage Grotesque and
+The PPCC story redesign (Step 3b) added Anton, Bricolage Grotesque and
 Instrument Serif. `PlayfairDisplay-ExtraBold.ttf` and
 `BricolageGrotesque-ExtraBold.ttf` are **static instances** cut from the
 upstream variable fonts (Playfair `wght=800`; Bricolage

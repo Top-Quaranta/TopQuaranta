@@ -33,8 +33,8 @@
   ordenats cap al clímax del #1 (Step 3b, 2026-06-01) i amb el
   redisseny visual validat portat al renderer Pillow — noves
   famílies OFL Anton / Bricolage Grotesque / Instrument Serif /
-  Playfair 800 a `social/fonts/` (Step 3c, 2026-06-02). Stories
-  territorials encara pendents de redisseny. Detall a
+  Playfair 800 a `social/fonts/` (redisseny Step 3b, 2026-06-02).
+  Stories territorials encara pendents (seran el Step 3c). Detall a
   `docs/architecture/social.md`.
 - **Analytics**: suite ètica completa (K1-K4 + GoAccess) a
   `/staff/analytics`. Pageviews, UTM, KPIs de pipeline, mètriques

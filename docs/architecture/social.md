@@ -306,14 +306,15 @@ short uppercase headline (≤ 50 chars) per hero `scenario_code` for the
 #1 story hero slide (e.g. a13 → "TORNA AL CIM DESPRÉS DE 5 SETMANES",
 a2 → "5A SETMANA AL CIM"). Created in 3a; wired into the renderer in 3b.
 
-## PPCC story set — 7 editorial slides (Step 3b structure, Step 3c redesign)
+## PPCC story set — 7 editorial slides (Step 3b)
 
 `renderer.render_stories_ppcc(setmana, entries, *, novetats_items,
 hero_headline)` replaces the legacy PPCC story sequence (intro + up to
 40 cançó slides + CTA) with a fixed seven-slide set ordered to build
-toward the #1 climax. Step 3b set the structure; **Step 3c (2026-06-02)
-ported the validated Claude Design canvas** (pixel-measured from the
-1080×1920 references) into the seven builders:
+toward the #1 climax. A first pass set the structure; a **redesign pass
+(2026-06-02) ported the validated Claude Design canvas** (pixel-measured
+from the 1080×1920 references) into the seven builders. Both passes are
+part of Step 3b — the territorial story redesign is the future Step 3c:
 
 1. **intro** — green radial field, white logo, "presenta" serif accent,
    the big **EL TOP / 40 / D'AQUESTA SETMANA** stack, star-separated

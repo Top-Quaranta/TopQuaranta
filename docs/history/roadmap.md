@@ -3,7 +3,7 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-06-01.
+> Last updated: 2026-06-02.
 
 ---
 
@@ -28,10 +28,14 @@
   Mastodon, Bluesky (carrusel 4 imatges), Telegram (media-group),
   newsletter, RSS. Esborrat remot real per a tots des de
   `/staff/social`. Renders en JPG q90 (Step 3a). Story set PPCC
-  reescrit a 7 slides editorials (intro → top 11-40 → top 4-10 →
-  podi → #1 hero amb síntesi Playfair → novetats → outro groc),
-  ordenats cap al clímax del #1 (Step 3b, 2026-06-01). Territorials
-  pendents (Step 3c). Detall a `docs/architecture/social.md`.
+  reescrit a 7 slides editorials (intro → top 40-11 → top 10-4 →
+  podi → #1 hero amb clímax Playfair → novetats → outro groc),
+  ordenats cap al clímax del #1 (Step 3b, 2026-06-01) i amb el
+  redisseny visual validat portat al renderer Pillow — noves
+  famílies OFL Anton / Bricolage Grotesque / Instrument Serif /
+  Playfair 800 a `social/fonts/` (Step 3c, 2026-06-02). Stories
+  territorials encara pendents de redisseny. Detall a
+  `docs/architecture/social.md`.
 - **Analytics**: suite ètica completa (K1-K4 + GoAccess) a
   `/staff/analytics`. Pageviews, UTM, KPIs de pipeline, mètriques
   socials per post i per compte, GoAccess sobre logs Caddy darrere

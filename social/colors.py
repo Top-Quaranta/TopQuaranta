@@ -68,6 +68,15 @@ TERR_COLORS = {
 }
 
 
+# PPCC story redesign palette (Step 3c). These are renderer-only
+# editorial tones for the seven-slide PPCC story set; they extend the
+# brand surfaces above and are not part of mm-design's public tokens.
+COLOR_GREEN_DEEP = "#2f5a2f"  # slide-1 radial gradient end
+COLOR_GREEN_LIGHT = "#7bbf7b"  # footer URL, green kickers, novetats rule
+COLOR_INK_CENTRE = "#141210"  # radial gradient centre on the ink slides
+COLOR_CREAM = "#f3ecdd"  # slide-1 "presenta"
+
+
 def terr_color(territori: str | None) -> str:
     """Brand colour for a territory; falls back to yellow."""
     return TERR_COLORS.get(territori or "", COLOR_YELLOW)

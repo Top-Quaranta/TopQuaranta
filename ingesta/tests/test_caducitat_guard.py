@@ -39,7 +39,6 @@ from ingesta.management.commands.obtenir_novetats import Command as NovetatsComm
 from music.constants import DIES_CADUCITAT
 from music.models import Album, Artista, ArtistaDeezer, Canco
 
-
 # ─────────────────────────────────────────────────────────────────────
 # helper
 # ─────────────────────────────────────────────────────────────────────

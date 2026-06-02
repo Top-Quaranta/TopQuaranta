@@ -302,6 +302,17 @@ re-tombstones the pendents that had already resurrected (live
 `font_descoberta="lastfm_similar"` rows whose name carries a prior
 `pendent_descartar`/deleted `StaffAuditLog` trace).
 
+**Backlog drain preserves recommended candidates (2026-06-02).** The
+weekly `netejar_pendents_no_ppcc` cron (Mon 02:15, cap 2000/run) that
+drains the ~35 k `lastfm_similar` backlog now requires
+`nb_similars_lastfm = 0` in its candidate filter — so it only sweeps the
+dead weight (no approved recommender) and **preserves** every pendent
+with ≥1 approved recommender for staff triage. `nb_similars_lastfm` is
+the exact model field the prioritiser (`pendents_list`) sorts by, so the
+preserved set equals the "sort by Last.fm affinity" view. Drain target
+drops to the ~27 k dead-weight subset (~14 weeks); the ~8 k recommended
+candidates stay.
+
 ### 3.9 Utility / ad-hoc commands (not cron-scheduled)
 - `recalcular_ml` — force retrain the RF model and reclassify all unverified
   tracks. Normally runs automatically via `recalcular_ml_si_cal()` when 5+ new

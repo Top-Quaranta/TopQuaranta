@@ -57,6 +57,10 @@ music/ml_model.joblib
 # Claude Code
 .claude/
 .claude.json
+# Claude Code personal memory — per-developer, never shared. Distinct
+# from the tracked, shared CLAUDE.md project memory (see CLAUDE.md §11),
+# which MUST stay committed.
+CLAUDE.local.md
 
 # Temporary files
 temp/

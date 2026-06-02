@@ -6,6 +6,10 @@ dist/
 build/
 *.egg
 
+# Operational scratch dir on prod (one-off CSV exports etc.). Kept out of
+# git so it doesn't trip the tq-health git-drift check.
+data/
+
 # Virtual environment
 venv/
 .venv/

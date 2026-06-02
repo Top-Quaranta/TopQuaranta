@@ -139,6 +139,33 @@ if [[ -f "$ERRORS_LOG" ]]; then
     fi
 fi
 
+# ── Git working-tree drift ─────────────────────────────────────────────
+# Prod must match origin/main EXACTLY: tq-deploy does `git reset --hard
+# origin/main`, so any tracked modification or untracked file (other than
+# the data/ scratch dir) means someone wrote to the working tree
+# out-of-band — un-reviewed code that runs until the next deploy silently
+# reverts it (the 2026-06-02 caducitat-guard incident). We also flag
+# HEAD != origin/main. The fetch is best-effort (deploy SSH key present);
+# on network failure we fall back to the last-known origin/main ref and
+# still catch dirty trees.
+GIT_OK=1; GIT_DETAIL="OK (matches origin/main, clean)"
+if [[ -d "$APP_DIR/.git" ]]; then
+    git -C "$APP_DIR" fetch -q --no-tags origin main >/dev/null 2>&1 || true
+    head_sha=$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
+    origin_sha=$(git -C "$APP_DIR" rev-parse --short origin/main 2>/dev/null || echo "?")
+    dirty=$(git -C "$APP_DIR" status --porcelain 2>/dev/null \
+        | grep -vE '^(.. |\?\? )data/' || true)
+    if [[ -n "$dirty" ]]; then
+        GIT_OK=0
+        n=$(printf '%s\n' "$dirty" | grep -c .)
+        first=$(printf '%s\n' "$dirty" | head -1 | sed 's/^ *//')
+        GIT_DETAIL="DRIFT — $n fitxer(s) out-of-band (p.ex. $first)"
+    elif [[ "$origin_sha" != "?" && "$head_sha" != "$origin_sha" ]]; then
+        GIT_OK=0
+        GIT_DETAIL="DRIFT — HEAD $head_sha != origin/main $origin_sha"
+    fi
+fi
+
 # ── Assemble extras JSON (env-var passing avoids shell quoting hell) ───
 EXTRAS=$(
     DISK_PCT="$DISK_PCT" DISK_AVAIL="$DISK_AVAIL" \
@@ -148,6 +175,7 @@ EXTRAS=$(
     PREMIUM_SEV="$PREMIUM_SEV" PREMIUM_MSG="$PREMIUM_MSG" PREMIUM_OK="$PREMIUM_OK" \
     COVERAGE_SEV="$COVERAGE_SEV" COVERAGE_MSG="$COVERAGE_MSG" COVERAGE_OK="$COVERAGE_OK" \
     MIGRATIONS_OK="$MIGRATIONS_OK" ERRORS_COUNT="$ERRORS_COUNT" ERRORS_LAST="$ERRORS_LAST" \
+    GIT_OK="$GIT_OK" GIT_DETAIL="$GIT_DETAIL" \
     "$PY" -c '
 import json, os
 def b(k): return os.environ.get(k) == "1"
@@ -165,6 +193,7 @@ print(json.dumps({
     "migrations_ok": b("MIGRATIONS_OK"),
     "errors": {"count": int(os.environ.get("ERRORS_COUNT") or 0),
                "last": [l for l in os.environ.get("ERRORS_LAST", "").split(chr(10)) if l]},
+    "git": {"ok": b("GIT_OK"), "detail": os.environ.get("GIT_DETAIL", "")},
 }))
 '
 )
@@ -180,7 +209,7 @@ if (( EMAIL_ON_FAIL )); then
         # failure summary CHANGES, so a persistent failure doesn't
         # refill the inbox every hour. The Anomalies section still
         # carries STALE/STUCK/FAIL tokens, so this grep keeps working.
-        bad=$(grep -E "STALE|STUCK|FAIL" <<<"$REPORT" | head -3 | tr '\n' ' | ')
+        bad=$(grep -E "STALE|STUCK|FAIL|DRIFT" <<<"$REPORT" | head -3 | tr '\n' ' | ')
         sig_input="$bad|errors=${ERRORS_COUNT}"
         SIG_FILE="$STATUS_DIR/_health.alert_sig"
         current_sig=$(printf '%s' "$sig_input" | sha256sum | cut -d' ' -f1)

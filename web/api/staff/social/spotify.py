@@ -84,9 +84,9 @@ _VALID_PRODUCTS = {"premium"}
 
 def _target_coverage(pl: SpotifyPlaylist) -> dict:
     """Predictive coverage: of the cançons this playlist would push
-    on the next sync, how many already have a `SpotifyMetadata` row
-    in `enrichment_status=found` (i.e. would actually make it through
-    the cache-only Process A).
+    on the next sync, how many already have a `SpotifyMetadata` row in
+    a locked status (`found` or `manual`) — i.e. anything the cache-only
+    Process A would actually push (`_resolve_uri_cache_only` accepts both).
 
     This is intentionally distinct from `last_n_matched / last_n_tracks`
     (the post-sync coverage). For weekly playlists that have never
@@ -146,7 +146,8 @@ def _target_coverage(pl: SpotifyPlaylist) -> dict:
     if total == 0:
         return {"total": 0, "found": 0, "ratio": None}
     found = SpotifyMetadata.objects.filter(
-        canco_id__in=canco_ids, enrichment_status=SpotifyMetadata.STATUS_FOUND
+        canco_id__in=canco_ids,
+        enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES,
     ).count()
     return {"total": total, "found": found, "ratio": round(found / total, 3)}
 

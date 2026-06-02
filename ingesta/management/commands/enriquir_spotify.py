@@ -126,6 +126,21 @@ class Command(BaseCommand):
                 "the verified pool and vice-versa, so no API call is wasted."
             ),
         )
+        parser.add_argument(
+            "--hydrate-limit",
+            type=int,
+            default=50,
+            help=(
+                "Max manual Spotify links to hydrate per run (phase 2, "
+                "AFTER the /search pass). Manual links already carry a "
+                "staff-pasted id, so hydration is get_track + get_artist "
+                "only — NO /search. Conservative default 50: those two "
+                "GETs share the rate-limit bucket with /search, so a big "
+                "hydration burst could indirectly pressure the /search "
+                "window. Manual links are few, so 50 is ample; tune up "
+                "for a one-off backlog drain."
+            ),
+        )
 
     def handle(self, *args, **opts):
         # Cooldown gate. The metadata-read bucket (`/v1/search`,
@@ -159,6 +174,7 @@ class Command(BaseCommand):
         pending_floor_frac = opts["pending_floor_frac"]
         if not 0.0 <= pending_floor_frac <= 1.0:
             raise CommandError("--pending-floor-frac must be in [0.0, 1.0].")
+        hydrate_limit = opts["hydrate_limit"]
 
         client = UserSpotifyClient(auth, throttle_s=throttle)
 
@@ -178,10 +194,14 @@ class Command(BaseCommand):
         processed = 0
         found = 0
         not_found = 0
+        hydrated = 0
+        hydrate_failed = 0
         affected_artist_ids: set[int] = set()
         aborted = False
 
         try:
+            # Phase 1: the /search pass over not_attempted / no-row
+            # cançons (manual links are excluded from this queue).
             for canco in candidates:
                 outcome = self._enrich_one(client, canco)
                 processed += 1
@@ -190,6 +210,22 @@ class Command(BaseCommand):
                     affected_artist_ids.add(canco.artista_id)
                 elif outcome == "not_found":
                     not_found += 1
+
+            # Phase 2: hydrate pending manual links from their known id —
+            # NO /search. Inside the same try so a RateLimitedError here
+            # also writes the shared cooldown (these GETs share the
+            # bucket). Cooldown-gated at the top of handle(), so during a
+            # ban this whole run (incl. hydration) is skipped.
+            hydrate_candidates = self._select_hydration_candidates(limit=hydrate_limit)
+            for canco in hydrate_candidates:
+                outcome = self._hydrate_manual_one(client, canco)
+                if outcome == "found":
+                    hydrated += 1
+                    affected_artist_ids.add(canco.artista_id)
+                else:
+                    # 404 on a staff-pasted id — kept as manual, stamped,
+                    # not retried. Surfaces as "failed" in the editor.
+                    hydrate_failed += 1
         except RateLimitedError as exc:
             # Spotify asked us to back off for hours. Write the
             # shared metadata cooldown so the backfill command and
@@ -225,6 +261,7 @@ class Command(BaseCommand):
         self.stdout.write(
             f"[enriquir_spotify] done: processed={processed} "
             f"found={found} not_found={not_found} "
+            f"hydrated_manual={hydrated} hydrate_failed={hydrate_failed} "
             f"artists_recomputed={len(affected_artist_ids)} "
             f"aborted={aborted}"
         )
@@ -377,12 +414,18 @@ class Command(BaseCommand):
         uri = client.search_isrc(canco.isrc)
         return uri.rsplit(":", 1)[-1] if uri else None
 
-    def _mark_not_found(self, sm: SpotifyMetadata) -> str:
-        """Stamp a SpotifyMetadata row as not_found and return the
-        outcome string. Single-statement transaction so a mid-batch
-        abort never leaves a partial update."""
+    def _mark_not_found(
+        self, sm: SpotifyMetadata, status: str = SpotifyMetadata.STATUS_NOT_FOUND
+    ) -> str:
+        """Stamp a SpotifyMetadata row as attempted-but-unresolved and
+        return "not_found". `status` is the status written: NOT_FOUND for
+        an automatic search-miss; MANUAL for a manual id whose get_track
+        404'd, so the row keeps its staff-pasted id and surfaces as a
+        failed hydration (enriched_at stamped, spotify_artist_id empty)
+        rather than vanishing. Single-statement transaction so a
+        mid-batch abort never leaves a partial update."""
         with transaction.atomic():
-            sm.enrichment_status = SpotifyMetadata.STATUS_NOT_FOUND
+            sm.enrichment_status = status
             sm.enriched_at = timezone.now()
             sm.save(update_fields=["enrichment_status", "enriched_at"])
         return "not_found"
@@ -393,18 +436,27 @@ class Command(BaseCommand):
         canco: Canco,
         sm: SpotifyMetadata,
         spotify_id: str,
+        *,
+        final_status: str = SpotifyMetadata.STATUS_FOUND,
+        not_found_status: str = SpotifyMetadata.STATUS_NOT_FOUND,
     ) -> str:
         """Steps 2-3: fetch the full track + artist JSON for a KNOWN
         `spotify_id` and write the complete SpotifyMetadata row. Does
         NOT call `/v1/search`. Returns "found" / "not_found" (the latter
         when `get_track` 404s — a takedown / stale id). Writes inside a
         transaction so a mid-batch abort never leaves a partial update.
+
+        `final_status` is written on success — FOUND for the automatic
+        path, MANUAL to preserve a staff link's provenance.
+        `not_found_status` is written when get_track 404s — NOT_FOUND
+        automatically, MANUAL for a manual id so it keeps the id and
+        lands in the "failed hydration" state instead of disappearing.
         """
         # Step 2: full track JSON.
         track = client.get_track(spotify_id)
         if not track:
             # id resolved but get_track 404'd: treat as not_found.
-            return self._mark_not_found(sm)
+            return self._mark_not_found(sm, status=not_found_status)
 
         artists = track.get("artists") or []
         principal = artists[0] if artists else {}
@@ -432,7 +484,7 @@ class Command(BaseCommand):
             sm.is_playable = track.get("is_playable")
             sm.images = album.get("images") or []
             sm.genres = (artist_payload or {}).get("genres") or []
-            sm.enrichment_status = SpotifyMetadata.STATUS_FOUND
+            sm.enrichment_status = final_status
             sm.enriched_at = timezone.now()
             sm.save()
             # Keep the legacy Canco.spotify_id in sync so any legacy
@@ -461,3 +513,39 @@ class Command(BaseCommand):
 
         # Steps 2-3: hydrate from the resolved id.
         return self._hydrate_from_id(client, canco, sm, spotify_id)
+
+    # ── manual-link hydration (NO /search) ──────────────────────────────
+    def _select_hydration_candidates(self, *, limit: int) -> list[Canco]:
+        """Manual Spotify links awaiting hydration: `status=manual` with
+        `enriched_at IS NULL` (never hydrated). They already carry a
+        staff-pasted `spotify_id`, so they skip `/v1/search` entirely —
+        Process B hydrates them with get_track + get_artist only. Oldest
+        manual edit first (`spotify.updated_at`). A 404 or a successful
+        hydration stamps `enriched_at`, dropping the row from this query
+        so nothing is retried forever.
+        """
+        return list(
+            Canco.objects.filter(
+                spotify__enrichment_status=SpotifyMetadata.STATUS_MANUAL,
+                spotify__enriched_at__isnull=True,
+            )
+            .select_related("spotify")
+            .order_by("spotify__updated_at", "pk")[:limit]
+        )
+
+    def _hydrate_manual_one(self, client: UserSpotifyClient, canco: Canco) -> str:
+        """Hydrate one manual link from its known `spotify_id` — NO
+        `/v1/search`. Preserves `status=manual` both on success and on a
+        404 (the latter being the "failed hydration" state: id kept,
+        enriched_at stamped, spotify_artist_id still empty). Returns
+        "found" / "not_found".
+        """
+        sm = canco.spotify
+        return self._hydrate_from_id(
+            client,
+            canco,
+            sm,
+            sm.spotify_id,
+            final_status=SpotifyMetadata.STATUS_MANUAL,
+            not_found_status=SpotifyMetadata.STATUS_MANUAL,
+        )

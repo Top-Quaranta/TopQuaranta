@@ -473,7 +473,10 @@ in the AIMD budget:
    track + artist) and the full `SpotifyMetadata` is persisted,
    so the playlist sync can use the resulting `spotify_id`.
    The HR scan pre-filters `canco_deezer_id` against the set of
-   surviving non-FOUND Cançons *before* the budget cap is applied,
+   surviving Cançons whose `SpotifyMetadata` is not in
+   `LOCKED_STATUSES` (`found` or `manual` — staff-pasted manual links,
+   2026-06-02, are excluded here too so their id is never re-resolved;
+   see `playlists.md`) *before* the budget cap is applied,
    and tiebreaks the `created_at` ordering with `pk`. The
    pre-filter is required because ~95 % of shortlist HR rows point
    to cançons already deleted by `rebutjar_album`/`rebutjar_artista`;

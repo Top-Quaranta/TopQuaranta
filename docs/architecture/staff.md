@@ -65,7 +65,7 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 |---|---|---|
 | GET | `/staff/pendents/?q=&page=` | Pending artists with `nb_verif` annotation. |
 | POST | `/staff/pendents/<pk>/aprovar/` | Body: `{deezer_id?, municipi_id? \| manual?}`. Approves, clears `pendent_review`. |
-| POST | `/staff/pendents/<pk>/descartar/` | Deletes if no verified tracks; else only clears `pendent_review`. |
+| POST | `/staff/pendents/<pk>/descartar/` | **Tombstones** (never deletes): sets `aprovat=False, pendent_review=False`. The row leaves the queue but survives, so the Last.fm similar resolver matches it instead of re-creating the pendent (the resurrection loop, audit 2026-06-02 — see `docs/architecture/pipeline.md` §3.8). Applies to every source, not just `lastfm_similar`. |
 
 ### Artistes
 | Method | Path | Purpose |

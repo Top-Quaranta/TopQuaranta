@@ -285,6 +285,23 @@ Pendents lists and in the `LastfmPanel` of `ArtistaEditPage`. Pendents
 gains a sort `?sort=similars_lastfm` (high-affinity first) and a
 filter `?font_descoberta=lastfm_similar` to triage just this batch.
 
+**Rejection memory — the resurrection loop fix (audit 2026-06-02).**
+`_resolve_similar_target` has no separate rejection record (the resolver
+only checks for an existing `Artista` row; `HistorialRevisio` is
+per-cançó, so a song-less placeholder leaves no trail). When
+`pendent_descartar` *hard-deleted* discarded placeholders, the next sync
+of any approved artist that still recommended the name re-created the
+pendent — Tremenda Jauría / The Fades were each discarded 4×. The fix:
+discard now **tombstones** (`aprovat=False, pendent_review=False`) instead
+of deleting (`web/api/staff/pendents.py`), so step 3 of the resolver
+matches the surviving row and `_process` never re-queues it
+(`pendent_review` stays False). The loop converges: every previously
+deleted name resurrects at most once more, then the tombstone is
+permanent. One-shot `backfill_lastfm_tombstones` (`--dry-run`)
+re-tombstones the pendents that had already resurrected (live
+`font_descoberta="lastfm_similar"` rows whose name carries a prior
+`pendent_descartar`/deleted `StaffAuditLog` trace).
+
 ### 3.9 Utility / ad-hoc commands (not cron-scheduled)
 - `recalcular_ml` — force retrain the RF model and reclassify all unverified
   tracks. Normally runs automatically via `recalcular_ml_si_cal()` when 5+ new

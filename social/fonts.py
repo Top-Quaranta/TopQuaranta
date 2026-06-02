@@ -23,7 +23,7 @@ _VENDORED = {
     "display_regular": FONTS_DIR / "PlayfairDisplay-Regular.ttf",
     "sans_bold": FONTS_DIR / "Roboto-Bold.ttf",
     "sans_regular": FONTS_DIR / "Roboto-Regular.ttf",
-    # Step 3c PPCC story redesign families.
+    # Step 3b PPCC story redesign families.
     "display_xbold": FONTS_DIR / "PlayfairDisplay-ExtraBold.ttf",
     "anton": FONTS_DIR / "Anton-Regular.ttf",
     "bricolage_xbold": FONTS_DIR / "BricolageGrotesque-ExtraBold.ttf",
@@ -82,7 +82,7 @@ def sans_regular(size: int) -> ImageFont.FreeTypeFont:
     return _load(_resolve("sans_regular"), size)
 
 
-# ── Step 3c PPCC story families ──────────────────────────────────────
+# ── Step 3b PPCC story families ──────────────────────────────────────
 
 
 def display_xbold(size: int) -> ImageFont.FreeTypeFont:

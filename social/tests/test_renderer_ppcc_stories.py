@@ -1,4 +1,4 @@
-"""Renderer Step 3c: the redesigned 7-slide editorial PPCC story set.
+"""Renderer Step 3b redesign: the 7-slide editorial PPCC story set.
 
 Renders real slides (needs Django for settings/fonts/svg_assets) and
 pins the structure + the redesign: JPG output, reasonable weight, the

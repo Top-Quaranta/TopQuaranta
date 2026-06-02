@@ -68,7 +68,7 @@ TERR_COLORS = {
 }
 
 
-# PPCC story redesign palette (Step 3c). These are renderer-only
+# PPCC story redesign palette (Step 3b). These are renderer-only
 # editorial tones for the seven-slide PPCC story set; they extend the
 # brand surfaces above and are not part of mm-design's public tokens.
 COLOR_GREEN_DEEP = "#2f5a2f"  # slide-1 radial gradient end

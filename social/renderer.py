@@ -1437,7 +1437,7 @@ def _story_cta() -> Image.Image:
     return img
 
 
-# ── STORIES · PPCC editorial set (Step 3c redesign) ──────────────────
+# ── STORIES · PPCC editorial set (Step 3b redesign) ──────────────────
 #
 # Seven slides, ordered to build toward the #1 climax. The visual
 # language is the validated Claude Design canvas (1080×1920, pixel
@@ -2148,8 +2148,8 @@ def render_stories_ppcc(
     novetats_items: list[dict] | None = None,
     hero_headline: str | None = None,
 ) -> list[Path]:
-    """Render the 7-slide editorial PPCC story set (Step 3b structure,
-    Step 3c visual redesign).
+    """Render the 7-slide editorial PPCC story set (Step 3b — structure
+    + visual redesign).
 
     The novetats slide is skipped when no recent releases are available,
     so the set is 6 or 7 slides. Territorial stories keep

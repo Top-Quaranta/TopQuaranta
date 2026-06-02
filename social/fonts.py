@@ -23,6 +23,11 @@ _VENDORED = {
     "display_regular": FONTS_DIR / "PlayfairDisplay-Regular.ttf",
     "sans_bold": FONTS_DIR / "Roboto-Bold.ttf",
     "sans_regular": FONTS_DIR / "Roboto-Regular.ttf",
+    # Step 3c PPCC story redesign families.
+    "display_xbold": FONTS_DIR / "PlayfairDisplay-ExtraBold.ttf",
+    "anton": FONTS_DIR / "Anton-Regular.ttf",
+    "bricolage_xbold": FONTS_DIR / "BricolageGrotesque-ExtraBold.ttf",
+    "instrument_italic": FONTS_DIR / "InstrumentSerif-Italic.ttf",
 }
 
 # Fallbacks present on Debian/Ubuntu base images.
@@ -31,6 +36,12 @@ _FALLBACK = {
     "display_regular": "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     "sans_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "sans_regular": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    # Best-effort fallbacks for the new display families — only hit on a
+    # dev box missing the vendored TTFs; production ships them.
+    "display_xbold": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+    "anton": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "bricolage_xbold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "instrument_italic": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
 }
 
 
@@ -69,3 +80,26 @@ def sans_bold(size: int) -> ImageFont.FreeTypeFont:
 
 def sans_regular(size: int) -> ImageFont.FreeTypeFont:
     return _load(_resolve("sans_regular"), size)
+
+
+# ── Step 3c PPCC story families ──────────────────────────────────────
+
+
+def display_xbold(size: int) -> ImageFont.FreeTypeFont:
+    """Playfair Display 800 — slide-5 hero song title only."""
+    return _load(_resolve("display_xbold"), size)
+
+
+def anton(size: int) -> ImageFont.FreeTypeFont:
+    """Anton 400 — condensed display: headlines, numbers, badges, pills."""
+    return _load(_resolve("anton"), size)
+
+
+def bricolage_xbold(size: int) -> ImageFont.FreeTypeFont:
+    """Bricolage Grotesque 800 — song titles on slides 2, 3, 4, 6."""
+    return _load(_resolve("bricolage_xbold"), size)
+
+
+def instrument_italic(size: int) -> ImageFont.FreeTypeFont:
+    """Instrument Serif 400 italic — 'presenta' / 'tens el rànquing sencer'."""
+    return _load(_resolve("instrument_italic"), size)

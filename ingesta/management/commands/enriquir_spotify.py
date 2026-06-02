@@ -365,40 +365,46 @@ class Command(BaseCommand):
         return list(pks)
 
     # ── per-Canço enrichment ────────────────────────────────────────────
-    def _enrich_one(self, client: UserSpotifyClient, canco: Canco) -> str:
-        """Resolve one Canco via search + get_track + get_artist.
-
-        Returns "found" / "not_found". Writes the SpotifyMetadata row
-        in a transaction so a mid-batch abort never leaves a partial
-        update.
+    def _resolve_spotify_id(
+        self, client: UserSpotifyClient, canco: Canco
+    ) -> str | None:
+        """Step 1 ONLY: resolve a Spotify track id from the Canço's ISRC
+        via `/v1/search`. Returns the bare 22-char id, or None when
+        Spotify has no match for the ISRC. This is the rate-limited,
+        ban-prone call — split out so a caller that already knows the id
+        can skip it entirely.
         """
-        # Lazy row creation (Option A): a candidate may have no
-        # SpotifyMetadata row yet (LEFT-JOIN visibility). get_or_create
-        # gives it one in its default `not_attempted` state before we
-        # write the outcome below.
-        sm, _ = SpotifyMetadata.objects.get_or_create(canco=canco)
-        now = timezone.now()
-
-        # Step 1: search by ISRC.
         uri = client.search_isrc(canco.isrc)
-        if not uri:
-            with transaction.atomic():
-                sm.enrichment_status = SpotifyMetadata.STATUS_NOT_FOUND
-                sm.enriched_at = now
-                sm.save(update_fields=["enrichment_status", "enriched_at"])
-            return "not_found"
+        return uri.rsplit(":", 1)[-1] if uri else None
 
-        spotify_id = uri.rsplit(":", 1)[-1]
+    def _mark_not_found(self, sm: SpotifyMetadata) -> str:
+        """Stamp a SpotifyMetadata row as not_found and return the
+        outcome string. Single-statement transaction so a mid-batch
+        abort never leaves a partial update."""
+        with transaction.atomic():
+            sm.enrichment_status = SpotifyMetadata.STATUS_NOT_FOUND
+            sm.enriched_at = timezone.now()
+            sm.save(update_fields=["enrichment_status", "enriched_at"])
+        return "not_found"
 
+    def _hydrate_from_id(
+        self,
+        client: UserSpotifyClient,
+        canco: Canco,
+        sm: SpotifyMetadata,
+        spotify_id: str,
+    ) -> str:
+        """Steps 2-3: fetch the full track + artist JSON for a KNOWN
+        `spotify_id` and write the complete SpotifyMetadata row. Does
+        NOT call `/v1/search`. Returns "found" / "not_found" (the latter
+        when `get_track` 404s — a takedown / stale id). Writes inside a
+        transaction so a mid-batch abort never leaves a partial update.
+        """
         # Step 2: full track JSON.
         track = client.get_track(spotify_id)
         if not track:
-            # search said yes but get_track 404'd: treat as not_found.
-            with transaction.atomic():
-                sm.enrichment_status = SpotifyMetadata.STATUS_NOT_FOUND
-                sm.enriched_at = now
-                sm.save(update_fields=["enrichment_status", "enriched_at"])
-            return "not_found"
+            # id resolved but get_track 404'd: treat as not_found.
+            return self._mark_not_found(sm)
 
         artists = track.get("artists") or []
         principal = artists[0] if artists else {}
@@ -427,7 +433,7 @@ class Command(BaseCommand):
             sm.images = album.get("images") or []
             sm.genres = (artist_payload or {}).get("genres") or []
             sm.enrichment_status = SpotifyMetadata.STATUS_FOUND
-            sm.enriched_at = now
+            sm.enriched_at = timezone.now()
             sm.save()
             # Keep the legacy Canco.spotify_id in sync so any legacy
             # consumer reading from there sees the same value. New
@@ -435,3 +441,23 @@ class Command(BaseCommand):
             if canco.spotify_id != spotify_id:
                 Canco.objects.filter(pk=canco.pk).update(spotify_id=spotify_id)
         return "found"
+
+    def _enrich_one(self, client: UserSpotifyClient, canco: Canco) -> str:
+        """Automatic path: resolve one Canco via search, then hydrate.
+
+        Behaviour-preserving wrapper over `_resolve_spotify_id` +
+        `_hydrate_from_id`. Returns "found" / "not_found".
+        """
+        # Lazy row creation (Option A): a candidate may have no
+        # SpotifyMetadata row yet (LEFT-JOIN visibility). get_or_create
+        # gives it one in its default `not_attempted` state before we
+        # write the outcome below.
+        sm, _ = SpotifyMetadata.objects.get_or_create(canco=canco)
+
+        # Step 1: search by ISRC.
+        spotify_id = self._resolve_spotify_id(client, canco)
+        if not spotify_id:
+            return self._mark_not_found(sm)
+
+        # Steps 2-3: hydrate from the resolved id.
+        return self._hydrate_from_id(client, canco, sm, spotify_id)

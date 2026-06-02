@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from ingesta.caducitat import caducitat_cutoff, is_caducat
 from ingesta.clients import deezer
 from music.constants import DIES_CADUCITAT
 from music.models import Album, Artista, ArtistaDeezer, Canco, HistorialRevisio
@@ -458,6 +459,26 @@ class Command(BaseCommand):
             "data_llancament": album.data_llancament,
             "verificada": False,
         }
+
+        # DIES_CADUCITAT guard at the creation frontier — see
+        # `ingesta/caducitat.py` for the full rationale. Only blocks
+        # the INSERT path: if a Canco with this `deezer_id` already
+        # exists, the upsert proceeds to update its metadata even
+        # when the album is past the window (staff may have curated
+        # the row and we still want corrected ISRC/preview/contributors
+        # to land on it). NULL `data_llancament` is treated as
+        # "unknown → don't caducate".
+        will_be_insert = not Canco.objects.filter(deezer_id=data["id"]).exists()
+        if will_be_insert and is_caducat(album.data_llancament, caducitat_cutoff()):
+            logger.info(
+                "Skipping track «%s» (deezer_id=%s album=%s data_llancament=%s) — "
+                "older than DIES_CADUCITAT, would be an INSERT.",
+                data.get("title", "?"),
+                data["id"],
+                album.pk,
+                album.data_llancament.isoformat(),
+            )
+            return False
 
         # Rejection memory (May-2026): if this ISRC or this Deezer
         # track id has ever been rejected by staff, skip creation.

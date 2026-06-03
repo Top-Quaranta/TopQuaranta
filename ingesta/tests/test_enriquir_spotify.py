@@ -513,3 +513,51 @@ def test_spill_fills_all_slots_when_a_pool_is_short():
     cands = _select(5, frac=0.5)  # 5 slots; verified can only supply 1
     assert len(cands) == 5  # leftover spilled into pending → all slots used
     assert sum(1 for c in cands if not c.verificada) == 4  # 1 verified + 4 pending
+
+
+# ── Caducitat guard on the pending pool (2026-06-03) ──────────────────
+# The enrich cron runs 03:00, netejar_caducades 04:00. The pending pool
+# must be EXACTLY the purge survivors so the floor never spends a slot on
+# a track that will be deleted an hour later (cascade-dropping its fresh
+# SpotifyMetadata). Mirrors the purge's `__lt` cutoff incl. NULL handling.
+
+
+def _make_pending_dated(idx, d):
+    a = Artista.objects.create(nom=f"EXEMPLE Cad{idx}", lastfm_nom=f"EXEMPLE Cad{idx}")
+    al = Album.objects.create(artista=a, nom=f"EXEMPLE CadAl{idx}")
+    c = _make_canco(a, al, idx, verificada=False, ml=0.9)
+    c.data_llancament = d
+    c.save(update_fields=["data_llancament"])
+    return c
+
+
+@pytest.mark.django_db
+def test_caducat_pending_never_selected():
+    """A pending track past DIES_CADUCITAT (the 04:00 purge will delete
+    it) must never be selected — no wasted slot on a condemned track."""
+    from datetime import timedelta
+
+    from ingesta.caducitat import caducitat_cutoff
+
+    c = _make_pending_dated(700, caducitat_cutoff() - timedelta(days=1))
+    assert c.pk not in {x.pk for x in _select(10)}
+
+
+@pytest.mark.django_db
+def test_recent_pending_is_selected():
+    """A pending track within the window (survives the purge) IS a
+    candidate."""
+    from datetime import timedelta
+
+    from ingesta.caducitat import caducitat_cutoff
+
+    c = _make_pending_dated(701, caducitat_cutoff() + timedelta(days=1))
+    assert c.pk in {x.pk for x in _select(10)}
+
+
+@pytest.mark.django_db
+def test_null_dated_pending_is_selected():
+    """`data_llancament=NULL` stays enrichable, mirroring the purge's
+    `__lt` filter which never deletes NULL-dated rows."""
+    c = _make_pending_dated(702, None)
+    assert c.pk in {x.pk for x in _select(10)}

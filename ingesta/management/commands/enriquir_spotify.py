@@ -54,6 +54,7 @@ from django.db import transaction
 from django.db.models import F, OuterRef, Q, Subquery
 from django.utils import timezone
 
+from ingesta.caducitat import exclude_caducats
 from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
 from music.models import Canco, SpotifyAuth, SpotifyMetadata, SpotifyPlaylist
 from music.spotify_dispersio import recalcular_dispersio
@@ -322,9 +323,20 @@ class Command(BaseCommand):
             .annotate(_pc=Subquery(latest_pc))
             .order_by(F("_pc").desc(nulls_last=True))
         )
-        pending_qs = base.filter(verificada=False, activa=True).order_by(
-            F("ml_confianca").desc(nulls_last=True), "-created_at"
-        )
+        # Caducitat guard (2026-06-03): the pending pool must be EXACTLY
+        # the survivors of `netejar_caducades`. The enrich cron runs at
+        # 03:00, the purge at 04:00; without this guard the equity floor
+        # spends its reserved pending slots on high-ml_confianca old-
+        # catalog tracks (data_llancament past DIES_CADUCITAT) that the
+        # 04:00 purge deletes an hour later, cascade-dropping the fresh
+        # SpotifyMetadata. `exclude_caducats` mirrors the purge's `__lt`
+        # filter, so NULL-dated pendents stay enrichable (same as the
+        # purge keeping them). Public pendents are NOT guarded — the
+        # purge only sweeps verificada=False, so verified rows are never
+        # condemned. See ingesta/caducitat.py.
+        pending_qs = exclude_caducats(
+            base.filter(verificada=False, activa=True)
+        ).order_by(F("ml_confianca").desc(nulls_last=True), "-created_at")
 
         # Equity floor: reserve up to `floor` slots for pending (the
         # bottleneck) so they never starve behind the verified backlog.

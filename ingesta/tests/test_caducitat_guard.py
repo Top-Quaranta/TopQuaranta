@@ -33,7 +33,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from ingesta.caducitat import caducitat_cutoff, is_caducat
+from ingesta.caducitat import caducitat_cutoff, exclude_caducats, is_caducat
 from ingesta.management.commands.obtenir_metadata import Command as MetadataCommand
 from ingesta.management.commands.obtenir_novetats import Command as NovetatsCommand
 from music.constants import DIES_CADUCITAT
@@ -61,6 +61,38 @@ def test_caducitat_cutoff_uses_today():
     deterministic tests."""
     explicit = caducitat_cutoff(date(2026, 6, 2))
     assert explicit == date(2026, 6, 2) - timedelta(days=DIES_CADUCITAT)
+
+
+@pytest.mark.django_db
+def test_exclude_caducats_queryset_mirrors_purge(db):
+    """`exclude_caducats` returns EXACTLY the survivors of
+    `netejar_caducades`: drops strictly-older-than-cutoff, keeps recent,
+    keeps equal-to-cutoff (strict `<`), and keeps NULL (unknown date,
+    same as the purge's `__lt` filter)."""
+    a = Artista.objects.create(nom="A", lastfm_nom="A", aprovat=True)
+    album = Album.objects.create(artista=a, nom="Al", deezer_id=30)
+    cutoff = caducitat_cutoff()
+
+    def mk(dz, d):
+        return Canco.objects.create(
+            artista=a,
+            album=album,
+            nom=f"c{dz}",
+            deezer_id=dz,
+            isrc="",
+            data_llancament=d,
+        )
+
+    ancient = mk(101, cutoff - timedelta(days=1))
+    recent = mk(102, cutoff + timedelta(days=1))
+    equal = mk(103, cutoff)
+    null = mk(104, None)
+
+    survivors = set(exclude_caducats(Canco.objects.all()).values_list("pk", flat=True))
+    assert ancient.pk not in survivors
+    assert recent.pk in survivors
+    assert equal.pk in survivors  # strict `<` keeps equal-to-cutoff
+    assert null.pk in survivors  # NULL kept, mirroring the purge
 
 
 # ─────────────────────────────────────────────────────────────────────

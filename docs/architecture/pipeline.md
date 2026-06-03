@@ -252,6 +252,20 @@ exits when nobody needs attention — idle invocations are cheap.
 python manage.py netejar_caducades
 ```
 Deletes unverified tracks with `data_llancament < today - DIES_CADUCITAT`.
+The cutoff comes from the shared `ingesta/caducitat.py::caducitat_cutoff()`
+(`__lt`, so NULL-dated rows are KEPT — never purged).
+
+**Survivor-mirror invariant (2026-06-03).** `enriquir_spotify`'s pending
+candidate pool must be EXACTLY the survivors of this purge. The enrich
+cron runs 03:00, the purge 04:00; before the guard, the equity floor
+spent its reserved pending slots on high-`ml_confianca` old-catalog
+tracks (past `DIES_CADUCITAT`) that the 04:00 purge then deleted an hour
+later, cascade-dropping the fresh `SpotifyMetadata` — so pending coverage
+of the `no_verificades` playlists stayed flat. `_select_candidates` now
+wraps its pending pool in `ingesta/caducitat.py::exclude_caducats()` (the
+queryset mirror of `is_caducat`: same `caducitat_cutoff()`, same `__lt`
+NULL-keeping). Public pendents are NOT guarded — the purge only sweeps
+`verificada=False`. See `playlists.md` "Spotify enrichment (Process B)".
 
 ### 3.8 `obtenir_metadata_lastfm` — daily 05:00 UTC
 ```bash

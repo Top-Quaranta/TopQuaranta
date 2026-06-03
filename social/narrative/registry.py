@@ -23,6 +23,7 @@ from typing import Optional
 
 from social.narrative.banks import phrase_id
 from social.narrative.banks.hero import HERO
+from social.narrative.utils import dies_str, territori_label, territori_ordinal
 
 
 def filter_unused(
@@ -85,8 +86,25 @@ def pick_phrase(
         return ("", "")
     chooser = rng.choice if rng is not None else random.choice
     idx, template = chooser(candidates)
+    # Backfill the two territori placeholders from the `territori` argument
+    # when the scenario didn't supply them. `_base_data` always sets both,
+    # but this guards detectors that build `data` by hand (and legacy test
+    # fixtures that predate `territori_ordinal`). `territori_label/ordinal`
+    # raise KeyError on an unknown code (e.g. ALT), which the except below
+    # turns into a skip rather than a crash.
+    data = dict(scenario.data)
     try:
-        text = template.format(**scenario.data)
+        data.setdefault("territori_label", territori_label(territori))
+        data.setdefault("territori_ordinal", territori_ordinal(territori))
+    except KeyError:
+        pass
+    # Derive the agreement-correct day string from a raw `dies` count when
+    # the scenario supplied `dies` but not `dies_str` (hand-built data /
+    # legacy fixtures predating dies_str).
+    if "dies" in data and "dies_str" not in data:
+        data["dies_str"] = dies_str(int(data["dies"]))
+    try:
+        text = template.format(**data)
     except KeyError:
         # Defensive: a template referencing a var that the scenario
         # data doesn't supply must not crash the publication. Skip.

@@ -2,8 +2,8 @@
 
 # Spec: docs/architecture/social.md
 
-Twelve detectors + a fallback (a1-a12, see ADR-0008). Each
-detector returns at most one
+Thirteen detectors + a fallback (a1-a12 per ADR-0008; a13_top1_return
+added 2026-06-01). Each detector returns at most one
 `Scenario` (the strongest case of its kind for the given week);
 `detect_all` calls every detector and returns the list sorted by
 severity desc so the composer picks the headline beat first.
@@ -21,8 +21,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from social.narrative.utils import (
+    dies_str,
     ordinal_ca,
     territori_label,
+    territori_ordinal,
     with_preposition,
 )
 
@@ -83,14 +85,37 @@ def _row_data(row, territori: str) -> tuple[str, str]:
     return artista, canco
 
 
-def _base_data(artista: str, canco: str, territori: str) -> dict:
-    """The four (now six) invariants every hero template can
-    interpolate. The pre-rendered preposition+artist variants
-    (`de_artista`, `per_a_artista`, `per_artista`) collapse the
-    Catalan contraction rules (article-stripping + apostrof
-    elision) at compose-time so templates can just write
-    `{de_artista}`, `{per_a_artista}` etc. without string
-    surgery. See `social/narrative/utils.with_preposition`."""
+def _base_data(
+    artista: str,
+    canco: str,
+    territori: str,
+    *,
+    row=None,
+    song_focal: bool = True,
+) -> dict:
+    """The six invariants every hero template can interpolate, plus the
+    two subject identifiers used for cross-slot dedup.
+
+    The pre-rendered preposition+artist variants (`de_artista`,
+    `per_a_artista`, `per_artista`) collapse the Catalan contraction
+    rules (article-stripping + apostrof elision) at compose-time so
+    templates can just write `{de_artista}` etc. without string surgery.
+    See `social/narrative/utils.with_preposition`.
+
+    `row` (a TopSetmanal row) and `song_focal` populate `canco_id` /
+    `artista_id` so the composer can avoid placing two slots about the
+    same song or the same artist (see `_scenario_subject`). `canco_id`
+    is set only when the scenario is about ONE concrete song
+    (`song_focal=True`); artist-centric scenarios (e.g. a5) pass
+    `song_focal=False` so they dedup by artist alone. The two keys are
+    inert in templates (`.format` ignores unused keys)."""
+    canco_id = None
+    artista_id = None
+    if row is not None:
+        if song_focal:
+            canco_id = row.canco_id
+        if row.canco_id and row.canco and row.canco.artista_id:
+            artista_id = row.canco.artista_id
     return {
         "artista": artista,
         "de_artista": with_preposition(artista, "de"),
@@ -98,6 +123,9 @@ def _base_data(artista: str, canco: str, territori: str) -> dict:
         "per_artista": with_preposition(artista, "per"),
         "canco": canco,
         "territori_label": territori_label(territori),
+        "territori_ordinal": territori_ordinal(territori),
+        "canco_id": canco_id,
+        "artista_id": artista_id,
     }
 
 
@@ -127,7 +155,7 @@ def detect_a1_outside_to_top1(
     else:
         severity, prev_str = 6, f"al {ordinal_ca(prev_pos)}"
     artista, canco = _row_data(top1, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=top1)
     data["posicio_anterior_str"] = prev_str
     return Scenario("a1_outside_to_top1", severity, data)
 
@@ -157,7 +185,7 @@ def detect_a2_streak(territori: str, setmana: datetime.date) -> Optional[Scenari
     if streak < 2:
         return None
     artista, canco = _row_data(top1, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=top1)
     data["streak"] = streak
     return Scenario("a2_streak", min(streak, 10), data)
 
@@ -187,7 +215,7 @@ def detect_a3_fall_from_top1(
     if this_pos == 1:
         return None
     artista, canco = _row_data(prev_top1, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=prev_top1)
     if this_pos is None:
         severity = 7
         data["posicio_nova_str"] = "fora del top"
@@ -214,7 +242,7 @@ def detect_a4_debut_alt(territori: str, setmana: datetime.date) -> Optional[Scen
     if not candidate:
         return None
     artista, canco = _row_data(candidate, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=candidate)
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
     return Scenario("a4_debut_alt", 10 - candidate.posicio, data)
@@ -241,7 +269,7 @@ def detect_a5_artista_multiple(
     if not best_aid:
         return None
     artista, _ = _row_data(best_rows[0], territori)
-    data = _base_data(artista, "", territori)
+    data = _base_data(artista, "", territori, row=best_rows[0], song_focal=False)
     data["n_cancons"] = len(best_rows)
     data["posicions"] = sorted(r.posicio for r in best_rows)
     return Scenario("a5_artista_multiple", len(best_rows), data)
@@ -266,10 +294,11 @@ def detect_a6_canco_recent(
         return None
     artista, canco = _row_data(best, territori)
     dies = max(1, (setmana - best.canco.data_llancament).days)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=best)
     data["posicio"] = best.posicio
     data["posicio_ordinal"] = ordinal_ca(int(best.posicio))
     data["dies"] = dies
+    data["dies_str"] = dies_str(dies)
     return Scenario("a6_canco_recent", 11 - best.posicio, data)
 
 
@@ -291,7 +320,7 @@ def detect_a7_long_runner(territori: str, setmana: datetime.date) -> Optional[Sc
     artista, canco = _row_data(best, territori)
     dies = max(180, (setmana - best.canco.data_llancament).days)
     mesos = max(6, dies // 30)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=best)
     data["mesos"] = mesos
     return Scenario("a7_long_runner", 5, data)
 
@@ -320,7 +349,7 @@ def detect_a8_pujada_forta(
     if not best:
         return None
     artista, canco = _row_data(best, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=best)
     data["posicio"] = best.posicio
     data["posicio_ordinal"] = ordinal_ca(int(best.posicio))
     data["pujada"] = best_climb
@@ -353,7 +382,7 @@ def detect_a9_debut_anywhere(
     if not candidate:
         return None
     artista, canco = _row_data(candidate, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=candidate)
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
     severity = max(1, (41 - candidate.posicio) // 8)
@@ -392,7 +421,7 @@ def detect_a10_artista_first_ever(
     if not candidate:
         return None
     artista, canco = _row_data(candidate, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=candidate)
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
     return Scenario("a10_artista_first_ever", 8, data)
@@ -438,7 +467,7 @@ def detect_a11_top5_drop_generic(
         return None
     row, this_pos = candidate
     artista, canco = _row_data(row, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=row)
     data["posicio_anterior"] = row.posicio
     data["posicio_anterior_ordinal"] = ordinal_ca(int(row.posicio))
     if this_pos is None:
@@ -492,10 +521,61 @@ def detect_a12_artista_emerging(
     if not candidate_row:
         return None
     artista, canco = _row_data(candidate_row, territori)
-    data = _base_data(artista, canco, territori)
+    data = _base_data(artista, canco, territori, row=candidate_row)
     data["posicio"] = candidate_row.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate_row.posicio))
     return Scenario("a12_artista_emerging", 3, data)
+
+
+def detect_a13_top1_return(
+    territori: str, setmana: datetime.date
+) -> Optional[Scenario]:
+    """A song reclaims the #1 after a gap — it is #1 this week, was NOT
+    #1 last week, and HAD been #1 at some earlier week.
+
+    Distinct from:
+      * a1_outside_to_top1 — fires for a fresh #1 with no #1 history
+        (it doesn't check the past); a13 requires a prior #1 reign.
+      * a2_streak — fires when the song is #1 in consecutive weeks; a13
+        requires the streak to have been broken (not #1 at W-1).
+
+    Severity scales with the gap (weeks since the last #1 reign):
+    `severity = min(9, max(5, gap_weeks + 3))`. The minimum gap is 2
+    weeks (a 1-week gap would mean #1 at W-1, i.e. a streak), so the
+    floor is 5; long absences (gap >= 6) cap at 9. Calibrated to the two
+    spec fixtures: gap 2 -> 5, gap 5 -> 8. (The brief's "gap" counts
+    weeks-away, one less than this gap_weeks.)"""
+    from ranking.models import TopSetmanal
+
+    rows = list(_load_week(territori, setmana)[:1])
+    if not rows or rows[0].posicio != 1 or not rows[0].canco_id:
+        return None
+    top1 = rows[0]
+
+    # Most recent earlier week where THIS song was #1.
+    last_top1_setmana = (
+        TopSetmanal.objects.filter(
+            territori=territori,
+            setmana__lt=setmana,
+            posicio=1,
+            canco_id=top1.canco_id,
+        )
+        .order_by("-setmana")
+        .values_list("setmana", flat=True)
+        .first()
+    )
+    if last_top1_setmana is None:
+        return None  # never #1 before → a1's territory, not a return
+    gap_weeks = (setmana - last_top1_setmana).days // 7
+    if gap_weeks < 2:
+        return None  # #1 at W-1 → a streak, not a return
+    severity = min(9, max(5, gap_weeks + 3))
+    artista, canco = _row_data(top1, territori)
+    data = _base_data(artista, canco, territori, row=top1)
+    data["gap_setmanes"] = gap_weeks
+    # gap_weeks is always >= 2 here, so the plural form is always correct.
+    data["gap_setmanes_str"] = f"{gap_weeks} setmanes"
+    return Scenario("a13_top1_return", severity, data)
 
 
 def fallback_scenario(territori: str) -> Scenario:
@@ -503,7 +583,10 @@ def fallback_scenario(territori: str) -> Scenario:
     return Scenario(
         "fallback_no_event",
         0,
-        {"territori_label": territori_label(territori)},
+        {
+            "territori_label": territori_label(territori),
+            "territori_ordinal": territori_ordinal(territori),
+        },
     )
 
 
@@ -523,7 +606,48 @@ _DETECTORS = (
     detect_a10_artista_first_ever,
     detect_a11_top5_drop_generic,
     detect_a12_artista_emerging,
+    detect_a13_top1_return,
 )
+
+
+def _scenario_subject(scenario) -> tuple:
+    """The `(canco_id, artista_id)` a scenario is principally about.
+
+    Either element may be None: a song-focal scenario carries both; an
+    artist-focal scenario (a5) carries only `artista_id`; the fallback
+    carries neither. Used by `select_slots` to avoid two caption slots
+    that talk about the same song or the same artist."""
+    d = scenario.data or {}
+    return (d.get("canco_id"), d.get("artista_id"))
+
+
+def select_slots(scenarios: list[Scenario], max_slots: int) -> list[Scenario]:
+    """Pick up to `max_slots` scenarios with DISTINCT subjects, greedily
+    by severity (the input is already sorted desc by `detect_all`).
+
+    A candidate is skipped when it shares a non-None `canco_id` OR a
+    non-None `artista_id` with an already-chosen slot — this prevents
+    the hero/secondary/tertiary from repeating the same song or artist
+    (audit #1/#6). The result may have fewer than `max_slots` entries
+    when the detectors don't supply enough distinct subjects; the
+    tertiary slot is therefore no longer systematic."""
+    chosen: list[Scenario] = []
+    used_cancons: set = set()
+    used_artistes: set = set()
+    for s in scenarios:
+        cid, aid = _scenario_subject(s)
+        if cid is not None and cid in used_cancons:
+            continue
+        if aid is not None and aid in used_artistes:
+            continue
+        chosen.append(s)
+        if cid is not None:
+            used_cancons.add(cid)
+        if aid is not None:
+            used_artistes.add(aid)
+        if len(chosen) >= max_slots:
+            break
+    return chosen
 
 
 def detect_all(territori: str, setmana: datetime.date) -> list[Scenario]:

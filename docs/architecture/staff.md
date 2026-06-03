@@ -65,7 +65,7 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 |---|---|---|
 | GET | `/staff/pendents/?q=&page=` | Pending artists with `nb_verif` annotation. |
 | POST | `/staff/pendents/<pk>/aprovar/` | Body: `{deezer_id?, municipi_id? \| manual?}`. Approves, clears `pendent_review`. |
-| POST | `/staff/pendents/<pk>/descartar/` | Deletes if no verified tracks; else only clears `pendent_review`. |
+| POST | `/staff/pendents/<pk>/descartar/` | **Tombstones** (never deletes): sets `aprovat=False, pendent_review=False`. The row leaves the queue but survives, so the Last.fm similar resolver matches it instead of re-creating the pendent (the resurrection loop, audit 2026-06-02 — see `docs/architecture/pipeline.md` §3.8). Applies to every source, not just `lastfm_similar`. |
 
 ### Artistes
 | Method | Path | Purpose |
@@ -80,7 +80,21 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 |---|---|---|
 | GET | `/staff/cancons/` | Filters: `q`, `verificada`, `ml_classe`, `whisper`, `deezer`, `sort`, `artista_pk`. |
 | POST | `/staff/cancons/accio/` | Bulk `aprovar` / `rebutjar` with `motiu`. `artista_incorrecte` → cascades to `rebutjar_artista`; `album_incorrecte` → `rebutjar_album`. |
-| GET/PATCH | `/staff/cancons/<pk>/` | Detail + PATCH incl. `artista_pk` reassignment + `artistes_col_pks` replace. |
+| GET/PATCH | `/staff/cancons/<pk>/` | Detail + PATCH incl. `artista_pk` reassignment + `artistes_col_pks` replace + `spotify_url` (manual Spotify track id, see below). |
+
+**Manual Spotify id (`spotify_url`, 2026-06-02).** PATCH accepts a
+Spotify track URL / `spotify:track:` URI / bare 22-char id. Store-and-trust:
+format validated by `web/api/staff/_spotify_url.py::parse_track_id` (base62,
+22 chars; album/artist/playlist refs → 400) with **no Spotify API call**. On
+success the id is written to `SpotifyMetadata.spotify_id` with
+`enrichment_status='manual'`, `enriched_at=NULL` (mirrored to legacy
+`Canco.spotify_id`): Process A puts it in playlists at once and Process B
+hydrates it from the id without `/search` (see `playlists.md` "Manual links +
+hydration"). Accepted only when no id is set (fill-when-empty); an id already
+on another canço → 400 (pre-check + an `IntegrityError` fallback for the
+race); `spotify_url=""` clears back to `not_attempted`. `_canco_row` exposes
+the link under `spotify` with `is_manual` and a `hydration` state
+(`pending`/`ok`/`failed`).
 
 ### Albums
 | Method | Path | Purpose |

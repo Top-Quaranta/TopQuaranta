@@ -19,11 +19,12 @@
     notifempty
     copytruncate
     su topquaranta topquaranta
-    # Disk hygiene: prune social PNG renders older than 60 days
+    # Disk hygiene: prune social renders older than 60 days
     # (Caddy serves them from /var/cache/topquaranta/social/renders/).
     # Per the May-2026 audit, these accumulate ~80 MB and were never
-    # cleaned. Runs once a week alongside the rotation.
+    # cleaned. Runs once a week alongside the rotation. Step 3 switched
+    # the renders from PNG to JPG, so prune both (legacy PNGs linger).
     prerotate
-        find /var/cache/topquaranta/social/renders/ -name '*.png' -mtime +60 -delete 2>/dev/null || true
+        find /var/cache/topquaranta/social/renders/ \( -name '*.png' -o -name '*.jpg' \) -mtime +60 -delete 2>/dev/null || true
     endscript
 }

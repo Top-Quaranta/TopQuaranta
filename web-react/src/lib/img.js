@@ -34,3 +34,23 @@ export function deezerImg(url, size = 500) {
   if (!url.includes(DEEZER_HOST)) return url
   return url.replace(SIZE_PATTERN, `/${size}x${size}-`)
 }
+
+// ── Self-hosted covers (Fase 3) ──────────────────────────────────────
+// Caddy serves /portades/<entitat>/<deezer_id>-<mida>.<format> from our
+// own origin (webp/avif/jpg, immutable cache). See
+// docs/architecture/portades.md.
+
+const PORTADA_BASE = '/portades'
+
+/** Path to one self-hosted cover variant. */
+export function portadaUrl(entitat, deezerId, mida, fmt) {
+  return `${PORTADA_BASE}/${entitat}/${deezerId}-${mida}.${fmt}`
+}
+
+/** `<source srcset>` value for a format: the 250w + 500w variants. */
+export function portadaSrcset(entitat, deezerId, fmt) {
+  return (
+    `${portadaUrl(entitat, deezerId, 250, fmt)} 250w, ` +
+    `${portadaUrl(entitat, deezerId, 500, fmt)} 500w`
+  )
+}

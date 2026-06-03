@@ -26,6 +26,10 @@ HARD_CEILING = 300
 def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     rng = rng or random.Random()
 
+    # Distinct-subject slots (audit #1/#6) — consistent with the other
+    # composers; Bluesky only renders the hero, so this is a no-op now.
+    scenarios = scen.select_slots(scenarios, 2)
+
     hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
     pid, hero_text = pick_phrase(hero, "short", territori, CHANNEL, rng=rng)
     if not hero_text:

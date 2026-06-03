@@ -252,6 +252,20 @@ exits when nobody needs attention — idle invocations are cheap.
 python manage.py netejar_caducades
 ```
 Deletes unverified tracks with `data_llancament < today - DIES_CADUCITAT`.
+The cutoff comes from the shared `ingesta/caducitat.py::caducitat_cutoff()`
+(`__lt`, so NULL-dated rows are KEPT — never purged).
+
+**Survivor-mirror invariant (2026-06-03).** `enriquir_spotify`'s pending
+candidate pool must be EXACTLY the survivors of this purge. The enrich
+cron runs 03:00, the purge 04:00; before the guard, the equity floor
+spent its reserved pending slots on high-`ml_confianca` old-catalog
+tracks (past `DIES_CADUCITAT`) that the 04:00 purge then deleted an hour
+later, cascade-dropping the fresh `SpotifyMetadata` — so pending coverage
+of the `no_verificades` playlists stayed flat. `_select_candidates` now
+wraps its pending pool in `ingesta/caducitat.py::exclude_caducats()` (the
+queryset mirror of `is_caducat`: same `caducitat_cutoff()`, same `__lt`
+NULL-keeping). Public pendents are NOT guarded — the purge only sweeps
+`verificada=False`. See `playlists.md` "Spotify enrichment (Process B)".
 
 ### 3.8 `obtenir_metadata_lastfm` — daily 05:00 UTC
 ```bash
@@ -284,6 +298,34 @@ The `nb_similars_lastfm` count surfaces in the staff Artistes /
 Pendents lists and in the `LastfmPanel` of `ArtistaEditPage`. Pendents
 gains a sort `?sort=similars_lastfm` (high-affinity first) and a
 filter `?font_descoberta=lastfm_similar` to triage just this batch.
+
+**Rejection memory — the resurrection loop fix (audit 2026-06-02).**
+`_resolve_similar_target` has no separate rejection record (the resolver
+only checks for an existing `Artista` row; `HistorialRevisio` is
+per-cançó, so a song-less placeholder leaves no trail). When
+`pendent_descartar` *hard-deleted* discarded placeholders, the next sync
+of any approved artist that still recommended the name re-created the
+pendent — Tremenda Jauría / The Fades were each discarded 4×. The fix:
+discard now **tombstones** (`aprovat=False, pendent_review=False`) instead
+of deleting (`web/api/staff/pendents.py`), so step 3 of the resolver
+matches the surviving row and `_process` never re-queues it
+(`pendent_review` stays False). The loop converges: every previously
+deleted name resurrects at most once more, then the tombstone is
+permanent. One-shot `backfill_lastfm_tombstones` (`--dry-run`)
+re-tombstones the pendents that had already resurrected (live
+`font_descoberta="lastfm_similar"` rows whose name carries a prior
+`pendent_descartar`/deleted `StaffAuditLog` trace).
+
+**Backlog drain preserves recommended candidates (2026-06-02).** The
+weekly `netejar_pendents_no_ppcc` cron (Mon 02:15, cap 2000/run) that
+drains the ~35 k `lastfm_similar` backlog now requires
+`nb_similars_lastfm = 0` in its candidate filter — so it only sweeps the
+dead weight (no approved recommender) and **preserves** every pendent
+with ≥1 approved recommender for staff triage. `nb_similars_lastfm` is
+the exact model field the prioritiser (`pendents_list`) sorts by, so the
+preserved set equals the "sort by Last.fm affinity" view. Drain target
+drops to the ~27 k dead-weight subset (~14 weeks); the ~8 k recommended
+candidates stay.
 
 ### 3.9 Utility / ad-hoc commands (not cron-scheduled)
 - `recalcular_ml` — force retrain the RF model and reclassify all unverified
@@ -404,8 +446,12 @@ enriquir_spotify_rebuigs.controller.json`. Each daily run:
   > `last_ban_at` stayed null, no multiplicative-decrease fired, and
   > the limit bumped back up the day after a ban (the 24/05 and
   > 29/05 bans were both lost). Detection keys on the sentinel's
-  > **mtime** (not its `resume_at`), so an expired-but-present file
-  > still counts; the 48 h `last_ban_at` memory covers the case
+  > **mtime** — read as **UTC-naive** (`fromtimestamp(..., tz=utc)`) to
+  > match `_utcnow()` / `last_run_at` / `last_ban_at`; plain
+  > `fromtimestamp()` returns server-local (CEST) time and stored a ban
+  > 2 h in the future (fixed 2026-05-30) — not its `resume_at`, so an
+  > expired-but-present file still counts; the 48 h `last_ban_at`
+  > memory covers the case
   > where the maintenance command pruned the sentinel before the
   > backfill tick. The decrease is `save_state`d before the
   > cooldown-active early return, so it persists even when the run
@@ -441,7 +487,10 @@ in the AIMD budget:
    track + artist) and the full `SpotifyMetadata` is persisted,
    so the playlist sync can use the resulting `spotify_id`.
    The HR scan pre-filters `canco_deezer_id` against the set of
-   surviving non-FOUND Cançons *before* the budget cap is applied,
+   surviving Cançons whose `SpotifyMetadata` is not in
+   `LOCKED_STATUSES` (`found` or `manual` — staff-pasted manual links,
+   2026-06-02, are excluded here too so their id is never re-resolved;
+   see `playlists.md`) *before* the budget cap is applied,
    and tiebreaks the `created_at` ordering with `pk`. The
    pre-filter is required because ~95 % of shortlist HR rows point
    to cançons already deleted by `rebutjar_album`/`rebutjar_artista`;
@@ -588,10 +637,20 @@ No external services. Everything is file-based on the server.
 - **Per-command status files** (`/var/log/topquaranta/status/<tag>.status`):
   written by `tq-run`. Contain `status=OK|FAIL`, `exit_code`, `last_run`
   (ISO-8601), and the last 20 lines of output.
-- **`/home/topquaranta/bin/tq-health`**: prints a summary table and exits
-  non-zero if any command is FAIL, STALE (past its expected cadence), or if
-  there are any Django ERROR-level entries logged today. Safe to pipe to a
-  notifier or to read manually when inspecting the server.
+- **`/home/topquaranta/bin/tq-health`**: gathers the facts (status files +
+  `cron-meta.json`, disk, web smoke, Spotify sub-checks, pending migrations,
+  today's Django errors) in shell, then delegates the PRESENTATION to
+  `analytics/health_report.py` (pure stdlib, runs without Django). Exits
+  non-zero if any command is FAIL/STALE/STUCK past its cadence, disk ≥90%,
+  a web check fails, a Spotify sub-check is WARN/CRIT, a migration is
+  pending, or there are Django ERRORs today. The rendered report has:
+  a one-line **executive summary** (🟢 Tot OK / 🔴 N anomalies), an
+  **Anomalies** block (only genuinely-escalating items; `[silenced]`
+  known-issues stay in their group and don't turn the header red), **crons
+  grouped** by logical area, **Sistema** + **Spotify** sections, and a
+  **legend**. Timestamps render in **CEST** (UTC stays in logs/files).
+  `--email-on-fail` mails the report to admin only when something escalates,
+  with signature dedup so a persistent failure doesn't spam hourly.
 
 ## 6. Artist discovery
 

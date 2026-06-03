@@ -18,7 +18,7 @@ from django.core.management import call_command
 from PIL import Image
 
 from ingesta.portades import manager
-from music.models import Album, Artista, ArtistaDeezer
+from music.models import Album, Artista, ArtistaDeezer, Canco
 
 
 def _png_bytes(size=(1000, 1000), color=(200, 50, 60)) -> bytes:
@@ -47,7 +47,7 @@ def test_path_for_builds_deterministic_paths(portades_root):
         manager.path_for("album", 12345, 500, "webp")
         == portades_root / "album" / "12345-500.webp"
     )
-    assert manager.path_for("cancio", 7, 250, "avif").name == "7-250.avif"
+    assert manager.path_for("canco", 7, 250, "avif").name == "7-250.avif"
     assert manager.path_for("artista", 9, 500, "jpg").parent.name == "artista"
 
 
@@ -179,3 +179,71 @@ def test_command_artista_uses_principal_deezer_id(mock_sleep, mock_dl, portades_
     call_command("descarregar_portades", entitat="artista", limit=10)
 
     mock_dl.assert_called_once_with("artista", 8888, _DZ_URL)
+
+
+# ── budget split across entitats (--entitat all) ─────────────────────
+
+
+def _seed_entities(n_album, n_canco, n_artista):
+    """Create exactly n candidates per entity, kept disjoint:
+    - structural artista carries no image → not an artista candidate;
+    - cançó parent albums have a cover but NO deezer_id → canco
+      candidates without also being album candidates."""
+    struct = Artista.objects.create(nom="struct")  # imatge_url="" → not a candidate
+    for i in range(n_album):
+        Album.objects.create(
+            artista=struct, nom=f"alb{i}", deezer_id=10000 + i, imatge_url=_DZ_URL
+        )
+    for i in range(n_canco):
+        alb = Album.objects.create(
+            artista=struct, nom=f"calb{i}", imatge_url=_DZ_URL  # deezer_id=None
+        )
+        Canco.objects.create(
+            artista=struct, album=alb, nom=f"c{i}", deezer_id=20000 + i
+        )
+    for i in range(n_artista):
+        a = Artista.objects.create(nom=f"art{i}", imatge_url=_DZ_URL)
+        ArtistaDeezer.objects.create(artista=a, deezer_id=30000 + i, principal=True)
+
+
+def _calls_per_entity(mock_dl):
+    counts = {"album": 0, "canco": 0, "artista": 0}
+    for c in mock_dl.call_args_list:
+        counts[c.args[0]] += 1
+    return counts
+
+
+@pytest.mark.django_db
+@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
+@patch("ingesta.management.commands.descarregar_portades.time.sleep")
+def test_all_even_split(mock_sleep, mock_dl, portades_root):
+    """6/6/6 candidates, limit=9 → 3 per entity."""
+    mock_dl.return_value = True
+    _seed_entities(6, 6, 6)
+    call_command("descarregar_portades", entitat="all", limit=9)
+    assert _calls_per_entity(mock_dl) == {"album": 3, "canco": 3, "artista": 3}
+
+
+@pytest.mark.django_db
+@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
+@patch("ingesta.management.commands.descarregar_portades.time.sleep")
+def test_all_fallthrough(mock_sleep, mock_dl, portades_root):
+    """1 album + 5 canco + 5 artista, limit=9 → 1 album, 5 canco
+    (gets album's 2 leftover), 3 artista (absorbs the rest)."""
+    mock_dl.return_value = True
+    _seed_entities(1, 5, 5)
+    call_command("descarregar_portades", entitat="all", limit=9)
+    assert _calls_per_entity(mock_dl) == {"album": 1, "canco": 5, "artista": 3}
+
+
+@pytest.mark.django_db
+@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
+@patch("ingesta.management.commands.descarregar_portades.time.sleep")
+def test_single_entity_mode_unchanged(mock_sleep, mock_dl, portades_root):
+    """--entitat album --limit 5 still caps at 5 (no split)."""
+    mock_dl.return_value = True
+    _seed_entities(8, 0, 0)
+    call_command("descarregar_portades", entitat="album", limit=5)
+    counts = _calls_per_entity(mock_dl)
+    assert counts["album"] == 5
+    assert counts["canco"] == 0 and counts["artista"] == 0

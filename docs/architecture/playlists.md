@@ -177,15 +177,50 @@ separated:
     `/v1/search` then `/v1/tracks/{id}` and `/v1/artists/{id}`.
     Throttled (default 0.5s between calls). Writes the cache.
 
-Source ordering inside Process B (FASE 0 "opció C compost"):
-  1. Public Cançons (`verificada=True, activa=True`) ordered by
-     the latest `SenyalDiari.lastfm_playcount desc`, NULLs last.
-  2. Pending Cançons (`verificada=False, activa=True`) ordered by
-     `ml_confianca desc`, NULLs last.
+**Manual links + hydration** (`enrichment_status='manual'`, 2026-06-02).
+Staff paste a track URL in the canço editor (`PATCH /staff/cancons/<pk>/
+{spotify_url}`, see `staff.md`): format validated, **no API call**. The id
+lands in `SpotifyMetadata.spotify_id` (mirrored to `Canco.spotify_id`) with
+status `manual`, `enriched_at=NULL`. Process A puts it in playlists instantly
+(reads `LOCKED_STATUSES = (found, manual)`). Process B **skips `/v1/search`**
+for it but still hydrates: phase 2 of `enriquir_spotify` (after the search
+pass, cap `--hydrate-limit` 50) selects `status=manual AND enriched_at IS
+NULL` and runs `get_track` + `get_artist` from the known id — filling
+`spotify_artist_id` + the rest and recomputing dispersion (hydrated manuals
+count like `found`). The id is never re-resolved. `enriched_at` is stamped on
+success or on a `get_track` 404 (bad pasted id → "failed" state in the editor,
+not retried). The `/search` queue and `enriquir_spotify_rebuigs` both exclude
+`LOCKED_STATUSES`. Fill-when-empty only; `spotify_url=""` clears to
+`not_attempted`.
+
+Source ordering inside Process B (FASE 0 "opció C compost") with a
+**pending equity floor** (2026-06-02):
+  1. Pending Cançons (`verificada=False, activa=True`) ordered by
+     `ml_confianca desc`, NULLs last — given a RESERVED floor of the
+     run's slots (`--pending-floor-frac`, default 0.5).
+  2. Public Cançons (`verificada=True, activa=True`) ordered by the
+     latest `SenyalDiari.lastfm_playcount desc`, NULLs last — fill the
+     rest.
+If either pool underfills, the leftover spills to the other (pending
+first); the batch is processed pending-first so the reserved floor
+survives a mid-run abort. Without the floor, pending starved behind the
+verified backlog (audit 2026-06-02: 1.5 k verified `not_attempted`
+ahead of ~290 pending → pending got 0 slots/run, so the no_verificades
+playlists stayed ~17 % covered).
+
+Candidate **visibility is a LEFT JOIN** on `SpotifyMetadata`: a Canço
+with no row has never been attempted, so it counts exactly like
+`not_attempted` (the row is created lazily by `_enrich_one` via
+`get_or_create`). Before this, ~420 cançons ingested after the one-shot
+backfill (migration 0080) had no row and were invisible to the
+inner-join candidate query. `isrc` must be non-NULL and non-empty.
 
 Flags:
-  * `--limit N` caps per-run work (default 200).
-  * `--throttle FLOAT` overrides the per-call sleep (default 0.5).
+  * `--limit N` caps per-run work (default 200; the cron uses 50).
+  * `--throttle FLOAT` overrides the per-call sleep (default 0.5; cron
+    1.0). The 50/day cap is the safe anti-429 rate — unchanged here.
+  * `--pending-floor-frac FLOAT` (default 0.5) reserves that fraction of
+    `--limit` for pending cançons.
   * `--retry-not-found` cycles through previously-not-found
     cançons after the main pool is exhausted.
   * `--target-playlists` narrows the pool to Cançons currently

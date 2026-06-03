@@ -1,13 +1,17 @@
 """PIL-based image generator for the Instagram payloads.
 
-Three render entry points:
+Render entry points:
   - `render_feed_top(tipus, territori, setmana, entries)` → list[Path]
   - `render_feed_novetats(tipus, setmana, items)`         → list[Path]
   - `render_stories_top(territori, setmana, entries)`     → list[Path]
+    (territorial story sequence: intro + N cançó slides + CTA)
+  - `render_stories_ppcc(setmana, entries, …)`            → list[Path]
+    (Step 3b editorial PPCC set: 7 slides built toward the #1 climax)
 
-All return PNG paths under `<SOCIAL_CACHE_DIR>/renders/`. Filename
-is deterministic: `<tipus>_<territori>_<setmana>_<idx>.png`. Same
-inputs → same path → idempotent re-renders.
+All return JPEG paths (quality 90) under `<SOCIAL_CACHE_DIR>/renders/`.
+Filename is deterministic: `<tipus>_<territori>_<setmana>_<idx>.jpg`.
+Same inputs → same path → idempotent re-renders. (Step 3: PNG → JPG
+to cut file weight; Instagram's Graph API accepts JPEG.)
 
 Layout reference (Sprint I prompt, lightly adapted to mm-design):
   - Feed dimensions: 1080×1350px (4:5 portrait, Instagram's max
@@ -20,9 +24,11 @@ Layout reference (Sprint I prompt, lightly adapted to mm-design):
 from __future__ import annotations
 
 import logging
+import math
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 from django.conf import settings
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
@@ -53,7 +59,7 @@ def _path(
 ) -> Path:
     suffix = "story" if story else "feed"
     ter = territori or "general"
-    name = f"{suffix}_{tipus}_{ter}_{setmana.isoformat()}_{idx:02d}.png"
+    name = f"{suffix}_{tipus}_{ter}_{setmana.isoformat()}_{idx:02d}.jpg"
     return _renders_dir() / name
 
 
@@ -292,6 +298,48 @@ def _cover(url: str | None, size: int, *, fallback_letter: str = "?") -> Image.I
     return img.resize((size, size), Image.LANCZOS)
 
 
+def _portada_local(deezer_id, mida: int) -> Image.Image | None:
+    """Load a self-hosted portada JPG from the local store, or None.
+
+    The renderer runs on the server where `PORTADES_ROOT` is populated
+    (`ingesta.portades`, Caddy-served at `/portades/*`); on dev machines
+    the file is absent and the caller falls through to the Deezer CDN."""
+    if not deezer_id:
+        return None
+    try:
+        from ingesta.portades import manager
+
+        p = manager.path_for("album", int(deezer_id), mida, "jpg")
+    except Exception:  # noqa: BLE001 — a bad id must never crash a render
+        return None
+    if not p.is_file():
+        return None
+    try:
+        return Image.open(p).convert("RGB")
+    except Exception:  # noqa: BLE001 — corrupted file → fall through
+        logger.warning("portada decode failed for %s", p)
+        return None
+
+
+def _story_cover(
+    deezer_id, url: str | None, size: int, *, fallback_letter: str = "?"
+) -> Image.Image:
+    """Cover for the PPCC story slides (Step 3b).
+
+    Resolution order: local self-hosted portada first (the 250 px variant
+    for small slots, the 500 px one for larger covers), then the live
+    Deezer CDN URL, then a coloured placeholder tile. Unlike the
+    newsletter, the placeholder is the last resort — the documented
+    fallback is the Deezer URL, not the brand placeholder."""
+    mida = 250 if size <= 250 else 500
+    img = _portada_local(deezer_id, mida)
+    if img is None and url:
+        img = fetch_cover(url)
+    if img is None:
+        return _placeholder_cover(size, fallback_letter)
+    return img.resize((size, size), Image.LANCZOS)
+
+
 def _logo_block(
     img_or_draw,
     x: int,
@@ -468,33 +516,85 @@ def _feed_cover_full(url: str | None) -> Image.Image:
     return _feed_canvas()
 
 
-def _feed_portada(territori: str, setmana, hero_cover_url: str | None) -> Image.Image:
-    """Cover slide — legacy layout, modern palette.
+def _feed_portada_ppcc(setmana, featured: list[str], accent) -> Image.Image:
+    """Editorial PPCC feed cover (Step 3): ink background, big
+    "TOP 40 / SETMANA N" kicker, a teaser list of up to 5 featured
+    artist names, and the brand logo. Replaces the ~85 %-empty legacy
+    PPCC cover. Sans-only (Playfair is reserved for the #1 story hero)."""
+    from .captions import _setmana_label
 
-    Layout (same for territorial + PPCC):
-      • full-bleed cover (scale-to-cover, no black bands)
-      • territory pill top-right (icon + name, white on territory colour)
-      • brand-logo pill mid-bottom (~75% wide), filled with the
-        territory colour; logo recoloured to whichever of white/ink
-        contrasts best with that fill
-      • small "Setmana N" pill bottom-left
-    No URL pill — keeps the cover as visible as the legacy did.
+    img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
+    d = ImageDraw.Draw(img)
+
+    # Brand logo, top-left.
+    logo = svg_assets.logo_image(360)
+    if logo is not None:
+        img.paste(logo, (84, 90), logo)
+
+    # "TOP 40" — the big yellow headline.
+    f_top = fonts.sans_bold(210)
+    d.text((84, 300), "TOP 40", font=f_top, fill=colors.COLOR_YELLOW)
+
+    # "SETMANA N" under it.
+    f_wk = fonts.sans_bold(64)
+    d.text(
+        (90, 560),
+        _setmana_label(setmana).upper(),
+        font=f_wk,
+        fill=colors.COLOR_WHITE,
+    )
+
+    # Accent divider.
+    d.rounded_rectangle((90, 680, 90 + 220, 690), radius=5, fill=accent)
+
+    # Featured artists teaser.
+    f_lead = fonts.sans_bold(34)
+    d.text((90, 730), "AQUESTA SETMANA", font=f_lead, fill=accent)
+    f_name = fonts.sans_bold(52)
+    y = 800
+    for nom in featured[:5]:
+        name = _truncate(d, nom, f_name, FEED_W - 90 - 60)
+        # Accent dot + name.
+        d.ellipse((90, y + 22, 90 + 16, y + 38), fill=accent)
+        d.text((124, y), name, font=f_name, fill=colors.COLOR_WHITE)
+        y += 76
+
+    # Footer URL.
+    f_url = fonts.sans_regular(32)
+    d.text(
+        (90, FEED_H - 70), "topquaranta.cat", font=f_url, fill=colors.COLOR_TEXT_MUTED
+    )
+    return img
+
+
+def _feed_portada(
+    territori: str,
+    setmana,
+    hero_cover_url: str | None,
+    *,
+    featured: list[str] | None = None,
+) -> Image.Image:
+    """Cover slide.
+
+    Territorial: full-bleed album cover + territory pill + logo pill +
+    Setmana pill (unchanged).
+
+    PPCC (Step 3, editorial rewrite): the old PPCC cover was ~85 % empty
+    ink. Now an editorial cover on ink — big "TOP 40 / SETMANA N" kicker
+    + a teaser list of `featured` artist names — plus the existing logo
+    + Setmana pill at the bottom.
     """
-    from .captions import TERRITORI_NOM, _setmana_label
+    from .captions import _setmana_label
 
     accent = colors.terr_color(territori)
     is_ppcc = (territori or "") == "PPCC"
 
-    # ── Background ───────────────────────────────────────────────
-    # Territorial covers use the album cover of song #1; PPCC/Global
-    # covers are solid ink — the brand-tri-colour logo (yellow + red
-    # + blue) reads at maximum contrast on `tq-ink`, which is also
-    # the SPA's body background. The PPCC accent (green) stays on
-    # the rest of the global surfaces (stories, list squares).
     if is_ppcc:
-        img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
-    else:
-        img = _feed_cover_full(hero_cover_url)
+        return _feed_portada_ppcc(setmana, featured or [], accent)
+
+    from .captions import TERRITORI_NOM
+
+    img = _feed_cover_full(hero_cover_url)
     d = ImageDraw.Draw(img)
 
     # ── Territory pill, top-right (territorial only) ─────────────
@@ -732,8 +832,20 @@ def render_feed_top(
     out: list[Path] = []
     hero_cover = entries[0].get("cover_url") if entries else None
 
+    # Featured artists for the editorial PPCC cover (Step 3): the main
+    # artist of each of the top-5 entries, de-duplicated preserving
+    # chart order, capped at 5. Simple + robust; a scenario-weighted
+    # heuristic is deferred until the story scenario is threaded.
+    featured: list[str] = []
+    for e in entries[:5]:
+        nom = e.get("artista_nom") or ""
+        if nom and nom not in featured:
+            featured.append(nom)
+
     p = _path(tipus, territori, setmana, 0)
-    _feed_portada(territori, setmana, hero_cover).save(p, "PNG")
+    _feed_portada(territori, setmana, hero_cover, featured=featured).save(
+        p, "JPEG", quality=90
+    )
     out.append(p)
 
     pages = max(1, (len(entries) + 9) // 10)
@@ -749,7 +861,7 @@ def render_feed_top(
             total_pages=pages,
         )
         p = _path(tipus, territori, setmana, page)
-        slide.save(p, "PNG")
+        slide.save(p, "JPEG", quality=90)
         out.append(p)
 
     # Instagram carousel cap is 10 — drop trailing slides if needed.
@@ -1017,13 +1129,13 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
     (10 per slide, list-style)."""
     out: list[Path] = []
     p = _path(tipus, "", setmana, 0)
-    _feed_novetats_portada(tipus, setmana).save(p, "PNG")
+    _feed_novetats_portada(tipus, setmana).save(p, "JPEG", quality=90)
     out.append(p)
 
     if tipus == "nous_albums":
         for i, item in enumerate(items[:9], start=1):
             p = _path(tipus, "", setmana, i)
-            _feed_album_slide(item).save(p, "PNG")
+            _feed_album_slide(item).save(p, "JPEG", quality=90)
             out.append(p)
     else:
         # Singles: dynamic bin-packing so we never end with a slide
@@ -1045,7 +1157,7 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
             if not chunk:
                 break
             p = _path(tipus, "", setmana, page)
-            _feed_singles_slide(chunk, page, pages).save(p, "PNG")
+            _feed_singles_slide(chunk, page, pages).save(p, "JPEG", quality=90)
             out.append(p)
             offset += chunk_size
     return out[:10]
@@ -1325,6 +1437,766 @@ def _story_cta() -> Image.Image:
     return img
 
 
+# ── STORIES · PPCC editorial set (Step 3b redesign) ──────────────────
+#
+# Seven slides, ordered to build toward the #1 climax. The visual
+# language is the validated Claude Design canvas (1080×1920, pixel
+# values measured from the reference PNGs):
+#   1. intro     — green field, "EL TOP / 40 / D'AQUESTA SETMANA"
+#   2. top 40-11 — 5×6 cover mosaic, yellow number badges
+#   3. top 10-4  — 2-col cover grid (+ #4 centred below)
+#   4. podi #3-2 — two big covers stacked, number + title + artist
+#   5. #1 hero   — Playfair song title climax (inverted hierarchy)
+#   6. novetats  — 2-3 recent releases
+#   7. outro     — yellow field, "EL TOP 40", informative URL
+#
+# Typography: Anton (display/numbers), Bricolage Grotesque 800 (song
+# titles on 2/3/4/6), Playfair Display 800 (slide-5 title ONLY),
+# Instrument Serif italic (the two serif accents), Roboto (sans role:
+# kickers, artist subtitles, hero scenario, CTA). No trend cues.
+
+GREEN_PPCC = colors.terr_color("PPCC")  # #427C42
+
+# Content-box padding (top, right, bottom, left).
+_PAD_INTRO = (110, 80, 92, 80)  # usable width 920
+_PAD_STD = (96, 90, 80, 90)  # usable width 900
+
+
+# ── low-level text + background helpers ──────────────────────────────
+
+
+def _tracked_width(d: ImageDraw.ImageDraw, text: str, font, tracking: float) -> float:
+    """Advance width of `text` with `tracking` px added after each glyph
+    except the last (PIL has no native letter-spacing)."""
+    if not text:
+        return 0.0
+    w = sum(d.textlength(ch, font=font) for ch in text)
+    return w + tracking * (len(text) - 1)
+
+
+def _draw_tracked(
+    d: ImageDraw.ImageDraw,
+    x: float,
+    y_top: float,
+    text: str,
+    font,
+    fill,
+    *,
+    tracking: float = 0.0,
+    center_w: int | None = None,
+):
+    """Draw a single line glyph-by-glyph with letter-spacing.
+
+    `y_top` is the visual top of the inked glyphs (we offset by the
+    line's bbox top so callers can stack lines by a chosen line-height
+    instead of PIL's em-box top). When `center_w` is given, the line is
+    horizontally centred within `[0, center_w]`."""
+    w = _tracked_width(d, text, font, tracking)
+    if center_w is not None:
+        x = (center_w - w) / 2
+    top_off = d.textbbox((0, 0), text, font=font)[1]
+    cx = x
+    for ch in text:
+        d.text((cx, y_top - top_off), ch, font=font, fill=fill)
+        cx += d.textlength(ch, font=font) + tracking
+    return w
+
+
+def _draw_star(d: ImageDraw.ImageDraw, cx: float, cy: float, r_out: float, fill):
+    """Five-pointed star polygon (font-independent — none of the bundled
+    display fonts carry U+2605)."""
+    pts = []
+    for i in range(10):
+        ang = -math.pi / 2 + i * math.pi / 5
+        r = r_out if i % 2 == 0 else r_out * 0.42
+        pts.append((cx + r * math.cos(ang), cy + r * math.sin(ang)))
+    d.polygon(pts, fill=fill)
+
+
+def _radial_bg(
+    inner_hex: str,
+    outer_hex: str,
+    center: tuple[float, float],
+    radii: tuple[float, float],
+    stop_outer: float,
+) -> Image.Image:
+    """Full-canvas RGB background with a CSS-style elliptical radial
+    gradient: `inner_hex` at the centre fading to `outer_hex` at
+    `stop_outer` of the ellipse radius (clamped beyond)."""
+    yy, xx = np.mgrid[0:STORY_H, 0:STORY_W].astype("float32")
+    cx, cy = center[0] * STORY_W, center[1] * STORY_H
+    rx, ry = radii[0] * STORY_W, radii[1] * STORY_H
+    dist = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
+    t = np.clip(dist / stop_outer, 0.0, 1.0)[..., None]
+    inner = np.array(colors._hex_to_rgb(inner_hex), dtype="float32")
+    outer = np.array(colors._hex_to_rgb(outer_hex), dtype="float32")
+    arr = inner * (1 - t) + outer * t
+    return Image.fromarray(arr.astype("uint8"), "RGB")
+
+
+def _bg_ink(center=(0.5, 0.0), radii=(1.2, 0.6), stop=0.6) -> Image.Image:
+    """Ink slides (2/3/4/6): #141210 centre → #0A0A0A."""
+    return _radial_bg(colors.COLOR_INK_CENTRE, colors.COLOR_BG, center, radii, stop)
+
+
+def _logo_white(width: int) -> Image.Image | None:
+    return svg_assets.logo_image_mono(width, colors.COLOR_WHITE)
+
+
+def _logo_ink(width: int) -> Image.Image | None:
+    return svg_assets.logo_image_mono(width, colors.COLOR_BG)
+
+
+def _setmana_pill(img: Image.Image, right_x: int, cy: int, setmana) -> None:
+    """Yellow SETMANA pill (Anton 26, ls 3, ink text), right edge pinned
+    at `right_x`, vertically centred on `cy`."""
+    from .captions import _setmana_label
+
+    d = ImageDraw.Draw(img)
+    label = _setmana_label(setmana).upper()
+    f = fonts.anton(26)
+    tracking = 3
+    pad_x, pad_y = 18, 7
+    tw = _tracked_width(d, label, f, tracking)
+    bbox = d.textbbox((0, 0), label, font=f)
+    th = bbox[3] - bbox[1]
+    pill_w = tw + 2 * pad_x
+    pill_h = th + 2 * pad_y
+    x0 = right_x - pill_w
+    y0 = cy - pill_h // 2
+    d.rectangle((x0, y0, x0 + pill_w, y0 + pill_h), fill=colors.COLOR_YELLOW)
+    _draw_tracked(
+        d, x0 + pad_x, y0 + pad_y, label, f, colors.COLOR_BG, tracking=tracking
+    )
+
+
+def _header_row(img: Image.Image, setmana, *, logo_w: int = 217, logo_h: int = 44):
+    """Slides 2/3/4/6 header: white logo left, SETMANA pill right, row
+    height ≈53 vertically centred at the top padding."""
+    left = _PAD_STD[3]
+    right = STORY_W - _PAD_STD[1]
+    top = _PAD_STD[0]
+    row_h = 53
+    cy = top + row_h // 2
+    logo = _logo_white(logo_w)
+    if logo is not None:
+        img.paste(logo, (left, cy - logo.size[1] // 2), logo)
+    _setmana_pill(img, right, cy, setmana)
+    return top + row_h
+
+
+def _section_header(
+    img: Image.Image,
+    title: str,
+    y_title_top: int,
+    *,
+    kicker: str | None = None,
+    title_color: str = colors.COLOR_WHITE,
+    rule_color: str = colors.COLOR_YELLOW,
+) -> int:
+    """Optional green kicker + Anton-96 title + accent rule. Centred.
+    Returns the y just below the rule."""
+    d = ImageDraw.Draw(img)
+    y = y_title_top
+    if kicker:
+        fk = fonts.sans_bold(25)
+        _draw_tracked(
+            d, 0, y, kicker, fk, colors.COLOR_GREEN_LIGHT, tracking=7, center_w=STORY_W
+        )
+        y += 25 + 12
+    ft = fonts.anton(96)
+    _draw_tracked(d, 0, y, title, ft, title_color, tracking=0.96, center_w=STORY_W)
+    title_bbox = d.textbbox((0, 0), title, font=ft)
+    y += (title_bbox[3] - title_bbox[1]) + 22
+    rule_w = 130
+    d.rectangle(
+        ((STORY_W - rule_w) // 2, y, (STORY_W + rule_w) // 2, y + 7), fill=rule_color
+    )
+    return y + 7
+
+
+def _footer_url(img: Image.Image) -> None:
+    """`topquaranta.cat` — Anton 30, ls 4, green-light, centred, near the
+    bottom edge (slides 2-6)."""
+    d = ImageDraw.Draw(img)
+    f = fonts.anton(30)
+    _draw_tracked(
+        d,
+        0,
+        STORY_H - 92,
+        "topquaranta.cat",
+        f,
+        colors.COLOR_GREEN_LIGHT,
+        tracking=4,
+        center_w=STORY_W,
+    )
+
+
+def _number_badge(img: Image.Image, sx: int, sy: int, text: str, *, font, pad_x, pad_y):
+    """Yellow-on-ink Anton number badge, top-left corner pinned at
+    (sx, sy) (width auto so double digits grow rightward)."""
+    d = ImageDraw.Draw(img)
+    bbox = d.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    bw, bh = tw + 2 * pad_x, th + 2 * pad_y
+    d.rectangle((sx, sy, sx + bw, sy + bh), fill=colors.COLOR_BG)
+    d.text(
+        (sx + pad_x - bbox[0], sy + pad_y - bbox[1]),
+        text,
+        font=font,
+        fill=colors.COLOR_YELLOW,
+    )
+
+
+def _paste_cover(
+    img: Image.Image, entry: dict, x: int, y: int, size: int, *, key="canco_nom"
+):
+    """Resolve + paste a square cover at (x, y). No rounding (the design
+    uses flat squares)."""
+    cov = _story_cover(
+        entry.get("album_deezer_id"),
+        entry.get("cover_url"),
+        size,
+        fallback_letter=(entry.get(key) or "?")[:1],
+    )
+    img.paste(cov, (x, y))
+
+
+def _wrap_tracked(d, text, font, max_width, tracking, max_lines):
+    """Greedy word-wrap into ≤ max_lines lines under `max_width` (with
+    tracking), ellipsising the last line."""
+    words = text.split()
+    lines: list[str] = []
+    cur = ""
+    for w in words:
+        cand = (cur + " " + w).strip()
+        if _tracked_width(d, cand, font, tracking) <= max_width or not cur:
+            cur = cand
+        else:
+            lines.append(cur)
+            cur = w
+            if len(lines) == max_lines:
+                break
+    if len(lines) < max_lines and cur and (not lines or lines[-1] != cur):
+        lines.append(cur)
+    lines = lines[:max_lines]
+    # Ellipsise the final line if content remains.
+    if lines and _tracked_width(d, lines[-1], font, tracking) > max_width:
+        s = lines[-1]
+        while s and _tracked_width(d, s + "…", font, tracking) > max_width:
+            s = s[:-1]
+        lines[-1] = (s + "…") if s else "…"
+    return lines
+
+
+# ── slide builders ───────────────────────────────────────────────────
+
+
+def _story_intro_ppcc(setmana) -> Image.Image:
+    """Slide 1 — green intro. Logo, "presenta", the big EL TOP / 40 /
+    D'AQUESTA SETMANA stack, and the star-separated SETMANA pill row."""
+    from .captions import _setmana_label
+
+    img = _radial_bg(GREEN_PPCC, colors.COLOR_GREEN_DEEP, (0.5, 0.0), (1.3, 0.8), 1.0)
+    d = ImageDraw.Draw(img)
+
+    # Logo white 340×69, centred at the top padding.
+    logo = _logo_white(340)
+    y = _PAD_INTRO[0]
+    if logo is not None:
+        img.paste(logo, ((STORY_W - logo.size[0]) // 2, y), logo)
+        logo_bottom = y + logo.size[1]
+    else:
+        logo_bottom = y + 69
+
+    # "presenta" — Instrument Serif italic 56, cream.
+    fp = fonts.instrument_italic(56)
+    _draw_tracked(
+        d, 0, logo_bottom + 40, "presenta", fp, colors.COLOR_CREAM, center_w=STORY_W
+    )
+
+    # Central headline stack (tight, the 40 overflows its line box).
+    f_top = fonts.anton(150)
+    _draw_tracked(
+        d, 0, 560, "EL TOP", f_top, colors.COLOR_WHITE, tracking=0.75, center_w=STORY_W
+    )
+    f_40 = fonts.anton(380)
+    _draw_tracked(
+        d, 0, 632, "40", f_40, colors.COLOR_YELLOW, tracking=-7.6, center_w=STORY_W
+    )
+    f_setm = fonts.anton(100)
+    _draw_tracked(
+        d,
+        0,
+        980,
+        "D'AQUESTA SETMANA",
+        f_setm,
+        colors.COLOR_WHITE,
+        tracking=1,
+        center_w=STORY_W,
+    )
+
+    # Footer group anchored to the bottom padding.
+    base = STORY_H - _PAD_INTRO[2]
+    # Pill row: "SETMANA N" (yellow box) + "CADA DISSABTE" (white).
+    f_pill = fonts.anton(46)
+    setm_label = _setmana_label(setmana).upper()
+    second = "CADA DISSABTE"
+    pad_x, pad_y = 24, 8
+    tr = 3
+    w_setm = _tracked_width(d, setm_label, f_pill, tr)
+    bbox = d.textbbox((0, 0), setm_label, font=f_pill)
+    th = bbox[3] - bbox[1]
+    pill_w = w_setm + 2 * pad_x
+    pill_h = th + 2 * pad_y
+    gap = 24
+    w_second = _tracked_width(d, second, f_pill, tr)
+    total_w = pill_w + gap + w_second
+    row_x = (STORY_W - total_w) / 2
+    pill_y = base - pill_h
+    d.rectangle(
+        (row_x, pill_y, row_x + pill_w, pill_y + pill_h), fill=colors.COLOR_YELLOW
+    )
+    _draw_tracked(
+        d,
+        row_x + pad_x,
+        pill_y + pad_y,
+        setm_label,
+        f_pill,
+        colors.COLOR_BG,
+        tracking=tr,
+    )
+    _draw_tracked(
+        d,
+        row_x + pill_w + gap,
+        pill_y + pad_y,
+        second,
+        f_pill,
+        colors.COLOR_WHITE,
+        tracking=tr,
+    )
+
+    # Star separator above the pill row.
+    sep_y = pill_y - 37
+    line_col = colors.mix(GREEN_PPCC, colors.COLOR_WHITE, 0.35)
+    cxc = STORY_W / 2
+    star_r, gap, sep_total = 16, 40, 920
+    left0 = (STORY_W - sep_total) / 2
+    d.rectangle((left0, sep_y, cxc - star_r - gap, sep_y + 2), fill=line_col)
+    d.rectangle(
+        (cxc + star_r + gap, sep_y, left0 + sep_total, sep_y + 2), fill=line_col
+    )
+    _draw_star(d, cxc, sep_y + 1, star_r, colors.COLOR_WHITE)
+    return img
+
+
+def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
+    """Slide 2 — positions 40→11 as a 5×6 cover mosaic with yellow Anton
+    number badges + Bricolage titles + Roboto artist subtitles."""
+    img = _bg_ink()
+    _header_row(img, setmana)
+    body_top = _section_header(img, "EL RÀNQUING", 200)
+
+    d = ImageDraw.Draw(img)
+    cols, gap = 5, 18
+    left = _PAD_STD[3]
+    cover = 150
+    cell_w = (STORY_W - _PAD_STD[1] - left - (cols - 1) * gap) // cols  # 165.6→165
+    grid_top = body_top + 40
+    f_badge = fonts.anton(33)
+    f_title = fonts.bricolage_xbold(20)
+    f_artist = fonts.sans_regular(17)
+    # Descending 40→11 so the mosaic ends one rank above the top-10 reveal.
+    items = list(reversed(entries[:30]))
+    for idx, e in enumerate(items):
+        r, c = divmod(idx, cols)
+        x = left + c * (cell_w + gap)
+        y = grid_top + r * (cell_w + 78)  # cover + title/artist block
+        _paste_cover(img, e, x, y, cover)
+        _number_badge(
+            img,
+            x,
+            y,
+            str(e.get("posicio") or (40 - idx)),
+            font=f_badge,
+            pad_x=15,
+            pad_y=7,
+        )
+        ty = y + cover + 10
+        for line in _wrap_tracked(
+            d, e.get("canco_nom") or "—", f_title, cell_w, -0.2, 2
+        ):
+            _draw_tracked(d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=-0.2)
+            ty += 21
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist = _truncate(d, ", ".join(names), f_artist, cell_w)
+        _draw_tracked(
+            d,
+            x,
+            ty + 4,
+            artist,
+            f_artist,
+            colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62),
+        )
+    _footer_url(img)
+    return img
+
+
+def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
+    """Slide 3 — positions 10→4: 2-column cover grid (#10/#9, #8/#7,
+    #6/#5) then #4 centred below.
+
+    Row heights are dynamic: each grid row reserves space for the taller
+    of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
+    never crowds the cover of the row below. The centred #4 is clamped so
+    it can't slide under the footer when several rows run tall."""
+    img = _bg_ink()
+    _header_row(img, setmana)
+    body_top = _section_header(img, "ENS ACOSTEM AL CIM", 200)
+
+    d = ImageDraw.Draw(img)
+    cover = 210
+    col_gap, row_gap = 48, 40
+    pair_w = 2 * cover + col_gap
+    block_left = (STORY_W - pair_w) // 2
+    col_x = [block_left, block_left + cover + col_gap]
+    grid_top = body_top + 40
+    title_lh, gap_above_title, gap_above_artist, artist_h = 34, 14, 4, 30
+    f_badge = fonts.anton(46)
+    f_title = fonts.bricolage_xbold(32)
+    f_artist = fonts.sans_regular(25)
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62)
+
+    def _text_h(n_lines: int) -> int:
+        """Height of the text block under a cover for `n_lines` title."""
+        return gap_above_title + n_lines * title_lh + gap_above_artist + artist_h
+
+    # Descending 10→4: grid holds #10/#9, #8/#7, #6/#5; #4 centred below.
+    items = list(reversed(entries[:7]))
+    # Pre-wrap every title (≤2 lines, ellipsised) so rows can be sized.
+    wrapped = [
+        _wrap_tracked(d, e.get("canco_nom") or "—", f_title, cover + 30, -0.32, 2)
+        for e in items
+    ]
+
+    def _cell(e, lines, x, y, pos):
+        _paste_cover(img, e, x, y, cover)
+        _number_badge(img, x, y, str(pos), font=f_badge, pad_x=21, pad_y=9)
+        ty = y + cover + gap_above_title
+        for line in lines:
+            _draw_tracked(d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=-0.32)
+            ty += title_lh
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist = _truncate(d, ", ".join(names), f_artist, cover + 30)
+        _draw_tracked(d, x, ty + gap_above_artist, artist, f_artist, subtle)
+
+    n = len(items)
+    y = grid_top
+    for r in range(3):
+        i0, i1 = r * 2, r * 2 + 1
+        if i0 >= n or i0 >= 6:
+            break
+        lines1 = wrapped[i1] if (i1 < n and i1 < 6) else None
+        row_lines = max(len(wrapped[i0]), len(lines1) if lines1 else 1)
+        _cell(
+            items[i0], wrapped[i0], col_x[0], y, items[i0].get("posicio") or (10 - i0)
+        )
+        if lines1:
+            _cell(items[i1], lines1, col_x[1], y, items[i1].get("posicio") or (10 - i1))
+        y += cover + _text_h(row_lines) + row_gap
+    # #4 centred below, clamped so its block never reaches the footer.
+    if n >= 7:
+        e = items[6]
+        needed = cover + _text_h(len(wrapped[6]))
+        max_y = STORY_H - 92 - 24 - needed  # 92 footer band + 24 margin
+        _cell(
+            e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
+        )
+    _footer_url(img)
+    return img
+
+
+def _story_podi(entries: list[dict], setmana) -> Image.Image:
+    """Slide 4 — #3 (top) and #2 (below): centred big covers with a big
+    Anton number badge, Bricolage title and Roboto artist."""
+    img = _radial_bg(
+        colors.COLOR_INK_CENTRE, colors.COLOR_BG, (0.5, 0.04), (1.1, 0.55), 0.58
+    )
+    _header_row(img, setmana)
+    _section_header(img, "EL PODI", 200, kicker="JA GAIREBÉ HI SOM")
+
+    d = ImageDraw.Draw(img)
+    cover = 300
+    f_badge = fonts.anton(66)
+    f_title = fonts.bricolage_xbold(60)
+    f_artist = fonts.sans_regular(38)
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.66)
+    entry_h = cover + 20 + 64 + 6 + 46  # cover + title block + artist
+    top0 = 470
+    gap = 120
+    # entries arrive as [#2, #3]; show #3 on top then #2, building toward #1.
+    ordered = list(entries[:2])[::-1]
+    for idx, e in enumerate(ordered):
+        y = top0 + idx * (entry_h + gap)
+        x = (STORY_W - cover) // 2
+        _paste_cover(img, e, x, y, cover)
+        _number_badge(
+            img, x, y, str(e.get("posicio", 3 - idx)), font=f_badge, pad_x=30, pad_y=13
+        )
+        ty = y + cover + 20
+        title_lines = _wrap_tracked(
+            d, e.get("canco_nom") or "—", f_title, STORY_W - 180, -1.2, 2
+        )
+        for line in title_lines:
+            _draw_tracked(
+                d,
+                0,
+                ty,
+                line,
+                f_title,
+                colors.COLOR_WHITE,
+                tracking=-1.2,
+                center_w=STORY_W,
+            )
+            ty += 62
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        artist = _truncate(d, ", ".join(names), f_artist, STORY_W - 180)
+        _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
+    _footer_url(img)
+    return img
+
+
+def _story_hero(entry: dict, headline: str | None) -> Image.Image:
+    """Slide 5 — the #1 climax. Inverted hierarchy: the editorial
+    scenario is a subordinate yellow kicker; the SONG TITLE in Playfair
+    Display 800 is the primary element."""
+    img = _radial_bg(
+        colors.mix(colors.COLOR_BG, colors.COLOR_YELLOW, 0.16),
+        colors.COLOR_BG,
+        (0.5, 0.32),
+        (0.8, 0.5),
+        0.6,
+    )
+    d = ImageDraw.Draw(img)
+
+    # Ghost "1" behind everything (white α0.04), clipped at the right.
+    ghost = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(ghost)
+    fg = fonts.anton(640)
+    gd.text((842, 40), "1", font=fg, fill=(255, 255, 255, 10))
+    img.paste(Image.alpha_composite(img.convert("RGBA"), ghost).convert("RGB"), (0, 0))
+    d = ImageDraw.Draw(img)
+
+    # Logo white 217×44, top centred.
+    logo = _logo_white(217)
+    if logo is not None:
+        img.paste(logo, ((STORY_W - logo.size[0]) // 2, _PAD_STD[0]), logo)
+
+    # Kicker "EL NÚMERO 1".
+    fk = fonts.anton(32)
+    _draw_tracked(
+        d, 0, 360, "EL NÚMERO 1", fk, colors.COLOR_YELLOW, tracking=10, center_w=STORY_W
+    )
+
+    # Cover 400×400 centred, hairline inset.
+    cover = 400
+    cx = (STORY_W - cover) // 2
+    cy = 430
+    _paste_cover(img, entry, cx, cy, cover)
+    d.rectangle(
+        (cx, cy, cx + cover - 1, cy + cover - 1),
+        outline=colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.08),
+        width=1,
+    )
+
+    # Editorial scenario (subordinate kicker).
+    text = (headline or "AL CIM AQUESTA SETMANA").strip() or "AL CIM AQUESTA SETMANA"
+    fsc = fonts.sans_bold(26)
+    sy = cy + cover + 36
+    sc_lines = _wrap_tracked(d, text, fsc, STORY_W - 180, 5, 2)
+    for line in sc_lines:
+        _draw_tracked(
+            d, 0, sy, line, fsc, colors.COLOR_YELLOW, tracking=5, center_w=STORY_W
+        )
+        sy += 34
+
+    # Song title — Playfair Display 800, the PRIMARY element.
+    ft = fonts.display_xbold(108)
+    title_lines = _wrap_two_lines(d, entry.get("canco_nom") or "—", ft, 880)[:2]
+    ty = sy + 16
+    for line in title_lines:
+        _draw_tracked(d, 0, ty, line, ft, colors.COLOR_YELLOW, center_w=STORY_W)
+        ty += 114
+
+    # Artist — Roboto 700, white.
+    fa = fonts.sans_bold(50)
+    names = entry.get("artistes_noms") or [entry.get("artista_nom") or "—"]
+    artist = _truncate(d, ", ".join(names), fa, STORY_W - 180)
+    _draw_tracked(d, 0, ty + 30, artist, fa, colors.COLOR_WHITE, center_w=STORY_W)
+
+    _footer_url(img)
+    return img
+
+
+def _story_novetats(setmana, items: list[dict]) -> Image.Image:
+    """Slide 6 — 2-3 recent releases stacked: centred cover + Bricolage
+    title + Roboto artist, no number badge."""
+    img = _bg_ink()
+    _header_row(img, setmana)
+    _section_header(
+        img,
+        "NOVETATS",
+        200,
+        kicker="FORA DEL TOP · ESTRENES",
+        title_color=colors.COLOR_YELLOW,
+        rule_color=colors.COLOR_GREEN_LIGHT,
+    )
+
+    d = ImageDraw.Draw(img)
+    cover = 210
+    f_title = fonts.bricolage_xbold(50)
+    f_artist = fonts.sans_regular(32)
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.66)
+    items = items[:3]
+    entry_h = cover + 16 + 52 + 6 + 32
+    gap = 70
+    block_h = len(items) * entry_h + (len(items) - 1) * gap if items else 0
+    top0 = max(470, (STORY_H - block_h) // 2)
+    for idx, it in enumerate(items):
+        y = top0 + idx * (entry_h + gap)
+        x = (STORY_W - cover) // 2
+        _paste_cover(img, it, x, y, cover, key="nom")
+        ty = y + cover + 16
+        for line in _wrap_tracked(
+            d, it.get("nom") or "—", f_title, STORY_W - 180, -1, 2
+        ):
+            _draw_tracked(
+                d,
+                0,
+                ty,
+                line,
+                f_title,
+                colors.COLOR_WHITE,
+                tracking=-1,
+                center_w=STORY_W,
+            )
+            ty += 52
+        artist = _truncate(d, it.get("artista_nom") or "—", f_artist, STORY_W - 180)
+        _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
+    _footer_url(img)
+    return img
+
+
+def _story_outro_ppcc(setmana) -> Image.Image:
+    """Slide 7 — yellow outro. Ink logo, "tens el rànquing sencer" serif
+    accent, big "EL TOP 40", star separator, CTA with an underlined
+    domain, and a SETMANA footer. No slate card."""
+    from .captions import _setmana_label
+
+    img = Image.new("RGB", (STORY_W, STORY_H), colors.COLOR_YELLOW)
+    d = ImageDraw.Draw(img)
+
+    logo = _logo_ink(266)
+    y = _PAD_STD[0]
+    if logo is not None:
+        img.paste(logo, ((STORY_W - logo.size[0]) // 2, y), logo)
+
+    ink = colors.COLOR_BG
+    # Serif accent.
+    fa = fonts.instrument_italic(52)
+    _draw_tracked(
+        d,
+        0,
+        560,
+        "tens el rànquing sencer",
+        fa,
+        colors.mix(colors.COLOR_YELLOW, ink, 0.72),
+        center_w=STORY_W,
+    )
+    # "EL TOP 40".
+    ft = fonts.anton(158)
+    _draw_tracked(d, 0, 650, "EL TOP 40", ft, ink, tracking=0.79, center_w=STORY_W)
+
+    # Star separator.
+    sep_y = 960
+    line_col = colors.mix(colors.COLOR_YELLOW, ink, 0.25)
+    cxc = STORY_W / 2
+    star_r, gap, sep_total = 15, 30, 520
+    left0 = (STORY_W - sep_total) / 2
+    d.rectangle((left0, sep_y, cxc - star_r - gap, sep_y + 3), fill=line_col)
+    d.rectangle(
+        (cxc + star_r + gap, sep_y, left0 + sep_total, sep_y + 3), fill=line_col
+    )
+    _draw_star(d, cxc, sep_y + 1, star_r, ink)
+
+    # CTA with underlined domain.
+    fc = fonts.sans_bold(42)
+    cta_pre = "Cada dissabte a "
+    cta_dom = "topquaranta.cat"
+    tr = 1
+    w_pre = _tracked_width(d, cta_pre, fc, tr)
+    w_dom = _tracked_width(d, cta_dom, fc, tr)
+    cta_y = 1060
+    x0 = (STORY_W - (w_pre + w_dom)) / 2
+    _draw_tracked(d, x0, cta_y, cta_pre, fc, ink, tracking=tr)
+    _draw_tracked(d, x0 + w_pre, cta_y, cta_dom, fc, ink, tracking=tr)
+    dom_bbox = d.textbbox((0, 0), cta_dom, font=fc)
+    underline_y = cta_y + (dom_bbox[3] - dom_bbox[1]) + 10
+    d.rectangle(
+        (x0 + w_pre, underline_y, x0 + w_pre + w_dom, underline_y + 2), fill=ink
+    )
+
+    # SETMANA footer.
+    ff = fonts.anton(40)
+    _draw_tracked(
+        d,
+        0,
+        STORY_H - _PAD_STD[2] - 40,
+        _setmana_label(setmana).upper(),
+        ff,
+        ink,
+        tracking=4,
+        center_w=STORY_W,
+    )
+    return img
+
+
+def render_stories_ppcc(
+    setmana,
+    entries: list[dict],
+    *,
+    novetats_items: list[dict] | None = None,
+    hero_headline: str | None = None,
+) -> list[Path]:
+    """Render the 7-slide editorial PPCC story set (Step 3b — structure
+    + visual redesign).
+
+    The novetats slide is skipped when no recent releases are available,
+    so the set is 6 or 7 slides. Territorial stories keep
+    `render_stories_top`."""
+    out: list[Path] = []
+    # Drop any falsy entries so a list of empty dicts can't slip through
+    # and produce a blank novetats slide.
+    novetats_items = [it for it in (novetats_items or []) if it]
+
+    def _emit(img: Image.Image):
+        p = _path("top_ppcc", "PPCC", setmana, len(out), story=True)
+        img.save(p, "JPEG", quality=90)
+        out.append(p)
+
+    _emit(_story_intro_ppcc(setmana))
+    _emit(_story_top_mosaic(setmana, entries[10:40]))
+    _emit(_story_top_grid(setmana, entries[3:10]))
+    _emit(_story_podi(entries[1:3], setmana))
+    _emit(_story_hero(entries[0] if entries else {}, hero_headline))
+    # Novetats slide is omitted entirely when there are no recent
+    # releases — never generated, never uploaded (the set is then 6).
+    if novetats_items:
+        _emit(_story_novetats(setmana, novetats_items[:3]))
+    _emit(_story_outro_ppcc(setmana))
+    return out
+
+
 def render_stories_top(
     tipus: str, territori: str, setmana, entries: list[dict], *, max_cancons: int
 ) -> list[Path]:
@@ -1336,15 +2208,15 @@ def render_stories_top(
     label = f"TOP {min(max_cancons, len(entries))}"
 
     p = _path(tipus, territori, setmana, 0, story=True)
-    _story_intro(territori, setmana, label_top=label).save(p, "PNG")
+    _story_intro(territori, setmana, label_top=label).save(p, "JPEG", quality=90)
     out.append(p)
 
     for i, e in enumerate(entries[:max_cancons], start=1):
         p = _path(tipus, territori, setmana, i, story=True)
-        _story_canco(territori, e).save(p, "PNG")
+        _story_canco(territori, e).save(p, "JPEG", quality=90)
         out.append(p)
 
     p = _path(tipus, territori, setmana, len(out), story=True)
-    _story_cta().save(p, "PNG")
+    _story_cta().save(p, "JPEG", quality=90)
     out.append(p)
     return out

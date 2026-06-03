@@ -12,7 +12,10 @@ import random
 
 # ── Per-territori accent (always at the front) ───────────────────
 TERRITORY_HASHTAGS: dict[str, list[str]] = {
-    "PPCC": ["#TopQuaranta", "#MúsicaEnCatalà", "#PaïsosCatalans"],
+    # PPCC (global top): neutral hashtags only — no "#PaïsosCatalans"
+    # (never user-visible; the public name is "Global"). No replacement
+    # global hashtag.
+    "PPCC": ["#TopQuaranta", "#MúsicaEnCatalà"],
     "CAT": ["#TopQuaranta", "#MúsicaEnCatalà", "#Catalunya"],
     "VAL": ["#TopQuaranta", "#MúsicaEnValencià", "#PaísValencià"],
     "BAL": ["#TopQuaranta", "#MúsicaBalear", "#IllesBalears"],

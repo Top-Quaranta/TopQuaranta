@@ -296,22 +296,21 @@ class Command(BaseCommand):
 
     # ── per-canço URI resolution (CACHE ONLY) ───────────────────────────
     def _resolve_uri_cache_only(self, canco: Canco) -> str | None:
-        """Return a Spotify URI for the Canço if (and only if)
-        SpotifyMetadata.status == found.
+        """Return a Spotify URI for the Canço if (and only if) its
+        SpotifyMetadata is in a locked status (`found` or `manual`).
 
         Never calls /v1/search. Returns None for not_attempted /
         not_found so the playlist write simply skips this slot. Process
-        B (enriquir_spotify) is the only path that can promote a Canço
-        into found status; calling it on its own throttled cron keeps
-        the search rate-limit budget under control regardless of how
-        often Process A runs.
+        B (enriquir_spotify) promotes a Canço into `found`; staff promote
+        it into `manual` by pasting a track URL in the editor. Both carry
+        a trusted `spotify_id`, so both are eligible for the playlist.
         """
         # Try the OneToOne reverse accessor (.spotify); a Canço with no
         # SpotifyMetadata row is treated identically to not_attempted.
         sm = getattr(canco, "spotify", None)
         if sm is None:
             return None
-        if sm.enrichment_status != SpotifyMetadata.STATUS_FOUND:
+        if sm.enrichment_status not in SpotifyMetadata.LOCKED_STATUSES:
             return None
         if not sm.spotify_id:
             return None

@@ -130,6 +130,9 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 # one `user_tags` payload per artist per slide.
                 "artistes_instagram_urls": _instagram_urls_for_canco(canco),
                 "cover_url": getattr(album, "imatge_url", None) or None,
+                # Deezer album id for the newsletter's local-cover lookup
+                # (`comptes.newsletter_covers.album_cover_url`).
+                "album_deezer_id": getattr(album, "deezer_id", None),
             }
         )
     return {
@@ -202,10 +205,19 @@ def build_novetats(
     qs = qs.filter(cancons__verificada=True, cancons__activa=True).distinct()
     qs = qs.order_by("-data_llancament", "-id")[:30]
 
+    albums = list(qs)
+    if not albums:
+        return None
+
+    # ── Batched enrichment for the narrative detectors (n1-n4) ───────
+    # Compute the flags once, in a handful of queries, instead of an
+    # N+1 lookup per album inside the detectors.
+    flags = _novetats_flags(albums, publish_date)
+
     # Pre-fetch each artist's primary territori so the renderer can
     # paint the right icon per row without an N+1 lookup.
     items: list[dict] = []
-    for a in qs:
+    for a in albums:
         artista = a.artista
         territori = ""
         if artista is not None:
@@ -214,17 +226,103 @@ def build_novetats(
             # back to PPCC if the artist is only tagged as global.
             non_ppcc = [c for c in codis if c != "PPCC"]
             territori = (non_ppcc or codis or ["PPCC"])[0]
+        f = flags.get(a.id, {})
+        dies = None
+        if a.data_llancament:
+            dies = max(0, (publish_date - a.data_llancament).days)
         items.append(
             {
                 "nom": a.nom,
                 "slug": a.slug,
+                "tipus": a.tipus,
+                "artista_id": artista.id if artista else None,
                 "artista_nom": artista.nom if artista else "—",
                 "artista_slug": artista.slug if artista else None,
                 "artista_instagram_url": _instagram_url(artista),
                 "artista_territori": territori,
                 "cover_url": getattr(a, "imatge_url", None) or None,
+                "album_deezer_id": getattr(a, "deezer_id", None),
+                # narrative flags (audit #5):
+                "dies": dies,
+                "segell": (a.label or "").strip(),
+                "artista_en_top": f.get("en_top", False),
+                "primer_release": f.get("primer", False),
+                "te_collab": f.get("collab", False),
+                "segell_compartit": f.get("segell_compartit", False),
             }
         )
-    if not items:
-        return None
     return {"items": items}
+
+
+def _novetats_flags(albums, publish_date: datetime.date) -> dict[int, dict]:
+    """Batch-compute the narrative flags for a list of new Albums.
+
+    Returns `{album_id: {en_top, primer, collab, segell_compartit}}`.
+    All work is done in a small fixed number of queries (no N+1)."""
+    from datetime import timedelta
+
+    from django.db.models import Count, Min
+
+    from music.models import Album, Canco
+    from ranking.models import TopSetmanal
+
+    artista_ids = {a.artista_id for a in albums if a.artista_id}
+    album_ids = [a.id for a in albums]
+    labels = {(a.label or "").strip() for a in albums if (a.label or "").strip()}
+
+    # Artists present in the top in the last ~90 days.
+    since = publish_date - timedelta(days=90)
+    en_top_artists: set[int] = set(
+        TopSetmanal.objects.filter(
+            canco__artista_id__in=artista_ids, setmana__gte=since
+        )
+        .values_list("canco__artista_id", flat=True)
+        .distinct()
+    )
+
+    # Earliest album release per artist → "first release" = this album is
+    # the artist's earliest (and the artist has a single release date min).
+    earliest: dict[int, datetime.date] = {}
+    n_albums: dict[int, int] = {}
+    for row in (
+        Album.objects.filter(artista_id__in=artista_ids)
+        .values("artista_id")
+        .annotate(n=Count("id"), first=Min("data_llancament"))
+    ):
+        earliest[row["artista_id"]] = row["first"]
+        n_albums[row["artista_id"]] = row["n"]
+
+    # Albums whose tracks include a featuring (artistes_col).
+    collab_album_ids: set[int] = set(
+        Canco.objects.filter(album_id__in=album_ids, artistes_col__isnull=False)
+        .values_list("album_id", flat=True)
+        .distinct()
+    )
+
+    # Labels shared by >= 2 distinct artists who appear in the recent top.
+    shared_labels: set[str] = set()
+    if labels:
+        for row in (
+            Album.objects.filter(label__in=labels, artista_id__in=en_top_artists)
+            .values("label")
+            .annotate(n=Count("artista_id", distinct=True))
+        ):
+            if row["n"] >= 2:
+                shared_labels.add(row["label"])
+
+    out: dict[int, dict] = {}
+    for a in albums:
+        aid = a.artista_id
+        primer = bool(
+            aid
+            and a.data_llancament
+            and earliest.get(aid) == a.data_llancament
+            and n_albums.get(aid, 0) <= 1
+        )
+        out[a.id] = {
+            "en_top": aid in en_top_artists,
+            "primer": primer,
+            "collab": a.id in collab_album_ids,
+            "segell_compartit": (a.label or "").strip() in shared_labels,
+        }
+    return out

@@ -81,6 +81,34 @@ WITH_LEADER_LONG_TEMPLATES: list[str] = [
 ]
 
 
+def _dedup_artist_names(
+    entries: list[dict], exclude: set[str] | None = None
+) -> list[str]:
+    """Artist names from `entries`, deduplicated by first occurrence.
+
+    The SHORT register lists plain artist names ("X, Y i Z"); an artist
+    with 2+ songs in the top 5 must be named ONCE, not repeated (the
+    pre-2026-05-31 bug rendered "Max Navarro, Ouineta i Max Navarro").
+    Order follows first appearance.
+
+    `exclude` is the set of names already named outside the listing — the
+    1r leader in Case B — so a leader with a second song in the top 5
+    doesn't get echoed in the "també al top 5" tail.
+
+    The LONG register is NOT deduped: it lists distinct songs with
+    positions, so the same artist legitimately recurs for different
+    cançons."""
+    seen: set[str] = set(exclude or ())
+    out: list[str] = []
+    for e in entries:
+        nom = e.get("artista_nom") or "—"
+        if nom in seen:
+            continue
+        seen.add(nom)
+        out.append(nom)
+    return out
+
+
 def _detall(entry: dict) -> str:
     """Render a long-form mention for one entry: «canço» de A al N-è.
 
@@ -108,16 +136,21 @@ def pick_short(
     if leader is None:
         if not others:
             return ""
-        artistes = llista_amb_i([(e.get("artista_nom") or "—") for e in others])
+        artistes = llista_amb_i(_dedup_artist_names(others))
         tpl = (rng or random).choice(COMPLETING_SHORT_TEMPLATES)
         return tpl.format(artistes=artistes)
     # Case B
     leader_canco = leader.get("canco_nom") or "—"
     leader_artista = leader.get("artista_nom") or "—"
-    if not others:
-        # Nothing else to mention; just give the leader its line.
+    # Exclude the leader's name from the tail listing: if the 1r artist
+    # also has a second song in the top 5, they're already named as the
+    # cim, so they must not echo in "també al top 5 …".
+    noms = _dedup_artist_names(others, exclude={leader_artista})
+    if not noms:
+        # Everything left over is the leader again — just give the leader
+        # its line rather than an empty "també al top 5 .".
         return f"Al cim continua «{leader_canco}», {apostrof_de(leader_artista)}."
-    artistes = llista_amb_i([(e.get("artista_nom") or "—") for e in others])
+    artistes = llista_amb_i(noms)
     tpl = (rng or random).choice(WITH_LEADER_SHORT_TEMPLATES)
     return tpl.format(
         leader_canco=leader_canco,

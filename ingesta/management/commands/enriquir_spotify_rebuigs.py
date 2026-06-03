@@ -360,7 +360,7 @@ class Command(BaseCommand):
         # while 192 live candidates existed beyond the cap.)
         alive_song_dzids = set(
             Canco.objects.exclude(
-                spotify__enrichment_status=SpotifyMetadata.STATUS_FOUND
+                spotify__enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES
             ).values_list("deezer_id", flat=True)
         )
 
@@ -388,7 +388,7 @@ class Command(BaseCommand):
 
         result = list(
             Canco.objects.filter(deezer_id__in=priority_dzids).exclude(
-                spotify__enrichment_status=SpotifyMetadata.STATUS_FOUND
+                spotify__enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES
             )
         )
 
@@ -411,7 +411,9 @@ class Command(BaseCommand):
                 seen.add(dz)
                 canco = (
                     Canco.objects.filter(deezer_id=dz)
-                    .exclude(spotify__enrichment_status=SpotifyMetadata.STATUS_FOUND)
+                    .exclude(
+                        spotify__enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES
+                    )
                     .first()
                 )
                 if canco is not None:
@@ -490,7 +492,7 @@ class Command(BaseCommand):
             Canco.objects.filter(verificada=False, activa=True)
             .exclude(isrc="")
             .exclude(isrc__isnull=True)
-            .exclude(spotify__enrichment_status=SpotifyMetadata.STATUS_FOUND)
+            .exclude(spotify__enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES)
             .order_by("-created_at")[:limit]
         )
 

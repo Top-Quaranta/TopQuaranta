@@ -28,15 +28,25 @@ a PPCC anchor:
     eventually get localitats / Deezer ID through other channels —
     one stuck at 0/0/0 with no staff touch is by definition noise.
 
+**Recommended candidates are preserved (2026-06-02).** The candidate
+filter requires `nb_similars_lastfm = 0` on top of the 0-main-tracks /
+0-PPCC-localitat / 0-staff-touch conditions, so the cron only sweeps the
+DEAD WEIGHT — pendents that no approved artist recommends. Anything with
+≥1 approved recommender (`nb_similars_lastfm > 0`) is left in the queue
+for triage. `nb_similars_lastfm` is the exact model field the
+prioritiser (`pendents_list`) sorts by, so the set the cron preserves is
+identical to the set the "sort by Last.fm affinity" view surfaces.
+
 Action: set `pendent_review=False` (descartat — kept for FK integrity
 in case a verified track still has a collab link). Audit-logged with
 the `pendent_descartar` action so the trail survives. Reversible if
 staff later spots a false positive: just flip pendent_review=True.
 
 `--dry-run` reports counts without writing. Designed to run weekly
-alongside `netejar_pendents_orfes` (Mon 02:15 UTC). Default cap of
-2000/run drains the lastfm_similar backlog (~35 k → 18 weeks); after
-the initial drain the steady-state inflow is small.
+alongside `netejar_pendents_orfes` (Mon 02:15 UTC). With the recommender
+guard the drain target is the ~27 k dead-weight subset (the ~8 k
+recommended candidates stay); the default cap of 2000/run clears it in
+~14 weeks, after which the steady-state inflow is small.
 """
 
 from __future__ import annotations
@@ -83,15 +93,22 @@ class Command(BaseCommand):
         source = opts.get("source")
         sources = (source,) if source else self.SAFE_SOURCES
 
-        # Candidates: auto-discovered pendent + 0 main tracks + 0 PPCC
-        # localitats. We keep the queryset broad and prune the staff-
-        # activity check per row (StaffAuditLog has no FK to Artista,
-        # only target_type/target_id snapshot).
+        # Candidates: auto-discovered pendent + 0 approved recommender +
+        # 0 main tracks + 0 PPCC localitats. We keep the queryset broad
+        # and prune the staff-activity check per row (StaffAuditLog has no
+        # FK to Artista, only target_type/target_id snapshot).
         qs = (
             Artista.objects.filter(
                 aprovat=False,
                 pendent_review=True,
                 font_descoberta__in=sources,
+                # Preserve recommended candidates: never sweep a pendent
+                # with >=1 approved-artist recommender. `nb_similars_lastfm`
+                # is the SAME model field the prioritiser sorts by
+                # (`pendents_list` → `order_by("-nb_similars_lastfm", …)`),
+                # so "what the cron preserves" is exactly "what the
+                # similars-sort view surfaces for triage".
+                nb_similars_lastfm=0,
             )
             .annotate(
                 n_main=Count("cancons", distinct=True),

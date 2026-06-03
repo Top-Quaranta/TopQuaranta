@@ -766,6 +766,37 @@ FALLBACK_NO_EVENT = {
 }
 
 
+# ── A13: a song reclaims the #1 after a gap ─────────────────────────
+# data: artista, de_artista, canco, territori_label, territori_ordinal,
+#       gap_setmanes (int >= 2), gap_setmanes_str ("N setmanes")
+A13_TOP1_RETURN = {
+    "short": [
+        "«{canco}» torna a manar {territori_ordinal} 👑",
+        "{artista} recupera el 1r {territori_ordinal} 🔁",
+        "Reconquesta del cim {territori_ordinal}: «{canco}» ⤴️",
+        "{artista} reclama el cim després de {gap_setmanes_str} 🔝",
+        "De nou al 1r {territori_ordinal}: «{canco}» {de_artista} 🎯",
+        "«{canco}» recupera el cim {gap_setmanes_str} després 🪃",
+    ],
+    "medium": [
+        "Retorn al cim {territori_ordinal}: «{canco}», {de_artista}, torna al 1r {gap_setmanes_str} després de la seva última vegada al capdamunt. 🔁",
+        "{artista} reconquereix el 1r {territori_ordinal} amb «{canco}», que recupera el cim després de {gap_setmanes_str} fora del primer lloc. 👑",
+        "«{canco}» torna a manar al top {territori_label}: {gap_setmanes_str} després del seu últim 1r, {de_artista} recupera el cim. ⤴️",
+        "Segona volada per a «{canco}» {de_artista}: torna al 1r {territori_ordinal} {gap_setmanes_str} després d'haver-lo deixat. 🪃",
+        "El cim {territori_ordinal} torna a ser de «{canco}», {de_artista}, després de {gap_setmanes_str} sense liderar. 🔝",
+        "Recuperació al capdamunt {territori_ordinal}: {artista} retorna «{canco}» al 1r {gap_setmanes_str} després. 🎯",
+    ],
+    "long": [
+        "Hi ha cançons que tornen. «{canco}», {de_artista}, recupera el 1r del top {territori_label} {gap_setmanes_str} després de la seva última setmana al capdamunt. Els retorns al cim acostumen a indicar una segona vida d'una peça que no s'havia acomiadat del tot. 🔁",
+        "{artista} reconquereix el cim {territori_ordinal}. «{canco}» torna al 1r {gap_setmanes_str} després d'haver-lo cedit, una recuperació que poques cançons aconsegueixen un cop han deixat el primer lloc. 👑",
+        "Segona coronació per a «{canco}», {de_artista}: la cançó torna a manar al top {territori_label} {gap_setmanes_str} després del seu darrer 1r. Quan una peça recupera el cim, sol ser senyal que el seu moment encara no s'havia esgotat. ⤴️",
+        "El cim {territori_ordinal} torna a dir-se «{canco}». {gap_setmanes_str} després d'abandonar el primer lloc, {artista} el recupera, signant un d'aquests retorns que confirmen que la cançó tenia més recorregut del que semblava. 🪃",
+        "Tornada al capdamunt {territori_ordinal} per a «{canco}», {de_artista}. La cançó recupera el 1r {gap_setmanes_str} després de deixar-lo, i els retorns d'aquesta mena solen marcar les peces que aguanten més enllà d'una única embranzida. 🔝",
+        "Reconquesta al top {territori_label}: «{canco}», {de_artista}, torna a liderar {gap_setmanes_str} després del seu últim 1r. Recuperar el cim un cop perdut és una gesta rara, i sovint diu més de la cançó que la primera coronació. 🎯",
+    ],
+}
+
+
 # ── Public registry ────────────────────────────────────────────────
 HERO: dict[str, dict[str, list[str]]] = {
     "a1_outside_to_top1": A1_OUTSIDE_TO_TOP1,
@@ -780,5 +811,6 @@ HERO: dict[str, dict[str, list[str]]] = {
     "a10_artista_first_ever": A10_ARTISTA_FIRST_EVER,
     "a11_top5_drop_generic": A11_TOP5_DROP_GENERIC,
     "a12_artista_emerging": A12_ARTISTA_EMERGING,
+    "a13_top1_return": A13_TOP1_RETURN,
     "fallback_no_event": FALLBACK_NO_EVENT,
 }

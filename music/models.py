@@ -1550,11 +1550,24 @@ class SpotifyMetadata(models.Model):
     STATUS_NOT_ATTEMPTED = "not_attempted"
     STATUS_FOUND = "found"
     STATUS_NOT_FOUND = "not_found"
+    # Staff pasted a Spotify track URL by hand (store-and-trust: format
+    # validated, no API call). Distinct from `found` so the id is never
+    # re-resolved via /search; Process B still hydrates the row from the
+    # known id (get_track + get_artist). See docs/architecture/playlists.md.
+    STATUS_MANUAL = "manual"
     STATUS_CHOICES = [
         (STATUS_NOT_ATTEMPTED, "Encara no provada"),
         (STATUS_FOUND, "Trobada"),
         (STATUS_NOT_FOUND, "ISRC no a Spotify"),
+        (STATUS_MANUAL, "Manual (staff)"),
     ]
+    # Statuses that already carry a trusted Spotify id. Process A
+    # (actualitzar_playlists_spotify) puts them in playlists; Process B's
+    # /search queue (enriquir_spotify / enriquir_spotify_rebuigs) never
+    # re-resolves them. `not_attempted` / `not_found` are the only
+    # /search-enrichable states. (A `manual` row is still hydrated from
+    # its id by enriquir_spotify phase 2 — fields filled, id untouched.)
+    LOCKED_STATUSES = (STATUS_FOUND, STATUS_MANUAL)
 
     canco = models.OneToOneField(
         Canco,

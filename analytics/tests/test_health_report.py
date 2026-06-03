@@ -152,6 +152,32 @@ def test_render_disk_alert_escalates():
     assert "Disc: 95%" in text
 
 
+def test_render_git_drift_escalates_and_emits_drift_token():
+    extras = _all_ok_extras()
+    extras["git"] = {"ok": False, "detail": "DRIFT — 2 fitxer(s) out-of-band"}
+    text, overall = hr.render([_c(name="x")], extras, NOW)
+    assert overall == 1
+    # "DRIFT" must appear so tq-health's email grep (STALE|STUCK|FAIL|DRIFT)
+    # picks it up, and it must surface in the anomalies + SISTEMA sections.
+    assert "DRIFT" in text
+    assert "Git tree DRIFT" in text
+
+
+def test_render_git_clean_is_ok():
+    extras = _all_ok_extras()
+    extras["git"] = {"ok": True, "detail": "OK (matches origin/main, clean)"}
+    text, overall = hr.render([_c(name="x")], extras, NOW)
+    assert overall == 0
+    assert "Git tree: OK" in text
+
+
+def test_render_git_absent_defaults_ok():
+    # No "git" key (dev/CI/older tq-health) → treated as OK, no escalation.
+    text, overall = hr.render([_c(name="x")], _all_ok_extras(), NOW)
+    assert overall == 0
+    assert "Git tree:" in text
+
+
 def test_render_silenced_stale_not_red_header():
     crons = [
         _c(

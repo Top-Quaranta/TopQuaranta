@@ -64,6 +64,11 @@ HASHTAG_TERR = {
 
 HASHTAGS_BASE = ["musicaencatala", "topquaranta"]
 
+# Novetats hashtags — TitleCase + diacritics, consistent with the top
+# posts' bank (`social/narrative/banks/hashtags.py`). Audit #2: the old
+# lowercase set (#musicaencatala …) clashed with the tops' #TopQuaranta.
+HASHTAGS_NOVETATS = ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+
 MES_CA = [
     "gener",
     "febrer",
@@ -316,6 +321,7 @@ def _caption_top_legacy(
 # release roundups. They route to the legacy caption straight.
 
 _NARRATIVE_TIPUS = ("top_ppcc", "top_territorial")
+_NOVETATS_TIPUS = ("nous_albums", "nous_singles")
 
 _CHANNEL_MAX_CHARS = {
     "mastodon": 480,
@@ -368,7 +374,41 @@ def compose_for_channel(
     return the legacy caption shape with `phrase_ids=[]`. The
     publication never goes out empty because of an engine bug.
     """
-    # Novetats bypass the engine entirely.
+    # Novetats now run through their own narrative engine (audit #5).
+    # IG-story is not a novetats surface, so anything else falls back.
+    if tipus in _NOVETATS_TIPUS:
+        if channel == "instagram_story":
+            return {
+                "text": _legacy_for(channel, tipus, territori, setmana, entries),
+                "hashtags": [],
+                "cta": "",
+                "phrase_ids": [],
+            }
+        try:
+            from social.narrative.composers import nous_albums, nous_singles
+
+            composer = nous_albums if tipus == "nous_albums" else nous_singles
+            result = composer.compose(channel, entries, setmana=setmana, rng=rng)
+            result.setdefault("phrase_ids", [])
+            result.setdefault("hashtags", [])
+            result.setdefault("cta", "")
+            # If the engine produced nothing usable, fall back.
+            if result.get("text"):
+                return result
+        except Exception:
+            logger.exception(
+                "novetats engine failed; legacy fallback (channel=%s tipus=%s)",
+                channel,
+                tipus,
+            )
+        return {
+            "text": _legacy_for(channel, tipus, territori, setmana, entries),
+            "hashtags": [],
+            "cta": "",
+            "phrase_ids": [],
+        }
+
+    # Other non-narrative tipus bypass the engine entirely.
     if tipus not in _NARRATIVE_TIPUS:
         return {
             "text": _legacy_for(channel, tipus, territori, setmana, entries),
@@ -621,7 +661,7 @@ def caption_novetats(tipus: str, setmana: datetime.date, entries: list[dict]) ->
         artist_label = _artist_label(e, use_handle=True)
         body_lines.append(f"· {e['nom']} — {artist_label}")
     body = "\n".join(body_lines)
-    footer = "\n\n" + " ".join(f"#{t}" for t in HASHTAGS_BASE + ["novetats"])
+    footer = "\n\n" + " ".join(HASHTAGS_NOVETATS)
     text = header + body + footer
     if len(text) > 2200:
         max_body = 2200 - len(header) - len(footer) - 10

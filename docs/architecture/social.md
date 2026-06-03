@@ -370,6 +370,17 @@ Django (CSP/COOP headers cause code 9004). Caddy serves
 `/static/social/*` directly from
 `/var/cache/topquaranta/social/renders/` as plain files.
 
+The URL handed to the fetchers comes from
+`SOCIAL_PUBLIC_BASE` via `_public_url_for`; if that setting is unset it
+falls back to the Django `/api/v1/social/render` view — the exact
+header-laden path that triggers 9004. The publish commands run under
+**`production`** settings, so `SOCIAL_PUBLIC_BASE` MUST live in
+`base.py` (not only `web_server.py`). Caught 2026-06-03: it was
+`web_server`-only, so every cron publish sent the Django URL and BAL's
+IG/Telegram slots failed with 9004 / `WEBPAGE_MEDIA_EMPTY` while the
+byte-upload channels (Mastodon, Bluesky) — which never fetch a URL —
+published fine. Guarded by `test_public_url_for_uses_caddy_static_not_django_fallback`.
+
 ## Related
 
 - Post-mortems: `2026-05-20-narrative-engine-collapsed.md`

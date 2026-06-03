@@ -22,6 +22,29 @@ from ranking.models import ConfiguracioGlobal, TopSetmanal
 from social import calendari, captions
 from social.models import SocialPost
 
+# ── Public media URL (Caddy static vs Django fallback) ────────────────
+
+
+def test_public_url_for_uses_caddy_static_not_django_fallback():
+    """Regression (2026-06-03): the social publish commands run under
+    `production` settings. `SOCIAL_PUBLIC_BASE` must be inherited there
+    — it now lives in `base.py` — so `_public_url_for` builds the Caddy
+    `/static/social/` URL. If it slips back to `web_server`-only, the
+    commands fall through to the header-laden Django
+    `/api/v1/social/render` view, which Meta rejects with code 9004 and
+    Telegram with WEBPAGE_MEDIA_EMPTY. The publish-flow tests below MOCK
+    `_public_url_for`, so they never caught this — this calls it for
+    real."""
+    from pathlib import Path
+
+    from social.management.commands.publicar_social import _public_url_for
+
+    name = "feed_top_territorial_BAL_2026-05-25_00.jpg"
+    url = _public_url_for(Path(name))
+    assert url == f"https://www.topquaranta.cat/static/social/{name}"
+    assert "/api/v1/social/render" not in url
+
+
 # ── Calendari ─────────────────────────────────────────────────────────
 
 

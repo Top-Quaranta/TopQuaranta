@@ -454,6 +454,18 @@ main local sincronitzat amb `origin/main`. Checklist obligatòria:
 before the migration was applied → 30 admin emails in 15 min) is the
 canonical reason the pipeline must run end-to-end.
 
+**Never write code directly into `/home/topquaranta/app/`.** Prod is
+deployed exclusively via push→GHA→`bin/tq-deploy`, and `tq-deploy` does
+`git reset --hard origin/main` — so any file you write into the prod
+working tree (a) runs un-reviewed, un-tested code immediately, and (b) is
+silently reverted on the next deploy, so a "hotfix" can vanish without
+warning. The canonical incident is the 2026-06-02 caducitat guard:
+`ingesta/caducitat.py` ran in prod for days while absent from
+`origin/main`. The only sanctioned change path is a committed PR. A
+`tq-health` git-drift check (added 2026-06-02) now emails admin@ within
+the hour whenever the prod tree is dirty (excluding `data/`) or
+`HEAD != origin/main`.
+
 **When you DO still need to SSH to the Hetzner box** (these are
 operational, not deploy paths):
 - Tail live logs: `tail -f /var/log/caddy/access.log`,

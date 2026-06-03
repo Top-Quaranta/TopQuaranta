@@ -287,6 +287,10 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     migrations_ok = bool(extras.get("migrations_ok", True))
     errors = extras.get("errors", {})
     errors_count = int(errors.get("count") or 0)
+    # Git working-tree drift on prod: out-of-band edits or a HEAD that
+    # doesn't match origin/main. Absent in dev/CI → treated as OK.
+    git = extras.get("git", {})
+    git_ok = bool(git.get("ok", True))
 
     # ── overall (mirror bash) ──
     overall = 0
@@ -304,8 +308,12 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
         overall = 1
     if errors_count > 0:
         overall = 1
+    if not git_ok:
+        overall = 1
 
     sys_anomalies: list[str] = []
+    if not git_ok:
+        sys_anomalies.append(f"Git tree DRIFT: {git.get('detail', 'out-of-band')}")
     if disk_pct >= 90:
         sys_anomalies.append(f"Disc {disk_pct}% (>90%)")
     for w in web:
@@ -385,6 +393,10 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
         f"{_ok_emoji(migrations_ok)} DB migrations: "
         f"{'OK (schema matches code)' if migrations_ok else 'pendents — run tq-deploy'}"
     )
+    git_detail = git.get("detail") or (
+        "OK (matches origin/main, clean)" if git_ok else "DRIFT"
+    )
+    out.append(f"{_ok_emoji(git_ok)} Git tree: {git_detail}")
     out.append("")
 
     # ── spotify ──

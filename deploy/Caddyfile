@@ -45,7 +45,10 @@ www.topquaranta.cat {
 	# pure static files (no Django, no CSP/COOP/Vary headers) — the
 	# `instagram_content_publish` fetcher rejected the Django view
 	# response with code 9004 ("Only photo or video can be accepted
-	# as media type"). Pair with `SOCIAL_PUBLIC_BASE` =
+	# as media type"). The site-level security-headers block below is
+	# scoped with `@not_social_media` so CSP / X-Frame-Options never
+	# leak onto this path (they did until 2026-06-03 despite this note).
+	# Pair with `SOCIAL_PUBLIC_BASE` =
 	# "https://www.topquaranta.cat/static/social" in settings.
 	handle_path /static/social/* {
 		root * /var/cache/topquaranta/social/renders
@@ -59,6 +62,33 @@ www.topquaranta.cat {
 		file_server
 		header Cache-Control "public, max-age=86400"
 		header Content-Type "image/svg+xml"
+	}
+
+	# Self-hosted covers (Fase 2). PORTADES_ROOT is
+	# /var/topquaranta/portades; `root */var/topquaranta` + the
+	# `/portades/*` request path resolves to it without a rewrite.
+	# Filenames are content-addressed (<deezer_id>-<mida>.<format>) so
+	# a generated variant never changes → 1-year `immutable` cache.
+	# Images are not in Caddy's default `encode` content-type
+	# allowlist, so the host-level `encode zstd gzip` does NOT
+	# recompress them. Explicit Content-Type per extension because the
+	# global `X-Content-Type-Options: nosniff` makes the browser trust
+	# the header verbatim and Go's mime table doesn't always know
+	# `.avif`. `file_server` returns a native 404 when the variant
+	# hasn't been generated yet (the Fase 3 frontend falls back to the
+	# Deezer URL). No `browse`, so no directory listing.
+	# See docs/architecture/portades.md.
+	@portades path /portades/*
+	@portades_avif path /portades/*.avif
+	@portades_webp path /portades/*.webp
+	@portades_jpg path /portades/*.jpg
+	handle @portades {
+		root * /var/topquaranta
+		header Cache-Control "public, max-age=31536000, immutable"
+		header @portades_avif Content-Type "image/avif"
+		header @portades_webp Content-Type "image/webp"
+		header @portades_jpg Content-Type "image/jpeg"
+		file_server
 	}
 
 	# Legacy URL pattern from before the React flip (pre-April 2026).
@@ -132,8 +162,18 @@ www.topquaranta.cat {
 		file_server
 	}
 
-	# Security headers
-	header {
+	# Security headers — applied to every response EXCEPT /static/social/*.
+	# Instagram's media fetcher (code 9004 "Only photo or video can be
+	# accepted as media type") and Telegram's fetcher reject media
+	# responses that carry CSP / X-Frame-Options, so the social-render
+	# path must stay header-free (it serves only images to external
+	# fetchers — see the handle_path block above, which sets just
+	# Cache-Control). Caddy applies a site-level `header` block OUTSIDE
+	# the handle_path, so an in-handle `header -Content-Security-Policy …`
+	# would be re-added here on the way out; scoping the matcher is the
+	# only reliable strip.
+	@not_social_media not path /static/social/*
+	header @not_social_media {
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
 		X-Content-Type-Options "nosniff"

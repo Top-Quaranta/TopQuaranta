@@ -27,7 +27,7 @@ import pytest
 from django.core.management import call_command
 
 from ingesta.clients.spotify import RateLimitedError
-from ingesta.management.commands.enriquir_spotify import COOLDOWN_FILE
+from ingesta.clients.spotify_metadata_cooldown import SHARED_PATH as COOLDOWN_FILE
 from music.models import Album, Artista, Canco, SpotifyMetadata, SpotifyPlaylist
 from ranking.models import SenyalDiari, TopProvisional
 
@@ -281,7 +281,7 @@ def test_rate_limit_writes_cooldown_and_exits_cleanly(
     # Redirect the cooldown file to tmp_path so the test works on CI
     # (no /var/log/topquaranta/ there).
     cooldown = tmp_path / "enriquir_spotify.cooldown"
-    with patch("ingesta.management.commands.enriquir_spotify.COOLDOWN_FILE", cooldown):
+    with patch("ingesta.clients.spotify_metadata_cooldown.SHARED_PATH", cooldown):
         # No CommandError raised — exits cleanly so tq-health doesn't alert.
         call_command("enriquir_spotify", limit=10)
 
@@ -333,7 +333,7 @@ def test_rate_limit_cooldown_clamped_to_max(auth_present, client_mock, tmp_path)
         return datetime.now(tz=dt_tz.utc).replace(tzinfo=None)
 
     before = _utc_naive()
-    with patch("ingesta.management.commands.enriquir_spotify.COOLDOWN_FILE", cooldown):
+    with patch("ingesta.clients.spotify_metadata_cooldown.SHARED_PATH", cooldown):
         call_command("enriquir_spotify", limit=10)
     after = _utc_naive()
 
@@ -423,3 +423,141 @@ def test_dispersion_recomputed_for_affected_artists(auth_present, client_mock):
     a.refresh_from_db()
     assert a.spotify_artist_dispersio == 2
     assert sorted(a.spotify_artist_ids_distints) == ["ARTX", "ARTY"]
+
+
+# ── Equity floor + LEFT-JOIN visibility (2026-06-02) ──────────────────
+
+
+def _select(limit, *, frac=0.5):
+    from ingesta.management.commands.enriquir_spotify import Command
+
+    return Command()._select_candidates(
+        limit=limit,
+        retry_not_found=False,
+        target_playlists=False,
+        pending_floor_frac=frac,
+    )
+
+
+@pytest.mark.django_db
+def test_pending_floor_reserves_slot_despite_verified_backlog():
+    """(a) Even with > limit verified not_attempted ahead, the pending
+    floor guarantees pending cançons a share of the run."""
+    a = Artista.objects.create(nom="EXEMPLE FloorA", lastfm_nom="EXEMPLE FloorA")
+    al = Album.objects.create(artista=a, nom="EXEMPLE FloorAl")
+    for i in range(10):  # 10 verified not_attempted ahead of the queue
+        _make_canco(a, al, 500 + i, verificada=True)
+    pend = _make_canco(a, al, 599, verificada=False, ml=0.9)
+
+    cands = _select(4, frac=0.5)  # floor = round(4*0.5) = 2 reserved for pending
+    pks = {c.pk for c in cands}
+    assert len(cands) == 4
+    assert pend.pk in pks  # got its reserved slot despite 10 verified ahead
+    assert sum(1 for c in cands if not c.verificada) >= 1
+
+
+@pytest.mark.django_db
+def test_canco_without_spotifymetadata_row_is_enriched(auth_present, client_mock):
+    """(b) A Canço with an isrc but NO SpotifyMetadata row is visible to
+    the LEFT-JOIN candidate query and gets enriched (row created lazily
+    by `_enrich_one`)."""
+    a = Artista.objects.create(nom="EXEMPLE NoRow", lastfm_nom="EXEMPLE NoRow")
+    al = Album.objects.create(artista=a, nom="EXEMPLE NoRowAl")
+    bare = Canco.objects.create(
+        artista=a,
+        album=al,
+        nom="EXEMPLE-bare",
+        isrc="ZZ00X9990001",
+        verificada=False,
+        ml_confianca=0.9,
+    )
+    assert not SpotifyMetadata.objects.filter(canco=bare).exists()  # no row yet
+
+    client_mock.search_isrc.return_value = "spotify:track:BARE1"
+    client_mock.get_track.return_value = _track_payload(
+        "BARE1", "ZZ00X9990001", ["ARTB"]
+    )
+    client_mock.get_artist.return_value = {"id": "ARTB", "name": "B", "genres": []}
+
+    call_command("enriquir_spotify", limit=10)
+
+    sm = SpotifyMetadata.objects.get(canco=bare)  # created lazily
+    assert sm.enrichment_status == SpotifyMetadata.STATUS_FOUND
+    assert sm.spotify_id == "BARE1"
+
+
+@pytest.mark.django_db
+def test_canco_with_empty_isrc_is_not_a_candidate():
+    """The isrc gate excludes "": a row-less Canço with no usable isrc
+    must not slip in (it would waste a slot / fail the /search). `isrc`
+    is NOT NULL at the model level, so "" is the only empty case; the
+    `isrc__isnull=False` clause is kept defensively."""
+    a = Artista.objects.create(nom="EXEMPLE EmptyIsrc", lastfm_nom="EXEMPLE EmptyIsrc")
+    al = Album.objects.create(artista=a, nom="EXEMPLE EmptyIsrcAl")
+    empty_isrc = Canco.objects.create(
+        artista=a, album=al, nom="EXEMPLE-emptyisrc", isrc="", verificada=False
+    )
+    assert empty_isrc.pk not in {c.pk for c in _select(10)}
+
+
+@pytest.mark.django_db
+def test_spill_fills_all_slots_when_a_pool_is_short():
+    """(c) When the verified pool can't fill its share, the leftover slots
+    spill to pending so every `limit` slot is used — no wasted API call."""
+    a = Artista.objects.create(nom="EXEMPLE Spill", lastfm_nom="EXEMPLE Spill")
+    al = Album.objects.create(artista=a, nom="EXEMPLE SpillAl")
+    for i in range(5):  # 5 pending available
+        _make_canco(a, al, 800 + i, verificada=False, ml=0.5 + i * 0.05)
+    _make_canco(a, al, 899, verificada=True)  # only 1 verified
+
+    cands = _select(5, frac=0.5)  # 5 slots; verified can only supply 1
+    assert len(cands) == 5  # leftover spilled into pending → all slots used
+    assert sum(1 for c in cands if not c.verificada) == 4  # 1 verified + 4 pending
+
+
+# ── Caducitat guard on the pending pool (2026-06-03) ──────────────────
+# The enrich cron runs 03:00, netejar_caducades 04:00. The pending pool
+# must be EXACTLY the purge survivors so the floor never spends a slot on
+# a track that will be deleted an hour later (cascade-dropping its fresh
+# SpotifyMetadata). Mirrors the purge's `__lt` cutoff incl. NULL handling.
+
+
+def _make_pending_dated(idx, d):
+    a = Artista.objects.create(nom=f"EXEMPLE Cad{idx}", lastfm_nom=f"EXEMPLE Cad{idx}")
+    al = Album.objects.create(artista=a, nom=f"EXEMPLE CadAl{idx}")
+    c = _make_canco(a, al, idx, verificada=False, ml=0.9)
+    c.data_llancament = d
+    c.save(update_fields=["data_llancament"])
+    return c
+
+
+@pytest.mark.django_db
+def test_caducat_pending_never_selected():
+    """A pending track past DIES_CADUCITAT (the 04:00 purge will delete
+    it) must never be selected — no wasted slot on a condemned track."""
+    from datetime import timedelta
+
+    from ingesta.caducitat import caducitat_cutoff
+
+    c = _make_pending_dated(700, caducitat_cutoff() - timedelta(days=1))
+    assert c.pk not in {x.pk for x in _select(10)}
+
+
+@pytest.mark.django_db
+def test_recent_pending_is_selected():
+    """A pending track within the window (survives the purge) IS a
+    candidate."""
+    from datetime import timedelta
+
+    from ingesta.caducitat import caducitat_cutoff
+
+    c = _make_pending_dated(701, caducitat_cutoff() + timedelta(days=1))
+    assert c.pk in {x.pk for x in _select(10)}
+
+
+@pytest.mark.django_db
+def test_null_dated_pending_is_selected():
+    """`data_llancament=NULL` stays enrichable, mirroring the purge's
+    `__lt` filter which never deletes NULL-dated rows."""
+    c = _make_pending_dated(702, None)
+    assert c.pk in {x.pk for x in _select(10)}

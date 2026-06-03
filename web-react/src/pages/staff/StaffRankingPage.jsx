@@ -36,7 +36,7 @@ export default function StaffRankingPage() {
   const [territori, setTerritori] = useState('CAT')
   const [data, setData] = useState(null)
   const [sel, setSel] = useState(new Set())
-  const [motiu, setMotiu] = useState('artista_incorrecte')
+  const [motiu, setMotiu] = useState('desvincular_artista')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 

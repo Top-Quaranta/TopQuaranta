@@ -184,12 +184,53 @@ MAX_API_RETRIES = 3
 # Score normalization batch size
 SCORE_BATCH_SIZE = 500
 
-# Motius de rebuig — single source of truth
+# Accions post-rebuig (single source of truth).
+#
+# Renamed from `motius de rebuig` on 2026-05-25. The previous names
+# described the cause (`no_catala`, `album_incorrecte`, ...) which
+# kept getting misread (e.g. assuming `album_incorrecte` meant "the
+# album is wrong but the artist is right" instead of the real
+# meaning "the album belongs to a homonym artist that Deezer
+# collapsed under the right Deezer profile"). The new codes
+# describe the concrete action each value triggers, so the name
+# itself locks the contract:
+#
+#   desvincular_canco   -> rebutjar_canco(canco):
+#       sets verificada=False, activa=False. The row stays in DB
+#       for audit but disappears from pendents and rankings.
+#       Covers the legacy `no_catala` (canço in another language)
+#       and `no_musica` (podcast, sample, interview).
+#
+#   desvincular_album   -> rebutjar_album(album):
+#       deletes all unverified cançons of the album + marks
+#       album.descartat=True. The artista's ArtistaDeezer rows are
+#       NOT touched: the album belongs to a homonym that Deezer
+#       collapsed under the right artista's Deezer profile.
+#
+#   desvincular_artista -> rebutjar_artista(artista):
+#       deletes all unverified cançons + clears every
+#       ArtistaDeezer row + marks every album descartat. The
+#       post_delete signal on ArtistaDeezer then sets aprovat=False
+#       and pendent_review=False on the artista (unless it has an
+#       MBID anchor). The artista does NOT auto-return to pendents.
+#
+# Data migration `music.0096_rename_motius_to_actions` rewrites
+# historical HistorialRevisio.motiu values: `artista_incorrecte`
+# -> `desvincular_artista`, `album_incorrecte` -> `desvincular_album`,
+# `no_catala` + `no_musica` -> `desvincular_canco`.
+#
+# IMPORTANT: the human label MUST name only the action, never the
+# cause. Including the cause ("homonim", "no és en català", ...)
+# brings back the same ambiguity the rename was meant to kill: the
+# operator reads the label, infers a meaning that does not match
+# what the action actually does, and we end up needing another doc
+# to undo the confusion. All cause / when-to-use prose lives in
+# `docs/architecture/staff.md` section 5; this list stays
+# action-only.
 MOTIUS_REBUIG = [
-    ("no_catala", "No és en català"),
-    ("artista_incorrecte", "El perfil Deezer no és el nostre artista"),
-    ("album_incorrecte", "Àlbum incorrecte"),
-    ("no_musica", "No és música"),
+    ("desvincular_canco", "Desvincular la cançó"),
+    ("desvincular_album", "Desvincular l'àlbum"),
+    ("desvincular_artista", "Desvincular l'artista"),
 ]
 MOTIUS_VALIDS = {m[0] for m in MOTIUS_REBUIG}
 

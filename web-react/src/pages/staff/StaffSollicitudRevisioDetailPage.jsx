@@ -36,17 +36,18 @@ const ESTAT_LABEL = {
   resolta: 'Resolta',
 }
 
+// Action-only labels — cause / when-to-use lives in
+// docs/architecture/staff.md section 5. Tones reflect blast
+// radius: cançó (default) < àlbum (warning) < artista (danger).
 const MOTIU_TONE = {
-  no_catala: 'default',
-  album_incorrecte: 'warning',
-  artista_incorrecte: 'warning',
-  no_musica: 'danger',
+  desvincular_canco: 'default',
+  desvincular_album: 'warning',
+  desvincular_artista: 'danger',
 }
 const MOTIU_LABEL = {
-  no_catala: 'No és en català',
-  album_incorrecte: 'Àlbum incorrecte',
-  artista_incorrecte: 'Artista incorrecte',
-  no_musica: 'No és música',
+  desvincular_canco: 'Cançó desvinculada',
+  desvincular_album: 'Àlbum desvinculat',
+  desvincular_artista: 'Artista desvinculat',
 }
 
 function fmtDate(iso) {

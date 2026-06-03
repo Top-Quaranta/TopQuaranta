@@ -36,6 +36,9 @@ def album_card(album) -> dict[str, Any]:
             album.data_llancament.isoformat() if album.data_llancament else None
         ),
         "imatge_url": getattr(album, "imatge_url", None) or None,
+        # Fase 3: lets the SPA build the self-hosted cover URL
+        # (/portades/album/<deezer_id>-…) instead of the Deezer JPEG.
+        "deezer_id": album.deezer_id,
     }
 
 

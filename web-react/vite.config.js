@@ -37,6 +37,22 @@ export default defineConfig({
         // in the default chunk".
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            // React core in its OWN stable chunk, evaluated first. Every
+            // page needs it, so it's always loaded. Pinning it here stops
+            // the shared React runtime (scheduler/react-is) from being
+            // co-located into a feature chunk: before this, one such
+            // shared module landed inside the `recharts` chunk, so the
+            // entry imported a symbol from it and the browser
+            // modulepreloaded all of recharts (~112 KB gz) on EVERY
+            // public page, even though only the lazy CancoChart uses it.
+            // `react-router` / `react-helmet-async` keep their own rules
+            // below (the trailing slash makes `react/`, `react-dom/`,
+            // `react-is/`, `scheduler/` not match `react-router/` etc.).
+            if (
+              /node_modules\/(react|react-dom|react-is|scheduler)\//.test(id)
+            ) {
+              return 'react'
+            }
             if (
               id.includes('recharts') ||
               /node_modules\/d3-/.test(id) ||

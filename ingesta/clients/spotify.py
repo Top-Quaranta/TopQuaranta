@@ -390,6 +390,35 @@ class UserSpotifyClient:
         items = resp.json().get("tracks", {}).get("items", [])
         return items[0]["uri"] if items else None
 
+    def search_isrc_principal_artist(self, isrc: str) -> str | None:
+        """Return the principal Spotify artist id for an ISRC in
+        ONE API call.
+
+        Used by the rebuig backfill's orphan flow
+        (`enriquir_spotify_rebuigs.py`) which only needs
+        `artista_spotify_id` for HR rows whose Canco was deleted.
+        Skips the `get_track` + `get_artist` round-trips because
+        the principal artist id is already in the `/search`
+        response. Returns None if no track matches or the result
+        carries no artist payload.
+        """
+        if not isrc:
+            return None
+        resp = self._request(
+            "GET",
+            "/search",
+            params={"q": f"isrc:{isrc}", "type": "track", "limit": 1},
+        )
+        items = resp.json().get("tracks", {}).get("items", [])
+        if not items:
+            return None
+        artists = items[0].get("artists") or []
+        for a in artists:
+            aid = (a or {}).get("id") or ""
+            if aid:
+                return aid
+        return None
+
     def get_track(self, spotify_id: str) -> dict | None:
         """Fetch the full Spotify track JSON for a known spotify_id.
 

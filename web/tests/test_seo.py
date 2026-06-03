@@ -144,6 +144,95 @@ def test_artista_seo_404_when_unapproved(client, artista):
     assert r.status_code == 404
 
 
+# ── Thin artiste pages (200 + noindex) — audit flags #3/#6 ──────────
+
+
+def _meta_desc(html: str) -> str:
+    m = re.search(r'<meta name="description" content="(.*?)"', html, re.DOTALL)
+    return m.group(1) if m else ""
+
+
+@pytest.mark.django_db
+def test_artista_thin_200_noindex_generated_desc(client, db):
+    """Case A: approved artiste with no indexable cançó → 200 +
+    noindex, generated description (never the Last.fm placeholder),
+    minimal JSON-LD (no discography)."""
+    a = Artista.objects.create(
+        nom="Thin Band",
+        slug="thin-band",
+        aprovat=True,
+        lastfm_bio_summary="Read more on Last.fm",
+    )
+    r = client.get(f"/artista/{a.slug}")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert 'name="robots" content="noindex' in body
+    assert "Thin Band" in body
+    desc = _meta_desc(body)
+    assert desc and "Read more on Last.fm" not in desc
+    # Minimal MusicGroup: name present, no album/track arrays.
+    mg = next(b for b in _jsonld_blocks(body) if b.get("@type") == "MusicGroup")
+    assert mg["name"] == "Thin Band"
+    assert "album" not in mg and "track" not in mg
+
+
+@pytest.mark.django_db
+def test_artista_indexable_is_index_not_noindex(client, artista):
+    """Case B: approved artiste WITH indexable cançó → 200, indexable
+    (no noindex)."""
+    r = client.get(f"/artista/{artista.slug}")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert 'name="robots" content="index' in body
+    assert "noindex" not in body
+
+
+@pytest.mark.django_db
+def test_artista_placeholder_bio_not_emitted_when_indexable(client, artista):
+    """Case C: approved + indexable but bio is the Last.fm placeholder
+    → 200, no noindex, description falls back to generated (placeholder
+    never emitted)."""
+    artista.bio = ""
+    artista.lastfm_bio_summary = "Read more on Last.fm"
+    artista.save()
+    r = client.get(f"/artista/{artista.slug}")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "noindex" not in body
+    desc = _meta_desc(body)
+    assert desc and "Read more on Last.fm" not in desc
+
+
+@pytest.mark.django_db
+def test_artista_seo_404_when_missing(client, db):
+    """Case E: non-existent slug → 404."""
+    r = client.get("/artista/no-existeix-xyz")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_seo_api_artista_thin_is_noindex(client, db):
+    """SPA parity: the helmet endpoint reports noindex + minimal
+    JSON-LD for a thin artiste."""
+    a = Artista.objects.create(nom="Thin API", slug="thin-api", aprovat=True)
+    r = client.get(f"/api/v1/seo/artista/{a.slug}/")
+    assert r.status_code == 200
+    payload = r.json()
+    assert "noindex" in payload["robots"]
+    mg = next(b for b in payload["jsonld"] if b.get("@type") == "MusicGroup")
+    assert "album" not in mg and "track" not in mg
+
+
+@pytest.mark.django_db
+def test_sitemap_excludes_thin_artista(client, db):
+    """A thin artiste (no indexable cançó) must NOT appear in the
+    artistes sitemap (it's served noindex)."""
+    Artista.objects.create(nom="Thin Sitemap", slug="thin-sitemap", aprovat=True)
+    r = client.get("/sitemap-artistes.xml")
+    assert r.status_code == 200
+    assert "/artista/thin-sitemap" not in r.content.decode()
+
+
 @pytest.mark.django_db
 def test_album_seo_404_when_descartat(client, album):
     album.descartat = True
@@ -257,3 +346,19 @@ def test_indexnow_key_file(client):
     r = client.get("/8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b.txt")
     assert r.status_code == 200
     assert b"8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b" in r.content
+
+
+@pytest.mark.django_db
+def test_no_template_comment_leaks_in_seo_pages(client, artista):
+    """Multi-line `{# ... #}` leaks in Django (single-line only). The
+    SEO `_base.html` comment leaked into every bot-served page in
+    production (2026-05-31). Pin that no comment markers/bodies reach
+    the rendered HTML — homepage + an indexable artista (both extend
+    `_base.html`) + a thin artista (extends `artista_thin.html`)."""
+    thin = Artista.objects.create(nom="Thin Leak", slug="thin-leak", aprovat=True)
+    for url in ("/", f"/artista/{artista.slug}", f"/artista/{thin.slug}"):
+        body = client.get(url).content.decode()
+        assert "{#" not in body, f"{url}: leaked '{{#'"
+        assert "#}" not in body, f"{url}: leaked '#}}'"
+        assert "Minimal inline CSS" not in body, f"{url}: leaked _base comment"
+        assert "Thin page for" not in body, f"{url}: leaked artista_thin comment"

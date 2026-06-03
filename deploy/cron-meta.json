@@ -64,6 +64,18 @@
     "skip_concern": 1,
     "description": "Process B: Spotify enrichment. Search ISRC -> fetch track + artist -> persist SpotifyMetadata. Nightly cadence (moved from hourly 2026-05-24 after repeated Dev-Mode quota bans); --limit 50 covers the ~21 new Cançons/day with ample headroom."
   },
+  "enriquir_spotify_rebuigs": {
+    "frequency_label": "Cada nit 05:00",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "description": "Process B backfill: enrich historical rebuig cançons so the per-(deezer_id, spotify_artist_id) ML rejection-ratio feature gains coverage on Deezer-collapsed homonym profiles. Cascade tier 1 (alive shortlist Cançons, ~3 calls/item) is processed first; when exhausted, tier 2 (orphan HR rows whose Canco was deleted by rebutjar_album/rebutjar_artista, ~1 call/ISRC via search_isrc_principal_artist) takes over via --include-orfes (added 2026-05-26 after dry-run + 31-ISRC wet validation: 100% homonyms detected, 1 call/ISRC confirmed, dedupe across multiple HR rows works). Limit chosen by the AIMD controller (state at /var/log/topquaranta/status/enriquir_spotify_rebuigs.controller.json)."
+  },
+  "descarregar_portades": {
+    "frequency_label": "Cada nit 02:00",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "description": "Self-hosted cover pipeline (Fase 1, 2026-05-30): downloads Deezer covers (album.imatge_url, canco.album.imatge_url, artista.imatge_url) and transcodes each to webp/avif/jpg variants at 250+500 px under PORTADES_ROOT (/var/topquaranta/portades/<entitat>/<deezer_id>-<mida>.<format>). State is the filesystem (no DB column); --force re-downloads, otherwise the 500.webp sentinel skips already-present covers. Caps at 200 entities/run, ~0.4s throttle. Caddy serving + SPA consumption are later phases. See docs/architecture/portades.md."
+  },
   "tq-restore-test": {
     "frequency_label": "Mensual (dia 1, 04:30)",
     "max_age_hours": 840,

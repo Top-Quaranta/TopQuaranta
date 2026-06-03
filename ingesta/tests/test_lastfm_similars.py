@@ -110,6 +110,30 @@ def test_resolver_creates_pendent_when_no_match(cmd):
 
 
 @pytest.mark.django_db
+def test_resolver_matches_tombstone_and_does_not_recreate_or_requeue(cmd):
+    """Regression for the similar→reject resurrection loop (2026-06-02):
+    a discarded pendent kept as a tombstone (aprovat=False,
+    pendent_review=False) is found by step 3 — NOT re-created — and is
+    NOT put back into the pendents queue."""
+    tombstone = Artista.objects.create(
+        nom="Tremenda Jauría",
+        lastfm_nom="Tremenda Jauría",
+        aprovat=False,
+        pendent_review=False,  # tombstone
+        font_descoberta="lastfm_similar",
+    )
+    target, created = cmd._resolve_similar_target("Tremenda Jauría", dry_run=False)
+    assert created is False
+    assert target.pk == tombstone.pk
+    # The resolver must not silently resurrect it into the queue.
+    tombstone.refresh_from_db()
+    assert tombstone.pendent_review is False
+    assert tombstone.aprovat is False
+    # No duplicate row was created for the same name.
+    assert Artista.objects.filter(nom__iexact="Tremenda Jauría").count() == 1
+
+
+@pytest.mark.django_db
 def test_replace_similars_dedup_by_target(cmd, manel, delen):
     """Even if 'Delên' and 'dêlen' both appear in the same source's
     response, only ONE row is written — dedup happens at call site

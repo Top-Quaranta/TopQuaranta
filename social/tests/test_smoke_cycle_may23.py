@@ -147,10 +147,20 @@ def test_smoke_ig_substitutes_at_handle(territori):
 
 
 @pytest.mark.django_db
-def test_smoke_capture_textual_output_per_channel_and_territori():
-    """FASE F report: emit one block per (territori, channel) so the
-    sprint summary has real text. Writes the report to
-    `/tmp/social-smoke-cycle-2026-05-23.txt`."""
+def test_smoke_every_channel_and_territori_produces_text():
+    """Every (territori × channel) composer pair must return a non-
+    empty text payload — locks the rendering chain end-to-end.
+
+    History: this used to be a FASE F (cycle 23/05/2026) artefact-
+    generator that also wrote a sprint-summary report to a hard-coded
+    `/tmp/social-smoke-cycle-2026-05-23.txt`. The side-effect made
+    the test fail on any host where that file already existed under a
+    different owner (root residue from one sudo-run on 2026-05-23 was
+    blocking the `topquaranta` user on the production box ever since).
+    Tests must not produce humans-facing artefacts as a side effect;
+    if a one-off sprint report is wanted, generate it from a shell
+    script or management command.
+    """
     entries = _entries()
     scenarios = _scenarios()
     channels = {
@@ -160,7 +170,6 @@ def test_smoke_capture_textual_output_per_channel_and_territori():
         "Telegram": c_telegram,
         "Newsletter": c_newsletter,
     }
-    report = []
     for territori in TERRITORIS:
         for name, mod in channels.items():
             out = mod.compose(
@@ -171,13 +180,7 @@ def test_smoke_capture_textual_output_per_channel_and_territori():
                 rng=random.Random(0),
             )
             text = out.get("text") or out.get("html") or ""
-            report.append(f"\n=== {territori} / {name} ({len(text)} chars) ===")
-            report.append(text)
-    full = "\n".join(report)
-    with open("/tmp/social-smoke-cycle-2026-05-23.txt", "w") as fh:
-        fh.write(full)
-    assert "=== PPCC / IG-feed" in full
-    assert "=== VAL / Newsletter" in full
+            assert text, f"{territori}/{name} produced empty output"
 
 
 @pytest.mark.django_db

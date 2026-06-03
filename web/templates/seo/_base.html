@@ -17,8 +17,8 @@
   <meta property="og:description" content="{{ meta.description }}">
   <meta property="og:url" content="{{ meta.canonical_url }}">
   <meta property="og:image" content="{{ meta.og_image }}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
+  <meta property="og:image:width" content="{{ meta.og_image_width }}">
+  <meta property="og:image:height" content="{{ meta.og_image_height }}">
   <meta property="og:locale" content="{{ meta.locale }}">
   <meta property="og:site_name" content="{{ meta.site_name }}">
 
@@ -29,8 +29,8 @@
   <meta name="twitter:image" content="{{ meta.og_image }}">
 
   <meta name="theme-color" content="#facc15">
-  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
-  <meta name="googlebot" content="index, follow">
+  <meta name="robots" content="{{ meta.robots }}">
+  <meta name="googlebot" content="{{ meta.robots }}">
 
   {# ── Schema.org structured data ── #}
   {% for block in jsonld_blocks %}
@@ -38,9 +38,14 @@
   {% endfor %}
 
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  {# Minimal inline CSS — no external stylesheets so JS-disabled
-     fallback renders fast. Mirrors the SPA palette (yellow on ink)
-     without dragging the full mm-design bundle. #}
+  {% comment %}
+    Minimal inline CSS — no external stylesheets so JS-disabled
+    fallback renders fast. Mirrors the SPA palette (yellow on ink)
+    without dragging the full mm-design bundle.
+    Multi-line MUST use {% comment %} — Django's {# #} is single-line
+    only and otherwise leaks into the rendered HTML (caught 2026-05-31
+    leaking into every bot-served SEO page).
+  {% endcomment %}
   <style>
     :root { color-scheme: dark; --ink: #0a0a0a; --yellow: #facc15; --gray: #9ca3af; }
     html, body { background: var(--ink); color: #fff; font-family: 'Roboto', system-ui, sans-serif; margin: 0; }

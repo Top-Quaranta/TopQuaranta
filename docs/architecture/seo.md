@@ -69,8 +69,20 @@ with a tenth of the work.
 
 Hard rules, mirrored across SSR views, sitemaps, and IndexNow notify:
 
-* **Artista** — only `aprovat=True`. When un-approved, SSR returns 404
-  → Google de-indexes within hours.
+* **Artista** — only `aprovat=True`. When un-approved (or
+  non-existent), SSR returns 404. An *approved* artiste with **no
+  verified active cançó** is NOT a 404: it is served **200 + `noindex,
+  follow`** (a thin page, `seo/artista_thin.html`, with a generated
+  description and minimal `MusicGroup` JSON-LD). Rationale: returning
+  404 for these made Google re-crawl previously-indexed URLs as errors
+  (~4.8k/week) and discard accumulated authority; 200 + noindex
+  de-indexes cleanly and the directive **drops automatically** the
+  moment the artiste gains an indexable cançó. The `Meta.robots` field
+  carries the directive; the thin/index decision lives in
+  `web/seo/views.py::_artista_has_indexable`. Bio descriptions are run
+  through `meta.clean_lastfm_bio`, which strips the
+  "Read more on Last.fm" boilerplate so the placeholder never reaches a
+  `<meta description>`.
 * **Album** — parent artiste approved AND `descartat=False`.
 * **Canco** — `verificada=True, activa=True`.
 * **Territori / Comarca / Dècada** — only when the aggregation has
@@ -162,6 +174,14 @@ entity, cached on disk under `/var/cache/topquaranta/og/<kind>/<slug>-<stamp>.pn
 
 Cache key includes `updated_at` so when an entity changes the OG image
 URL changes too — every social share gets the latest card.
+
+**Declared dimensions.** `Meta.og_image_width` / `og_image_height`
+carry the real pixel size of `og_image` and are emitted as
+`og:image:width` / `og:image:height` by both the SSR template and the
+SPA `SeoHead`. Default is 1200×630 (the dynamic generator). Album and
+cançó pages prefer the raw Deezer cover (`cover_xl`, square
+**1000×1000**) as the card and declare 1000×1000 accordingly, so
+social scrapers don't crop/mis-scale against a wrong aspect ratio.
 
 ## SPA parity
 

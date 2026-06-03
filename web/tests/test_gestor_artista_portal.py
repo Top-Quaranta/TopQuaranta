@@ -397,9 +397,9 @@ def rebutjades_fixture(db, artista):
     Deezer ID 999001, one per common motiu."""
     rows = []
     for motiu, nom in [
-        ("no_catala", "Track ES-only"),
-        ("album_incorrecte", "Track wrong-album"),
-        ("no_musica", "Track is-podcast"),
+        ("desvincular_canco", "Track ES-only"),
+        ("desvincular_album", "Track wrong-album"),
+        ("desvincular_artista", "Track wrong-deezer-profile"),
     ]:
         rows.append(
             HistorialRevisio.objects.create(
@@ -470,7 +470,7 @@ def test_cancons_pendents_includes_rebutjades(
     assert len(body["results"]) == 3
     assert len(body["rebutjades"]) == 3
     motius = {row["motiu"] for row in body["rebutjades"]}
-    assert motius == {"no_catala", "album_incorrecte", "no_musica"}
+    assert motius == {"desvincular_canco", "desvincular_album", "desvincular_artista"}
     # Required keys for the SPA's row renderer.
     sample = body["rebutjades"][0]
     for k in (
@@ -516,7 +516,7 @@ def test_ping_staff_with_rebutjades_kind(client_g, artista, rebutjades_fixture):
     assert s.pendents_ids == []
     assert len(s.rebutjades_snapshot) == 3
     motius = {row["motiu"] for row in s.rebutjades_snapshot}
-    assert motius == {"no_catala", "album_incorrecte", "no_musica"}
+    assert motius == {"desvincular_canco", "desvincular_album", "desvincular_artista"}
 
 
 def test_ping_staff_mix_via_include_rebutjada_historial_pks(

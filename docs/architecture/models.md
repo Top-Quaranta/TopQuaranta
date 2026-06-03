@@ -227,9 +227,25 @@ and confidence — this allows the ML model to be retrained from its own history
 - **Track snapshot:** `canco_nom`, `album_nom`, `data_llancament`, `isrc_prefix`
 - **Artist snapshot:** `artista_nom`, `artista_territori`, `artista_deezer_id`,
   `artista_deezer_nb_fan`, `artista_deezer_nb_album`, `artista_nom_deezer`,
-  `artista_nom_similitud`
+  `artista_nom_similitud`, `artista_spotify_id` (added 2026-05-25,
+  migration 0085 — principal Spotify artist id at decision time,
+  read from the canço's `SpotifyMetadata.spotify_artist_id`. Keyed
+  by the per-pair rejection-ratio feature in
+  `music/ml.py`; backfilled for legacy rows by the dedicated
+  drain command `enriquir_spotify_rebuigs` once Process B
+  enriches them.), `spotify_lookup_at` (added 2026-05-26,
+  migration 0086 — stamp of the last orphan-flow ISRC lookup so
+  not-found ISRCs are not re-searched for 30 days)
 - **ML snapshot:** `ml_classe_decisio`, `ml_confianca_decisio`
-- **Decision:** `decisio` (aprovada/rebutjada), `motiu` (see `Canco.MOTIUS`)
+- **Decision:** `decisio` (aprovada/rebutjada), `motiu` — action code
+  from `music.constants.MOTIUS_REBUIG` (for rebuigs:
+  `desvincular_canco`, `desvincular_album`, `desvincular_artista`)
+  or `ok` / `auto_ml` for approvals. Each value names the exact
+  action the rebuig triggered; full semantics at
+  `docs/architecture/staff.md §5`. Renamed 2026-05-25 from
+  cause-based codes (`no_catala`, `album_incorrecte`,
+  `artista_incorrecte`, `no_musica`) via migration
+  `music.0083_rename_motius_to_actions`.
 - `created_at`
 
 ---

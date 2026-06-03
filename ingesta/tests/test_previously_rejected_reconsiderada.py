@@ -23,7 +23,9 @@ from music.models import HistorialRevisio
 def reject(db):
     """Factory for HistorialRevisio rebutjada rows."""
 
-    def _factory(*, isrc="", deezer_id=None, reconsiderada=False, motiu="no_catala"):
+    def _factory(
+        *, isrc="", deezer_id=None, reconsiderada=False, motiu="desvincular_canco"
+    ):
         return HistorialRevisio.objects.create(
             canco_nom="x",
             artista_nom="x",

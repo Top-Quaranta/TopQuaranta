@@ -64,6 +64,7 @@ export function SeoHead({ entity, slug = '', fallback = null }) {
     <Helmet>
       <title>{meta.title}</title>
       <meta name="description" content={meta.description} />
+      {meta.robots ? <meta name="robots" content={meta.robots} /> : null}
       <link rel="canonical" href={meta.canonical_url} />
       <link rel="alternate" hrefLang="ca" href={meta.canonical_url} />
       <link rel="alternate" hrefLang="x-default" href={meta.canonical_url} />
@@ -72,8 +73,8 @@ export function SeoHead({ entity, slug = '', fallback = null }) {
       <meta property="og:description" content={meta.description} />
       <meta property="og:url" content={meta.canonical_url} />
       <meta property="og:image" content={meta.og_image} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      <meta property="og:image:width" content={String(meta.og_image_width || 1200)} />
+      <meta property="og:image:height" content={String(meta.og_image_height || 630)} />
       <meta property="og:locale" content={meta.locale} />
       <meta property="og:site_name" content={meta.site_name} />
       <meta name="twitter:card" content={meta.twitter_card} />

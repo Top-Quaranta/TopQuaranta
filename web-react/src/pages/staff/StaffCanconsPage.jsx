@@ -25,14 +25,15 @@ import {
 import { Field } from '../../components/staff/StaffTable'
 import FilterPanel from '../../components/staff/FilterPanel'
 
-// Mirror of music.constants.MOTIUS_REBUIG (label/value pairs). Keep
-// this in sync when the backend list changes — the bulk-action
-// endpoint rejects anything outside this set with "Motiu invàlid".
+// Mirror of music.constants.MOTIUS_REBUIG (label/value pairs).
+// Action-only labels — cause / when-to-use lives in
+// docs/architecture/staff.md section 5 and must NOT be duplicated
+// here. Order: cançó (safest) first, artista (most destructive)
+// last.
 const MOTIUS = [
-  ['no_catala',          'No és en català'],
-  ['artista_incorrecte', "El perfil Deezer no és el nostre artista"],
-  ['album_incorrecte',   'Àlbum incorrecte'],
-  ['no_musica',          'No és música'],
+  ['desvincular_canco',   'Desvincular la cançó'],
+  ['desvincular_album',   "Desvincular l'àlbum"],
+  ['desvincular_artista', "Desvincular l'artista"],
 ]
 
 // Default filter values — also used by the FilterPanel "Restablir"
@@ -70,7 +71,7 @@ export default function StaffCanconsPage() {
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
   const [sel, setSel] = useState(new Set())
-  const [motiu, setMotiu] = useState('no_catala')
+  const [motiu, setMotiu] = useState('desvincular_canco')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 

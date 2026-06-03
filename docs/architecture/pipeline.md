@@ -28,6 +28,11 @@
                                      RankingProvisional / RankingSetmanal
 ```
 
+> Related: the **self-hosted cover pipeline** (`ingesta/portades/` +
+> `descarregar_portades`) downloads and transcodes Deezer covers to
+> webp/avif variants on our own origin. It is documented separately at
+> [`portades.md`](portades.md) (Fase 1 = ingestion only).
+
 ## 2. API clients (`ingesta/clients/`)
 
 All clients import `DEEZER_RATE_LIMIT`, `LASTFM_RATE_LIMIT`, `MAX_API_RETRIES`
@@ -247,6 +252,20 @@ exits when nobody needs attention — idle invocations are cheap.
 python manage.py netejar_caducades
 ```
 Deletes unverified tracks with `data_llancament < today - DIES_CADUCITAT`.
+The cutoff comes from the shared `ingesta/caducitat.py::caducitat_cutoff()`
+(`__lt`, so NULL-dated rows are KEPT — never purged).
+
+**Survivor-mirror invariant (2026-06-03).** `enriquir_spotify`'s pending
+candidate pool must be EXACTLY the survivors of this purge. The enrich
+cron runs 03:00, the purge 04:00; before the guard, the equity floor
+spent its reserved pending slots on high-`ml_confianca` old-catalog
+tracks (past `DIES_CADUCITAT`) that the 04:00 purge then deleted an hour
+later, cascade-dropping the fresh `SpotifyMetadata` — so pending coverage
+of the `no_verificades` playlists stayed flat. `_select_candidates` now
+wraps its pending pool in `ingesta/caducitat.py::exclude_caducats()` (the
+queryset mirror of `is_caducat`: same `caducitat_cutoff()`, same `__lt`
+NULL-keeping). Public pendents are NOT guarded — the purge only sweeps
+`verificada=False`. See `playlists.md` "Spotify enrichment (Process B)".
 
 ### 3.8 `obtenir_metadata_lastfm` — daily 05:00 UTC
 ```bash
@@ -279,6 +298,34 @@ The `nb_similars_lastfm` count surfaces in the staff Artistes /
 Pendents lists and in the `LastfmPanel` of `ArtistaEditPage`. Pendents
 gains a sort `?sort=similars_lastfm` (high-affinity first) and a
 filter `?font_descoberta=lastfm_similar` to triage just this batch.
+
+**Rejection memory — the resurrection loop fix (audit 2026-06-02).**
+`_resolve_similar_target` has no separate rejection record (the resolver
+only checks for an existing `Artista` row; `HistorialRevisio` is
+per-cançó, so a song-less placeholder leaves no trail). When
+`pendent_descartar` *hard-deleted* discarded placeholders, the next sync
+of any approved artist that still recommended the name re-created the
+pendent — Tremenda Jauría / The Fades were each discarded 4×. The fix:
+discard now **tombstones** (`aprovat=False, pendent_review=False`) instead
+of deleting (`web/api/staff/pendents.py`), so step 3 of the resolver
+matches the surviving row and `_process` never re-queues it
+(`pendent_review` stays False). The loop converges: every previously
+deleted name resurrects at most once more, then the tombstone is
+permanent. One-shot `backfill_lastfm_tombstones` (`--dry-run`)
+re-tombstones the pendents that had already resurrected (live
+`font_descoberta="lastfm_similar"` rows whose name carries a prior
+`pendent_descartar`/deleted `StaffAuditLog` trace).
+
+**Backlog drain preserves recommended candidates (2026-06-02).** The
+weekly `netejar_pendents_no_ppcc` cron (Mon 02:15, cap 2000/run) that
+drains the ~35 k `lastfm_similar` backlog now requires
+`nb_similars_lastfm = 0` in its candidate filter — so it only sweeps the
+dead weight (no approved recommender) and **preserves** every pendent
+with ≥1 approved recommender for staff triage. `nb_similars_lastfm` is
+the exact model field the prioritiser (`pendents_list`) sorts by, so the
+preserved set equals the "sort by Last.fm affinity" view. Drain target
+drops to the ~27 k dead-weight subset (~14 weeks); the ~8 k recommended
+candidates stay.
 
 ### 3.9 Utility / ad-hoc commands (not cron-scheduled)
 - `recalcular_ml` — force retrain the RF model and reclassify all unverified
@@ -339,7 +386,18 @@ A/B 5-fold CV proved the smaller cap matched ROC-AUC and improved F1
   signal; estructurals dominate at 95.6 %, TF-IDF only 4.4 %.
 
 Top 5 features by importance (2026-04-25 retrain, max_features=30):
-1. `ratio_rebuig_artista` (20.0%) — Bayesian-smoothed (k=5, prior=0.5)
+1. `ratio_rebuig_par_artist` (20.0%) — Bayesian-smoothed (k=5,
+   prior=0.5). Renamed 2026-05-25 from `ratio_rebuig_artista` (by
+   name only). The new key is the most-specific available among
+   `(artista_deezer_id, artista_spotify_id)`,
+   `artista_deezer_id` alone, then `artista_nom` as legacy
+   fallback. Disambiguates Deezer-collapsed homonyms (canonical
+   `Aion` and `Jim` cases) so the wrong-Aion's rejections stop
+   penalising the real-Aion's catalogue. Position at index 8 of
+   `FEATURE_NAMES` preserved across the rename: length stays 50,
+   so the RF on disk keeps loading; quality degrades silently
+   at that index until the next `entrenar_model()` learns the
+   new splits.
 2. `whisper_p_ca` (17.8%) — Whisper LID confidence the track is català
 3. `ratio_rebuig_registrant` (10.7%)
 4. `whisper_p_en` (9.8%)
@@ -350,6 +408,160 @@ Bayesian smoothing on the three `ratio_rebuig_*` features: returns
 decisions can't collapse to 0 or 1 from one or two calls. Prevents
 feedback loops where an early false rebuig biases the model
 permanently.
+
+Per-pair coverage of historical decisions: `HistorialRevisio`
+stores `artista_spotify_id` as a snapshot from migration 0085
+onwards. New decisions fill it from the canço's `SpotifyMetadata`
+at decision time. Legacy rejection rows (essentially 0 % enriched
+as of 2026-05-25) are filled in by the dedicated drain command
+`enriquir_spotify_rebuigs` (see section 5 below) on a separate
+daily budget. Until coverage fills out, the per-pair ratio falls
+back to per-deezer or per-name automatically — same FEATURE_NAMES
+slot, no MISALIGNED flag.
+
+### Backfill rate controller (AIMD)
+
+`ingesta/clients/spotify_backfill_controller.py` implements an
+additive-increase / multiplicative-decrease controller that
+chooses the daily limit `enriquir_spotify_rebuigs` runs at. The
+shape matches TCP congestion control: ramp up slowly, drop hard
+on the first sign of trouble.
+
+State persists at `/var/log/topquaranta/status/
+enriquir_spotify_rebuigs.controller.json`. Each daily run:
+
+  1. Looks at the two cooldown files
+     (`enriquir_spotify.cooldown` for maintenance and
+     `enriquir_spotify_rebuigs.cooldown` for the backfill itself)
+     plus the persisted `last_ban_at` (**48 h** memory) to decide
+     whether a ban has been observed.
+
+  > **Ordering invariant (2026-05-30):** `handle()` runs
+  > `adjust_for_run()` **before** `clear_expired()`, so the
+  > controller checks for recent bans BEFORE expired cooldown
+  > sentinels are pruned. A Spotify Retry-After runs 18–24 h —
+  > longer than the gap to the next daily tick — so by the time the
+  > cron fires again the sentinel has usually just expired. The old
+  > order pruned it first, `detect_recent_ban` found nothing,
+  > `last_ban_at` stayed null, no multiplicative-decrease fired, and
+  > the limit bumped back up the day after a ban (the 24/05 and
+  > 29/05 bans were both lost). Detection keys on the sentinel's
+  > **mtime** — read as **UTC-naive** (`fromtimestamp(..., tz=utc)`) to
+  > match `_utcnow()` / `last_run_at` / `last_ban_at`; plain
+  > `fromtimestamp()` returns server-local (CEST) time and stored a ban
+  > 2 h in the future (fixed 2026-05-30) — not its `resume_at`, so an
+  > expired-but-present file still counts; the 48 h `last_ban_at`
+  > memory covers the case
+  > where the maintenance command pruned the sentinel before the
+  > backfill tick. The decrease is `save_state`d before the
+  > cooldown-active early return, so it persists even when the run
+  > then aborts.
+  2. If a ban is fresh: drop to `last_safe_limit` if any (the
+     most recent limit that survived `DAYS_BEFORE_BUMP = 3` days
+     unbanned); otherwise halve, with `MIN_LIMIT = 50` as the
+     floor. Reset the day counter.
+  3. If no ban: increment the day counter. After 3 ban-free
+     days, promote the current limit to `last_safe_limit` and
+     bump it by `BUMP = 200`, capped at `MAX_DAILY_LIMIT = 800`.
+
+Volume reasoning for the constants: each backfill cançó costs
+up to 3 Spotify API calls (search + track + artist). Hard
+ceiling 800 cançons/day → 2 400 backfill calls + ~150
+maintenance ≈ 2 550 calls/day, well under the ~3 600/day that
+triggered the 2026-05-24 ban. Initial limit 200 → 600 + 150 =
+750 calls/day, comfortably safe.
+
+Manual overrides via `--limit <N>` bypass the controller for one
+run and leave the persisted state untouched. Use them for
+sanity-test runs or one-off pushes, never as a daily setting.
+
+### Cascade (alive -> orfes -> rest -> pendents)
+
+`enriquir_spotify_rebuigs` walks four tiers in priority order
+within a single run; each tier only fills what the previous left
+in the AIMD budget:
+
+1. **Live shortlist alive** — Cançons that still exist in the DB
+   whose `artista_deezer_id` carries at least one
+   `desvincular_album` HR row. Three calls per cançó (search +
+   track + artist) and the full `SpotifyMetadata` is persisted,
+   so the playlist sync can use the resulting `spotify_id`.
+   The HR scan pre-filters `canco_deezer_id` against the set of
+   surviving Cançons whose `SpotifyMetadata` is not in
+   `LOCKED_STATUSES` (`found` or `manual` — staff-pasted manual links,
+   2026-06-02, are excluded here too so their id is never re-resolved;
+   see `playlists.md`) *before* the budget cap is applied,
+   and tiebreaks the `created_at` ordering with `pk`. The
+   pre-filter is required because ~95 % of shortlist HR rows point
+   to cançons already deleted by `rebutjar_album`/`rebutjar_artista`;
+   without it the cap was spent entirely on dead deezer_ids and the
+   tier starved to 0 even when live candidates existed (2026-05-28
+   `live_alive=0` incident). The `pk` tiebreak makes the capped
+   selection deterministic across runs given large same-`created_at`
+   batches.
+2. **Orphan flow shortlist** — HR rows whose `canco_deezer_id`
+   no longer has a matching Canco (deleted by `rebutjar_album` /
+   `rebutjar_artista`) but still carries an ISRC. One `/v1/search`
+   per distinct ISRC; the principal `spotify_artist_id` from the
+   response is written back to every HR row carrying that ISRC.
+   No `Canco` or `SpotifyMetadata` rows are created. Every HR row
+   gets `spotify_lookup_at` stamped (found or not), and the
+   candidate query excludes rows looked up within the last 30
+   days so a not-found ISRC is not re-searched on every nightly
+   run. Behind `--include-orfes`.
+3. **Rest of rebuigs** — when `--shortlist-only` is OFF, tiers 1
+   and 2 widen beyond the `desvincular_album` shortlist to any
+   rebuig HR row with an ISRC.
+4. **Pendents** — Cançons with `verificada=False, activa=True`
+   and an ISRC that have not been classified yet. Most-recent
+   `created_at` first so the freshest queue items reach the
+   playlists first. Behind `--include-pendents`.
+
+The AIMD budget caps total items processed in a run, not API
+calls. Tier 1 and tier 4 cost ~3 calls/item; tier 2 costs ~1.
+A run that shifts toward orphans is automatically more
+conservative on the metadata quota.
+
+`--include-orfes` and `--include-pendents` are off by default and
+the production cron does not pass them. They are validated
+manually via `tq-run enriquir_spotify_rebuigs ...` before any
+schedule change.
+
+### Shared metadata cooldown (`spotify_metadata_cooldown`)
+
+The maintenance enrichment and the rebuig backfill both call the
+same Spotify endpoints (`/v1/search`, `/v1/tracks`, `/v1/artists`)
+and share a single Spotify quota bucket. Until 2026-05-25 each
+command kept its own cooldown file, so a ban seen by maintenance
+left the backfill free to keep probing — which the Spotify docs
+warn extends the ban window. The shared module
+`ingesta/clients/spotify_metadata_cooldown.py` consolidates the
+state:
+
+- **Single canonical file** at
+  `/var/log/topquaranta/status/spotify_metadata.cooldown`. Both
+  commands write to it on `RateLimitedError` and check it before
+  the first API call.
+- **Legacy fallback reads** of
+  `enriquir_spotify.cooldown` and `enriquir_spotify_rebuigs
+  .cooldown` keep an old-binary ban honoured during the
+  transition. New writes never touch the legacy paths, so they
+  drain naturally as their `resume_at` passes.
+- **`active_resume_at`** returns the latest unexpired `resume_at`
+  across every file. The longest pending back-off wins
+  (conservative against silently shrinking the window).
+- **`clear_expired`** prunes files whose `resume_at` is in the
+  past on every successful run, so the AIMD controller's mtime-
+  based ban detection does not re-look fresh after every
+  filesystem touch.
+- **Playlist sync is OUT.** `actualitzar_playlists_spotify` hits
+  `/v1/playlists/<id>/items`, a separate bucket. Empirically the
+  playlist sync ran successfully during the 2026-05-24 metadata
+  ban without extending it; routing playlist writes through the
+  shared cooldown would cause spurious skips of work Spotify
+  allows. The test
+  `test_playlist_sync_does_not_reference_metadata_cooldown`
+  pins that boundary.
 
 Classes: `A ≥ 0.7`, `B 0.4–0.7`, `C < 0.4`. Stored on `Canco.ml_classe` +
 `ml_confianca`. Model files: `music/ml_model.joblib` + `ml_tfidf.joblib`.
@@ -425,10 +637,20 @@ No external services. Everything is file-based on the server.
 - **Per-command status files** (`/var/log/topquaranta/status/<tag>.status`):
   written by `tq-run`. Contain `status=OK|FAIL`, `exit_code`, `last_run`
   (ISO-8601), and the last 20 lines of output.
-- **`/home/topquaranta/bin/tq-health`**: prints a summary table and exits
-  non-zero if any command is FAIL, STALE (past its expected cadence), or if
-  there are any Django ERROR-level entries logged today. Safe to pipe to a
-  notifier or to read manually when inspecting the server.
+- **`/home/topquaranta/bin/tq-health`**: gathers the facts (status files +
+  `cron-meta.json`, disk, web smoke, Spotify sub-checks, pending migrations,
+  today's Django errors) in shell, then delegates the PRESENTATION to
+  `analytics/health_report.py` (pure stdlib, runs without Django). Exits
+  non-zero if any command is FAIL/STALE/STUCK past its cadence, disk ≥90%,
+  a web check fails, a Spotify sub-check is WARN/CRIT, a migration is
+  pending, or there are Django ERRORs today. The rendered report has:
+  a one-line **executive summary** (🟢 Tot OK / 🔴 N anomalies), an
+  **Anomalies** block (only genuinely-escalating items; `[silenced]`
+  known-issues stay in their group and don't turn the header red), **crons
+  grouped** by logical area, **Sistema** + **Spotify** sections, and a
+  **legend**. Timestamps render in **CEST** (UTC stays in logs/files).
+  `--email-on-fail` mails the report to admin only when something escalates,
+  with signature dedup so a persistent failure doesn't spam hourly.
 
 ## 6. Artist discovery
 

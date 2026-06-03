@@ -55,6 +55,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # Nightly pipeline (UTC) — each step feeds the next
 # ─────────────────────────────────────────────────────────────────────
 
+# 02:00 → Self-hosted cover pipeline (Fase 1). Downloads Deezer
+# covers and transcodes them to webp/avif/jpg variants under
+# PORTADES_ROOT. No DB writes; state is the filesystem. Caps at 200
+# entities/run, throttled ~0.4s between downloads. Caddy serving +
+# SPA consumption land in later phases. See docs/architecture/portades.md.
+0 2 * * *   topquaranta   /home/topquaranta/bin/tq-run descarregar_portades --entitat all --limit 200 >> /var/log/topquaranta/portades.log 2>&1
+
 # 03:00 → PostgreSQL backup. Tiered retention in /home/topquaranta/backups/
 0 3 * * *   postgres      /home/topquaranta/bin/tq-backup >> /var/log/topquaranta/backup.log 2>&1
 
@@ -151,6 +158,42 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 429, not preemptively. See docs/architecture/playlists.md
 # (Process B) and ADR-0013 for the A/B split.
 0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 50 --throttle 1.0 >> /var/log/topquaranta/playlists.log 2>&1
+
+# 05:00 nightly -> Process B backfill of historical rebuigs.
+# Enriches Cançons that carry a rebuig HR row but no Spotify
+# metadata yet, so the per-(deezer_id, spotify_artist_id) ML
+# rejection-ratio feature gains coverage on the rows that drive
+# it (the homonym-suspect Deezer profiles). Wet-run validated
+# 2026-05-26 on PR #96 + first prod run (19/19 enriched, no
+# 429).
+#
+# --shortlist-only restricts to cançons whose artista_deezer_id
+# has at least one `desvincular_album` rebuig. Those are the
+# Deezer-collapsed homonyms where disambiguating by Spotify
+# artist actually changes the ML signal; the wider rebuig
+# universe gets no useful information from this work and stays
+# off the shortlist by design.
+#
+# No `--limit` flag: the AIMD controller at
+# `ingesta/clients/spotify_backfill_controller.py` reads its
+# persisted state and picks the daily limit (starts at 200,
+# ramps +200 every 3 ban-free days up to a hard ceiling of 800,
+# drops on any ban observed in the shared metadata cooldown).
+# Manual --limit overrides bypass the controller and are
+# operator-only.
+#
+# Slot 05:00 UTC: separated from the 03:00 maintenance run so
+# the two enrichment commands do not race for the shared
+# metadata quota in the same minute. 05:00 also sits before the
+# first `actualitzar_playlists_spotify` tick at 04:15... wait,
+# actually 05:00 is AFTER 04:15. The playlist sync at 04:15
+# already saw the night's spotify_ids from the 03:00
+# maintenance run; the 05:00 backfill catches up the historical
+# rebuigs without competing for the same slot.
+#
+# See docs/architecture/pipeline.md section 4 ("Backfill rate
+# controller") for the full controller contract.
+0 5 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify_rebuigs --shortlist-only --include-orfes >> /var/log/topquaranta/playlists.log 2>&1
 
 # 22:30 → Pull engagement metrics from each social platform
 # (Mastodon, Bluesky, Instagram, Telegram). Per-post counters for the

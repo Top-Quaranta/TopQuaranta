@@ -33,7 +33,7 @@ const DEFAULTS = {
   territori: '',
   mb: '',
   // `homonim_sospitos`: '1' restricts to artists with at least one
-  // Cançó rejected as `artista_incorrecte` AND ≥1 still active.
+  // Cançó rejected as `desvincular_artista` AND ≥1 still active.
   // Driven by the dashboard click-through; also exposed in the panel.
   homonim_sospitos: '',
   instagram: '',

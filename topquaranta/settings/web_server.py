@@ -29,11 +29,8 @@ ALLOWED_HOSTS = ["www.topquaranta.cat", "topquaranta.cat", "127.0.0.1"]
 
 STATIC_URL = "/static/"
 
-# Public URL prefix used when handing PNG paths to Meta's media
-# fetcher (carousel item upload). Caddy serves `/static/social/*`
-# from `/var/cache/topquaranta/social/renders/` as plain static
-# files — bypassing Django avoids the CSP/COOP/Vary headers that
-# Meta's fetcher rejects with code 9004 ("Only photo or video can
-# be accepted as media type"). Switch back to the Django view at
-# `/api/v1/social/render` only if Caddy is unavailable.
-SOCIAL_PUBLIC_BASE = "https://www.topquaranta.cat/static/social"
+# NOTE: `SOCIAL_PUBLIC_BASE` now lives in `base.py` so the social
+# publish commands (which run under `production`, not `web_server`)
+# inherit it too — a missing value there silently fell back to the
+# header-laden Django `/api/v1/social/render` view (2026-06-03 9004
+# incident). See the comment in base.py.

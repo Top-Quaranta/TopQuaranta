@@ -26,6 +26,11 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     label_setmana = _setmana_label(setmana)
     label_terr = territori_label(territori)
 
+    # Distinct-subject slots (audit #1/#6) — consistent with the other
+    # composers; Mastodon only renders the hero today, so this is a
+    # no-op now but keeps the hero subject canonical.
+    scenarios = scen.select_slots(scenarios, 2)
+
     hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
     pid, hero_text = pick_phrase(hero, "medium", territori, CHANNEL, rng=rng)
     if not hero_text:

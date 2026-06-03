@@ -934,23 +934,18 @@ function EditarTab({ slug, data, onReload }) {
 // ───────────────────────── Tab: Cançons ──────────────────────────
 
 
-// Motiu → Badge tone. Maps the four reject reasons documented in
-// `HistorialRevisio.MOTIUS`. `no_catala` is the most common (~languaje
-// drift) and reads as neutral; `album_incorrecte` and `artista_
-// incorrecte` flag profile collisions and warrant a warning; `no_musica`
-// is rare and is shown danger because it usually means a podcast that
-// slipped through ingestion. Keep this table in sync with backend.
+// Action-only labels — cause / when-to-use lives in
+// docs/architecture/staff.md section 5. Tone reflects the blast
+// radius: cançó (default), àlbum (warning), artista (danger).
 const MOTIU_TONE = {
-  no_catala: 'default',
-  album_incorrecte: 'warning',
-  artista_incorrecte: 'warning',
-  no_musica: 'danger',
+  desvincular_canco: 'default',
+  desvincular_album: 'warning',
+  desvincular_artista: 'danger',
 }
 const MOTIU_LABEL = {
-  no_catala: 'No és en català',
-  album_incorrecte: 'Àlbum incorrecte',
-  artista_incorrecte: 'Artista incorrecte',
-  no_musica: 'No és música',
+  desvincular_canco: 'Cançó desvinculada',
+  desvincular_album: 'Àlbum desvinculat',
+  desvincular_artista: 'Artista desvinculat',
 }
 
 function CanconsTab({ slug, onSollicitudCreated }) {

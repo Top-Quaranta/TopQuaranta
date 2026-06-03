@@ -265,7 +265,7 @@ def _top_artistes_backlog(limit: int = 15) -> list[dict]:
 
 def _homonym_suspects_details() -> list[dict]:
     """Pairs (artist, deezer_id) that look like an unresolved homonym
-    collision: a Cançó was rejected as `artista_incorrecte` while
+    collision: a Cançó was rejected as `desvincular_artista` while
     pointing at this specific Deezer artist ID, AND that same Deezer
     ID is *still* linked to an artist of the same name with verified
     tracks.
@@ -283,7 +283,7 @@ def _homonym_suspects_details() -> list[dict]:
     rejected = (
         HistorialRevisio.objects.filter(
             decisio="rebutjada",
-            motiu="artista_incorrecte",
+            motiu="desvincular_artista",
             artista_deezer_id__isnull=False,
         )
         .values("artista_nom", "artista_deezer_id")
@@ -455,7 +455,10 @@ def _spotify_enrichment_stats() -> dict:
     sm_qs = SpotifyMetadata.objects.all()
     sm_total = sm_qs.count()
 
-    found_qs = sm_qs.filter(enrichment_status=SpotifyMetadata.STATUS_FOUND)
+    # `found` here means "has a usable Spotify id Process A will push":
+    # both auto-enriched (`found`) and staff-pasted (`manual`) rows count,
+    # so the breakdown still sums to `sm_total`.
+    found_qs = sm_qs.filter(enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES)
     not_found_qs = sm_qs.filter(enrichment_status=SpotifyMetadata.STATUS_NOT_FOUND)
     found = found_qs.count()
     not_found = not_found_qs.count()

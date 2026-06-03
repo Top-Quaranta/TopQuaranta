@@ -10,14 +10,11 @@
  * The chart lines colour-match territory colors defined in HomePage
  * to keep the brand language consistent.
  */
+import { lazy, Suspense } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import {
-  CartesianGrid, Line, LineChart, ResponsiveContainer,
-  Tooltip, XAxis, YAxis, Legend,
-} from 'recharts'
 import Alert from '../components/ui/Alert'
 import { albumUrl } from '../lib/urls'
-import { deezerImg } from '../lib/img'
+import Cover from '../components/Cover'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import TopBreakdownPanel from '../components/TopBreakdownPanel'
@@ -25,14 +22,9 @@ import { SeoHead } from '../lib/seoHead'
 import useApi from '../hooks/useApi'
 import { TERRITORI_NOM } from '../components/editorial'
 
-// Chart-only territori palette. Frontend palette centralisation
-// (TopQuaranta audit 2026-05-11, item C3 deferred) is tracked
-// separately in roadmap.md.
-const TERRITORI_COLORS = {
-  PPCC: '#427c42', CAT: '#c99b0c', VAL: '#cf3339', BAL: '#0047ba',
-  AND:  '#7c3aed', CNO: '#0891b2', FRA: '#ea580c', ALG: '#db2777',
-  ALT:  '#6b7280',
-}
+// Lazy so recharts (~115 KB gz) stays out of the public entry bundle;
+// it only loads when a song actually has a ranking history to chart.
+const CancoChart = lazy(() => import('../components/CancoChart'))
 
 function formatDuration(ms) {
   if (!ms) return '—'
@@ -83,9 +75,13 @@ export default function CancoPage() {
       {/* Header */}
       <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
         {data.album?.imatge_url ? (
-          <img
-            src={deezerImg(data.album.imatge_url, 500)}
+          <Cover
+            entitat="album"
+            deezerId={data.album?.deezer_id}
+            imatgeUrl={data.album.imatge_url}
             alt=""
+            size={500}
+            priority
             className="w-full sm:w-48 h-48 object-cover rounded-md shrink-0"
           />
         ) : (
@@ -150,45 +146,17 @@ export default function CancoPage() {
           <p className="text-xs text-gray-500 mb-4">
             Posició setmanal — més baix és millor (1 = top)
           </p>
+          {/* Height reserved on the wrapper so the lazy chart streaming
+              in causes no layout shift (CLS). */}
           <div className="w-full h-72">
-            <ResponsiveContainer>
-              <LineChart data={data.historial} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="setmana"
-                  tickFormatter={d => d.slice(5)}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  stroke="#9ca3af"
-                />
-                <YAxis
-                  reversed
-                  domain={[1, 40]}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  stroke="#9ca3af"
-                  label={{ value: 'Posició', angle: -90, position: 'insideLeft', fill: '#6b7280', style: { fontSize: 11 } }}
-                />
-                <Tooltip
-                  formatter={(v, n) => [`#${v}`, TERRITORI_NOM[n] || n]}
-                  labelFormatter={l => `Setmana ${l}`}
-                />
-                <Legend
-                  formatter={n => TERRITORI_NOM[n] || n}
-                  wrapperStyle={{ fontSize: 12 }}
-                />
-                {data.territoris_historial.map(t => (
-                  <Line
-                    key={t}
-                    type="monotone"
-                    dataKey={t}
-                    stroke={TERRITORI_COLORS[t] || '#6b7280'}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+            <Suspense
+              fallback={<div className="w-full h-full bg-gray-100 rounded animate-pulse" />}
+            >
+              <CancoChart
+                historial={data.historial}
+                territoris={data.territoris_historial}
+              />
+            </Suspense>
           </div>
         </section>
       )}

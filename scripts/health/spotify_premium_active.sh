@@ -41,7 +41,24 @@ if [[ "$FORCE" == "0" && -f "$CACHE_FILE" ]]; then
         line=$(head -1 "$CACHE_FILE")
         code="${line%%	*}"
         rest="${line#*	}"
-        echo "$rest (cached ${age}s ago)"
+        # Emit ONLY valid JSON. Previously we appended
+        # " (cached ${age}s ago)" as human text, which broke the
+        # consumer's `json.loads` ("Extra data: char 230" → the
+        # tq-health report showed Spotify Premium as "(unparsed)"
+        # even though the subscription was fine). The cache age now
+        # rides inside the JSON as `cache_age_seconds`.
+        if echo "$rest" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+d['cache_age_seconds'] = ${age}
+print(json.dumps(d))
+" 2>/dev/null; then
+            :
+        else
+            # Cache somehow not valid JSON — emit it verbatim rather
+            # than nothing, so the consumer can still try to parse.
+            echo "$rest"
+        fi
         exit "$code"
     fi
 fi

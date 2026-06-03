@@ -14,8 +14,11 @@ backend; for the visual design system see
   `@tailwindcss/vite`.
 - `mm-design` consumed as a git npm dep
   (`github:miquelmatoses/mm-design`) for tokens and brand SVGs.
-- `recharts` for staff dashboards (lazy-loaded so the public bundle
-  does not pay for it), `react-helmet-async` for SEO head tags,
+- `recharts` for staff dashboards AND the public CancoPage ranking
+  chart — both lazy-loaded (the chart is split into
+  `components/CancoChart.jsx` and pulled via `React.lazy`) so the
+  public bundle does not pay for it, `react-helmet-async` for SEO head
+  tags,
   `react-markdown` + `remark-gfm` for community rich text,
   `vitest` for unit tests.
 - Node 22 is the build target. CI uses `npm ci` against
@@ -117,10 +120,46 @@ handles client-side 404.
 
 ## Code splitting
 
-`vite.config.js` declares `manualChunks` for `recharts` and
-`react-router-dom` so the public bundle (HomePage / TopPage /
-ArtistaPage) does not download the staff-only chart library.
-Dynamic `import()` is used for the entire staff page tree (`pages/
-staff/*`) and the legal pages, so an anonymous visitor's first byte
-pays for the public surface only. Current gzipped public bundle is
-about 200 kB.
+`vite.config.js` declares `manualChunks` for `react` (core), `recharts`
+and `react-router-dom`. The dedicated `react` chunk is evaluated first
+and pins React core (`react` / `react-dom` / `react-is` / `scheduler`)
+so the shared React runtime is never co-located into a feature chunk —
+without it, a shared runtime module landed inside the `recharts` chunk,
+so the entry imported a symbol from it and every public page
+`modulepreload`ed all of recharts (~110 kB gz) even though only the
+lazy `CancoChart` uses it (LCP audit Task 1, 2026-05).
+
+`recharts` is now reached ONLY through dynamic `import()`: the staff
+page tree (`pages/staff/*`), the legal pages, and the public
+CancoPage ranking chart (`components/CancoChart.jsx`). So an anonymous
+visitor's first byte pays for the public surface only and recharts is
+no longer in the entry `modulepreload` list.
+
+## Fonts
+
+Self-hosted (OFL), served from `public/fonts/*` on our own origin.
+Replaced the Google Fonts `@import` (which added a 3-hop critical
+chain — external CSS → `fonts.googleapis.com` CSS → `fonts.gstatic.com`
+woff2 — with no preload, delaying the text LCP on home/top per LCP
+audit Task 1).
+
+- **Families:** Playfair Display (headings) + Roboto (body). Both are
+  **variable** fonts, so one woff2 per family+subset covers all weights
+  via a `font-weight` range (Playfair `400 800`, Roboto `300 700`).
+- **Subsets:** `latin` + `latin-ext` only (latin-ext carries Catalan
+  edge glyphs such as `ŀ`). No italic axis — italics stay synthetic,
+  identical to before. Four files total (~132 kB; latin 38/43 kB,
+  latin-ext 21/29 kB).
+- `@font-face` blocks live in `src/index.css` with `font-display: swap`
+  and the Google unicode-ranges preserved.
+- **Preloaded** in `index.html` (`<link rel="preload" as="font"
+  crossorigin>`): the two `latin` faces (`playfair-display-latin.woff2`,
+  `roboto-latin.woff2`) — the above-the-fold text LCP. `latin-ext`
+  loads on demand.
+- `mm-design/tokens/typography.css` is intentionally NOT imported in
+  `main.jsx`: its only effect was a Google Fonts `@import` (its
+  `--mm-font-*`/`--mm-text-*` tokens are unused here). `colors.css` and
+  `spacing.css` are still imported.
+- The Django auth templates (`comptes/_base_auth.html`) still use Google
+  Fonts — a separate, self-contained surface — so the shared Caddy CSP
+  keeps `fonts.googleapis.com` / `fonts.gstatic.com` allowed.

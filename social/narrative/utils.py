@@ -147,25 +147,73 @@ def llista_amb_i(items: list[str]) -> str:
     return ", ".join(items[:-1]) + f" i {items[-1]}"
 
 
-_TERRITORI_LABELS = {
-    "PPCC": "Global",  # public-facing rename — see CLAUDE.md §5
+# Genitive form — the territori name as it slots AFTER a noun
+# ("Top …", "al rànquing …", "el cim del top …"), i.e. carrying the
+# implicit "de" with the correct article/contraction. Never a bare
+# "Illes" or article-less "País Valencià". PPCC is "Global" with NO
+# preposition (an adjective-like label of "top"/"rànquing", not a proper
+# place name — see CLAUDE.md §5; "Països Catalans" is never user-visible).
+#
+# `ALT` ("Altres territoris") is DELIBERATELY OMITTED: it never surfaces
+# as a public top, so any `territori_label("ALT")` / `territori_short("ALT")`
+# call is a bug. We let the dict lookup raise a natural KeyError instead of
+# masking it with a silent fallback (2026-05-31 decision).
+TERRITORI_DE = {
+    "PPCC": "Global",
+    "CAT": "de Catalunya",
+    "VAL": "del País Valencià",
+    "BAL": "de les Illes Balears",
+    "AND": "d'Andorra",
+    "CNO": "de Catalunya Nord",
+    "FRA": "de la Franja",
+    "ALG": "de l'Alguer",
+    "CAR": "del Carxe",
+}
+
+# Short standalone form — story pills, OG titles, hashtags. Bare name
+# (with its leading article where the name carries one). `ALT` omitted for
+# the same reason as TERRITORI_DE above.
+TERRITORI_SHORT = {
+    "PPCC": "Global",
     "CAT": "Catalunya",
     "VAL": "País Valencià",
-    "BAL": "Illes",
+    "BAL": "Balears",
     "AND": "Andorra",
     "CNO": "Catalunya Nord",
-    "FRA": "Franja",
-    "ALG": "Alguer",
-    "ALT": "Altres",
+    "FRA": "la Franja",
+    "ALG": "l'Alguer",
+    "CAR": "el Carxe",
 }
+
+# Ordinal/locative override — used when the territori label slots directly
+# after a position word ("al 1r …", "el cim …", "al podi …", "al capdamunt
+# …") with no intervening "top"/"rànquing". For those, PPCC's bare "Global"
+# reads terse ("al 1r Global"), so we substitute the genitive "del top
+# general" ("al 1r del top general"). Every other territori keeps its
+# TERRITORI_DE form, so the override is a no-op for them.
+TERRITORI_ORDINAL = {"PPCC": "del top general"}
 
 
 def territori_label(codi: str) -> str:
-    """Single source of truth for the user-facing territori name.
-    Unknown codes fall through to the raw code (defensive — the
-    composer should never crash because a new territori was added
-    upstream without updating this map)."""
-    return _TERRITORI_LABELS.get(codi, codi)
+    """Genitive form for narrative phrases that attach to a "top"/"rànquing"
+    noun ("Top …", "al rànquing …"). Raises KeyError on an unknown/omitted
+    code (e.g. "ALT") so an erroneous invocation surfaces instead of leaking
+    a raw slug into a published caption."""
+    return TERRITORI_DE[codi]
+
+
+def territori_short(codi: str) -> str:
+    """Short standalone label (story pills, OG, hashtags). Raises KeyError
+    on an unknown/omitted code (see `territori_label`)."""
+    return TERRITORI_SHORT[codi]
+
+
+def territori_ordinal(codi: str) -> str:
+    """Genitive form for ordinal/locative contexts ("al 1r …", "el cim …").
+    PPCC → "del top general"; every other territori falls back to its
+    TERRITORI_DE form. Raises KeyError on an unknown/omitted code via the
+    TERRITORI_DE lookup."""
+    return TERRITORI_ORDINAL.get(codi, TERRITORI_DE[codi])
 
 
 # Catalan ordinal forms (ADR-0006). Used to replace `#N` positional
@@ -174,6 +222,16 @@ def territori_label(codi: str) -> str:
 # but margin doesn't cost anything. Raises `ValueError` for n <= 0
 # (the top has no 0th or negative position).
 _ORDINAL_SUFFIX = {1: "r", 2: "n", 3: "r", 4: "t"}
+
+
+def dies_str(n: int) -> str:
+    """Catalan day-count with correct singular/plural agreement.
+
+    `dies_str(1)` → "1 dia"; `dies_str(n)` → "{n} dies" for any other n
+    (including 0, which takes the plural in Catalan: "0 dies"). Replaces
+    the hardcoded `{dies} dies` pattern in the narrative banks, which read
+    "1 dies" for day-old debuts."""
+    return f"{n} dia" if n == 1 else f"{n} dies"
 
 
 def ordinal_ca(n: int) -> str:

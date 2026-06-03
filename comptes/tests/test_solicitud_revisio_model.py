@@ -88,7 +88,7 @@ def test_reconsiderada_default_false(db):
         canco_nom="x",
         artista_nom="y",
         decisio="rebutjada",
-        motiu="no_catala",
+        motiu="desvincular_canco",
     )
     assert h.reconsiderada is False
 
@@ -98,7 +98,7 @@ def test_reconsiderada_can_be_flipped(db):
         canco_nom="x",
         artista_nom="y",
         decisio="rebutjada",
-        motiu="no_catala",
+        motiu="desvincular_canco",
     )
     h.reconsiderada = True
     h.save(update_fields=["reconsiderada"])
@@ -114,14 +114,14 @@ def test_reconsiderada_filter_used_by_cron(db):
         canco_nom="a",
         artista_nom="x",
         decisio="rebutjada",
-        motiu="no_catala",
+        motiu="desvincular_canco",
         reconsiderada=False,
     )
     HistorialRevisio.objects.create(
         canco_nom="b",
         artista_nom="x",
         decisio="rebutjada",
-        motiu="no_catala",
+        motiu="desvincular_canco",
         reconsiderada=True,
     )
     HistorialRevisio.objects.create(

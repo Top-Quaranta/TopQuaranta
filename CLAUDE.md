@@ -286,8 +286,9 @@ Import from `music/constants.py`:
 - `ML_CLASSE_A_THRESHOLD`, `ML_CLASSE_B_THRESHOLD`, `MIN_TRAINING_SAMPLES`,
   `MIN_NEW_DECISIONS`
 - `DEEZER_RATE_LIMIT`, `LASTFM_RATE_LIMIT`, `MAX_API_RETRIES`
-- `MOTIUS_REBUIG` — 4 valid reject reasons: `no_catala`, `artista_incorrecte`,
-  `album_incorrecte`, `no_musica`. Semantics in `CLAUDE_STAFF.md §5`.
+- `MOTIUS_REBUIG` — 3 action-based reject codes: `desvincular_canco`,
+  `desvincular_album`, `desvincular_artista`. Renamed 2026-05-25 from
+  cause-based codes; semantics in `docs/architecture/staff.md §5`.
 
 ## 8. Environment (.env)
 
@@ -402,6 +403,22 @@ your editor). GitHub is canonical. Commits are authored by
 At the end of each session, update `docs/history/roadmap.md` to reflect
 reality.
 
+**Cicle de git estàndard (cada PR de Claude Code):** mantenir SEMPRE el
+main local sincronitzat amb `origin/main`. Checklist obligatòria:
+
+1. **Inici de sessió, abans de tocar res:** comprovar que `git status`
+   està net. Si hi ha canvis locals no committats, ATURAR-SE i preguntar
+   al Miquel. Si està net, executar `git fetch && git checkout main &&
+   git pull`. Mai crear una branca sense aquest pas previ.
+2. **Crear la branca de feature des del main local** ja actualitzat (no
+   des d'`origin/main`: amb el pas 1 són equivalents, i així el flux és
+   uniforme).
+3. **Treball → commit → push → PR → squash-merge** a GitHub.
+4. **Després del squash-merge, OBLIGATORI:** `git checkout main &&
+   git pull` per descarregar el commit de merge. Aquest era el pas que
+   es saltava i deixava el main local enrere.
+5. **Cleanup:** `git branch -d <feature-branch>` al final.
+
 **Deploy pipeline (GitHub Actions, since 2026-05-11):**
 
 1. Edit at the Mac → `git commit` → `git push origin main`.
@@ -436,6 +453,18 @@ reality.
 `Album.label` incident (gunicorn `--reload` picked up the new code
 before the migration was applied → 30 admin emails in 15 min) is the
 canonical reason the pipeline must run end-to-end.
+
+**Never write code directly into `/home/topquaranta/app/`.** Prod is
+deployed exclusively via push→GHA→`bin/tq-deploy`, and `tq-deploy` does
+`git reset --hard origin/main` — so any file you write into the prod
+working tree (a) runs un-reviewed, un-tested code immediately, and (b) is
+silently reverted on the next deploy, so a "hotfix" can vanish without
+warning. The canonical incident is the 2026-06-02 caducitat guard:
+`ingesta/caducitat.py` ran in prod for days while absent from
+`origin/main`. The only sanctioned change path is a committed PR. A
+`tq-health` git-drift check (added 2026-06-02) now emails admin@ within
+the hour whenever the prod tree is dirty (excluding `data/`) or
+`HEAD != origin/main`.
 
 **When you DO still need to SSH to the Hetzner box** (these are
 operational, not deploy paths):

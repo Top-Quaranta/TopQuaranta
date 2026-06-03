@@ -66,9 +66,9 @@ class StaticSitemap(Sitemap):
 
 class ArtistesSitemap(Sitemap):
     """One row per approved artiste that has at least one verified
-    active cançó. Profiles without indexable content 404 in the SEO
-    view, so listing them here would trip 'sitemap contains URLs
-    blocked' warnings in GSC."""
+    active cançó. Profiles without indexable content are served
+    200 + noindex by the SEO view, so listing them here would trip
+    'sitemap contains URLs marked noindex' warnings in GSC."""
 
     changefreq = "weekly"
     priority = 0.7

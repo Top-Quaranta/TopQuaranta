@@ -51,6 +51,21 @@ SOCIAL_PROFILES = (
 # automatically to /tmp/tq_social if the path is unwriteable.
 SOCIAL_CACHE_DIR = "/var/cache/topquaranta/social"
 
+# Self-hosted cover pipeline (Fase 1, 2026-05-30). Deezer covers are
+# downloaded once and transcoded into small webp/avif/jpg variants
+# served from our own origin (Caddy wiring + SPA consumption land in
+# later phases). Files live at
+# `<PORTADES_ROOT>/<entitat>/<deezer_id>-<mida>.<format>` — state is
+# derived from the filesystem, no DB column. See
+# docs/architecture/portades.md.
+PORTADES_ROOT = "/var/topquaranta/portades"
+PORTADES_VARIANTS = [250, 500]  # square px sides
+PORTADES_FORMATS = ["avif", "webp", "jpg"]
+# Deezer serves every cover under the same path with a `WxH` segment;
+# we normalise the stored URL to this square size as the transcode
+# source (cover_xl is 1000×1000; 2000+ returns 403).
+PORTADES_DEEZER_SOURCE_SIZE = 1000
+
 # Instagram credentials. Empty/test value forces DRY_RUN in the
 # client (no real API calls; PNGs still rendered).
 INSTAGRAM_ACCESS_TOKEN = ""
@@ -268,3 +283,16 @@ LOGGING = {
         "ranking": {"level": "INFO"},
     },
 }
+
+# Public URL prefix handed to Meta's / Telegram's media fetchers when
+# publishing carousel items. Caddy serves `/static/social/*` from
+# `/var/cache/topquaranta/social/renders/` as plain static files —
+# bypassing Django avoids the CSP/COOP/Vary headers that Meta's fetcher
+# rejects with code 9004 ("Only photo or video can be accepted as media
+# type"). MUST live in `base` (not just `web_server`): the social
+# publish commands run under `production`, and a missing value here
+# silently falls back to the Django `/api/v1/social/render` view —
+# exactly the header-laden path Meta/Telegram reject (caught 2026-06-03:
+# every BAL cron publish hit 9004 / WEBPAGE_MEDIA_EMPTY). Switch back to
+# the Django view only if Caddy is unavailable.
+SOCIAL_PUBLIC_BASE = "https://www.topquaranta.cat/static/social"

@@ -1165,12 +1165,20 @@ class HistorialRevisio(models.Model):
         ("aprovada", "Aprovada"),
         ("rebutjada", "Rebutjada"),
     ]
+    # `motiu` records the action that resolved this HR row.
+    # For `decisio="aprovada"`: `ok` (manual approval) or
+    # `auto_ml` (RF auto-approval). For `decisio="rebutjada"`: one
+    # of the action codes in `music.constants.MOTIUS_REBUIG`. See
+    # the contract each value implies in
+    # `docs/architecture/staff.md` section 5; do not duplicate the
+    # prose here. Action-only labels keep the choices list short
+    # and unambiguous; cause/when-to-use lives in the doc.
     MOTIUS = [
-        ("ok", "En català i correcte"),
-        ("no_catala", "La cançó no és en català"),
-        ("artista_incorrecte", "El perfil Deezer no és el nostre artista"),
-        ("album_incorrecte", "L'àlbum sencer no pertany al nostre artista"),
-        ("no_musica", "No és música (podcast, audiollibre...)"),
+        ("ok", "Aprovada"),
+        ("auto_ml", "Aprovada per ML"),
+        ("desvincular_canco", "Desvincular la cançó"),
+        ("desvincular_album", "Desvincular l'àlbum"),
+        ("desvincular_artista", "Desvincular l'artista"),
     ]
 
     canco_deezer_id = models.BigIntegerField(null=True, blank=True)
@@ -1196,6 +1204,33 @@ class HistorialRevisio(models.Model):
     artista_deezer_nb_album = models.IntegerField(null=True, blank=True)
     artista_nom_deezer = models.CharField(max_length=255, blank=True)
     artista_nom_similitud = models.FloatField(null=True, blank=True)
+    # Snapshot of the principal Spotify artist id at decision time
+    # (read from `SpotifyMetadata.spotify_artist_id` of the canço).
+    # Empty when the canço had no enrichment yet; the backfill
+    # command at `backfill_artista_spotify_id_in_historial` fills
+    # legacy rows once Process B catches up. Keyed by the per-pair
+    # rejection-ratio feature in `music.ml`; see
+    # `docs/architecture/pipeline.md` section 4.
+    artista_spotify_id = models.CharField(max_length=50, blank=True, db_index=True)
+    # Stamped by `enriquir_spotify_rebuigs` orphan flow every time
+    # an ISRC lookup is attempted for this row, regardless of
+    # whether Spotify returned a match. The candidate query
+    # excludes rows looked up within the last 30 days so a
+    # not-found ISRC is not re-searched on every nightly run.
+    # NULL = never attempted. See migration 0086.
+    spotify_lookup_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Set by the rebuig backfill (`enriquir_spotify_rebuigs`) "
+            "every time the orphan flow runs an ISRC lookup against "
+            "Spotify for this row. NULL = never attempted. The "
+            "candidate query excludes rows looked up within the "
+            "last 30 days, regardless of whether the previous "
+            "attempt resolved the artist or not."
+        ),
+    )
 
     ml_classe_decisio = models.CharField(
         max_length=1,
@@ -1515,11 +1550,24 @@ class SpotifyMetadata(models.Model):
     STATUS_NOT_ATTEMPTED = "not_attempted"
     STATUS_FOUND = "found"
     STATUS_NOT_FOUND = "not_found"
+    # Staff pasted a Spotify track URL by hand (store-and-trust: format
+    # validated, no API call). Distinct from `found` so the id is never
+    # re-resolved via /search; Process B still hydrates the row from the
+    # known id (get_track + get_artist). See docs/architecture/playlists.md.
+    STATUS_MANUAL = "manual"
     STATUS_CHOICES = [
         (STATUS_NOT_ATTEMPTED, "Encara no provada"),
         (STATUS_FOUND, "Trobada"),
         (STATUS_NOT_FOUND, "ISRC no a Spotify"),
+        (STATUS_MANUAL, "Manual (staff)"),
     ]
+    # Statuses that already carry a trusted Spotify id. Process A
+    # (actualitzar_playlists_spotify) puts them in playlists; Process B's
+    # /search queue (enriquir_spotify / enriquir_spotify_rebuigs) never
+    # re-resolves them. `not_attempted` / `not_found` are the only
+    # /search-enrichable states. (A `manual` row is still hydrated from
+    # its id by enriquir_spotify phase 2 — fields filled, id untouched.)
+    LOCKED_STATUSES = (STATUS_FOUND, STATUS_MANUAL)
 
     canco = models.OneToOneField(
         Canco,

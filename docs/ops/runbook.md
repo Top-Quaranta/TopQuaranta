@@ -358,6 +358,19 @@ and leaves the DB behind the code, the next hourly tick of the
 `tq-health --email-on-fail` cron flags it. The signature-dedup
 limits inbox noise to one alert per distinct failure state.
 
+**Git-tree drift detection** (added 2026-06-02): `tq-health` also
+emits a `Git tree: ...` row. Because `tq-deploy` does
+`git reset --hard origin/main`, the prod working tree must always be
+clean and at `origin/main`. The check flags a `DRIFT` anomaly (and
+escalates `overall`, so `--email-on-fail` mails admin@ within the hour)
+when `git status --porcelain` is non-empty (excluding the `data/`
+scratch dir) or `HEAD != origin/main` — i.e. someone wrote code
+directly into `/home/topquaranta/app/`, bypassing push→GHA→`tq-deploy`.
+Such edits run un-reviewed and are silently reverted on the next
+deploy. Canonical incident: the 2026-06-02 caducitat guard
+(`ingesta/caducitat.py`) ran in prod for days while absent from
+`origin/main`. The token `DRIFT` is included in the email-alert grep.
+
 **Pytest gates**: `topquaranta/tests/test_deploy_safety.py` asserts
 (a) `makemigrations --check` is clean (every model change has a
 committed migration), (b) `tq-deploy` and `tq-health` parse with

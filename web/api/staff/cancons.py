@@ -50,6 +50,7 @@ from music.models import (
     Canco,
     HistorialRevisio,
     Municipi,
+    SpotifyMetadata,
     StaffAuditLog,
 )
 from music.services import (
@@ -69,6 +70,7 @@ from ranking.models import (
 # public endpoints — see `web/api/search_utils.py`.
 from web.api.search_utils import normalize_search_term as _normalize_search_term
 from web.api.search_utils import unaccent_field as _unaccent_field
+from web.api.staff._spotify_url import SpotifyUrlError, parse_track_id
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.
@@ -87,11 +89,33 @@ def _canco_row(c) -> dict:
     # default keeps the response shape stable.
     sm = getattr(c, "spotify", None)
     spotify_payload = None
-    if sm is not None and sm.enrichment_status == "found":
+    if (
+        sm is not None
+        and sm.enrichment_status in SpotifyMetadata.LOCKED_STATUSES
+        and sm.spotify_id
+    ):
+        # Hydration state (manual links are id-first, hydrated later by
+        # Process B from the id — see playlists.md). Three states so the
+        # editor can distinguish a still-queued link from a bad id:
+        #   ok      — spotify_artist_id resolved (fully hydrated)
+        #   pending — manual id saved, not yet hydrated (enriched_at NULL)
+        #   failed  — hydration ran but couldn't resolve the id (bad URL):
+        #             enriched_at stamped, spotify_artist_id still empty
+        if sm.spotify_artist_id:
+            hydration = "ok"
+        elif sm.enriched_at is None:
+            hydration = "pending"
+        else:
+            hydration = "failed"
         spotify_payload = {
             "spotify_id": sm.spotify_id,
             "artist_name": sm.spotify_artist_name or "",
             "artist_id": sm.spotify_artist_id or "",
+            # True when a staff member pasted the id by hand (Process A
+            # puts it in playlists like `found`; Process B hydrates it
+            # from the id without re-resolving via /search).
+            "is_manual": sm.enrichment_status == SpotifyMetadata.STATUS_MANUAL,
+            "hydration": hydration,
         }
     return {
         "pk": c.pk,
@@ -375,6 +399,60 @@ def canco_detail(request: Request, pk: int) -> Response:
                     return Response({"error": "Deezer ID invàlid."}, status=400)
             else:
                 canco.deezer_id = None
+        # Manual Spotify track id (store-and-trust: format validated, no
+        # API call — see `_spotify_url.parse_track_id`). Empty value →
+        # clear back to `not_attempted` so auto-enrichment can retry. A
+        # non-empty value is accepted ONLY when the Canço has no Spotify
+        # id yet (auto or manual); to replace one, clear it first. The
+        # validated action is applied after the main save so a parse
+        # error short-circuits before any write.
+        spotify_action: tuple[str, str] | None = None
+        if "spotify_url" in data:
+            raw = (data.get("spotify_url") or "").strip()
+            if not raw:
+                spotify_action = ("clear", "")
+            else:
+                try:
+                    track_id = parse_track_id(raw)
+                except SpotifyUrlError as exc:
+                    return Response({"error": str(exc)}, status=400)
+                sm_existing = getattr(canco, "spotify", None)
+                if sm_existing is not None and sm_existing.spotify_id:
+                    return Response(
+                        {
+                            "error": (
+                                "Aquesta cançó ja té un id de Spotify. "
+                                "Buida'l primer per substituir-lo."
+                            )
+                        },
+                        status=400,
+                    )
+                # Collision: a Spotify track id must not point at two
+                # cançons. Clear 400 (the legacy-unique IntegrityError is
+                # kept below as a race-condition fallback). Check the
+                # canonical SpotifyMetadata table and the legacy column.
+                clash = (
+                    SpotifyMetadata.objects.filter(spotify_id=track_id)
+                    .exclude(canco_id=canco.pk)
+                    .values_list("canco_id", "canco__nom")
+                    .first()
+                ) or (
+                    Canco.objects.filter(spotify_id=track_id)
+                    .exclude(pk=canco.pk)
+                    .values_list("pk", "nom")
+                    .first()
+                )
+                if clash:
+                    return Response(
+                        {
+                            "error": (
+                                f"Aquest id de Spotify ja està assignat "
+                                f"a la cançó #{clash[0]} ({clash[1]})."
+                            )
+                        },
+                        status=400,
+                    )
+                spotify_action = ("set", track_id)
         # Reassign to a different artist (when staff spots a mis-attribution).
         if "artista_pk" in data:
             raw = data.get("artista_pk")
@@ -396,6 +474,80 @@ def canco_detail(request: Request, pk: int) -> Response:
                     new_artista=new_artista.nom,
                 )
         canco.save()
+        # Apply the validated manual Spotify action. Writes the canonical
+        # `SpotifyMetadata.spotify_id` (what Process A reads) and mirrors
+        # the legacy `Canco.spotify_id` best-effort.
+        if spotify_action is not None:
+            verb, track_id = spotify_action
+            sm, _ = SpotifyMetadata.objects.get_or_create(canco=canco)
+            if verb == "set":
+                # id-first: store the id + mark manual, leave
+                # `enriched_at = NULL` so Process B's hydration phase
+                # picks it up next run and fills spotify_artist_id + the
+                # rest from the id (no /search). Reset spotify_artist_id
+                # so a previously-hydrated row re-hydrates cleanly. The
+                # canonical write and the legacy-unique mirror share one
+                # savepoint: the pre-check above rejects collisions, and
+                # this catches the rare race where another canço grabbed
+                # the id in between — the IntegrityError rolls back BOTH
+                # writes and we return the same clear 400, never a 500.
+                try:
+                    with transaction.atomic():
+                        sm.spotify_id = track_id
+                        sm.spotify_artist_id = ""
+                        sm.enrichment_status = SpotifyMetadata.STATUS_MANUAL
+                        sm.enriched_at = None
+                        sm.save(
+                            update_fields=[
+                                "spotify_id",
+                                "spotify_artist_id",
+                                "enrichment_status",
+                                "enriched_at",
+                                "updated_at",
+                            ]
+                        )
+                        Canco.objects.filter(pk=canco.pk).update(spotify_id=track_id)
+                except IntegrityError:
+                    return Response(
+                        {
+                            "error": (
+                                "Aquest id de Spotify acaba de ser assignat "
+                                "a una altra cançó. Torna-ho a provar."
+                            )
+                        },
+                        status=400,
+                    )
+                log_staff_action(
+                    request,
+                    "canco_edit",
+                    target=canco,
+                    field="spotify_manual",
+                    spotify_id=track_id,
+                )
+            else:  # clear → re-enrichable
+                sm.spotify_id = ""
+                sm.enrichment_status = SpotifyMetadata.STATUS_NOT_ATTEMPTED
+                sm.enriched_at = None
+                sm.save(
+                    update_fields=[
+                        "spotify_id",
+                        "enrichment_status",
+                        "enriched_at",
+                        "updated_at",
+                    ]
+                )
+                Canco.objects.filter(pk=canco.pk).update(spotify_id=None)
+                log_staff_action(
+                    request,
+                    "canco_edit",
+                    target=canco,
+                    field="spotify_manual",
+                    spotify_id="",
+                )
+            # Refresh the cached reverse relation so the response
+            # serializer reflects the row we just wrote (the earlier
+            # `getattr(canco, "spotify", …)` may have cached its absence).
+            canco.spotify = sm
         # Replace the collaborator list (artistes_col ManyToMany). Expects
         # an array of Artista PKs. A check in Canco.clean() rejects the
         # D5 case where the main artist also appears as a collaborator;

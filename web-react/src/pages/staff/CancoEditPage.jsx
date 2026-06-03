@@ -19,6 +19,7 @@ export default function CancoEditPage() {
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const [spotifyUrl, setSpotifyUrl] = useState('')
 
   useEffect(() => {
     api.get(`/staff/cancons/${pk}/`).then(setC).catch(e => setErr(e.message))
@@ -48,6 +49,29 @@ export default function CancoEditPage() {
           'el senyal seguirà sent zero fins que hi hagi scrobbles.'
         )
       }
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  // Manual Spotify link is PATCHed on its own (not bundled into save())
+  // so the main "Desar" never re-sends the id and trips the
+  // fill-when-empty guard on the backend.
+  async function saveSpotify() {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const out = await api.patch(`/staff/cancons/${pk}/`, { spotify_url: spotifyUrl.trim() })
+      setC(out); setSpotifyUrl(''); setMsg('Enllaç de Spotify desat.')
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  async function clearSpotify() {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const out = await api.patch(`/staff/cancons/${pk}/`, { spotify_url: '' })
+      setC(out); setSpotifyUrl(''); setMsg('Enllaç de Spotify esborrat. L\'enriquiment automàtic el podrà tornar a resoldre.')
     } catch (e) {
       setErr(e.payload?.error || e.message)
     } finally { setBusy(false) }
@@ -162,6 +186,71 @@ export default function CancoEditPage() {
           <label className="text-xs font-semibold">Deezer ID
             <Input value={c.deezer_id || ''} inputMode="numeric" onChange={e => patch({ deezer_id: e.target.value })} className="w-full mt-1 font-normal" />
           </label>
+          <div className="text-xs font-semibold">
+            Spotify (manual)
+            {c.spotify?.spotify_id ? (
+              <div className="mt-1 font-normal text-sm">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    className="underline"
+                    href={`https://open.spotify.com/track/${c.spotify.spotify_id}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    ▶ Escoltar a Spotify
+                  </a>
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-tq-ink/10">
+                    {c.spotify.is_manual ? 'manual' : 'automàtic'}
+                  </span>
+                  <code className="text-[11px] text-tq-ink/60">{c.spotify.spotify_id}</code>
+                  <Btn size="sm" tone="outline" onClick={clearSpotify} disabled={busy}>Buidar</Btn>
+                </div>
+                {c.spotify.hydration === 'pending' && (
+                  <p className="mt-1 text-[11px] text-tq-ink/60">
+                    Pendent d'hidratar — la playlist ja l'inclou; les dades de
+                    l'artista s'ompliran al pròxim cicle d'enriquiment.
+                  </p>
+                )}
+                {c.spotify.hydration === 'failed' && (
+                  <p className="mt-1 text-[11px] text-red-700">
+                    ⚠ No s'ha pogut resoldre aquest id a Spotify. Revisa l'URL:
+                    buida'l i torna a enganxar l'enllaç correcte de la cançó.
+                  </p>
+                )}
+                {c.spotify.hydration === 'ok' && c.spotify.artist_name && (
+                  <p className="mt-1 text-[11px] text-tq-ink/60">
+                    Artista a Spotify: {c.spotify.artist_name}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-1 font-normal">
+                <Input
+                  value={spotifyUrl}
+                  onChange={e => setSpotifyUrl(e.target.value)}
+                  placeholder="https://open.spotify.com/track/…"
+                  className="w-full"
+                />
+                <p className="mt-1 text-[11px] text-tq-ink/75">
+                  Enganxa l'enllaç «Comparteix → Copia l'enllaç de la cançó» de
+                  Spotify. Es valida el format i s'enllaça a l'instant (sense
+                  cerca a l'API): la playlist la recollirà de seguida i el
+                  pròxim cicle d'enriquiment omplirà les dades de l'artista des
+                  de l'id. Per substituir-lo, primer buida'l.
+                </p>
+                <div className="mt-2">
+                  <Btn
+                    size="sm"
+                    tone="secondary"
+                    onClick={saveSpotify}
+                    disabled={busy || !spotifyUrl.trim()}
+                  >
+                    Desa enllaç Spotify
+                  </Btn>
+                </div>
+              </div>
+            )}
+          </div>
           <label className="text-xs font-semibold">Data llançament
             <Input type="date" value={c.data_llancament || ''} onChange={e => patch({ data_llancament: e.target.value })} className="w-full mt-1 font-normal" />
           </label>

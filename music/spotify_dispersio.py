@@ -12,7 +12,9 @@ Design notes:
   * Only the PRINCIPAL spotify_artist_id counts. Collaborations
     inflate the list otherwise (a featuring on someone else's track
     would make every soloist look dispersed).
-  * Cançons with enrichment_status != found are ignored (no signal).
+  * Cançons whose enrichment_status is not in LOCKED_STATUSES
+    (`found` or hydrated `manual`) are ignored (no signal). A manual
+    link contributes its principal id once hydrated, same as `found`.
   * We write the artist row only when the value actually changes, so
     repeated calls don't churn `updated_at`.
 
@@ -36,7 +38,7 @@ def recalcular_dispersio(artista_ids: Iterable[int] | None = None) -> dict:
     actually changed. Cheap O(n) over the enriched-found rows.
     """
     qs = SpotifyMetadata.objects.filter(
-        enrichment_status=SpotifyMetadata.STATUS_FOUND
+        enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES
     ).exclude(spotify_artist_id="")
     if artista_ids is not None:
         # The OneToOne canco -> artista relationship is two hops away;

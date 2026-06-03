@@ -1,9 +1,9 @@
-"""Renderer Step 3b: the 7-slide editorial PPCC story set.
+"""Renderer Step 3b redesign: the 7-slide editorial PPCC story set.
 
 Renders real slides (needs Django for settings/fonts/svg_assets) and
-pins the new structure: JPG output, reasonable weight, the #1 hero
-headline wiring, the 11-40 mosaic, and the yellow outro without the
-legacy slate card.
+pins the structure + the redesign: JPG output, reasonable weight, the
+new display fonts, the #1 hero Playfair climax, the 40→11 mosaic, and
+the yellow outro without the legacy slate card.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import datetime
 import pytest
 from PIL import Image
 
-from social import colors, renderer
+from social import colors, fonts, renderer
 from social.narrative.story_synth import synthesize_hero
 
 WK = datetime.date(2026, 5, 25)
@@ -54,11 +54,11 @@ class _Scn:
 
 
 def _count_yellow(img: Image.Image) -> int:
-    """Full-resolution yellow-pixel count over the headline band — the
-    Playfair strokes are thin, so a downscale blends them into the ink
-    and undercounts. Crop to the headline area and count at native res."""
-    band = img.convert("RGB").crop((0, 150, renderer.STORY_W, 420))
-    return sum(1 for r, g, b in band.getdata() if r > 200 and g > 160 and b < 130)
+    """Full-resolution yellow-pixel count over the whole slide. The hero
+    Playfair title + kickers are yellow on ink, so a healthy count proves
+    the headline painted. Native res — a downscale blends the strokes."""
+    rgb = img.convert("RGB")
+    return sum(1 for r, g, b in rgb.getdata() if r > 200 and g > 160 and b < 130)
 
 
 # ── Full set ────────────────────────────────────────────────────────
@@ -83,6 +83,16 @@ def test_ppcc_story_set_outputs_7_jpeg_slides():
 def test_ppcc_story_set_skips_novetats_when_empty():
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=[], hero_headline="NOU #1"
+    )
+    assert len(paths) == 6, [p.name for p in paths]
+
+
+@pytest.mark.django_db
+def test_ppcc_story_set_skips_novetats_when_items_falsy():
+    """A list of falsy entries (None / empty dict) must also be treated as
+    'no novetats' — the slide is neither generated nor returned."""
+    paths = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=[None, {}], hero_headline="NOU #1"
     )
     assert len(paths) == 6, [p.name for p in paths]
 
@@ -120,8 +130,8 @@ def test_hero_slide_receives_scenario_synthesis(code, data):
     assert headline and headline == headline.upper()
     img = renderer._story_hero(_entries(1)[0], headline)
     assert img.size == (renderer.STORY_W, renderer.STORY_H)
-    # The slide carries appreciable yellow (the Playfair headline) on ink.
-    assert _count_yellow(img) > 300, _count_yellow(img)
+    # The slide carries appreciable yellow (Playfair title + kickers) on ink.
+    assert _count_yellow(img) > 1000, _count_yellow(img)
 
 
 @pytest.mark.django_db
@@ -129,7 +139,7 @@ def test_hero_slide_empty_headline_falls_back():
     """An empty headline must not crash and must still paint a headline
     (the generic fallback line)."""
     img = renderer._story_hero(_entries(1)[0], "")
-    assert _count_yellow(img) > 300, _count_yellow(img)
+    assert _count_yellow(img) > 1000, _count_yellow(img)
 
 
 # ── Top 11-40 mosaic ────────────────────────────────────────────────
@@ -149,12 +159,42 @@ def test_mosaic_renders_30_covers_with_fallback():
     assert img.size == (renderer.STORY_W, renderer.STORY_H)
 
 
+# ── Top 10-4 grid — dynamic row height ──────────────────────────────
+
+
+@pytest.mark.django_db
+def test_grid_long_titles_do_not_reach_footer():
+    """Every title forced to 2 lines: dynamic row heights + the #4 clamp
+    keep the last (centred) cover out of the footer band."""
+    entries = []
+    for i in range(7):
+        e = _entries(1)[0].copy()
+        e["posicio"] = i + 4
+        e["canco_nom"] = "On T'has Ficat Aquesta Nit Que No Et Trobo Enlloc"
+        e["artistes_noms"] = ["Una Banda De Nom Ben Llarg"]
+        entries.append(e)
+    img = renderer._story_top_grid(WK, entries).convert("RGB")
+    assert img.size == (renderer.STORY_W, renderer.STORY_H)
+    # Placeholder covers paint COLOR_CARD; none may appear in the 30 px
+    # strip just above the footer (proves no cover overflowed downward).
+    cr = colors._hex_to_rgb(colors.COLOR_CARD)
+    band = img.crop(
+        (0, renderer.STORY_H - 122, renderer.STORY_W, renderer.STORY_H - 96)
+    )
+    card = sum(
+        1
+        for r, g, b in band.getdata()
+        if abs(r - cr[0]) < 20 and abs(g - cr[1]) < 20 and abs(b - cr[2]) < 20
+    )
+    assert card == 0, f"a cover bled into the footer band ({card} px)"
+
+
 # ── Outro ───────────────────────────────────────────────────────────
 
 
 @pytest.mark.django_db
 def test_outro_is_yellow_without_slate_card():
-    img = renderer._story_outro_ppcc().convert("RGB")
+    img = renderer._story_outro_ppcc(WK).convert("RGB")
     small = img.resize((108, 192))
     pixels = list(small.getdata())
 
@@ -168,6 +208,44 @@ def test_outro_is_yellow_without_slate_card():
     slate = sum(1 for px in pixels if _near(px, colors.COLOR_CARD))
     assert yellow > len(pixels) * 0.5, yellow  # yellow dominates
     assert slate == 0, f"slate COLOR_CARD must be gone, found {slate}"
+
+
+# ── Redesign: fonts + intro ─────────────────────────────────────────
+
+
+def test_redesign_fonts_load_real_families():
+    """The four bundled display families resolve to the vendored TTFs
+    (not the DejaVu fallback) — guards the OFL bundle being present."""
+    for loader in (
+        fonts.anton,
+        fonts.bricolage_xbold,
+        fonts.instrument_italic,
+        fonts.display_xbold,
+    ):
+        f = loader(48)
+        assert f.getbbox("Test")[2] > 0
+    # Resolved path must be the vendored file, not a DejaVu fallback.
+    assert "PlayfairDisplay-ExtraBold" in fonts._resolve("display_xbold")
+    assert "Anton" in fonts._resolve("anton")
+    assert "Bricolage" in fonts._resolve("bricolage_xbold")
+    assert "InstrumentSerif" in fonts._resolve("instrument_italic")
+
+
+@pytest.mark.django_db
+def test_intro_is_green_with_big_yellow_forty():
+    """Slide 1 is the green field carrying the big yellow '40'."""
+    img = renderer._story_intro_ppcc(WK).convert("RGB")
+    small = img.resize((108, 192))
+    px = list(small.getdata())
+
+    def _near(p, hexs, tol=30):
+        h = hexs.lstrip("#")
+        t = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+        return all(abs(p[i] - t[i]) < tol for i in range(3))
+
+    green = sum(1 for p in px if _near(p, colors.terr_color("PPCC"), 40))
+    assert green > len(px) * 0.4, green  # green dominates
+    assert _count_yellow(img) > 1000  # the big "40" + pill
 
 
 # ── Territorial regression ──────────────────────────────────────────

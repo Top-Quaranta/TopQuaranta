@@ -1,10 +1,9 @@
 import logging
-from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from music.constants import DIES_CADUCITAT
+from ingesta.caducitat import caducitat_cutoff
 from music.models import Canco
 
 logger = logging.getLogger(__name__)
@@ -18,7 +17,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        cutoff = date.today() - timedelta(days=DIES_CADUCITAT)
+        # Shared cutoff source (#131) — the same `caducitat_cutoff()` the
+        # `enriquir_spotify` pending guard reads, so the enrich pending
+        # pool stays EXACTLY the survivors of this purge. Never recompute
+        # the 365-day boundary inline.
+        cutoff = caducitat_cutoff()
 
         # `activa=True` (added May 2026): only purge rows that are still
         # in the active pool — i.e. unverified pending review tracks

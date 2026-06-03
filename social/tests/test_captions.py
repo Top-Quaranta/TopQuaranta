@@ -10,10 +10,20 @@ on the other networks.
 from __future__ import annotations
 
 import datetime
+import re
 
 import pytest
 
-from social.captions import caption_novetats, caption_short, caption_top
+from music.models import Album, Artista, Canco
+from ranking.models import TopSetmanal
+from social.captions import (
+    caption_novetats,
+    caption_short,
+    caption_top,
+    compose_for_channel,
+)
+
+_NO_POSITIONAL_HASHTAG = re.compile(r"#\d")
 
 SETMANA = datetime.date(2026, 5, 11)  # Monday of TQ-week 37
 
@@ -145,8 +155,11 @@ def test_caption_top_uses_narrative_engine():
     # The legacy plain caption never carries the word "setmana" (it
     # uses "Setmana N" in the header). The engine bank uses lower-case
     # "setmana"/"setmanes" inside the hero. Quick signal that we're
-    # on the engine path:
-    assert any(tok in text for tok in (" setmana", "setmanes", "cim", "#1"))
+    # on the engine path. ADR-0006: positions are emitted as Catalan
+    # ordinals / words ("al 1r", "al cim"), never as "#1" (which would
+    # autolink as a hashtag), so "#1" is no longer an accepted token —
+    # all 15 A2-streak long templates carry "setmana"/"setmanes".
+    assert any(tok in text for tok in (" setmana", "setmanes", "cim"))
 
 
 @pytest.mark.django_db
@@ -217,3 +230,173 @@ def test_caption_top_fallback_on_engine_error(monkeypatch, caplog):
     assert any("narrative engine failed" in r.getMessage() for r in caplog.records), [
         r.getMessage() for r in caplog.records
     ]
+
+
+# ── Regression guard: 2026-05-20 narrative-engine collapse ──────────
+#
+# Post-mortem docs/post-mortems/2026-05-20-narrative-engine-collapsed.md.
+# Two defects landed silently when compose_for_channel started routing
+# top_ppcc/top_territorial through the engine; fixed in #59 (55725dd,
+# 2026-05-21) via ADR-0006 (Catalan ordinals, no positional "#N") and
+# ADR-0007 (@handle restored on the Instagram-feed path only). These
+# tests are the prevention net the post-mortem asked for: they fail if
+# either defect is reintroduced.
+#
+# We exercise more than one hero scenario (A2 streak + A1
+# outside-to-top1) so passing counts as real output verification, not
+# just a negative grep. The asserts are invariant across the random
+# phrase pick: every long-tier hero template names the artist (so the
+# rewritten IG @handle always appears on the feed path), and no
+# template in any tier emits "#<digit>".
+
+
+def _mk_canco(nom, slug, artista):
+    album = Album.objects.create(
+        nom="A", slug=f"{slug}-al", artista=artista, descartat=False
+    )
+    return Canco.objects.create(
+        nom=nom, slug=slug, artista=artista, album=album, verificada=True, activa=True
+    )
+
+
+def _seed_streak_top(territori, weeks):
+    """Seed an A2-streak hero (La Fúmiga, #1 every week in `weeks`) and
+    return the entries list with the hero carrying an instagram_url."""
+    a = Artista.objects.create(nom="La Fúmiga", slug="lf-reg", aprovat=True)
+    c = _mk_canco("La Gent de la Mediterrània", "lgm-reg", a)
+    for w in weeks:
+        TopSetmanal.objects.create(
+            canco=c, territori=territori, setmana=w, posicio=1, score_setmanal=99.0
+        )
+    return [
+        {
+            "posicio": 1,
+            "canco_nom": "La Gent de la Mediterrània",
+            "artista_nom": "La Fúmiga",
+            "artista_instagram_url": "https://www.instagram.com/lafumiga/",
+        }
+    ]
+
+
+def _seed_outside_to_top1(territori, prev_week, this_week):
+    """Seed an A1 hero (a song outside the top last week, #1 this week)
+    and return entries with the hero carrying an instagram_url."""
+    a = Artista.objects.create(nom="Figa Flawas", slug="ff-reg", aprovat=True)
+    old = _mk_canco("Vell líder", "vl-reg", a)
+    new = _mk_canco("Nou cim", "nc-reg", a)
+    TopSetmanal.objects.create(
+        canco=old,
+        territori=territori,
+        setmana=prev_week,
+        posicio=1,
+        score_setmanal=99.0,
+    )
+    TopSetmanal.objects.create(
+        canco=new,
+        territori=territori,
+        setmana=this_week,
+        posicio=1,
+        score_setmanal=99.0,
+    )
+    return [
+        {
+            "posicio": 1,
+            "canco_nom": "Nou cim",
+            "artista_nom": "Figa Flawas",
+            "artista_instagram_url": "https://www.instagram.com/figaflawas/",
+        }
+    ]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "seeder, handle",
+    [
+        (
+            lambda: _seed_streak_top(
+                "PPCC",
+                [
+                    datetime.date(2026, 4, 20),
+                    datetime.date(2026, 4, 27),
+                    datetime.date(2026, 5, 4),
+                    datetime.date(2026, 5, 11),
+                ],
+            ),
+            "@lafumiga",
+        ),
+        (
+            lambda: _seed_outside_to_top1(
+                "PPCC", datetime.date(2026, 5, 4), datetime.date(2026, 5, 11)
+            ),
+            "@figaflawas",
+        ),
+    ],
+    ids=["a2_streak", "a1_outside_to_top1"],
+)
+def test_no_positional_hashtag_in_any_channel(seeder, handle):
+    """ADR-0006: no caption on any channel may contain a positional
+    "#<digit>" (those autolink as hashtags on IG/Telegram and leak the
+    audience out). Letter-led discovery hashtags (#TopQuaranta) are
+    fine, so we match "#" only when directly followed by a digit."""
+    entries = seeder()
+    for channel in ("instagram_feed", "telegram", "bluesky", "mastodon", "newsletter"):
+        res = compose_for_channel(
+            channel, "top_ppcc", "PPCC", datetime.date(2026, 5, 11), entries
+        )
+        text = res["text"]
+        assert not _NO_POSITIONAL_HASHTAG.search(
+            text
+        ), f"positional #N leaked into {channel} caption:\n{text}"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "seeder, handle",
+    [
+        (
+            lambda: _seed_streak_top(
+                "PPCC",
+                [
+                    datetime.date(2026, 4, 20),
+                    datetime.date(2026, 4, 27),
+                    datetime.date(2026, 5, 4),
+                    datetime.date(2026, 5, 11),
+                ],
+            ),
+            "@lafumiga",
+        ),
+        (
+            lambda: _seed_outside_to_top1(
+                "PPCC", datetime.date(2026, 5, 4), datetime.date(2026, 5, 11)
+            ),
+            "@figaflawas",
+        ),
+    ],
+    ids=["a2_streak", "a1_outside_to_top1"],
+)
+def test_handle_only_on_instagram_feed(seeder, handle):
+    """ADR-0007: an artist with a stored instagram_url surfaces as
+    `@handle` on the Instagram-feed path (autolink + notify) and must
+    NOT carry the literal `@handle` on the short channels, whose mention
+    syntax differs (the IG-style `@handle` would render as broken text).
+
+    We assert the @handle presence on IG and its absence on the four
+    short channels. We do NOT assert the plain artist name is present on
+    the short channels: the short-tier hero templates may reference only
+    the song title, and Bluesky's 300-char truncation can drop both the
+    top-5 listing and the hero down to a generic sentinel. So the plain
+    name is not an invariant of those channels; the @handle contract is."""
+    entries = seeder()
+    week = datetime.date(2026, 5, 11)
+
+    ig = compose_for_channel("instagram_feed", "top_ppcc", "PPCC", week, entries)[
+        "text"
+    ]
+    assert handle in ig, f"@handle missing from IG feed caption:\n{ig}"
+
+    for channel in ("telegram", "bluesky", "mastodon", "newsletter"):
+        text = compose_for_channel(channel, "top_ppcc", "PPCC", week, entries)["text"]
+        assert text, f"{channel} caption came back empty"
+        assert (
+            handle not in text
+        ), f"@handle leaked into {channel} caption (should be plain name):\n{text}"

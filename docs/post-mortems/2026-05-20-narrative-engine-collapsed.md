@@ -3,7 +3,8 @@
 - **Date of incident:** observed 2026-05-20 during social
   investigation; degradation accumulated over weeks
 - **Severity:** high (every weekly social post affected)
-- **Status:** Resolved by ADR-0006, ADR-0007, ADR-0008 (2026-05-21)
+- **Status:** Resolved by ADR-0006, ADR-0007, ADR-0008 (#59,
+  2026-05-21); regression guard added 2026-06-03
 - **Author:** Miquel
 
 ## Impact
@@ -64,10 +65,36 @@ Two layers:
 
 ## Fix applied
 
-Not yet applied. This post-mortem captures the regression as the
-trigger for a dedicated social refactor sprint.
+Landed in #59 (commit `55725dd`, 2026-05-21), the day after this
+post-mortem, formalised as three ADRs:
 
-Architecture-level fixes that the next sprint needs to land:
+- **ADR-0006** (`docs/decisions/0006-narrative-ordinals-catalan.md`)
+  — positional `#N` removed from every caption phrase bank; positions
+  are now emitted as Catalan ordinals / words ("al 1r", "al 40è", "al
+  cim") via `ordinal_ca()`. The only `#N` that survives is in
+  `social/narrative/story_synth.py` (story-hero headlines like "NOU
+  #1"), which the renderer paints as image pixels — never parsed as a
+  hashtag.
+- **ADR-0007** (`docs/decisions/0007-instagram-at-handles-restored.md`)
+  — the `@handle` path is reintroduced on the Instagram-feed composer
+  only (`social/narrative/composers/instagram_feed.py`: `_ig_label`,
+  `_ig_hero_data`, `_ig_entry`). The other four channels keep plain
+  names (different mention syntax per network).
+- **ADR-0008** (`docs/decisions/0008-narrative-detectors-expanded.md`)
+  — detector set expanded to address the one-scenario-week sameness.
+
+Prevention net added later in `test/narrative-regression-guard`
+(2026-06-03): `social/tests/test_captions.py` gains
+`test_no_positional_hashtag_in_any_channel` (asserts no `#<digit>` on
+any of the six channels) and `test_handle_only_on_instagram_feed`
+(asserts `@handle` on IG feed, absent on the short channels), both
+parametrised over the A2-streak and A1-outside-to-top1 heroes. The
+loose assertion in `test_caption_top_uses_narrative_engine` that still
+accepted `#1` as a valid token was tightened to drop it, so the old
+defect can no longer pass silently.
+
+Architecture-level fixes already landed by the above; remaining
+follow-ups tracked on the roadmap:
 
 - Replace literal `#N` with an alternative: "núm. N", "lloc N",
   emoji digits (1️⃣ 2️⃣), or simply "al cim", "al 2", "al 3" in

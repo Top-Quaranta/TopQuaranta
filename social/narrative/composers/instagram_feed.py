@@ -7,6 +7,7 @@ slides ARE the bullet list."""
 
 from __future__ import annotations
 
+import logging
 import random
 
 from social.captions import _setmana_label, instagram_username
@@ -18,8 +19,14 @@ from social.narrative.banks import top5 as top5_bank
 from social.narrative.registry import pick_phrase
 from social.narrative.utils import territori_label
 
+logger = logging.getLogger(__name__)
+
 CHANNEL = "instagram_feed"
 MAX_CHARS = 2200
+# Density floor (audit #4): below this we try to upgrade phrase tiers
+# rather than ship a thin caption. ~45 % of the 2200 ceiling.
+MIN_CAPTION_RATIO = 0.45
+MIN_CHARS = int(MAX_CHARS * MIN_CAPTION_RATIO)
 
 
 def _ig_label(artista_nom: str, instagram_url: str | None) -> str:
@@ -80,6 +87,12 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     label_setmana = _setmana_label(setmana)
     label_terr = territori_label(territori)
 
+    # Pick up to 3 slots with distinct subjects (audit #1/#6): the hero,
+    # secondary and tertiary must not repeat the same song or artist. The
+    # tertiary slot is no longer systematic — it only appears when the
+    # detectors supply a third distinct subject.
+    scenarios = scen.select_slots(scenarios, 3)
+
     hero = scenarios[0] if scenarios else scen.fallback_scenario(territori)
     # ADR-0007: swap artista_nom → @handle for Instagram only. We
     # rewrite the scenario's data and the entries' artista_nom so
@@ -94,6 +107,8 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     secondary_text = ""
     pid_secondary = ""
     secondary_canco = ""
+    sec_sc = None
+    ter_sc = None
     if len(scenarios) >= 2:
         sec = scenarios[1]
         sec = scen.Scenario(
@@ -101,6 +116,7 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
             severity=sec.severity,
             data=_ig_hero_data(sec.data, entries),
         )
+        sec_sc = sec
         pid_secondary, secondary_text = pick_phrase(
             sec, "medium", territori, CHANNEL, rng=rng
         )
@@ -123,6 +139,7 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
             severity=ter.severity,
             data=_ig_hero_data(ter.data, entries),
         )
+        ter_sc = ter
         pid_tertiary, tertiary_text = pick_phrase(
             ter, "short", territori, CHANNEL, rng=rng
         )
@@ -169,6 +186,41 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
         return "\n".join(parts)
 
     text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
+
+    # ── Density floor (audit #4) ─────────────────────────────────────
+    # A caption well under MIN_CHARS reads thin. Upgrade tiers before the
+    # truncation pass, keeping any upgrade that still fits MAX_CHARS:
+    #   a) tertiary  short  → medium
+    #   b) secondary medium → long
+    # We never synthesise filler — if the detectors gave us little, the
+    # caption stays short and we WARN below rather than pad.
+    if len(text) < MIN_CHARS and ter_sc is not None and tertiary_text:
+        up_pid, up_text = pick_phrase(ter_sc, "medium", territori, CHANNEL, rng=rng)
+        if up_text:
+            cand_ter = (
+                connectors_bank.lowercase_first(up_text)
+                if connector2.endswith(",")
+                else up_text
+            )
+            candidate = assemble(
+                hero_text, secondary_text, cand_ter, top5_text, hashtags
+            )
+            if len(candidate) <= MAX_CHARS:
+                tertiary_text, pid_tertiary, text = cand_ter, up_pid, candidate
+    if len(text) < MIN_CHARS and sec_sc is not None and secondary_text:
+        up_pid, up_text = pick_phrase(sec_sc, "long", territori, CHANNEL, rng=rng)
+        if up_text:
+            cand_sec = (
+                connectors_bank.lowercase_first(up_text)
+                if connector.endswith(",")
+                else up_text
+            )
+            candidate = assemble(
+                hero_text, cand_sec, tertiary_text, top5_text, hashtags
+            )
+            if len(candidate) <= MAX_CHARS:
+                secondary_text, pid_secondary, text = cand_sec, up_pid, candidate
+
     # Truncate priority: tertiary → secondary → top5 detail → hashtags.
     if len(text) > MAX_CHARS and tertiary_text:
         tertiary_text = ""
@@ -184,6 +236,20 @@ def compose(scenarios, entries, *, territori, setmana, rng=None) -> dict:
     while len(text) > MAX_CHARS and hashtags:
         hashtags = hashtags[:-1]
         text = assemble(hero_text, secondary_text, tertiary_text, top5_text, hashtags)
+
+    if len(text) < MIN_CHARS:
+        # Honest under-density: better a thin true caption than synthetic
+        # filler. Surfaced for monitoring, not an error.
+        n_slots = sum(1 for t in (hero_text, secondary_text, tertiary_text) if t)
+        logger.warning(
+            "IG caption under density floor: %d/%d chars, %d slot(s) "
+            "(territori=%s setmana=%s)",
+            len(text),
+            MIN_CHARS,
+            n_slots,
+            territori,
+            setmana,
+        )
 
     phrase_ids: list[str] = []
     if pid_hero:

@@ -225,6 +225,83 @@ def test_detect_all_sorts_by_severity():
 
 
 @pytest.mark.django_db
+def test_detect_a13_top1_return_with_gap_5():
+    """top1 W, pos3 W-1, top1 W-5 → a13 fires, severity 8 (gap 5 weeks)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("Divinize", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)  # this week #1
+    _seed(c, "PPCC", _monday(2026, 5, 11), 3)  # W-1 at #3 (not #1)
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)  # someone else #1 at W-1
+    _seed(c, "PPCC", _monday(2026, 4, 13), 1)  # W-5 was #1
+    s = scen.detect_a13_top1_return("PPCC", W)
+    assert s and s.code == "a13_top1_return"
+    assert s.severity == 8
+    assert s.data["gap_setmanes"] == 5
+    assert s.data["gap_setmanes_str"] == "5 setmanes"
+
+
+@pytest.mark.django_db
+def test_detect_a13_top1_return_with_gap_2():
+    """top1 W, pos2 W-1, top1 W-2 → a13 fires, severity 5 (gap 2 weeks)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)
+    _seed(c, "PPCC", _monday(2026, 5, 11), 2)  # W-1 at #2
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)
+    _seed(c, "PPCC", _monday(2026, 5, 4), 1)  # W-2 was #1
+    s = scen.detect_a13_top1_return("PPCC", W)
+    assert s and s.severity == 5
+    assert s.data["gap_setmanes"] == 2
+
+
+@pytest.mark.django_db
+def test_detect_a13_does_not_fire_on_streak():
+    """top1 W and top1 W-1 → a13 is NOT a return (a2_streak owns it)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)
+    _seed(c, "PPCC", _monday(2026, 5, 11), 1)  # #1 last week too
+    assert scen.detect_a13_top1_return("PPCC", W) is None
+    assert scen.detect_a2_streak("PPCC", W) is not None
+
+
+@pytest.mark.django_db
+def test_detect_a13_does_not_fire_without_prior_top1():
+    """top1 W, never #1 before → a13 NO (a1_outside_to_top1 owns it)."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)  # first appearance, no history
+    assert scen.detect_a13_top1_return("PPCC", W) is None
+    assert scen.detect_a1_outside_to_top1("PPCC", W) is not None
+
+
+@pytest.mark.django_db
+def test_detect_a13_subject_ids_present():
+    """a13's Scenario.data carries canco_id + artista_id for dedup."""
+    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
+    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
+    c = _make_canco("X", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
+    W = _monday(2026, 5, 18)
+    _seed(c, "PPCC", W, 1)
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)
+    _seed(c, "PPCC", _monday(2026, 5, 4), 1)
+    s = scen.detect_a13_top1_return("PPCC", W)
+    assert s.data["canco_id"] == c.pk
+    assert s.data["artista_id"] == a.pk
+
+
+@pytest.mark.django_db
 def test_fallback_when_no_scenario():
     """Empty top → detect_all returns [] and composer should fall
     back to fallback_no_event."""
@@ -252,14 +329,19 @@ def test_hero_has_nine_codes_three_lengths_fifteen_entries_each():
         "a10_artista_first_ever",
         "a11_top5_drop_generic",
         "a12_artista_emerging",
+        "a13_top1_return",
         "fallback_no_event",
     }
     assert set(HERO.keys()) == expected_codes
     for code, by_length in HERO.items():
         for length in ("short", "medium", "long"):
             assert length in by_length, f"{code} missing {length}"
+            # The original 12 detectors + fallback ship 15 variants/tier;
+            # a13 (2026-06-01) ships 6 (its trigger is rarer). Either way
+            # at least 4 so anti-repeat has room.
+            minimum = 6 if code == "a13_top1_return" else 15
             assert (
-                len(by_length[length]) == 15
+                len(by_length[length]) >= minimum
             ), f"{code}/{length} has {len(by_length[length])} entries"
 
 
@@ -284,6 +366,8 @@ def test_short_phrases_fit_under_120_chars():
         "dies_str": "18 dies",
         "mesos": 8,
         "pujada": 15,
+        "gap_setmanes": 5,
+        "gap_setmanes_str": "5 setmanes",
         "territori_label": "Global",
         "territori_ordinal": "del top general",
     }
@@ -337,6 +421,8 @@ def test_phrases_interpolate_with_diverse_artist_names():
         "dies_str": "18 dies",
         "mesos": 8,
         "pujada": 15,
+        "gap_setmanes": 5,
+        "gap_setmanes_str": "5 setmanes",
         "territori_label": "Global",
         "territori_ordinal": "del top general",
     }
@@ -400,6 +486,162 @@ def _fake_scenario():
             "territori_ordinal": "del top general",
         },
     )
+
+
+def _full_scenario(code, sev, canco_id, artista_id, canco, artista):
+    """A scenario with complete data + distinct subject ids so
+    select_slots keeps it and every tier renders."""
+    return scen.Scenario(
+        code=code,
+        severity=sev,
+        data={
+            "artista": artista,
+            "de_artista": f"de {artista}",
+            "per_a_artista": f"per a {artista}",
+            "per_artista": f"per {artista}",
+            "canco": canco,
+            "streak": 4,
+            "posicio": 3,
+            "posicio_ordinal": "3r",
+            "posicio_anterior_str": "fora del top",
+            "posicio_anterior": 3,
+            "posicio_anterior_ordinal": "3r",
+            "posicio_nova_str": "al 5è",
+            "n_cancons": 4,
+            "dies": 12,
+            "dies_str": "12 dies",
+            "mesos": 8,
+            "pujada": 15,
+            "gap_setmanes": 5,
+            "gap_setmanes_str": "5 setmanes",
+            "territori_label": "Global",
+            "territori_ordinal": "del top general",
+            "canco_id": canco_id,
+            "artista_id": artista_id,
+        },
+    )
+
+
+def _three_distinct_scenarios():
+    return [
+        _full_scenario("a6_canco_recent", 9, 101, 11, "Cançó U", "Artista U"),
+        _full_scenario("a8_pujada_forta", 7, 102, 12, "Cançó D", "Artista D"),
+        _full_scenario("a7_long_runner", 5, 103, 13, "Cançó T", "Artista T"),
+    ]
+
+
+@pytest.mark.django_db
+def test_ig_density_floor_upgrades_increase_density(caplog):
+    """The density floor is a best-effort target: the composer upgrades
+    tiers to get closer to it without ever exceeding 2200 and WITHOUT
+    synthesising filler (spec allows sub-density). We verify the
+    mechanism — three distinct subjects produce a denser caption than a
+    single one, the result fits the ceiling, and a thin caption WARNs."""
+    caplog.set_level(30, logger="social.narrative.composers.instagram_feed")  # WARNING
+    setmana = _monday(2026, 5, 11)
+    three = c_ig_feed.compose(
+        _three_distinct_scenarios(),
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=setmana,
+        rng=random.Random(0),
+    )
+    one = c_ig_feed.compose(
+        _three_distinct_scenarios()[:1],
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=setmana,
+        rng=random.Random(0),
+    )
+    assert len(three["text"]) <= c_ig_feed.MAX_CHARS
+    # More distinct subjects + tier upgrades → a denser caption.
+    assert len(three["text"]) > len(one["text"])
+    # A genuinely thin (single-slot) caption that stays under the floor
+    # must surface a WARN rather than be padded.
+    if len(one["text"]) < c_ig_feed.MIN_CHARS:
+        assert any("under density floor" in r.message for r in caplog.records)
+
+
+@pytest.mark.django_db
+def test_newsletter_three_paragraphs_with_three_subjects():
+    """Newsletter now carries hero + secondary + tertiary (3 paragraphs)
+    when the detectors supply 3 distinct subjects."""
+    out = c_newsletter.compose(
+        _three_distinct_scenarios(),
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=_monday(2026, 5, 11),
+        rng=random.Random(0),
+    )
+    paras = [p for p in out["narrative_part"].split("\n\n") if p.strip()]
+    # hero + secondary + tertiary + top5 detail = 4 blocks.
+    assert len(paras) >= 3
+    assert len(out["phrase_ids"]) == 3
+
+
+@pytest.mark.django_db
+def test_ig_dedup_no_repeated_subject_in_slots():
+    """Two scenarios sharing an artist → only one slot for that artist."""
+    scs = [
+        _full_scenario("a6_canco_recent", 9, 201, 21, "Cançó A", "Mateix"),
+        _full_scenario("a8_pujada_forta", 8, 202, 21, "Cançó B", "Mateix"),
+        _full_scenario("a7_long_runner", 5, 203, 23, "Cançó C", "Altre"),
+    ]
+    out = c_ig_feed.compose(
+        scs,
+        _fake_entries(40),
+        territori="PPCC",
+        setmana=_monday(2026, 5, 11),
+        rng=random.Random(0),
+    )
+    # 2 distinct artists kept → at most 2 narrative slots.
+    assert len(out["phrase_ids"]) <= 2
+
+
+@pytest.mark.django_db
+def test_build_novetats_enriches_flags_and_composes_narrative():
+    """nous_albums with 1 known (in-top) artist + 1 brand-new artist:
+    build_novetats sets the flags and compose_for_channel produces a
+    narrative caption (not the legacy skeleton)."""
+    from social import captions, payload
+
+    pub = _monday(2026, 5, 25)
+    known = Artista.objects.create(nom="Coneguda", slug="coneguda", aprovat=True)
+    nova = Artista.objects.create(nom="Nova", slug="nova", aprovat=True)
+    al_k = Album.objects.create(
+        nom="Disc Conegut",
+        slug="disc-k",
+        artista=known,
+        descartat=False,
+        tipus="album",
+        data_llancament=pub - datetime.timedelta(days=2),
+    )
+    al_n = Album.objects.create(
+        nom="Debut",
+        slug="debut",
+        artista=nova,
+        descartat=False,
+        tipus="album",
+        data_llancament=pub - datetime.timedelta(days=1),
+    )
+    _make_canco("T1", known, al_k, "t1")
+    _make_canco("T2", nova, al_n, "t2")
+    # `known` has a recent top appearance; `nova` does not.
+    top_canco = _make_canco("Hit", known, al_k, "hit")
+    _seed(top_canco, "PPCC", pub, 1)
+
+    data = payload.build_novetats("nous_albums", pub, publish_date=pub)
+    assert data and len(data["items"]) == 2
+    by_artist = {it["artista_nom"]: it for it in data["items"]}
+    assert by_artist["Coneguda"]["artista_en_top"] is True
+    assert by_artist["Nova"]["primer_release"] is True
+
+    res = captions.compose_for_channel(
+        "instagram_feed", "nous_albums", "", pub, data["items"], rng=random.Random(0)
+    )
+    txt = res["text"]
+    assert txt and "Setmana" not in txt.split("\n")[0]  # not the skeleton header
+    assert res["hashtags"] == ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
 
 
 @pytest.mark.django_db

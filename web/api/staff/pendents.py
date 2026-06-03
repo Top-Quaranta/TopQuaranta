@@ -409,29 +409,31 @@ def pendent_aprovar(request: Request, pk: int) -> Response:
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def pendent_descartar(request: Request, pk: int) -> Response:
+    """Discard a pendent artist by TOMBSTONING it — never deleting.
+
+    A hard delete leaves no `Artista` row for the Last.fm similar
+    resolver (`obtenir_metadata_lastfm._resolve_similar_target`) to
+    match, so an approved artist that still recommends the name
+    re-creates the pendent on its next sync — the
+    Tremenda Jauría / The Fades resurrection loop (audit 2026-06-02).
+    `aprovat=False, pendent_review=False` keeps the row out of the
+    pendents queue (`pendents_list` filters `pendent_review=True`) AND
+    lets the resolver's step 3 (`aprovat=False` by name) find it without
+    re-queuing it (`_process` never flips `pendent_review` on a matched
+    row). Both branches (with/without verified tracks) now land on the
+    same tombstone state; the StaffAuditLog row is preserved.
+    """
     artista = get_object_or_404(Artista, pk=pk)
-    has_verified = artista.cancons.filter(verificada=True).exists()
-    if has_verified:
-        artista.pendent_review = False
-        artista.save(update_fields=["pendent_review"])
-        recalcular_ml_si_cal()
-        log_staff_action(
-            request,
-            "pendent_descartar",
-            target=artista,
-            action_taken="kept_pendent_review_false",
-            reason="had verified tracks",
-        )
-        return Response({"ok": True, "action": "kept"})
-    label = str(artista)
-    pk_val = artista.pk
-    artista.delete()
+    had_verified = artista.cancons.filter(verificada=True).exists()
+    artista.aprovat = False
+    artista.pendent_review = False
+    artista.save(update_fields=["aprovat", "pendent_review"])
+    recalcular_ml_si_cal()
     log_staff_action(
         request,
         "pendent_descartar",
-        target=None,
-        action_taken="deleted",
-        target_id_deleted=pk_val,
-        target_label_deleted=label,
+        target=artista,
+        action_taken="kept_pendent_review_false",
+        reason="had verified tracks" if had_verified else "tombstoned (no verified)",
     )
-    return Response({"ok": True, "action": "deleted"})
+    return Response({"ok": True, "action": "tombstoned"})

@@ -455,7 +455,10 @@ def _spotify_enrichment_stats() -> dict:
     sm_qs = SpotifyMetadata.objects.all()
     sm_total = sm_qs.count()
 
-    found_qs = sm_qs.filter(enrichment_status=SpotifyMetadata.STATUS_FOUND)
+    # `found` here means "has a usable Spotify id Process A will push":
+    # both auto-enriched (`found`) and staff-pasted (`manual`) rows count,
+    # so the breakdown still sums to `sm_total`.
+    found_qs = sm_qs.filter(enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES)
     not_found_qs = sm_qs.filter(enrichment_status=SpotifyMetadata.STATUS_NOT_FOUND)
     found = found_qs.count()
     not_found = not_found_qs.count()

@@ -1,53 +1,197 @@
-{% extends "comptes/email_base.html" %}
-{% block pretitle %}Top setmanal · Setmana {{ project_week }}{% endblock %}
-{% block content %}
-<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;color:#facc15;margin:0 0 16px;">
-  {{ heading }}
-</h1>
-{% if narrative_html %}
-  {{ narrative_html|safe }}
-{% else %}
-<p style="margin:0 0 24px;color:#d4d4d4;">
-  Aquesta setmana al Top de <strong>{{ territori_nom }}</strong>:
-</p>
+{% load static %}<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ subject }}</title>
+<style>
+  /* Email reset + responsive + dark mode. Clients that strip <style>
+     still get the inline styles below; this only enhances. */
+  body { margin:0; padding:0; width:100%; background:#fafafa; }
+  table { border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }
+  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; display:block; }
+  a { text-decoration:none; }
+  .wrap { width:640px; max-width:640px; }
+  .px { padding-left:28px; padding-right:28px; }
+  @media (max-width:640px) {
+    .wrap { width:100% !important; }
+    .px { padding-left:18px !important; padding-right:18px !important; }
+    .gridcell { display:block !important; width:100% !important; }
+    .heronum { font-size:54px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    body, .body-bg { background:#0a0a0a !important; }
+    .card { background:#161616 !important; }
+    .ink { color:#fafafa !important; }
+    .muted { color:#a3a3a3 !important; }
+  }
+</style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="body-bg" style="background:#fafafa;">
+<tr><td align="center" style="padding:0;">
+<table role="presentation" class="wrap" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;">
+
+{% comment %} 1. HEADER (ink) {% endcomment %}
+<tr><td style="background:#0a0a0a;padding:22px 28px;" class="px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td align="left" valign="middle">
+      <img src="{{ site_url }}{% static 'web/img/newsletter/logo_email.png' %}" width="200" alt="TopQuaranta" style="width:200px;height:auto;">
+      <div style="color:#facc15;font-size:13px;font-weight:700;letter-spacing:1px;margin-top:8px;">SETMANA {{ project_week }} · TOP GLOBAL</div>
+    </td>
+    <td align="right" valign="top" style="font-size:11px;">
+      <a href="{{ browser_url }}" style="color:#a3a3a3;">Veure al navegador</a>
+    </td>
+  </tr></table>
+</td></tr>
+
+{% comment %} 2. PODI (#1 hero + #2-3) {% endcomment %}
+{% if podi %}
+<tr><td class="px" style="padding:28px 28px 8px;background:#fafafa;" valign="top">
+  {% with one=podi.0 %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td width="300" valign="top" class="gridcell" style="padding-bottom:8px;">
+      <a href="{{ one.url }}"><img src="{{ one.cover }}" width="300" alt="Portada de {{ one.canco_nom }}" style="width:100%;max-width:300px;border-radius:10px;"></a>
+    </td>
+    <td valign="middle" class="gridcell" style="padding-left:18px;">
+      <div class="heronum" style="font-size:64px;font-weight:900;color:#427c42;line-height:1;">1</div>
+      <div class="ink" style="font-size:22px;font-weight:700;color:#0a0a0a;margin:6px 0 2px;"><a class="ink" href="{{ one.url }}" style="color:#0a0a0a;">{{ one.canco_nom }}</a></div>
+      <div class="muted" style="font-size:15px;color:#525252;">{{ one.artistes_display }}</div>
+      {% include "comptes/_trend_badge.html" with t=one.trend %}
+    </td>
+  </tr></table>
+  {% endwith %}
+  {% if podi|length > 1 %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;"><tr>
+    {% for e in podi %}{% if forloop.counter > 1 %}
+    <td width="50%" valign="top" class="gridcell" style="padding:6px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#ffffff;border-radius:10px;"><tr>
+        <td width="72" valign="top" style="padding:10px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="62" alt="Portada de {{ e.canco_nom }}" style="width:62px;border-radius:6px;"></a></td>
+        <td valign="middle" style="padding:10px 10px 10px 0;">
+          <div style="font-size:13px;font-weight:700;color:#427c42;">{{ e.posicio }}</div>
+          <div class="ink" style="font-size:15px;font-weight:700;color:#0a0a0a;"><a class="ink" href="{{ e.url }}" style="color:#0a0a0a;">{{ e.canco_nom }}</a></div>
+          <div class="muted" style="font-size:12px;color:#525252;">{{ e.artistes_display }}</div>
+          {% include "comptes/_trend_badge.html" with t=e.trend %}
+        </td>
+      </tr></table>
+    </td>
+    {% endif %}{% endfor %}
+  </tr></table>
+  {% endif %}
+</td></tr>
 {% endif %}
-<ol style="padding:0 0 0 22px;margin:0 0 28px;color:#fff;">
-  {% for e in entries %}
-  <li style="margin:6px 0;">
-    {% comment %}
-      Top entries carry `canco_nom`; novetats items carry `nom`.
-      Django's `default` filter eagerly evaluates its argument, so
-      `e.canco_nom|default:e.nom` raises VariableDoesNotExist on a
-      top entry (no `nom` key) — caught 2026-05-09 when the
-      Saturday newsletter cron failed for every recipient.
-      `{# #}` is single-line only; multi-line MUST use this block
-      tag or it leaks into the rendered output (caught 2026-05-09
-      when the recovery newsletter shipped with the comment text
-      visible in every row).
-    {% endcomment %}
-    <strong style="color:#facc15;">{% if e.canco_nom %}{{ e.canco_nom }}{% else %}{{ e.nom }}{% endif %}</strong>
-    {% comment %}
-      Tasca B2: show collaborators alongside the main artist when
-      present. `e.artistes_display` is precomputed by the sender
-      (`comptes/newsletter.py`) so the template doesn't truncate
-      or comma-join itself. Falls back to the legacy single-artist
-      string for callers that haven't been updated. Multi-line
-      template comments MUST use `{% comment %}` — `{# #}` is
-      single-line only and leaks into the rendered output (caught
-      2026-05-09).
-    {% endcomment %}
-    <span style="color:#9ca3af;"> — {{ e.artistes_display|default:e.artista_nom }}</span>
-  </li>
-  {% endfor %}
-</ol>
-<p style="margin:0 0 24px;">
-  <a href="{{ top_url }}"
-     style="display:inline-block;padding:10px 22px;background:#facc15;color:#0a0a0a;font-weight:bold;border-radius:6px;text-decoration:none;">
-    Veure el top complet
-  </a>
-</p>
-<p style="margin:32px 0 0;color:#6b7280;font-size:12px;line-height:1.5;border-top:1px solid #1f2937;padding-top:16px;">
-  Reps aquest correu perquè vas marcar l'opció "Vull rebre la newsletter setmanal" al teu compte.
-  <a href="{{ unsub_url }}" style="color:#9ca3af;">Donar-me de baixa</a>.
-</p>
-{% endblock %}
+
+{% comment %} 3. EDITORIAL {% endcomment %}
+{% if narrative_html %}
+<tr><td class="px ink" style="padding:18px 28px;background:#fafafa;color:#262626;font-size:15px;line-height:1.6;">
+  {{ narrative_html|safe }}
+</td></tr>
+{% endif %}
+
+{% comment %} 4. TOP 4-10 (hybrid: 4-5 list, 6-9 grid, 10 centred) {% endcomment %}
+{% if resta %}
+<tr><td class="px" style="padding:8px 28px;background:#fafafa;">
+  {% for e in resta %}{% if e.posicio <= 5 %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#ffffff;border-radius:8px;margin:6px 0;"><tr>
+    <td width="56" valign="middle" style="padding:8px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="48" alt="Portada de {{ e.canco_nom }}" style="width:48px;border-radius:5px;"></a></td>
+    <td valign="middle" style="padding:8px 8px 8px 0;">
+      <span style="font-size:13px;font-weight:700;color:#427c42;">{{ e.posicio }}.</span>
+      <span class="ink" style="font-size:15px;font-weight:700;color:#0a0a0a;"><a class="ink" href="{{ e.url }}" style="color:#0a0a0a;">{{ e.canco_nom }}</a></span>
+      <span class="muted" style="font-size:13px;color:#525252;"> &mdash; {{ e.artistes_display }}</span>
+    </td>
+    <td align="right" valign="middle" style="padding:8px;">{% include "comptes/_trend_badge.html" with t=e.trend %}</td>
+  </tr></table>
+  {% endif %}{% endfor %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    {% for e in resta %}{% if e.posicio >= 6 and e.posicio <= 9 %}
+    <td width="50%" valign="top" class="gridcell" style="padding:6px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#ffffff;border-radius:8px;"><tr>
+        <td width="56" style="padding:8px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="48" alt="Portada de {{ e.canco_nom }}" style="width:48px;border-radius:5px;"></a></td>
+        <td valign="middle" style="padding:8px 8px 8px 0;">
+          <span style="font-size:12px;font-weight:700;color:#427c42;">{{ e.posicio }}.</span>
+          <span class="ink" style="font-size:13px;font-weight:700;color:#0a0a0a;">{{ e.canco_nom }}</span>
+          <div class="muted" style="font-size:11px;color:#525252;">{{ e.artistes_display }}</div>
+          {% include "comptes/_trend_badge.html" with t=e.trend %}
+        </td>
+      </tr></table>
+    </td>
+    {% endif %}{% endfor %}
+  </tr></table>
+  {% for e in resta %}{% if e.posicio == 10 %}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;"><tr>
+    <td align="center" class="card" style="background:#ffffff;border-radius:8px;padding:10px;">
+      <span style="font-size:13px;font-weight:700;color:#427c42;">10.</span>
+      <span class="ink" style="font-size:15px;font-weight:700;color:#0a0a0a;"><a class="ink" href="{{ e.url }}" style="color:#0a0a0a;">{{ e.canco_nom }}</a></span>
+      <span class="muted" style="font-size:13px;color:#525252;"> &mdash; {{ e.artistes_display }}</span>
+      {% include "comptes/_trend_badge.html" with t=e.trend %}
+    </td>
+  </tr></table>
+  {% endif %}{% endfor %}
+</td></tr>
+{% endif %}
+
+{% comment %} 5. CTA {% endcomment %}
+<tr><td align="center" class="px" style="padding:20px 28px;background:#fafafa;">
+  <a href="{{ cta_url }}" style="display:inline-block;padding:13px 30px;background:#427c42;color:#ffffff;font-weight:700;border-radius:8px;font-size:15px;">Veure el top complet</a>
+</td></tr>
+
+{% comment %} 6. TERRITORIALS (CAT/VAL/BAL) {% endcomment %}
+{% if territorials %}
+<tr><td class="px" style="padding:8px 28px;background:#fafafa;">
+  <div class="ink" style="font-size:13px;font-weight:700;color:#0a0a0a;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Els tops territorials</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    {% for c in territorials %}
+    <td width="33%" valign="top" class="gridcell" style="padding:6px;">
+      <a href="{{ c.url }}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#ffffff;border-radius:8px;"><tr><td align="center" style="padding:10px;">
+        <img src="{{ c.cover }}" width="64" alt="Portada de {{ c.canco_nom }}" style="width:64px;border-radius:6px;margin:0 auto 6px;">
+        <div style="font-size:12px;font-weight:700;color:#427c42;">{{ c.territori_nom }}</div>
+        <div class="ink" style="font-size:13px;font-weight:700;color:#0a0a0a;">{{ c.canco_nom }}</div>
+        <div class="muted" style="font-size:11px;color:#525252;">{{ c.artistes_display }}</div>
+      </td></tr></table></a>
+    </td>
+    {% endfor %}
+  </tr></table>
+</td></tr>
+{% endif %}
+
+{% comment %} 7. NOVETATS {% endcomment %}
+{% if novetats %}
+<tr><td class="px" style="padding:8px 28px;background:#fafafa;">
+  <div class="ink" style="font-size:13px;font-weight:700;color:#0a0a0a;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Novetats de la setmana</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    {% for n in novetats %}
+    <td width="33%" valign="top" class="gridcell" style="padding:6px;">
+      <a href="{{ n.url }}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#ffffff;border-radius:8px;"><tr><td align="center" style="padding:10px;">
+        <img src="{{ n.cover }}" width="64" alt="Portada de {{ n.nom }}" style="width:64px;border-radius:6px;margin:0 auto 6px;">
+        <div class="ink" style="font-size:13px;font-weight:700;color:#0a0a0a;">{{ n.nom }}</div>
+        <div class="muted" style="font-size:11px;color:#525252;">{{ n.artista_nom }}</div>
+      </td></tr></table></a>
+    </td>
+    {% endfor %}
+  </tr></table>
+</td></tr>
+{% endif %}
+
+{% comment %} 8. SHARE {% endcomment %}
+{% if share_links %}
+<tr><td align="center" class="px" style="padding:18px 28px;background:#fafafa;">
+  <div class="muted" style="font-size:12px;color:#525252;margin-bottom:8px;">Segueix-nos i comparteix</div>
+  {% for s in share_links %}<a href="{{ s.url }}" style="display:inline-block;margin:0 6px;padding:8px 14px;background:#0a0a0a;color:#facc15;border-radius:6px;font-size:12px;font-weight:700;">{{ s.canal|capfirst }}</a>{% endfor %}
+</td></tr>
+{% endif %}
+
+{% comment %} 9. FOOTER {% endcomment %}
+<tr><td class="px" style="padding:22px 28px;background:#0a0a0a;color:#737373;font-size:11px;line-height:1.6;text-align:center;">
+  Reps aquest correu perquè vas activar "Vull rebre la newsletter setmanal" al teu compte de TopQuaranta.<br>
+  <a href="{{ unsub_url }}" style="color:#a3a3a3;text-decoration:underline;">Donar-me de baixa</a>
+  &middot; <a href="{{ browser_url }}" style="color:#a3a3a3;text-decoration:underline;">veure al navegador</a><br>
+  Aquest correu és automàtic. TopQuaranta &middot; <a href="{{ site_url }}" style="color:#facc15;">topquaranta.cat</a>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

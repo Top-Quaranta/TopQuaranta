@@ -17,21 +17,27 @@ syndication and a static-PNG hosting path for Meta's media-fetcher.
 ```
 cron (publicar_social or publicar_canal)
   ↓ social/payload.py             → {entries, hero_cover_url}  for top_*
+                                    (entries/items carry album_deezer_id
+                                     for the newsletter's local-cover lookup)
                                      {items}                    for nous_*
   ↓ social/captions.py
       compose_for_channel(channel, tipus, territori, setmana, entries)
         ↓ if tipus ∈ {top_ppcc, top_territorial}:
-            social/narrative/scenarios.detect_all → 12 detectors a1-a12 (ADR-0008)
+            social/narrative/scenarios.detect_all → 13 detectors a1-a13
+            social/narrative/scenarios.select_slots → distinct-subject slots
             social/narrative/composers/<channel>.compose
               ↓ pick_phrase(hero, long, …)     via registry (anti-repeat)
-              ↓ pick_phrase(secondary, medium, …)  if scenarios[1] exists
-              ↓ pick_phrase(tertiary, short, …)    IG-feed only (ADR-0008)
+              ↓ pick_phrase(secondary, medium, …)  slot[1] if distinct subject
+              ↓ pick_phrase(tertiary, short, …)    IG-feed only, slot[2] if distinct
               ↓ for IG: `@handle` rewrite per ADR-0007
               ↓ top5_bank.pick_long / pick_short (ordinals per ADR-0006)
               ↓ hashtags_bank.build_hashtags
               ↓ cta_bank.pick_cta
-          else: _legacy_for(channel, tipus, …)  ← novetats path
-  ↓ social/renderer.py            → PNG slides
+        ↓ elif tipus ∈ {nous_albums, nous_singles}:  ← narrative novetats
+            social/narrative/novetats.detect_novetats → n1-n4 + fallback
+            social/narrative/composers/{nous_albums,nous_singles}.compose
+          else: _legacy_for(channel, tipus, …)  ← IG-story / fallback
+  ↓ social/renderer.py            → JPEG slides (q=90)
   ↓ social/<channel>_client.py    → publish
   ↓ social.SocialPost row         status ∈ {publicat, error, omes}
   ↓ StaffAuditLog                 audit trail
@@ -48,15 +54,27 @@ cron (publicar_social or publicar_canal)
 | Telegram | `social/telegram_client.py` + `composers/telegram.py` | 1 024 | plain name | 3-5 |
 | Newsletter | `composers/newsletter.py` | unbounded | plain name | — |
 
-## Narrative engine (12 detectors)
+## Narrative engine (13 detectors)
 
 Located at `social/narrative/scenarios.py`. Each detector runs
 over the `TopSetmanal` for a given week and territory; returns at
 most one `Scenario(code, severity, data)`. `detect_all` returns
-the list sorted by severity desc; the composer picks
-`scenarios[0]` as the hero, optionally `scenarios[1]` as a
-secondary thread, and (IG feed only, ADR-0008) `scenarios[2]` as
-a tertiary thread.
+the list sorted by severity desc.
+
+### Distinct-subject slot selection (2026-06-01, audit #1/#6)
+
+`select_slots(scenarios, max_slots)` picks up to `max_slots`
+scenarios with **distinct subjects**, greedily by severity. Two
+scenarios conflict when they share a non-None `canco_id` OR a
+non-None `artista_id` (`_scenario_subject` returns the
+`(canco_id, artista_id)` tuple; `_base_data` populates both — a
+song-focal scenario carries both, the artist-focal `a5` carries
+only `artista_id`). This stops the hero/secondary/tertiary from
+repeating the same song or artist (e.g. hero `a10` "Noia de
+Porcellana 5è" + tertiary `a6` about the same song). IG feed asks
+for 3 slots; the other composers for 2. **The tertiary slot is no
+longer systematic** — a caption ends at hero+secondary (or just
+hero) when the detectors don't supply enough distinct subjects.
 
 | Code | Trigger | Severity range |
 |---|---|---|
@@ -72,7 +90,54 @@ a tertiary thread.
 | `a10_artista_first_ever` | Artist's first-ever top appearance (ADR-0008) | 8 (fixed) |
 | `a11_top5_drop_generic` | Song was top 2-5, now out of top 10 (ADR-0008) | 4-5 |
 | `a12_artista_emerging` | Artist re-appears after a one-week gap (ADR-0008) | 3 (fixed) |
+| `a13_top1_return` | Song reclaims #1 after a gap (was #1 before, not #1 at W-1) | min(9, max(5, gap_weeks+3)) |
 | `fallback_no_event` | Catch-all when nothing fires | 0 |
+
+`a13_top1_return` (2026-06-01) is distinct from `a1` (fresh #1 with
+no #1 history) and `a2` (consecutive streak). Severity scales with
+the gap since the last #1 reign (min gap 2 weeks → floor 5; ≥6 weeks
+caps at 9). Its bank ships 6 variants/tier (rarer trigger) vs the
+15/tier of the original detectors.
+
+### Novetats narrative engine (2026-06-01, audit #5)
+
+`nous_albums` / `nous_singles` no longer use the skeleton
+`caption_novetats`; they run a parallel engine. `payload.build_novetats`
+batch-computes per-album flags (`artista_en_top`, `primer_release`,
+`te_collab`, `segell_compartit`, `dies`, `segell`) in
+`_novetats_flags`. `novetats.detect_novetats(items)` runs four detectors
+over those flags and always appends a `fallback_novetat`:
+
+| Code | Trigger | Severity |
+|---|---|---|
+| `n1_debut_artist_known` | release by an artist in the recent top | 6 |
+| `n2_first_release` | artist's first catalogued release | 5 |
+| `n3_collaboration` | release with a featuring (generic copy — guest names aren't stored) | 4 |
+| `n4_label_release` | label shared by ≥2 distinct top artists | 3 |
+| `fallback_novetat` | most recent release (always present) | 0 |
+
+Novetats scenarios are **album-focal** (`canco_id=None`, `artista_id`
+set), so `select_slots` dedups them by artist. `composers/novetats.py`
+is the shared composer (per-channel budget); `nous_albums.py` /
+`nous_singles.py` are thin tipus-pinning wrappers. Bank:
+`banks/novetats.py` (no territori placeholders). Hashtags are the
+TitleCase `HASHTAGS_NOVETATS`; CTAs are novetats-specific (the top
+CTAs reference a "rànquing" that a roundup isn't).
+
+### Caption density (2026-06-01, audit #4/#13)
+
+The IG-feed composer has a **density floor** `MIN_CAPTION_RATIO = 0.45`
+(~990 of 2200 chars). Below it, it upgrades phrase tiers before
+truncation — tertiary `short → medium`, then secondary `medium → long`
+— keeping any upgrade that still fits 2200. It never synthesises
+filler; a still-thin caption is `logger.warning`-ed, not padded. The
+**newsletter** now carries a third paragraph (`select_slots(…, 3)` →
+hero + secondary + tertiary + top-5 detail); it has no hard ceiling.
+A symmetric newsletter floor is deferred (proposed, not applied).
+
+Novetats hashtags are now TitleCase (`#TopQuaranta #MúsicaEnCatalà
+#Novetats` via `captions.HASHTAGS_NOVETATS`), consistent with the
+tops' bank (audit #2).
 
 ### Format de posicions (ADR-0006)
 
@@ -220,12 +285,101 @@ Driven by `social/calendari.py`. Slots per weekday with
 the canonical `top_ppcc` cycle; territorials Sun 09:50 UTC;
 novetats slots Mon/Wed mornings.
 
-## Static PNG hosting
+## Renderer image format + PPCC feed cover (Step 3a, 2026-06-01)
+
+`social/renderer.py` outputs **JPEG quality 90** (was PNG) for every
+slide — `_path` emits `.jpg`, all `.save(...)` use `JPEG, quality=90`.
+Instagram's Graph API accepts JPEG; the logrotate prune
+(`deploy/logrotate.topquaranta`) now globs both `*.png` (legacy) and
+`*.jpg`.
+
+The **PPCC feed cover** (`_feed_portada_ppcc`) is rewritten as an
+editorial cover on ink: big "TOP 40 / SETMANA N" kicker + a teaser of
+up to 5 featured artist names (the main artist of each top-5 entry,
+de-duplicated, chart order) + logo + footer URL. Replaces the
+~85 %-empty legacy cover. Territorial covers (full-bleed album art) and
+the feed list slides 1-4 are unchanged. Sans-only (Playfair is reserved
+for the #1 story hero, landing in 3b).
+
+`social/narrative/story_synth.py::synthesize_hero(scenario)` derives a
+short uppercase headline (≤ 50 chars) per hero `scenario_code` for the
+#1 story hero slide (e.g. a13 → "TORNA AL CIM DESPRÉS DE 5 SETMANES",
+a2 → "5A SETMANA AL CIM"). Created in 3a; wired into the renderer in 3b.
+
+## PPCC story set — 7 editorial slides (Step 3b)
+
+`renderer.render_stories_ppcc(setmana, entries, *, novetats_items,
+hero_headline)` replaces the legacy PPCC story sequence (intro + up to
+40 cançó slides + CTA) with a fixed seven-slide set ordered to build
+toward the #1 climax. A first pass set the structure; a **redesign pass
+(2026-06-02) ported the validated Claude Design canvas** (pixel-measured
+from the 1080×1920 references) into the seven builders. Both passes are
+part of Step 3b — the territorial story redesign is the future Step 3c:
+
+1. **intro** — green radial field, white logo, "presenta" serif accent,
+   the big **EL TOP / 40 / D'AQUESTA SETMANA** stack, star-separated
+   SETMANA pill row.
+2. **top 40→11** — 5×6 cover mosaic, yellow Anton number badge pinned to
+   each cover's top-left corner (`width:auto`, so double digits stay
+   left-aligned), Bricolage titles + Roboto artist subtitles.
+3. **top 10→4** — 2-column cover grid (#10/#9, #8/#7, #6/#5) with #4
+   centred below (mirrors the newsletter D1a block).
+4. **podi #3-2** — two centred 300 px covers stacked, big Anton badge +
+   Bricolage title + Roboto artist.
+5. **#1 hero** — inverted hierarchy: a ghost "1" clipped at the right, a
+   subordinate yellow scenario kicker, and the SONG TITLE in **Playfair
+   Display 800** as the primary element (the only Playfair on the set).
+6. **novetats** — 2-3 most recent releases (albums + singles merged,
+   newest first); **skipped** when nothing is recent → 6 or 7 slides.
+7. **outro** — yellow field, ink logo, "EL TOP 40" (Anton), star
+   separator, an informative (non-clickable) underlined `topquaranta.cat`
+   CTA, SETMANA footer. No slate `COLOR_CARD` card (that primitive stays
+   in use by the territorial `_story_cta`).
+
+**Typography** (vendored OFL TTFs under `social/fonts/`): **Anton**
+(display/numbers/pills/footers), **Bricolage Grotesque 800** (song
+titles on 2/3/4/6), **Playfair Display 800** (slide-5 title only),
+**Instrument Serif italic** (the two serif accents); the sans role
+(kickers, artist subtitles, hero scenario, CTA) reuses bundled
+**Roboto**. Playfair/Bricolage are static instances cut from the upstream
+variable fonts. Letter-spacing + line-height are emulated glyph-by-glyph
+(`_draw_tracked`); the star separators are vector polygons
+(`_draw_star`); backgrounds are numpy radial gradients (`_radial_bg`,
+flat green/ink/yellow + gradient — grain deliberately skipped). The logo
+reuses `svg_assets.logo_image_mono` (white on dark, ink on yellow). No
+trend cues anywhere.
+
+Covers resolve **local self-hosted portada first** (`ingesta.portades`,
+250 px for small slots / 500 px for large) then the live Deezer CDN URL
+then a placeholder tile — the newsletter placeholder does NOT apply here.
+`story_max_cancons_ppcc` no longer governs the PPCC set (kept for the
+config/staff surfaces). Territorial stories are untouched and still use
+`render_stories_top`. The `#1` hero headline is threaded from
+`publicar_social._story_hero_headline` → `scenarios.detect_all("PPCC",
+…)` (strongest post-dedup scenario) → `story_synth.synthesize_hero`.
+Output stays JPEG q90; a full set is ~1 MB (7 JPG) vs the legacy ~42 PNG.
+
+Operational note: the link-sticker on the outro story must still be
+added manually each week through the Instagram app — the Graph API
+does not expose story stickers programmatically.
+
+## Static hosting
 
 Meta's IG media-fetcher rejects rendered images served through
 Django (CSP/COOP headers cause code 9004). Caddy serves
 `/static/social/*` directly from
 `/var/cache/topquaranta/social/renders/` as plain files.
+
+The URL handed to the fetchers comes from
+`SOCIAL_PUBLIC_BASE` via `_public_url_for`; if that setting is unset it
+falls back to the Django `/api/v1/social/render` view — the exact
+header-laden path that triggers 9004. The publish commands run under
+**`production`** settings, so `SOCIAL_PUBLIC_BASE` MUST live in
+`base.py` (not only `web_server.py`). Caught 2026-06-03: it was
+`web_server`-only, so every cron publish sent the Django URL and BAL's
+IG/Telegram slots failed with 9004 / `WEBPAGE_MEDIA_EMPTY` while the
+byte-upload channels (Mastodon, Bluesky) — which never fetch a URL —
+published fine. Guarded by `test_public_url_for_uses_caddy_static_not_django_fallback`.
 
 ## Related
 

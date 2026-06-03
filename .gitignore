@@ -6,6 +6,10 @@ dist/
 build/
 *.egg
 
+# Operational scratch dir on prod (one-off CSV exports etc.). Kept out of
+# git so it doesn't trip the tq-health git-drift check.
+data/
+
 # Virtual environment
 venv/
 .venv/
@@ -53,6 +57,10 @@ music/ml_model.joblib
 # Claude Code
 .claude/
 .claude.json
+# Claude Code personal memory — per-developer, never shared. Distinct
+# from the tracked, shared CLAUDE.md project memory (see CLAUDE.md §11),
+# which MUST stay committed.
+CLAUDE.local.md
 
 # Temporary files
 temp/

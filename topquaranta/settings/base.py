@@ -283,3 +283,16 @@ LOGGING = {
         "ranking": {"level": "INFO"},
     },
 }
+
+# Public URL prefix handed to Meta's / Telegram's media fetchers when
+# publishing carousel items. Caddy serves `/static/social/*` from
+# `/var/cache/topquaranta/social/renders/` as plain static files —
+# bypassing Django avoids the CSP/COOP/Vary headers that Meta's fetcher
+# rejects with code 9004 ("Only photo or video can be accepted as media
+# type"). MUST live in `base` (not just `web_server`): the social
+# publish commands run under `production`, and a missing value here
+# silently falls back to the Django `/api/v1/social/render` view —
+# exactly the header-laden path Meta/Telegram reject (caught 2026-06-03:
+# every BAL cron publish hit 9004 / WEBPAGE_MEDIA_EMPTY). Switch back to
+# the Django view only if Caddy is unavailable.
+SOCIAL_PUBLIC_BASE = "https://www.topquaranta.cat/static/social"

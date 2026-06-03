@@ -117,6 +117,52 @@ business write isn't blocked.
 - `/compte/esborrar-sollicitud/` — self-delete confirmation
   email flow. Throttled per `_AccountDeleteThrottle`.
 
+## Weekly newsletter (Step 2 rework, 2026-06-01)
+
+`comptes/newsletter.py::send_top_newsletter` builds **one Global
+newsletter per week** (no territorial editions). `_build_top_context`
+assembles a recipient-independent context once per run:
+
+1. **Header** — raster logo (`logo_email.png`) on ink + "Setmana N ·
+   Top Global" + "Veure al navegador".
+2. **Podi** — #1 hero (500 px cover) + #2-3 sub-cards.
+3. **Editorial** — the narrative paragraphs from the social newsletter
+   composer (Step 1β).
+4. **Top 4-10** — hybrid: 4-5 list rows, 6-9 a 2×2 grid, 10 centred.
+5. **CTA** — "Veure el top complet".
+6. **Territorials** — CAT/VAL/BAL current #1 mini-cards.
+7. **Novetats** — 2-3 of the week's releases.
+8. **Share** — IG/Mastodon/Bluesky/Telegram buttons.
+9. **Footer** — unsubscribe + backup link.
+
+Template `comptes/templates/comptes/email_newsletter_top.html` is
+self-contained (640 px, light `#fafafa` body + ink header, system
+sans, `@media` responsive + dark mode), no longer extends
+`email_base.html`. The `_trend_badge.html` partial renders the
+per-entry movement.
+
+Helpers:
+- **`newsletter_utm.build_newsletter_url(base, content, setmana)`** —
+  every body link gets `utm_source=newsletter`, `utm_medium=email`,
+  `utm_campaign=top_<setmana>_global`, `utm_content=<block>`
+  (`podi_1`, `top_4`, `cta_top`, `territorial_cat`, `novetat_1`,
+  `compartir_telegram`, …).
+- **`newsletter_covers.album_cover_url(deezer_id, mida)`** — local JPG
+  at `/portades/album/<id>-{250,500}.jpg` (filesystem check via
+  `ingesta.portades.manager`, no network) else the committed
+  placeholder.
+- **`newsletter_meta.trend_indicator(pos, pos_anterior, is_return)`** —
+  ↑N / ↓N / → / DEBUT / TORNA (a13) with mm-design colours. Deltas
+  come from `payload.build_top`'s `posicio_anterior` (no extra query).
+- **`newsletter_meta.derive_subject(hero, week)`** — short editorial
+  subject (≤60 chars) from a per-scenario_code phrase bank.
+
+Raster assets (email clients don't render SVG) are committed PNGs
+under `web/static/web/img/newsletter/`, regenerable run-once via
+`manage.py generar_assets_newsletter` (rasterises the vendored brand
+SVG through `social.svg_assets`): `cover_placeholder.png` (500×500,
+ink + white logo) and `logo_email.png` (full-colour header mark).
+
 ## Related
 
 - ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`
@@ -125,4 +171,5 @@ business write isn't blocked.
 - Policy: `docs/policies/identities.md`
 - Modules: `comptes/models.py`, `comptes/views.py`,
   `comptes/notifications.py`, `comptes/management/`,
+  `comptes/newsletter.py`, `comptes/newsletter_{utm,covers,meta}.py`,
   `web/api/compte_views/`, `web/api/staff/sollicituds_revisio.py`

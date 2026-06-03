@@ -238,6 +238,26 @@ def test_tq_health_emits_migration_status_row():
 # ── Multi-tenant Caddy: import contract + conf.d isolation ──────────
 
 
+def test_static_social_excluded_from_security_headers():
+    """The `/static/social/*` render path must NOT receive the site-level
+    CSP / X-Frame-Options headers: Instagram's media fetcher (code 9004)
+    and Telegram's fetcher reject media responses that carry them. The
+    security-headers block is therefore scoped with a matcher that
+    excludes the path. Static tripwire: if a refactor drops the
+    exclusion, this fails before it ships (runtime regression would only
+    surface as a failed social publish). See docs/ops/infra.md."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    body = (repo_root / "deploy" / "Caddyfile").read_text()
+    assert (
+        "handle_path /static/social/*" in body
+    ), "deploy/Caddyfile must serve /static/social/* as plain static files."
+    assert "not path /static/social/*" in body, (
+        "deploy/Caddyfile must exclude /static/social/* from the security-"
+        "headers block (CSP / X-Frame-Options trigger Instagram code 9004). "
+        "Scope the `header` block with `@<name> not path /static/social/*`."
+    )
+
+
 def test_caddyfile_imports_confd():
     """The repo Caddyfile must include an `import` directive that
     pulls every `.caddy` snippet under /etc/caddy/conf.d/. Without

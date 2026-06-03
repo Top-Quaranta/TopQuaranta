@@ -38,8 +38,12 @@ is a separate, known follow-up — not addressed here.
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import TYPE_CHECKING
 
 from music.constants import DIES_CADUCITAT
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 
 def caducitat_cutoff(today: date | None = None) -> date:
@@ -59,3 +63,19 @@ def is_caducat(data_llancament: date | None, cutoff: date) -> bool:
     semantics as `netejar_caducades`, which uses a `__lt` filter that
     excludes NULLs)."""
     return data_llancament is not None and data_llancament < cutoff
+
+
+def exclude_caducats(qs: QuerySet, today: date | None = None) -> QuerySet:
+    """Queryset mirror of `is_caducat`: drop rows whose `data_llancament`
+    is strictly older than the caducity cutoff, KEEPING both recent and
+    NULL-dated rows.
+
+    This returns EXACTLY the survivor set of `netejar_caducades`, which
+    deletes `data_llancament__lt=cutoff` — a `__lt` filter, so NULLs are
+    never matched and therefore kept. Use it wherever a queryset must
+    contain exactly the purge survivors, e.g. the `enriquir_spotify`
+    pending pool, so the equity floor never spends a slot on a track the
+    04:00 purge will delete an hour later. Same `caducitat_cutoff()` and
+    same NULL treatment as the purge and `is_caducat`; no second cutoff.
+    """
+    return qs.exclude(data_llancament__lt=caducitat_cutoff(today))

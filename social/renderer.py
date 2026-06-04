@@ -1699,6 +1699,7 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
     The radial field uses the territory accent (PPCC → green, identical
     to before)."""
     from .captions import _setmana_label
+    from .narrative.utils import TERRITORI_DE
 
     pal = colors.story_palette(territori)
     img = _radial_bg(pal["accent"], pal["deep"], (0.5, 0.0), (1.3, 0.8), 1.0)
@@ -1729,11 +1730,20 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
         d, 0, 632, "40", f_40, colors.COLOR_YELLOW, tracking=-7.6, center_w=STORY_W
     )
     f_setm = fonts.anton(100)
+    # PPCC keeps the brand "D'AQUESTA SETMANA" (byte-identical). Territorial
+    # stories localise the chart: "DE CATALUNYA" / "DEL PAÍS VALENCIÀ" /
+    # "DE LES ILLES BALEARS" (TERRITORI_DE, uppercased). Same slot/size, so
+    # only the string differs; fine-tuning the placement is left to polish
+    # (a long name like the Balears one may need a size step-down).
+    if territori == "PPCC":
+        subtitle = "D'AQUESTA SETMANA"
+    else:
+        subtitle = (TERRITORI_DE.get(territori) or "d'aquesta setmana").upper()
     _draw_tracked(
         d,
         0,
         980,
-        "D'AQUESTA SETMANA",
+        subtitle,
         f_setm,
         colors.COLOR_WHITE,
         tracking=1,
@@ -2212,6 +2222,55 @@ def render_stories_ppcc(
     # releases — never generated, never uploaded (the set is then 6).
     if novetats_items:
         _emit(_story_novetats(setmana, novetats_items[:3]))
+    _emit(_story_outro_ppcc(setmana))
+    return out
+
+
+def render_stories_territorial(
+    territori: str,
+    setmana,
+    entries: list[dict],
+    *,
+    novetats_items: list[dict] | None = None,
+    hero_headline: str | None = None,
+) -> list[Path]:
+    """Render the editorial territorial story set (Step 3c).
+
+    Same grammar and inverted-toward-#1 slicing as the PPCC set, but
+    recoloured per territory (`story_palette`) and degraded by omission:
+    a tier slide is emitted only when its slice is non-empty, so a short
+    top (N < 40) never yields a near-blank mosaic/grid/podi. Hero (#1)
+    and outro stay brand yellow/ink. PPCC keeps `render_stories_ppcc`."""
+    out: list[Path] = []
+    novetats_items = [it for it in (novetats_items or []) if it]
+    n = len(entries)
+    if n < 11:
+        # Not an error: graceful degradation. Surfaced so a future
+        # volume collapse on a thin territory (BAL) is visible in logs.
+        logger.warning(
+            "territorial story has N=%d (<11) for %s setmana=%s; "
+            "mosaic/grid/podi tiers may be omitted",
+            n,
+            territori,
+            setmana,
+        )
+
+    def _emit(img: Image.Image):
+        p = _path("top_territorial", territori, setmana, len(out), story=True)
+        img.save(p, "JPEG", quality=90)
+        out.append(p)
+
+    _emit(_story_intro_ppcc(setmana, territori=territori))
+    if n > 10:
+        _emit(_story_top_mosaic(setmana, entries[10:40], territori=territori))
+    if n > 3:
+        _emit(_story_top_grid(setmana, entries[3:10], territori=territori))
+    if n > 1:
+        _emit(_story_podi(entries[1:3], setmana, territori=territori))
+    if entries:
+        _emit(_story_hero(entries[0], hero_headline))
+    if novetats_items:
+        _emit(_story_novetats(setmana, novetats_items[:3], territori=territori))
     _emit(_story_outro_ppcc(setmana))
     return out
 

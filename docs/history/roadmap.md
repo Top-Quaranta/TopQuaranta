@@ -34,7 +34,8 @@
   redisseny visual validat portat al renderer Pillow — noves
   famílies OFL Anton / Bricolage Grotesque / Instrument Serif /
   Playfair 800 a `social/fonts/` (redisseny Step 3b, 2026-06-02).
-  Stories territorials encara pendents (seran el Step 3c). Detall a
+  Stories territorials (CAT/VAL/BAL) portades a la mateixa estructura
+  editorial (Step 3c, 2026-06-04). Detall a
   `docs/architecture/social.md`.
 - **Analytics**: suite ètica completa (K1-K4 + GoAccess) a
   `/staff/analytics`. Pageviews, UTM, KPIs de pipeline, mètriques
@@ -370,6 +371,34 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 ---
 
 ## Sprints — completats
+
+### Stories territorials editorials (Step 3c) ✅ (2026-06-04)
+
+Les stories territorials (CAT/VAL/BAL) passen del format antic
+(intro + N cançons + CTA) a la mateixa estructura editorial de 7
+slides que PPCC, via `render_stories_territorial`. Builders
+parametritzats per territori amb `colors.story_palette`
+(accent/deep/light + rol `badge` per a la pastilla; CAT badge
+taronja viu perquè el seu ambre fosc s'apaga sobre ink). Cada slide
+intern porta un marcador de territori (pastilla `TERRITORI_SHORT`)
+al costat de SETMANA; la intro porta una icona de territori (marca
+d'aigua) i un subtítol locatiu (`TERRITORI_DE`, step-down a 84 pt
+si supera 680 px). Hero/outro es queden en groc/ink de marca.
+Degradació per omissió segons N (mosaic N>10, grid N>3, podi N>1)
+amb `logger.warning` sota N=11. Allowlist fail-loud:
+només `calendari.TERRITORIS_ROTATORI` (CAT/VAL/BAL) publiquen
+story; altres codes peten explícitament. PPCC queda byte-idèntic
+(guard `test_renderer_ppcc_stories.py`). Detall a
+`docs/architecture/social.md`.
+
+**Deute conegut (cleanup a banda):** la icona de la story de CAT
+reusa l'art de la senyera (la icona de "global"/PPCC) via un remap
+només de stories (`_STORY_ICON_CODI`), perquè `territory-cat.svg`
+és una creu compartida amb la web. Implica: (a) a la web, CAT
+segueix mostrant la creu al `TerritoriBadge`; (b) la senyera fa
+doble servei (icona global + story de CAT). Pendent de decidir la
+icona de "global" a la web i reconciliar vendor + web en un PR a
+part.
 
 ### Regressió motor narratiu (post-mortem 2026-05-20) ✅ (2026-06-03)
 

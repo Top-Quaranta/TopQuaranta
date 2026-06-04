@@ -309,12 +309,11 @@ a2 → "5A SETMANA AL CIM"). Created in 3a; wired into the renderer in 3b.
 ## PPCC story set — 7 editorial slides (Step 3b)
 
 `renderer.render_stories_ppcc(setmana, entries, *, novetats_items,
-hero_headline)` replaces the legacy PPCC story sequence (intro + up to
-40 cançó slides + CTA) with a fixed seven-slide set ordered to build
-toward the #1 climax. A first pass set the structure; a **redesign pass
-(2026-06-02) ported the validated Claude Design canvas** (pixel-measured
-from the 1080×1920 references) into the seven builders. Both passes are
-part of Step 3b — the territorial story redesign is the future Step 3c:
+hero_headline)` replaces the legacy PPCC sequence (intro + up to 40
+cançó slides + CTA) with a fixed seven-slide set ordered toward the #1
+climax (structure + a **2026-06-02 redesign** porting the validated
+Claude Design canvas, pixel-measured from the 1080×1920 references).
+Both are Step 3b; the territorial port is Step 3c (section below):
 
 1. **intro** — green radial field, white logo, "presenta" serif accent,
    the big **EL TOP / 40 / D'AQUESTA SETMANA** stack, star-separated
@@ -333,8 +332,7 @@ part of Step 3b — the territorial story redesign is the future Step 3c:
    newest first); **skipped** when nothing is recent → 6 or 7 slides.
 7. **outro** — yellow field, ink logo, "EL TOP 40" (Anton), star
    separator, an informative (non-clickable) underlined `topquaranta.cat`
-   CTA, SETMANA footer. No slate `COLOR_CARD` card (that primitive stays
-   in use by the territorial `_story_cta`).
+   CTA, SETMANA footer. No slate `COLOR_CARD` card.
 
 **Typography** (vendored OFL TTFs under `social/fonts/`): **Anton**
 (display/numbers/pills/footers), **Bricolage Grotesque 800** (song
@@ -353,15 +351,24 @@ Covers resolve **local self-hosted portada first** (`ingesta.portades`,
 250 px for small slots / 500 px for large) then the live Deezer CDN URL
 then a placeholder tile — the newsletter placeholder does NOT apply here.
 `story_max_cancons_ppcc` no longer governs the PPCC set (kept for the
-config/staff surfaces). Territorial stories are untouched and still use
-`render_stories_top`. The `#1` hero headline is threaded from
-`publicar_social._story_hero_headline` → `scenarios.detect_all("PPCC",
-…)` (strongest post-dedup scenario) → `story_synth.synthesize_hero`.
-Output stays JPEG q90; a full set is ~1 MB (7 JPG) vs the legacy ~42 PNG.
+config/staff surfaces). The `#1` headline comes from
+`_story_hero_headline(setmana, territori)`. Output stays JPEG q90; a
+full set is ~1 MB (7 JPG) vs the legacy ~42 PNG.
 
 Operational note: the link-sticker on the outro story must still be
 added manually each week through the Instagram app — the Graph API
 does not expose story stickers programmatically.
+
+## Territorial stories — Step 3c
+
+`render_stories_territorial` reuses the PPCC builders, recoloured by
+`colors.story_palette` (accent/deep/light + a `badge` role; CAT badge is
+a vivid orange, others = accent). Slides add a `TERRITORI_SHORT` pill, an
+intro territory-icon watermark (`_STORY_ICON_CODI` maps CAT → senyera)
+and a `TERRITORI_DE` subtitle (step-down past 680 px); hero/outro stay
+brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
+below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
+loud. PPCC byte-identical.
 
 ## Static hosting
 

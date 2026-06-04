@@ -133,7 +133,22 @@ def best_text_on(hex_str: str) -> str:
 # raises on a future code.
 _STORY_PALETTES: dict[str, dict[str, str]] = {
     "PPCC": {"accent": "#427c42", "deep": COLOR_GREEN_DEEP, "light": COLOR_GREEN_LIGHT},
-    "CAT": {"accent": "#8a6900", "deep": "#5c4500", "light": "#f0c419"},
+    # CAT amber darkened (polish 1): brand yellow shares the amber hue, so
+    # only luminance separates them. A much darker amber lets the "40" /
+    # SETMANA pill / badges pop like they do on the red/blue/green accents,
+    # without touching the yellow. Identity stays amber. light unchanged
+    # (gold kicker/footer on ink, already high-contrast).
+    # CAT: the dark amber accent fills the intro field, but as a pill on
+    # ink it would sink in. `badge` is a separate vivid burnt-orange used
+    # only for the territory pill: it pops on ink like VAL/BAL (badge/ink
+    # 3.82 vs VAL 3.95), white text passes AA (5.18), and it stays clearly
+    # distinct from the neighbouring yellow SETMANA pill (3.38).
+    "CAT": {
+        "accent": "#5c4500",
+        "deep": "#3a2b00",
+        "light": "#f0c419",
+        "badge": "#c2410c",
+    },
     "VAL": {"accent": "#cf3339", "deep": "#8c1f24", "light": "#f4a3a6"},
     "BAL": {"accent": "#0047ba", "deep": "#00307d", "light": "#9bc0f5"},
 }
@@ -153,4 +168,8 @@ def story_palette(territori: str) -> dict[str, str]:
             "deep": darken(accent, 0.45),
             "light": mix(accent, COLOR_WHITE, 0.35),
         }
-    return {**pal, "text_on": best_text_on(pal["accent"])}
+    # `badge` defaults to the accent (VAL/BAL/PPCC + derived); only CAT
+    # overrides it. `text_on` is the text colour over the accent; the pill
+    # picks its own text over `badge` via `best_text_on` at draw time.
+    badge = pal.get("badge", pal["accent"])
+    return {**pal, "badge": badge, "text_on": best_text_on(pal["accent"])}

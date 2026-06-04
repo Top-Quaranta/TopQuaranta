@@ -365,14 +365,25 @@ class Command(BaseCommand):
             )
             max_cancons = None
         else:
-            max_cancons = STORY_TOP_TERRITORIAL
-            paths = renderer.render_stories_top(
-                slot.tipus,
+            # Step 3c: editorial territorial story set (same grammar as
+            # PPCC, recoloured + degraded by omission). Only CAT/VAL/BAL
+            # host a territorial story (calendari rotation). Any other
+            # code in a story slot is a misconfiguration: fail loud (the
+            # slot is marked ERROR by _handle_slot), never derive a silent
+            # story. Coherent with ALT/CAR not being public tops.
+            if territori not in calendari.TERRITORIS_ROTATORI:
+                raise ValueError(
+                    f"no editorial story for territori={territori!r}; "
+                    f"expected one of {calendari.TERRITORIS_ROTATORI}"
+                )
+            hero_headline = self._story_hero_headline(setmana, territori)
+            paths = renderer.render_stories_territorial(
                 territori,
                 setmana,
                 data["entries"],
-                max_cancons=max_cancons,
+                hero_headline=hero_headline,
             )
+            max_cancons = None
         self.stdout.write(f"  · renderitzades {len(paths)} stories")
 
         if opts["dry_run"]:
@@ -428,17 +439,18 @@ class Command(BaseCommand):
 
     # ── PPCC story-set extras (Step 3b) ──────────────────────────
 
-    def _story_hero_headline(self, setmana) -> str:
+    def _story_hero_headline(self, setmana, territori: str = "PPCC") -> str:
         """Short uppercase Playfair headline for the #1 hero slide,
         derived from the strongest scenario of the week (post-dedup).
         Falls back to a generic line on any error so the render never
-        crashes."""
+        crashes. `territori` defaults to PPCC so the current PPCC call is
+        unchanged; the territorial wire (final slice) passes its code."""
         try:
             from social.narrative.scenarios import detect_all, fallback_scenario
             from social.narrative.story_synth import synthesize_hero
 
-            scenarios = detect_all("PPCC", setmana)
-            scenario = scenarios[0] if scenarios else fallback_scenario("PPCC")
+            scenarios = detect_all(territori, setmana)
+            scenario = scenarios[0] if scenarios else fallback_scenario(territori)
             return synthesize_hero(scenario)
         except Exception:  # noqa: BLE001 — never block a publication
             logger.exception("hero headline synthesis failed; using generic")

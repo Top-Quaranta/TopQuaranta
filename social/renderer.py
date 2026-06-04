@@ -1460,6 +1460,17 @@ GREEN_PPCC = colors.terr_color("PPCC")  # #427C42
 # Content-box padding (top, right, bottom, left).
 _PAD_INTRO = (110, 80, 92, 80)  # usable width 920
 _PAD_STD = (96, 90, 80, 90)  # usable width 900
+# Intro locative subtitle: non-PPCC names wider than this (at 100 pt) step
+# down to 84 pt. 680 catches VAL (703) and BAL (816), not CAT (540).
+_SUBTITLE_STEPDOWN_W = 680
+
+# Story-intro watermark icon: which `territory_icon` art to draw per
+# territori. CAT has no silhouette asset of its own (territory-cat.svg is
+# a cross, shared with the web's TerritoriBadge), so the CAT story borrows
+# the existing senyera art (the PPCC/global icon). This is a stories-only
+# remap: it does NOT modify the vendor asset and does NOT touch the web
+# (TerritoriBadge keeps the cross). VAL/BAL fall through to their own art.
+_STORY_ICON_CODI = {"CAT": "PPCC"}
 
 
 # ── low-level text + background helpers ──────────────────────────────
@@ -1547,13 +1558,14 @@ def _logo_ink(width: int) -> Image.Image | None:
     return svg_assets.logo_image_mono(width, colors.COLOR_BG)
 
 
-def _setmana_pill(img: Image.Image, right_x: int, cy: int, setmana) -> None:
-    """Yellow SETMANA pill (Anton 26, ls 3, ink text), right edge pinned
-    at `right_x`, vertically centred on `cy`."""
-    from .captions import _setmana_label
-
+def _header_pill(
+    img: Image.Image, right_x: int, cy: int, label: str, fill: str, ink: str
+):
+    """Draw a header pill ending at `right_x`, centred on `cy`, filled with
+    `fill` and `label` (Anton 26, ls 3) in `ink`. Returns the pill width so
+    callers can stack pills horizontally. Distinct from the legacy `_pill`
+    used by the old territorial CTA path."""
     d = ImageDraw.Draw(img)
-    label = _setmana_label(setmana).upper()
     f = fonts.anton(26)
     tracking = 3
     pad_x, pad_y = 18, 7
@@ -1564,15 +1576,42 @@ def _setmana_pill(img: Image.Image, right_x: int, cy: int, setmana) -> None:
     pill_h = th + 2 * pad_y
     x0 = right_x - pill_w
     y0 = cy - pill_h // 2
-    d.rectangle((x0, y0, x0 + pill_w, y0 + pill_h), fill=colors.COLOR_YELLOW)
-    _draw_tracked(
-        d, x0 + pad_x, y0 + pad_y, label, f, colors.COLOR_BG, tracking=tracking
-    )
+    d.rectangle((x0, y0, x0 + pill_w, y0 + pill_h), fill=fill)
+    _draw_tracked(d, x0 + pad_x, y0 + pad_y, label, f, ink, tracking=tracking)
+    return pill_w
 
 
-def _header_row(img: Image.Image, setmana, *, logo_w: int = 217, logo_h: int = 44):
+def _setmana_pill(img: Image.Image, right_x: int, cy: int, setmana) -> int:
+    """Yellow SETMANA pill (ink text), right edge pinned at `right_x`."""
+    from .captions import _setmana_label
+
+    label = _setmana_label(setmana).upper()
+    return _header_pill(img, right_x, cy, label, colors.COLOR_YELLOW, colors.COLOR_BG)
+
+
+def _territori_pill(img: Image.Image, right_x: int, cy: int, territori: str) -> int:
+    """Accent-tinted territory pill (short name, e.g. CATALUNYA) ending at
+    `right_x`. Returns its width. PPCC callers skip this (no pill)."""
+    from .narrative.utils import TERRITORI_SHORT
+
+    pal = colors.story_palette(territori)
+    label = (TERRITORI_SHORT.get(territori) or territori).upper()
+    badge = pal["badge"]
+    return _header_pill(img, right_x, cy, label, badge, colors.best_text_on(badge))
+
+
+def _header_row(
+    img: Image.Image,
+    setmana,
+    *,
+    territori: str = "PPCC",
+    logo_w: int = 217,
+    logo_h: int = 44,
+):
     """Slides 2/3/4/6 header: white logo left, SETMANA pill right, row
-    height ≈53 vertically centred at the top padding."""
+    height ≈53 vertically centred at the top padding. Territorial slides
+    add an accent territory pill left of the SETMANA pill; PPCC has none
+    (byte-identical)."""
     left = _PAD_STD[3]
     right = STORY_W - _PAD_STD[1]
     top = _PAD_STD[0]
@@ -1581,7 +1620,9 @@ def _header_row(img: Image.Image, setmana, *, logo_w: int = 217, logo_h: int = 4
     logo = _logo_white(logo_w)
     if logo is not None:
         img.paste(logo, (left, cy - logo.size[1] // 2), logo)
-    _setmana_pill(img, right, cy, setmana)
+    setmana_w = _setmana_pill(img, right, cy, setmana)
+    if territori != "PPCC":
+        _territori_pill(img, right - setmana_w - 16, cy, territori)
     return top + row_h
 
 
@@ -1593,16 +1634,16 @@ def _section_header(
     kicker: str | None = None,
     title_color: str = colors.COLOR_WHITE,
     rule_color: str = colors.COLOR_YELLOW,
+    kicker_color: str = colors.COLOR_GREEN_LIGHT,
 ) -> int:
-    """Optional green kicker + Anton-96 title + accent rule. Centred.
-    Returns the y just below the rule."""
+    """Optional kicker + Anton-96 title + accent rule. Centred. Returns
+    the y just below the rule. `kicker_color` defaults to the PPCC green
+    light; territorial builders pass their `story_palette` light tone."""
     d = ImageDraw.Draw(img)
     y = y_title_top
     if kicker:
         fk = fonts.sans_bold(25)
-        _draw_tracked(
-            d, 0, y, kicker, fk, colors.COLOR_GREEN_LIGHT, tracking=7, center_w=STORY_W
-        )
+        _draw_tracked(d, 0, y, kicker, fk, kicker_color, tracking=7, center_w=STORY_W)
         y += 25 + 12
     ft = fonts.anton(96)
     _draw_tracked(d, 0, y, title, ft, title_color, tracking=0.96, center_w=STORY_W)
@@ -1615,9 +1656,10 @@ def _section_header(
     return y + 7
 
 
-def _footer_url(img: Image.Image) -> None:
-    """`topquaranta.cat` — Anton 30, ls 4, green-light, centred, near the
-    bottom edge (slides 2-6)."""
+def _footer_url(img: Image.Image, *, light: str = colors.COLOR_GREEN_LIGHT) -> None:
+    """`topquaranta.cat` — Anton 30, ls 4, centred, near the bottom edge
+    (slides 2-6). `light` defaults to the PPCC green light; territorial
+    builders pass their `story_palette` light tone."""
     d = ImageDraw.Draw(img)
     f = fonts.anton(30)
     _draw_tracked(
@@ -1626,7 +1668,7 @@ def _footer_url(img: Image.Image) -> None:
         STORY_H - 92,
         "topquaranta.cat",
         f,
-        colors.COLOR_GREEN_LIGHT,
+        light,
         tracking=4,
         center_w=STORY_W,
     )
@@ -1692,12 +1734,33 @@ def _wrap_tracked(d, text, font, max_width, tracking, max_lines):
 # ── slide builders ───────────────────────────────────────────────────
 
 
-def _story_intro_ppcc(setmana) -> Image.Image:
-    """Slide 1 — green intro. Logo, "presenta", the big EL TOP / 40 /
-    D'AQUESTA SETMANA stack, and the star-separated SETMANA pill row."""
+def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
+    """Slide 1 — accent intro. Logo, "presenta", the big EL TOP / 40 /
+    D'AQUESTA SETMANA stack, and the star-separated SETMANA pill row.
+    The radial field uses the territory accent (PPCC → green, identical
+    to before)."""
     from .captions import _setmana_label
+    from .narrative.utils import TERRITORI_DE
 
-    img = _radial_bg(GREEN_PPCC, colors.COLOR_GREEN_DEEP, (0.5, 0.0), (1.3, 0.8), 1.0)
+    pal = colors.story_palette(territori)
+    img = _radial_bg(pal["accent"], pal["deep"], (0.5, 0.0), (1.3, 0.8), 1.0)
+
+    # Territorial intro: a large faint monochrome territory-icon watermark
+    # in the lower-half empty band, behind the text. Aspect ratio is
+    # preserved (territory_icon scales by width; height follows the
+    # viewBox, so VAL/BAL stay wide, CAT square). White at low alpha
+    # harmonises on any accent and never rivals the yellow "40". PPCC has
+    # no icon (byte-identical). Copy before alpha-scaling: territory_icon
+    # is lru_cached and the cached image must not be mutated.
+    if territori != "PPCC":
+        icon_codi = _STORY_ICON_CODI.get(territori, territori)
+        icon = svg_assets.territory_icon(icon_codi, 540, colors.COLOR_WHITE)
+        if icon is not None:
+            icon = icon.copy()
+            icon.putalpha(icon.getchannel("A").point(lambda v: int(v * 0.16)))
+            iy = 1400 - icon.size[1] // 2
+            img.paste(icon, ((STORY_W - icon.size[0]) // 2, iy), icon)
+
     d = ImageDraw.Draw(img)
 
     # Logo white 340×69, centred at the top padding.
@@ -1724,12 +1787,25 @@ def _story_intro_ppcc(setmana) -> Image.Image:
     _draw_tracked(
         d, 0, 632, "40", f_40, colors.COLOR_YELLOW, tracking=-7.6, center_w=STORY_W
     )
+    # PPCC keeps the brand "D'AQUESTA SETMANA" at 100 pt (byte-identical).
+    # Territorial stories localise the chart ("DE CATALUNYA" etc., via
+    # TERRITORI_DE, uppercased). Long locative names ("DE LES ILLES
+    # BALEARS" 816 px, "DEL PAÍS VALENCIÀ" 703 px at 100 pt) crowd the
+    # margins under the "40", so non-PPCC subtitles step down one notch
+    # to 84 pt when they exceed `_SUBTITLE_STEPDOWN_W`. The gate on
+    # territori keeps PPCC untouched regardless of its width (780 px).
     f_setm = fonts.anton(100)
+    if territori == "PPCC":
+        subtitle = "D'AQUESTA SETMANA"
+    else:
+        subtitle = (TERRITORI_DE.get(territori) or "d'aquesta setmana").upper()
+        if _tracked_width(d, subtitle, f_setm, 1) > _SUBTITLE_STEPDOWN_W:
+            f_setm = fonts.anton(84)
     _draw_tracked(
         d,
         0,
         980,
-        "D'AQUESTA SETMANA",
+        subtitle,
         f_setm,
         colors.COLOR_WHITE,
         tracking=1,
@@ -1778,7 +1854,7 @@ def _story_intro_ppcc(setmana) -> Image.Image:
 
     # Star separator above the pill row.
     sep_y = pill_y - 37
-    line_col = colors.mix(GREEN_PPCC, colors.COLOR_WHITE, 0.35)
+    line_col = colors.mix(pal["accent"], colors.COLOR_WHITE, 0.35)
     cxc = STORY_W / 2
     star_r, gap, sep_total = 16, 40, 920
     left0 = (STORY_W - sep_total) / 2
@@ -1790,11 +1866,14 @@ def _story_intro_ppcc(setmana) -> Image.Image:
     return img
 
 
-def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
+def _story_top_mosaic(
+    setmana, entries: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 2 — positions 40→11 as a 5×6 cover mosaic with yellow Anton
     number badges + Bricolage titles + Roboto artist subtitles."""
+    pal = colors.story_palette(territori)
     img = _bg_ink()
-    _header_row(img, setmana)
+    _header_row(img, setmana, territori=territori)
     body_top = _section_header(img, "EL RÀNQUING", 200)
 
     d = ImageDraw.Draw(img)
@@ -1838,11 +1917,13 @@ def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
             f_artist,
             colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62),
         )
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
-def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
+def _story_top_grid(
+    setmana, entries: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 3 — positions 10→4: 2-column cover grid (#10/#9, #8/#7,
     #6/#5) then #4 centred below.
 
@@ -1850,8 +1931,9 @@ def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
     of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
     never crowds the cover of the row below. The centred #4 is clamped so
     it can't slide under the footer when several rows run tall."""
+    pal = colors.story_palette(territori)
     img = _bg_ink()
-    _header_row(img, setmana)
+    _header_row(img, setmana, territori=territori)
     body_top = _section_header(img, "ENS ACOSTEM AL CIM", 200)
 
     d = ImageDraw.Draw(img)
@@ -1912,18 +1994,23 @@ def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
         _cell(
             e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
         )
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
-def _story_podi(entries: list[dict], setmana) -> Image.Image:
+def _story_podi(
+    entries: list[dict], setmana, *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 4 — #3 (top) and #2 (below): centred big covers with a big
     Anton number badge, Bricolage title and Roboto artist."""
+    pal = colors.story_palette(territori)
     img = _radial_bg(
         colors.COLOR_INK_CENTRE, colors.COLOR_BG, (0.5, 0.04), (1.1, 0.55), 0.58
     )
-    _header_row(img, setmana)
-    _section_header(img, "EL PODI", 200, kicker="JA GAIREBÉ HI SOM")
+    _header_row(img, setmana, territori=territori)
+    _section_header(
+        img, "EL PODI", 200, kicker="JA GAIREBÉ HI SOM", kicker_color=pal["light"]
+    )
 
     d = ImageDraw.Draw(img)
     cover = 300
@@ -1962,14 +2049,18 @@ def _story_podi(entries: list[dict], setmana) -> Image.Image:
         names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
         artist = _truncate(d, ", ".join(names), f_artist, STORY_W - 180)
         _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
-def _story_hero(entry: dict, headline: str | None) -> Image.Image:
+def _story_hero(
+    entry: dict, headline: str | None, *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 5 — the #1 climax. Inverted hierarchy: the editorial
     scenario is a subordinate yellow kicker; the SONG TITLE in Playfair
-    Display 800 is the primary element."""
+    Display 800 is the primary element. The yellow climax + ink field are
+    brand-locked; only the territory pill (non-PPCC) and footer tint are
+    territory-aware."""
     img = _radial_bg(
         colors.mix(colors.COLOR_BG, colors.COLOR_YELLOW, 0.16),
         colors.COLOR_BG,
@@ -1991,6 +2082,9 @@ def _story_hero(entry: dict, headline: str | None) -> Image.Image:
     logo = _logo_white(217)
     if logo is not None:
         img.paste(logo, ((STORY_W - logo.size[0]) // 2, _PAD_STD[0]), logo)
+    # Territory pill top-right (territorial only), aligned to the logo row.
+    if territori != "PPCC":
+        _territori_pill(img, STORY_W - _PAD_STD[1], _PAD_STD[0] + 22, territori)
 
     # Kicker "EL NÚMERO 1".
     fk = fonts.anton(32)
@@ -2034,13 +2128,16 @@ def _story_hero(entry: dict, headline: str | None) -> Image.Image:
     artist = _truncate(d, ", ".join(names), fa, STORY_W - 180)
     _draw_tracked(d, 0, ty + 30, artist, fa, colors.COLOR_WHITE, center_w=STORY_W)
 
-    _footer_url(img)
+    _footer_url(img, light=colors.story_palette(territori)["light"])
     return img
 
 
-def _story_novetats(setmana, items: list[dict]) -> Image.Image:
+def _story_novetats(
+    setmana, items: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 6 — 2-3 recent releases stacked: centred cover + Bricolage
     title + Roboto artist, no number badge."""
+    pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana)
     _section_header(
@@ -2049,7 +2146,8 @@ def _story_novetats(setmana, items: list[dict]) -> Image.Image:
         200,
         kicker="FORA DEL TOP · ESTRENES",
         title_color=colors.COLOR_YELLOW,
-        rule_color=colors.COLOR_GREEN_LIGHT,
+        rule_color=pal["light"],
+        kicker_color=pal["light"],
     )
 
     d = ImageDraw.Draw(img)
@@ -2083,7 +2181,7 @@ def _story_novetats(setmana, items: list[dict]) -> Image.Image:
             ty += 52
         artist = _truncate(d, it.get("artista_nom") or "—", f_artist, STORY_W - 180)
         _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
@@ -2193,6 +2291,55 @@ def render_stories_ppcc(
     # releases — never generated, never uploaded (the set is then 6).
     if novetats_items:
         _emit(_story_novetats(setmana, novetats_items[:3]))
+    _emit(_story_outro_ppcc(setmana))
+    return out
+
+
+def render_stories_territorial(
+    territori: str,
+    setmana,
+    entries: list[dict],
+    *,
+    novetats_items: list[dict] | None = None,
+    hero_headline: str | None = None,
+) -> list[Path]:
+    """Render the editorial territorial story set (Step 3c).
+
+    Same grammar and inverted-toward-#1 slicing as the PPCC set, but
+    recoloured per territory (`story_palette`) and degraded by omission:
+    a tier slide is emitted only when its slice is non-empty, so a short
+    top (N < 40) never yields a near-blank mosaic/grid/podi. Hero (#1)
+    and outro stay brand yellow/ink. PPCC keeps `render_stories_ppcc`."""
+    out: list[Path] = []
+    novetats_items = [it for it in (novetats_items or []) if it]
+    n = len(entries)
+    if n < 11:
+        # Not an error: graceful degradation. Surfaced so a future
+        # volume collapse on a thin territory (BAL) is visible in logs.
+        logger.warning(
+            "territorial story has N=%d (<11) for %s setmana=%s; "
+            "mosaic/grid/podi tiers may be omitted",
+            n,
+            territori,
+            setmana,
+        )
+
+    def _emit(img: Image.Image):
+        p = _path("top_territorial", territori, setmana, len(out), story=True)
+        img.save(p, "JPEG", quality=90)
+        out.append(p)
+
+    _emit(_story_intro_ppcc(setmana, territori=territori))
+    if n > 10:
+        _emit(_story_top_mosaic(setmana, entries[10:40], territori=territori))
+    if n > 3:
+        _emit(_story_top_grid(setmana, entries[3:10], territori=territori))
+    if n > 1:
+        _emit(_story_podi(entries[1:3], setmana, territori=territori))
+    if entries:
+        _emit(_story_hero(entries[0], hero_headline, territori=territori))
+    if novetats_items:
+        _emit(_story_novetats(setmana, novetats_items[:3], territori=territori))
     _emit(_story_outro_ppcc(setmana))
     return out
 

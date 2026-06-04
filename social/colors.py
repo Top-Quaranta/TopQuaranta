@@ -113,3 +113,63 @@ def best_text_on(hex_str: str) -> str:
 
     L = 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
     return COLOR_WHITE if L < 0.4 else COLOR_BG
+
+
+# ── Editorial story palette per territory (Step 3c) ──────────────────
+#
+# The seven-slide editorial story set (intro radial + ink section
+# slides) is recoloured per territory. Each palette carries:
+#   accent  — radial base on the intro + territory pills
+#   deep    — radial gradient end (darker corner of the intro)
+#   light   — kickers / rules / footer URL on the ink section slides
+#   text_on — text drawn directly on the accent fill
+#
+# PPCC, CAT, VAL and BAL are hand-curated and WCAG-AA verified (white
+# on accent >= 4.5, light on ink >= 4.5). PPCC returns the exact
+# Step-3b green tones so its render stays byte-identical once the
+# builders read from here. Hero (#1) and outro stay yellow/ink (brand
+# climax) and do NOT consume this palette. Territories without a story
+# slot today fall through to a derived palette so the function never
+# raises on a future code.
+_STORY_PALETTES: dict[str, dict[str, str]] = {
+    "PPCC": {"accent": "#427c42", "deep": COLOR_GREEN_DEEP, "light": COLOR_GREEN_LIGHT},
+    # CAT amber darkened (polish 1): brand yellow shares the amber hue, so
+    # only luminance separates them. A much darker amber lets the "40" /
+    # SETMANA pill / badges pop like they do on the red/blue/green accents,
+    # without touching the yellow. Identity stays amber. light unchanged
+    # (gold kicker/footer on ink, already high-contrast).
+    # CAT: the dark amber accent fills the intro field, but as a pill on
+    # ink it would sink in. `badge` is a separate vivid burnt-orange used
+    # only for the territory pill: it pops on ink like VAL/BAL (badge/ink
+    # 3.82 vs VAL 3.95), white text passes AA (5.18), and it stays clearly
+    # distinct from the neighbouring yellow SETMANA pill (3.38).
+    "CAT": {
+        "accent": "#5c4500",
+        "deep": "#3a2b00",
+        "light": "#f0c419",
+        "badge": "#c2410c",
+    },
+    "VAL": {"accent": "#cf3339", "deep": "#8c1f24", "light": "#f4a3a6"},
+    "BAL": {"accent": "#0047ba", "deep": "#00307d", "light": "#9bc0f5"},
+}
+
+
+def story_palette(territori: str) -> dict[str, str]:
+    """Return the editorial-story palette for `territori`.
+
+    Curated literals for PPCC/CAT/VAL/BAL (the only territories with a
+    story slot); a derived fallback for any other code so the function
+    is total. `text_on` is computed from the accent via `best_text_on`."""
+    pal = _STORY_PALETTES.get(territori)
+    if pal is None:
+        accent = terr_color(territori)
+        pal = {
+            "accent": accent,
+            "deep": darken(accent, 0.45),
+            "light": mix(accent, COLOR_WHITE, 0.35),
+        }
+    # `badge` defaults to the accent (VAL/BAL/PPCC + derived); only CAT
+    # overrides it. `text_on` is the text colour over the accent; the pill
+    # picks its own text over `badge` via `best_text_on` at draw time.
+    badge = pal.get("badge", pal["accent"])
+    return {**pal, "badge": badge, "text_on": best_text_on(pal["accent"])}

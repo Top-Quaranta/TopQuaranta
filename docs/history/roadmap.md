@@ -371,6 +371,26 @@ Auditoria d'higiene del 2026-05-11. Baixa prioritat; un sol PR per
 
 ## Sprints — completats
 
+### Regressió motor narratiu (post-mortem 2026-05-20) ✅ (2026-06-03)
+
+Els dos defectes del post-mortem
+`docs/post-mortems/2026-05-20-narrative-engine-collapsed.md` (1.
+`#N` posicionals parsejats com a hashtags clicables a IG/Telegram; 2.
+`@handle` d'IG perdut quan `compose_for_channel` va passar a enrutar
+els tops pel motor) ja estaven **arreglats funcionalment** a #59
+(`55725dd`, 2026-05-21) via ADR-0006 (ordinals catalans, sense `#N`),
+ADR-0007 (`@handle` restaurat només a la path d'IG feed) i ADR-0008
+(detectors ampliats). El que faltava era la **xarxa de prevenció** que
+el post-mortem demanava: a `test/narrative-regression-guard`
+(2026-06-03) s'afig a `social/tests/test_captions.py`
+`test_no_positional_hashtag_in_any_channel` (cap `#<dígit>` als 6
+canals) i `test_handle_only_on_instagram_feed` (`@handle` a IG feed,
+absent als canals curts), tots dos parametritzats sobre els heroes
+A2-streak i A1-outside-to-top1; i s'endureix l'assert fluix de
+`test_caption_top_uses_narrative_engine` (treu `#1` dels tokens
+acceptats). Cap canvi de lògica de composició. Verificat: la
+regressió ja no era viva abans d'aquest PR.
+
 ### Sprint — Fase 4 PR 1: motor narratiu social (library) ✅ (2026-05-18)
 
 Auditoria narrativa del 2026-05-18 va detectar el core 5-patrons

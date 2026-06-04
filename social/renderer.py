@@ -1593,16 +1593,16 @@ def _section_header(
     kicker: str | None = None,
     title_color: str = colors.COLOR_WHITE,
     rule_color: str = colors.COLOR_YELLOW,
+    kicker_color: str = colors.COLOR_GREEN_LIGHT,
 ) -> int:
-    """Optional green kicker + Anton-96 title + accent rule. Centred.
-    Returns the y just below the rule."""
+    """Optional kicker + Anton-96 title + accent rule. Centred. Returns
+    the y just below the rule. `kicker_color` defaults to the PPCC green
+    light; territorial builders pass their `story_palette` light tone."""
     d = ImageDraw.Draw(img)
     y = y_title_top
     if kicker:
         fk = fonts.sans_bold(25)
-        _draw_tracked(
-            d, 0, y, kicker, fk, colors.COLOR_GREEN_LIGHT, tracking=7, center_w=STORY_W
-        )
+        _draw_tracked(d, 0, y, kicker, fk, kicker_color, tracking=7, center_w=STORY_W)
         y += 25 + 12
     ft = fonts.anton(96)
     _draw_tracked(d, 0, y, title, ft, title_color, tracking=0.96, center_w=STORY_W)
@@ -1615,9 +1615,10 @@ def _section_header(
     return y + 7
 
 
-def _footer_url(img: Image.Image) -> None:
-    """`topquaranta.cat` — Anton 30, ls 4, green-light, centred, near the
-    bottom edge (slides 2-6)."""
+def _footer_url(img: Image.Image, *, light: str = colors.COLOR_GREEN_LIGHT) -> None:
+    """`topquaranta.cat` — Anton 30, ls 4, centred, near the bottom edge
+    (slides 2-6). `light` defaults to the PPCC green light; territorial
+    builders pass their `story_palette` light tone."""
     d = ImageDraw.Draw(img)
     f = fonts.anton(30)
     _draw_tracked(
@@ -1626,7 +1627,7 @@ def _footer_url(img: Image.Image) -> None:
         STORY_H - 92,
         "topquaranta.cat",
         f,
-        colors.COLOR_GREEN_LIGHT,
+        light,
         tracking=4,
         center_w=STORY_W,
     )
@@ -1692,12 +1693,15 @@ def _wrap_tracked(d, text, font, max_width, tracking, max_lines):
 # ── slide builders ───────────────────────────────────────────────────
 
 
-def _story_intro_ppcc(setmana) -> Image.Image:
-    """Slide 1 — green intro. Logo, "presenta", the big EL TOP / 40 /
-    D'AQUESTA SETMANA stack, and the star-separated SETMANA pill row."""
+def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
+    """Slide 1 — accent intro. Logo, "presenta", the big EL TOP / 40 /
+    D'AQUESTA SETMANA stack, and the star-separated SETMANA pill row.
+    The radial field uses the territory accent (PPCC → green, identical
+    to before)."""
     from .captions import _setmana_label
 
-    img = _radial_bg(GREEN_PPCC, colors.COLOR_GREEN_DEEP, (0.5, 0.0), (1.3, 0.8), 1.0)
+    pal = colors.story_palette(territori)
+    img = _radial_bg(pal["accent"], pal["deep"], (0.5, 0.0), (1.3, 0.8), 1.0)
     d = ImageDraw.Draw(img)
 
     # Logo white 340×69, centred at the top padding.
@@ -1778,7 +1782,7 @@ def _story_intro_ppcc(setmana) -> Image.Image:
 
     # Star separator above the pill row.
     sep_y = pill_y - 37
-    line_col = colors.mix(GREEN_PPCC, colors.COLOR_WHITE, 0.35)
+    line_col = colors.mix(pal["accent"], colors.COLOR_WHITE, 0.35)
     cxc = STORY_W / 2
     star_r, gap, sep_total = 16, 40, 920
     left0 = (STORY_W - sep_total) / 2
@@ -1790,9 +1794,12 @@ def _story_intro_ppcc(setmana) -> Image.Image:
     return img
 
 
-def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
+def _story_top_mosaic(
+    setmana, entries: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 2 — positions 40→11 as a 5×6 cover mosaic with yellow Anton
     number badges + Bricolage titles + Roboto artist subtitles."""
+    pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana)
     body_top = _section_header(img, "EL RÀNQUING", 200)
@@ -1838,11 +1845,13 @@ def _story_top_mosaic(setmana, entries: list[dict]) -> Image.Image:
             f_artist,
             colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62),
         )
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
-def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
+def _story_top_grid(
+    setmana, entries: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 3 — positions 10→4: 2-column cover grid (#10/#9, #8/#7,
     #6/#5) then #4 centred below.
 
@@ -1850,6 +1859,7 @@ def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
     of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
     never crowds the cover of the row below. The centred #4 is clamped so
     it can't slide under the footer when several rows run tall."""
+    pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana)
     body_top = _section_header(img, "ENS ACOSTEM AL CIM", 200)
@@ -1912,18 +1922,23 @@ def _story_top_grid(setmana, entries: list[dict]) -> Image.Image:
         _cell(
             e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
         )
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
-def _story_podi(entries: list[dict], setmana) -> Image.Image:
+def _story_podi(
+    entries: list[dict], setmana, *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 4 — #3 (top) and #2 (below): centred big covers with a big
     Anton number badge, Bricolage title and Roboto artist."""
+    pal = colors.story_palette(territori)
     img = _radial_bg(
         colors.COLOR_INK_CENTRE, colors.COLOR_BG, (0.5, 0.04), (1.1, 0.55), 0.58
     )
     _header_row(img, setmana)
-    _section_header(img, "EL PODI", 200, kicker="JA GAIREBÉ HI SOM")
+    _section_header(
+        img, "EL PODI", 200, kicker="JA GAIREBÉ HI SOM", kicker_color=pal["light"]
+    )
 
     d = ImageDraw.Draw(img)
     cover = 300
@@ -1962,7 +1977,7 @@ def _story_podi(entries: list[dict], setmana) -> Image.Image:
         names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
         artist = _truncate(d, ", ".join(names), f_artist, STORY_W - 180)
         _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 
@@ -2038,9 +2053,12 @@ def _story_hero(entry: dict, headline: str | None) -> Image.Image:
     return img
 
 
-def _story_novetats(setmana, items: list[dict]) -> Image.Image:
+def _story_novetats(
+    setmana, items: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
     """Slide 6 — 2-3 recent releases stacked: centred cover + Bricolage
     title + Roboto artist, no number badge."""
+    pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana)
     _section_header(
@@ -2049,7 +2067,8 @@ def _story_novetats(setmana, items: list[dict]) -> Image.Image:
         200,
         kicker="FORA DEL TOP · ESTRENES",
         title_color=colors.COLOR_YELLOW,
-        rule_color=colors.COLOR_GREEN_LIGHT,
+        rule_color=pal["light"],
+        kicker_color=pal["light"],
     )
 
     d = ImageDraw.Draw(img)
@@ -2083,7 +2102,7 @@ def _story_novetats(setmana, items: list[dict]) -> Image.Image:
             ty += 52
         artist = _truncate(d, it.get("artista_nom") or "—", f_artist, STORY_W - 180)
         _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
-    _footer_url(img)
+    _footer_url(img, light=pal["light"])
     return img
 
 

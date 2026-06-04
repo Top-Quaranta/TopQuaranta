@@ -261,3 +261,69 @@ def test_territorial_stories_still_use_cta_path():
     for p in paths:
         with Image.open(p) as im:
             assert im.format == "JPEG"
+
+
+# ── Step 3c no-regression baseline (added BEFORE parametrising) ──────
+#
+# These two guards freeze the current PPCC behaviour so that the Step
+# 3c work (palette parametrisation + a separate territorial
+# orchestrator) cannot silently drift the PPCC render. Established here
+# while the builders are still PPCC-hardcoded, so they are a true
+# before-state baseline.
+
+
+def test_ppcc_palette_unchanged():
+    """story_palette('PPCC') must return the exact Step-3b green tones,
+    so reading the palette from this helper keeps the PPCC render
+    byte-identical once the builders consume it."""
+    p = colors.story_palette("PPCC")
+    assert p["accent"] == "#427c42"
+    assert p["deep"] == colors.COLOR_GREEN_DEEP
+    assert p["light"] == colors.COLOR_GREEN_LIGHT
+    assert p["text_on"] == colors.COLOR_WHITE  # white wins on the green
+
+
+def test_ppcc_story_structure(monkeypatch, tmp_path):
+    """The PPCC orchestrator emits its slides in a fixed order. We spy
+    on the seven builders (so no real rendering happens) and record the
+    call sequence, then assert order + count for the full set and for
+    the novetats-skipped set. Detects any reorder/drop introduced when
+    the builders get parametrised."""
+    calls: list[str] = []
+
+    def _spy(name):
+        def _f(*args, **kwargs):
+            calls.append(name)
+            return Image.new("RGB", (1, 1))
+
+        return _f
+
+    for attr, name in (
+        ("_story_intro_ppcc", "intro"),
+        ("_story_top_mosaic", "mosaic"),
+        ("_story_top_grid", "grid"),
+        ("_story_podi", "podi"),
+        ("_story_hero", "hero"),
+        ("_story_novetats", "novetats"),
+        ("_story_outro_ppcc", "outro"),
+    ):
+        monkeypatch.setattr(renderer, attr, _spy(name))
+    # Keep the JPEG saves out of the real renders dir.
+    monkeypatch.setattr(
+        renderer,
+        "_path",
+        lambda tipus, territori, setmana, idx, story=False: tmp_path / f"{idx}.jpg",
+    )
+
+    paths = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=_novetats(3), hero_headline="DEBUT AL CIM"
+    )
+    assert calls == ["intro", "mosaic", "grid", "podi", "hero", "novetats", "outro"]
+    assert len(paths) == 7
+
+    calls.clear()
+    paths = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=[], hero_headline="NOU #1"
+    )
+    assert calls == ["intro", "mosaic", "grid", "podi", "hero", "outro"]
+    assert len(paths) == 6

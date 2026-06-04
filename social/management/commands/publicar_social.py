@@ -365,14 +365,25 @@ class Command(BaseCommand):
             )
             max_cancons = None
         else:
-            max_cancons = STORY_TOP_TERRITORIAL
-            paths = renderer.render_stories_top(
-                slot.tipus,
+            # Step 3c: editorial territorial story set (same grammar as
+            # PPCC, recoloured + degraded by omission). Only CAT/VAL/BAL
+            # host a territorial story (calendari rotation). Any other
+            # code in a story slot is a misconfiguration: fail loud (the
+            # slot is marked ERROR by _handle_slot), never derive a silent
+            # story. Coherent with ALT/CAR not being public tops.
+            if territori not in calendari.TERRITORIS_ROTATORI:
+                raise ValueError(
+                    f"no editorial story for territori={territori!r}; "
+                    f"expected one of {calendari.TERRITORIS_ROTATORI}"
+                )
+            hero_headline = self._story_hero_headline(setmana, territori)
+            paths = renderer.render_stories_territorial(
                 territori,
                 setmana,
                 data["entries"],
-                max_cancons=max_cancons,
+                hero_headline=hero_headline,
             )
+            max_cancons = None
         self.stdout.write(f"  · renderitzades {len(paths)} stories")
 
         if opts["dry_run"]:

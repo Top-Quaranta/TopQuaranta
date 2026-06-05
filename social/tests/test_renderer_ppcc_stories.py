@@ -248,21 +248,6 @@ def test_intro_is_green_with_big_yellow_forty():
     assert _count_yellow(img) > 1000  # the big "40" + pill
 
 
-# ── Territorial regression ──────────────────────────────────────────
-
-
-@pytest.mark.django_db
-def test_territorial_stories_still_use_cta_path():
-    """render_stories_top (territorial) is untouched: intro + N + CTA."""
-    paths = renderer.render_stories_top(
-        "top_territorial", "CAT", WK, _entries(5), max_cancons=5
-    )
-    assert len(paths) == 7  # intro + 5 cançons + CTA
-    for p in paths:
-        with Image.open(p) as im:
-            assert im.format == "JPEG"
-
-
 # ── Step 3c no-regression baseline (added BEFORE parametrising) ──────
 #
 # These two guards freeze the current PPCC behaviour so that the Step

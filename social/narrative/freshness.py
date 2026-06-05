@@ -1,4 +1,4 @@
-# Spec: docs/architecture/social.md
+# Spec: docs/architecture/social-narrative.md
 """Verified-recent-release fact for the narrative engine.
 
 Computes a single boolean — *is this `Canço` a verified recent release* —

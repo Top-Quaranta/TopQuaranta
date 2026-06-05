@@ -25,6 +25,11 @@
 # ---------------------------------------------------------------------
 mapping:
   # Django apps (1-to-1 with INSTALLED_APPS where possible)
+  # The narrative engine was split out of social.md into its own doc
+  # (2026-06-05, docs-size headroom), so its code resolves to the
+  # narrower doc; the generic `social/` entry catches the rest.
+  - prefix: social/narrative/
+    doc: docs/architecture/social-narrative.md
   - prefix: social/
     doc: docs/architecture/social.md
   - prefix: comptes/

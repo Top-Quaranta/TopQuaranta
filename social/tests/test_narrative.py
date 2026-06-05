@@ -155,8 +155,10 @@ def test_detect_a4_debut_alt_at_top3():
 @pytest.mark.django_db
 def test_cold_start_suppresses_freshness_detectors():
     """First ranking week of a territori (no previous week seeded) must
-    not fire a1/a4/a9 — with no baseline every entry is trivially "new",
-    so the "debut" / "fora del top" framing would be false freshness."""
+    not fire a1/a4/a9/a10 — with no baseline every entry is trivially
+    "new" and every artist trivially "first ever", so the "debut" /
+    "fora del top" / "estrena absoluta" framing would be false
+    freshness."""
     a = Artista.objects.create(nom="Z", slug="z", aprovat=True)
     al = Album.objects.create(nom="A", slug="z-a", artista=a, descartat=False)
     c1 = _make_canco("Cim", a, al, "z-1")
@@ -169,11 +171,20 @@ def test_cold_start_suppresses_freshness_detectors():
     assert scen.detect_a1_outside_to_top1("VAL", W) is None
     assert scen.detect_a4_debut_alt("VAL", W) is None
     assert scen.detect_a9_debut_anywhere("VAL", W) is None
-    # Seed a real baseline week → the same fixtures now legitimately fire
-    # a4 (c1 jumped in from outside an existing top).
-    _seed(_make_canco("Baseline", a, al, "z-b"), "VAL", _monday(2026, 4, 6), 1)
-    s = scen.detect_a4_debut_alt("VAL", W)
-    assert s and s.code == "a4_debut_alt" and s.data["posicio"] == 1
+    assert scen.detect_a10_artista_first_ever("VAL", W) is None
+    # Seed a real baseline week with a DIFFERENT artist. Now there is a
+    # baseline, so the same fixtures legitimately fire: a4 (c1 jumped in
+    # from outside an existing top) and a10 (artist `a` is genuinely
+    # first-ever, absent from the baseline week).
+    other = Artista.objects.create(nom="Q", slug="q", aprovat=True)
+    other_al = Album.objects.create(nom="B", slug="q-b", artista=other)
+    _seed(
+        _make_canco("Baseline", other, other_al, "q-b"), "VAL", _monday(2026, 4, 6), 1
+    )
+    s4 = scen.detect_a4_debut_alt("VAL", W)
+    assert s4 and s4.code == "a4_debut_alt" and s4.data["posicio"] == 1
+    s10 = scen.detect_a10_artista_first_ever("VAL", W)
+    assert s10 and s10.code == "a10_artista_first_ever"
 
 
 @pytest.mark.django_db

@@ -1,6 +1,6 @@
 """Scenario detectors over `TopSetmanal` (Fase 4 reset, 2026-05-18).
 
-# Spec: docs/architecture/social.md
+# Spec: docs/architecture/social-narrative.md
 
 Thirteen detectors + a fallback (a1-a12 per ADR-0008; a13_top1_return
 added 2026-06-01). Each detector returns at most one
@@ -434,6 +434,11 @@ def detect_a10_artista_first_ever(
 
     rows = list(_load_week(territori, setmana))
     if not rows:
+        return None
+    # No baseline week → EVERY artist is trivially "first ever" in the
+    # territori's (just-started) top history, so "estrena absoluta" /
+    # "primera vegada al top" would be false freshness. Suppress.
+    if not _has_previous_week(territori, setmana):
         return None
     candidate = None
     for r in rows:

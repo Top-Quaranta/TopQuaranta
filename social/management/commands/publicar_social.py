@@ -38,9 +38,6 @@ from social.models import SocialPost
 
 logger = logging.getLogger(__name__)
 
-# Stories cap for territorial slots (PPCC is configurable).
-STORY_TOP_TERRITORIAL = 5
-
 
 def _public_url_for(local_path: Path) -> str:
     """Public URL Meta can GET to fetch the rendered PNG.

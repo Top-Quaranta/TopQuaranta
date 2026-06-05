@@ -364,7 +364,7 @@ Newsletter) + RSS, all from one payload. Code in `social/`; full doc
   podi #3-2 → #1 hero (Playfair climax) → novetats (skipped when none) →
   yellow outro. Builders `_story_intro_ppcc`, `_story_top_mosaic`,
   `_story_top_grid`, `_story_podi`, `_story_hero`, `_story_novetats`,
-  `_story_outro_ppcc`. Territorial stories still use `render_stories_top`.
+  `_story_outro_ppcc`.
 - **Covers** — `_story_cover` (`social/renderer.py:324`): local self-hosted
   portada (`ingesta.portades`, 250/500 px) → live Deezer CDN URL →
   placeholder. The cover is bound to the song's `Canco.album` (per-album, not

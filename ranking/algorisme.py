@@ -39,6 +39,7 @@ import unicodedata
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
+from statistics import median
 
 from django.db.models import Q
 
@@ -62,6 +63,78 @@ TERRITORIS_OPCIONALS = set(_TERRITORIS_OPCIONALS_TUPLE)
 # this many days on either side; closest wins. Keeps gaps in ingestion
 # from blanking out otherwise-healthy tracks.
 _WEEK_WINDOW_DAYS = 3
+
+# Step-robust weekly-plays guard (2026-06-06). Last.fm periodically
+# merges scrobbles onto a canonical recording, doubling a track's
+# CUMULATIVE playcount overnight while the track NAME stays unchanged
+# (so the track-switch guard below does NOT catch it). The rolling
+# 7-day delta then reads that one-day step as a full week of plays —
+# 74/888 top entries and 7 false #1s in the 2026-04-22 / 2026-05-21
+# events (sonda 2026-06-06). We excise the step and back-fill its day(s)
+# with the song's own clean daily rhythm. A genuine viral week spreads
+# across several days and is NOT a single-day outlier, so it survives.
+# A merge step is flagged only when ALL three hold for one segment:
+#   - daily rate ≥ _MERGE_RATE_OVER_MEDIAN × the song's own median rate,
+#   - increment ≥ _MERGE_DOUBLING_FRAC × the cumulative at the step
+#     (a near-doubling — the signature of a lifetime-scrobble merge),
+#   - absolute increment ≥ _MERGE_ABS_FLOOR, a light noise guard so a
+#     2→5 "doubling" on a near-silent track is left alone.
+# The doubling + rate criteria are the real fingerprint; the absolute
+# floor is deliberately low (a 958-play overnight doubling of «Sa
+# Madona» in BAL, a small territory, was enough to fake a #1 — the
+# 2026-06-06 calibration set it to 300 after an initial 1000 missed it).
+_MERGE_ABS_FLOOR = 300
+_MERGE_RATE_OVER_MEDIAN = 8.0
+_MERGE_DOUBLING_FRAC = 0.4
+
+
+def _robust_weekly_from_series(series: list[tuple[date, int]]) -> float | None:
+    """Step-robust weekly plays from a daily cumulative `series`.
+
+    `series` is ascending `(data, playcount)` pairs, already filtered to
+    one recording identity (the track-switch guard runs upstream). The
+    function looks for a single merge-step — an implausible one-day jump
+    in the cumulative — drops it, and projects the remaining clean daily
+    rhythm to 7 days.
+
+    Returns the cleaned weekly figure ONLY when a merge step is detected.
+    Returns `None` otherwise, so the caller keeps the legacy endpoint
+    delta unchanged — non-merge weeks stay byte-identical to the previous
+    behaviour, and the week AFTER a merge is correct for free (the step
+    is already in the baseline and outside this window). Also returns
+    `None` when there is too little daily data to judge an outlier."""
+    pts = [(d, p) for d, p in series if p is not None]
+    if len(pts) < 4:
+        return None
+    segs: list[tuple[int, int, int]] = []  # (span_days, increment, base)
+    for (da, pa), (db, pb) in zip(pts, pts[1:]):
+        span = (db - da).days
+        if span <= 0:
+            continue
+        segs.append((span, max(0, pb - pa), pa))
+    if len(segs) < 3:
+        return None
+    covered = sum(span for span, _, _ in segs)
+    if covered < 4:
+        return None
+    med = median(inc / span for span, inc, _ in segs)
+    clean_inc = 0.0
+    clean_days = 0
+    flagged = False
+    for span, inc, base in segs:
+        rate = inc / span
+        if (
+            inc >= _MERGE_ABS_FLOOR
+            and rate >= _MERGE_RATE_OVER_MEDIAN * max(med, 1.0)
+            and inc >= _MERGE_DOUBLING_FRAC * max(base, 1)
+        ):
+            flagged = True
+            continue  # drop the merge step; back-filled by the clean rhythm
+        clean_inc += inc
+        clean_days += span
+    if not flagged or clean_days <= 0:
+        return None
+    return clean_inc / clean_days * 7.0
 
 
 def territoris_amb_top_propi() -> list[str]:
@@ -293,7 +366,12 @@ def _compute_weekly_plays(
        weekly figure (e.g. «Alba» de Suc i Sopes hit 2 541 against
        a real Last.fm count of 726). Cap at `playcount_today` is the
        only honest answer when the song's whole life ≤ the window.
-    2. **Rolling delta** (preferred when we have a baseline):
+    2. **Step-robust delta** (`_robust_weekly_from_series`): when a
+       single-day merge step is present in the window (Last.fm doubling
+       the cumulative overnight), excise it and project the clean daily
+       rhythm to 7 days. Acts only when a merge is detected; otherwise
+       falls through to (2b) unchanged.
+    2b. **Rolling delta** (legacy, preferred when we have a baseline):
        newest signal as "today's" playcount; closest signal within
        ±_WEEK_WINDOW_DAYS of "today - 7d" as baseline; rescale the
        delta to a 7-day denominator. Negative deltas (Last.fm
@@ -372,7 +450,27 @@ def _compute_weekly_plays(
             return True
         return _track_identity(s.lastfm_returned_track or "") == ref_track_n
 
-    # 2) Preferred: rolling 7-day delta with ±window.
+    # 2) Step-robust 7-day delta. Build the daily series over the window
+    # and let `_robust_weekly_from_series` excise a Last.fm scrobble-merge
+    # step. It acts ONLY when a merge is found; otherwise it returns None
+    # and we fall through to the legacy endpoint delta below, so non-merge
+    # weeks are unchanged.
+    # Strict 7-day window so the intervention is confined to the week
+    # whose delta actually straddles the merge step. The week AFTER a
+    # merge has the step before `today - 7`, so it sees no merge here and
+    # stays byte-identical to the legacy path below.
+    robust_series = [
+        (s.data, s.lastfm_playcount)
+        for s in signals
+        if s.lastfm_playcount is not None
+        and today - timedelta(days=7) <= s.data <= today
+        and _same_recording(s)
+    ]
+    robust = _robust_weekly_from_series(robust_series)
+    if robust is not None:
+        return max(0.0, robust)
+
+    # 2b) Preferred legacy path: rolling 7-day delta with ±window.
     target = today - timedelta(days=7)
     window_lo = today - timedelta(days=7 + _WEEK_WINDOW_DAYS)
     window_hi = today - timedelta(days=7 - _WEEK_WINDOW_DAYS)

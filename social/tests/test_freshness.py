@@ -90,9 +90,7 @@ def test_future_release_clamps_age_to_zero():
 def test_custom_window():
     dl = REF - datetime.timedelta(days=60)
     assert _verdict("X", dl).is_verified_recent_release is False
-    assert (
-        _verdict("X", dl, max_age_days=90).is_verified_recent_release is True
-    )
+    assert _verdict("X", dl, max_age_days=90).is_verified_recent_release is True
 
 
 def test_boolean_wrapper_matches_verdict():

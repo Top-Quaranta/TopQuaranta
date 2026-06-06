@@ -1,6 +1,6 @@
 """Novetats detectors (audit #5, 2026-06-01).
 
-# Spec: docs/architecture/social.md
+# Spec: docs/architecture/social-narrative.md
 
 Parallel to `scenarios.py` (the top detectors) but for the weekly
 new-release roundups. Each detector scans the enriched `items` list

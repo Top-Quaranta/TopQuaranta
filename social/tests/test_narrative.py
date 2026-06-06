@@ -153,6 +153,41 @@ def test_detect_a4_debut_alt_at_top3():
 
 
 @pytest.mark.django_db
+def test_cold_start_suppresses_freshness_detectors():
+    """First ranking week of a territori (no previous week seeded) must
+    not fire a1/a4/a9/a10 — with no baseline every entry is trivially
+    "new" and every artist trivially "first ever", so the "debut" /
+    "fora del top" / "estrena absoluta" framing would be false
+    freshness."""
+    a = Artista.objects.create(nom="Z", slug="z", aprovat=True)
+    al = Album.objects.create(nom="A", slug="z-a", artista=a, descartat=False)
+    c1 = _make_canco("Cim", a, al, "z-1")
+    c2 = _make_canco("Segon", a, al, "z-2")
+    c3 = _make_canco("Sise", a, al, "z-3")
+    W = _monday(2026, 4, 13)  # nothing seeded for the week before it
+    _seed(c1, "VAL", W, 1)
+    _seed(c2, "VAL", W, 2)
+    _seed(c3, "VAL", W, 6)
+    assert scen.detect_a1_outside_to_top1("VAL", W) is None
+    assert scen.detect_a4_debut_alt("VAL", W) is None
+    assert scen.detect_a9_debut_anywhere("VAL", W) is None
+    assert scen.detect_a10_artista_first_ever("VAL", W) is None
+    # Seed a real baseline week with a DIFFERENT artist. Now there is a
+    # baseline, so the same fixtures legitimately fire: a4 (c1 jumped in
+    # from outside an existing top) and a10 (artist `a` is genuinely
+    # first-ever, absent from the baseline week).
+    other = Artista.objects.create(nom="Q", slug="q", aprovat=True)
+    other_al = Album.objects.create(nom="B", slug="q-b", artista=other)
+    _seed(
+        _make_canco("Baseline", other, other_al, "q-b"), "VAL", _monday(2026, 4, 6), 1
+    )
+    s4 = scen.detect_a4_debut_alt("VAL", W)
+    assert s4 and s4.code == "a4_debut_alt" and s4.data["posicio"] == 1
+    s10 = scen.detect_a10_artista_first_ever("VAL", W)
+    assert s10 and s10.code == "a10_artista_first_ever"
+
+
+@pytest.mark.django_db
 def test_detect_a5_artista_multiple():
     a = Artista.objects.create(nom="Maria Jaume", slug="mj", aprovat=True)
     al = Album.objects.create(nom="A", slug="mj-a", artista=a, descartat=False)
@@ -275,12 +310,18 @@ def test_detect_a13_does_not_fire_on_streak():
 
 @pytest.mark.django_db
 def test_detect_a13_does_not_fire_without_prior_top1():
-    """top1 W, never #1 before → a13 NO (a1_outside_to_top1 owns it)."""
+    """top1 W, never #1 before → a13 NO (a1_outside_to_top1 owns it).
+
+    A baseline week is seeded (with a different #1) so a1 can fire for
+    the right reason — the song genuinely jumped from outside the top.
+    Without that baseline a1 is now suppressed too (cold-start guard)."""
     a = Artista.objects.create(nom="R", slug="r", aprovat=True)
     al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
     c = _make_canco("X", a, al, "r-c")
+    other = _make_canco("Vell", a, al, "r-o")
     W = _monday(2026, 5, 18)
-    _seed(c, "PPCC", W, 1)  # first appearance, no history
+    _seed(other, "PPCC", _monday(2026, 5, 11), 1)  # baseline week, c absent
+    _seed(c, "PPCC", W, 1)  # first #1 for c
     assert scen.detect_a13_top1_return("PPCC", W) is None
     assert scen.detect_a1_outside_to_top1("PPCC", W) is not None
 

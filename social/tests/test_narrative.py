@@ -187,17 +187,58 @@ def test_cold_start_suppresses_freshness_detectors():
     assert s10 and s10.code == "a10_artista_first_ever"
 
 
+def _seed_filler(territori, setmana, start_pos, count):
+    """Seed `count` cançons from distinct one-off artists so a focal
+    artist's share of the top can be controlled in a5 tests."""
+    for j in range(count):
+        fa = Artista.objects.create(nom=f"Filler{j}", slug=f"f{j}", aprovat=True)
+        fal = Album.objects.create(nom="F", slug=f"f{j}-a", artista=fa)
+        fc = _make_canco(f"Fill{j}", fa, fal, f"f{j}-c")
+        _seed(fc, territori, setmana, start_pos + j)
+
+
 @pytest.mark.django_db
-def test_detect_a5_artista_multiple():
+def test_detect_a5_artista_multiple_good_week_fires():
+    """4 cançons among a 24-row top (share 0.17, n<5) is a good week,
+    not domination: a5 fires and celebrates."""
     a = Artista.objects.create(nom="Maria Jaume", slug="mj", aprovat=True)
     al = Album.objects.create(nom="A", slug="mj-a", artista=a, descartat=False)
     setmana = _monday(2026, 5, 11)
     for i in range(4):
         c = _make_canco(f"C{i}", a, al, f"mj-{i}")
         _seed(c, "BAL", setmana, i + 1)
+    _seed_filler("BAL", setmana, 5, 20)  # top_size = 24, share = 4/24 ≈ 0.17
     s = scen.detect_a5_artista_multiple("BAL", setmana)
     assert s and s.data["n_cancons"] == 4
     assert s.data["de_artista"] == "de Maria Jaume"
+
+
+@pytest.mark.django_db
+def test_detect_a5_domination_is_suppressed_by_count():
+    """5+ cançons from one artist is domination: a5 is suppressed so a
+    movement/position scenario can headline instead of celebrating."""
+    a = Artista.objects.create(nom="Maria Jaume", slug="mj", aprovat=True)
+    al = Album.objects.create(nom="A", slug="mj-a", artista=a, descartat=False)
+    setmana = _monday(2026, 5, 11)
+    for i in range(6):
+        c = _make_canco(f"C{i}", a, al, f"mj-{i}")
+        _seed(c, "BAL", setmana, i + 1)
+    _seed_filler("BAL", setmana, 7, 30)  # n=6 ≥ 5 → domination regardless of share
+    assert scen.detect_a5_artista_multiple("BAL", setmana) is None
+
+
+@pytest.mark.django_db
+def test_detect_a5_domination_is_suppressed_by_share():
+    """A small top where one artist holds ≥25 % is also domination,
+    even with fewer than 5 cançons."""
+    a = Artista.objects.create(nom="Maria Jaume", slug="mj", aprovat=True)
+    al = Album.objects.create(nom="A", slug="mj-a", artista=a, descartat=False)
+    setmana = _monday(2026, 5, 11)
+    for i in range(3):
+        c = _make_canco(f"C{i}", a, al, f"mj-{i}")
+        _seed(c, "ALT", setmana, i + 1)
+    _seed_filler("ALT", setmana, 4, 6)  # top_size 9, share 3/9 ≈ 0.33 ≥ 0.25
+    assert scen.detect_a5_artista_multiple("ALT", setmana) is None
 
 
 @pytest.mark.django_db
@@ -215,6 +256,78 @@ def test_detect_a6_canco_recent():
     _seed(c, "PPCC", setmana, 3)
     s = scen.detect_a6_canco_recent("PPCC", setmana)
     assert s and s.data["dies"] == 10 and s.data["posicio"] == 3
+
+
+@pytest.mark.django_db
+def test_detect_a6_suppressed_for_reissue_by_deceased_artist():
+    """A reissue whose data_llancament looks recent but whose artist
+    died before it (Pau Riba pattern): a6 must NOT fire — the recency is
+    the artifact, so it never claims 'just publicada'."""
+    a = Artista.objects.create(
+        nom="Pau Riba",
+        slug="pr",
+        aprovat=True,
+        mb_end_date=datetime.date(2022, 3, 6),
+    )
+    al = Album.objects.create(nom="A", slug="pr-a", artista=a, descartat=False)
+    setmana = _monday(2026, 5, 18)
+    c = _make_canco(
+        "Noia de Porcellana",
+        a,
+        al,
+        "pr-c",
+        data_llancament=datetime.date(2026, 4, 24),  # reissue date, < 30 d
+    )
+    _seed(c, "BAL", setmana, 1)
+    assert scen.detect_a6_canco_recent("BAL", setmana) is None
+
+
+@pytest.mark.django_db
+def test_detect_a6_suppressed_for_version_marker_title():
+    """A 'recent' live/remaster cut is not a genuine new release: a6
+    suppressed."""
+    a = Artista.objects.create(nom="Y", slug="y", aprovat=True)
+    al = Album.objects.create(nom="A", slug="y-a", artista=a, descartat=False)
+    setmana = _monday(2026, 5, 11)
+    c = _make_canco(
+        "Camins (En Directe)",
+        a,
+        al,
+        "y-c",
+        data_llancament=setmana - datetime.timedelta(days=5),
+    )
+    _seed(c, "CAT", setmana, 2)
+    assert scen.detect_a6_canco_recent("CAT", setmana) is None
+
+
+@pytest.mark.django_db
+def test_detect_a4_freshness_blocked_for_reissue():
+    """a4 still fires for a reissue debut ('debuta al N' is chart-true)
+    but flags freshness_blocked so the composer drops the first-week
+    touch. A genuine recent debut does not set the flag."""
+    a = Artista.objects.create(
+        nom="Pau Riba", slug="pr", aprovat=True, mb_end_date=datetime.date(2022, 3, 6)
+    )
+    al = Album.objects.create(nom="A", slug="pr-a", artista=a, descartat=False)
+    other = _make_canco("Vell", a, al, "pr-v")
+    new = _make_canco(
+        "Noia de Porcellana", a, al, "pr-d", data_llancament=datetime.date(2026, 4, 24)
+    )
+    _seed(other, "BAL", _monday(2026, 5, 4), 2)
+    _seed(new, "BAL", _monday(2026, 5, 11), 1)
+    s = scen.detect_a4_debut_alt("BAL", _monday(2026, 5, 11))
+    assert s and s.data.get("freshness_blocked") is True
+
+    # Genuine recent debut: flag absent.
+    b = Artista.objects.create(nom="SX3", slug="sx3", aprovat=True)
+    bal = Album.objects.create(nom="B", slug="sx3-a", artista=b)
+    gb = _make_canco(
+        "Tots Som Súpers", b, bal, "sx3-d", data_llancament=_monday(2026, 5, 10)
+    )
+    _seed(_make_canco("Prev", b, bal, "sx3-p"), "CAT", _monday(2026, 5, 4), 2)
+    _seed(gb, "CAT", _monday(2026, 5, 11), 1)
+    s2 = scen.detect_a4_debut_alt("CAT", _monday(2026, 5, 11))
+    assert s2 and "freshness_blocked" not in s2.data
 
 
 @pytest.mark.django_db
@@ -880,3 +993,42 @@ def test_pick_phrase_is_deterministic_with_rng():
     assert pid.startswith("hero_a2_streak_")
     assert "La Fúmiga" in text
     assert "{" not in text
+
+
+@pytest.mark.django_db
+def test_pick_phrase_drops_freshness_variants_when_blocked():
+    """When a4 carries freshness_blocked, pick_phrase must never return a
+    template with the 'primera setmana' touch, while the bank does carry
+    such variants (so the filter is meaningful)."""
+    from social.narrative.banks.hero import A4_DEBUT_ALT
+
+    data = {
+        "artista": "Pau Riba",
+        "de_artista": "de Pau Riba",
+        "canco": "Noia de Porcellana",
+        "posicio": 1,
+        "posicio_ordinal": "1r",
+        "territori_label": "de les Illes Balears",
+        "territori_ordinal": "de les Illes Balears",
+    }
+    # Sanity: the short bank really does contain a 'primera setmana' phrase.
+    assert any("primera setmana" in t.lower() for t in A4_DEBUT_ALT["short"])
+
+    blocked = scen.Scenario("a4_debut_alt", 9, {**data, "freshness_blocked": True})
+    for seed in range(60):
+        _, text = pick_phrase(
+            blocked, "short", "BAL", "mastodon", rng=random.Random(seed)
+        )
+        assert "primera setmana" not in text.lower()
+
+    # Without the flag the touch is reachable (not asserting it appears
+    # every time, just that the filter is what removes it).
+    plain = scen.Scenario("a4_debut_alt", 9, dict(data))
+    seen_fresh = any(
+        "primera setmana"
+        in pick_phrase(plain, "short", "BAL", "mastodon", rng=random.Random(s))[
+            1
+        ].lower()
+        for s in range(60)
+    )
+    assert seen_fresh

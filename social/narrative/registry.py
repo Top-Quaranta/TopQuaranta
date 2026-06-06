@@ -25,6 +25,19 @@ from social.narrative.banks import phrase_id
 from social.narrative.banks.hero import HERO
 from social.narrative.utils import dies_str, territori_label, territori_ordinal
 
+# Substrings that mark a release-freshness assertion in a hero template.
+# Used to drop the freshness touch from a scenario whose song is not a
+# verified recent release (see `pick_phrase`'s `freshness_blocked` path).
+# These are the only release-freshness phrasings the mixed scenarios
+# (a4) carry; the pure-freshness scenario a6 is suppressed at the
+# detector instead, so it never reaches this filter.
+_FRESHNESS_MARKERS = ("primera setmana",)
+
+
+def _asserts_freshness(template: str) -> bool:
+    low = template.lower()
+    return any(marker in low for marker in _FRESHNESS_MARKERS)
+
 
 def filter_unused(
     scenario_code: str,
@@ -82,6 +95,15 @@ def pick_phrase(
     `rng` lets tests force a deterministic choice (`random.Random(0)`).
     In production it defaults to the global `random` module."""
     candidates = filter_unused(scenario.code, length, territori, channel, weeks)
+    if scenario.data.get("freshness_blocked"):
+        # The scenario's song is not a verified recent release; drop the
+        # phrase variants that assert release freshness (the "first week"
+        # touch) and keep the pure position/movement ones. Never empty the
+        # pool at runtime (the post must go out) — at dev time every
+        # scenario that sets this flag is checked to have non-freshness
+        # variants; otherwise the rule is to STOP, not invent a phrase.
+        non_fresh = [c for c in candidates if not _asserts_freshness(c[1])]
+        candidates = non_fresh or candidates
     if not candidates:
         return ("", "")
     chooser = rng.choice if rng is not None else random.choice

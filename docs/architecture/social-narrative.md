@@ -226,7 +226,7 @@ filters phrases already used at the same (channel, territori) in
 a recent window; falls back to the full bank if exhausted (a post
 must go out).
 
-## Verified-recent-release fact (2026-06-05, scaffolding)
+## Verified-recent-release fact (2026-06-05, wired 2026-06-06)
 
 `social/narrative/freshness.py` computes a single boolean —
 *is this `Canço` a verified recent release* — combining
@@ -257,7 +257,33 @@ wrapper. The function is pure (reads `canco` + its `artista`, never
 writes), so it works against stored `TopSetmanal` rows read-only as
 well as in the live pipeline.
 
-**Scaffolding only:** the fact is computed and exposed but **not
-consumed** by any caption template or detector yet. Wiring it into
-the composer (e.g. gating `a4`/`a6` freshness phrasing) is a
-pending editorial decision, deliberately out of scope.
+**Wired (2026-06-06).** The fact gates the freshness scenarios at the
+detector, with NO new editorial text (logic + selection only):
+
+- **`a6_canco_recent`** is a pure freshness scenario (every phrase
+  asserts "just publicada" / "fa només N dies"). When its candidate is
+  not `is_verified_recent_release`, the detector returns `None`: there
+  is no non-freshness variant to fall back to, so suppression is the
+  honest answer, and a movement/position scenario headlines. (Pau Riba's
+  «Noia de Porcellana» — artist deceased before the reissue date — no
+  longer says "just publicada"; SX3's genuinely new release keeps it.)
+- **`a4_debut_alt`** still fires for a non-verified-recent debut (the
+  "debuta al N" claim is chart-accurate) but sets `freshness_blocked` in
+  its `data`. `registry.pick_phrase` then drops the phrase variants that
+  carry the "first week" touch (`_FRESHNESS_MARKERS`) and keeps a4's
+  pure debut-position variants. a4 has such variants, so no STOP / no
+  new phrase.
+- **`a1_outside_to_top1`** carries no release-freshness claim (all
+  variants are chart-movement: "salt de … al 1r"); no change.
+
+## Concentration demotion (2026-06-06)
+
+`a5_artista_multiple` celebrates one artist holding ≥3 cançons in the
+top. When that share becomes **domination** (`n_cancons ≥ 5`, or
+`n_cancons / top_size ≥ 0.25` for small territoris), the detector
+returns `None` instead. Rationale (sonda 2026-06-06): a5 has only
+celebratory phrasing (no neutral variant), and a large concentration
+can be a fusion/score artifact, so celebrating it is editorially wrong;
+suppression lets a movement/position scenario take the headline. Below
+the threshold a5 fires normally (a genuine good week). Maria Jaume's BAL
+weeks (7-9 cançons) no longer headline with concentration celebration.

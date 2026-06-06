@@ -20,6 +20,7 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
+from social.narrative.freshness import is_verified_recent_release
 from social.narrative.utils import (
     dies_str,
     ordinal_ca,
@@ -27,6 +28,15 @@ from social.narrative.utils import (
     territori_ordinal,
     with_preposition,
 )
+
+# Concentration demotion: when one artist holds at least this many
+# cançons in the territori's top (or this share of it), do NOT let a5
+# headline as a celebration. a5 has only celebratory phrasing and the
+# magnitude can be a fusion/concentration artifact (sonda 2026-06-06),
+# so the detector suppresses it and a movement/position scenario takes
+# the title. Below the threshold a5 fires normally (a genuine good week).
+_A5_DOMINATION_MIN = 5
+_A5_DOMINATION_SHARE = 0.25
 
 # ── Data class ─────────────────────────────────────────────────────
 
@@ -274,6 +284,12 @@ def detect_a4_debut_alt(territori: str, setmana: datetime.date) -> Optional[Scen
     data = _base_data(artista, canco, territori, row=candidate)
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
+    # If the debut is not a verified recent release (reissue / deceased
+    # artist / live-remaster title), block the "first-week" freshness
+    # touch: the composer keeps a4's pure debut-position phrasing. The
+    # "debuta al N" claim itself stays (it is chart-accurate).
+    if not is_verified_recent_release(candidate.canco, ref_date=setmana):
+        data["freshness_blocked"] = True
     return Scenario("a4_debut_alt", 10 - candidate.posicio, data)
 
 
@@ -297,11 +313,21 @@ def detect_a5_artista_multiple(
             best_rows = lst
     if not best_aid:
         return None
+    n = len(best_rows)
+    top_size = sum(1 for r in rows if r.canco_id)
+    share = (n / top_size) if top_size else 0.0
+    if n >= _A5_DOMINATION_MIN or share >= _A5_DOMINATION_SHARE:
+        # Domination, not a good week: one artist holds a large part of
+        # the top. a5 only has celebratory phrasing (no neutral variant),
+        # so we suppress it rather than emit celebration over what may be
+        # an artifact. detect_all then lets a movement/position scenario
+        # take the headline; a5 is simply not mentioned.
+        return None
     artista, _ = _row_data(best_rows[0], territori)
     data = _base_data(artista, "", territori, row=best_rows[0], song_focal=False)
-    data["n_cancons"] = len(best_rows)
+    data["n_cancons"] = n
     data["posicions"] = sorted(r.posicio for r in best_rows)
-    return Scenario("a5_artista_multiple", len(best_rows), data)
+    return Scenario("a5_artista_multiple", n, data)
 
 
 def detect_a6_canco_recent(
@@ -320,6 +346,15 @@ def detect_a6_canco_recent(
         if best is None or r.posicio < best.posicio:
             best = r
     if not best:
+        return None
+    # a6 is a pure freshness scenario ("just publicada", "fa només N
+    # dies"). When the release is not verified-recent (reissue with a
+    # recent data_llancament, deceased-before-release artist, or a
+    # live/remix/remaster title), the recency is the artifact, so a6 does
+    # not fire and a movement/position scenario headlines instead. Every
+    # a6 phrase asserts freshness, so there is no non-freshness variant to
+    # fall back to: suppression is the honest answer.
+    if not is_verified_recent_release(best.canco, ref_date=setmana):
         return None
     artista, canco = _row_data(best, territori)
     dies = max(1, (setmana - best.canco.data_llancament).days)

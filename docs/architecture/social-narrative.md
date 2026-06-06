@@ -226,7 +226,7 @@ filters phrases already used at the same (channel, territori) in
 a recent window; falls back to the full bank if exhausted (a post
 must go out).
 
-## Verified-recent-release fact (2026-06-05, scaffolding)
+## Verified-recent-release fact (2026-06-05, wired 2026-06-06)
 
 `social/narrative/freshness.py` computes a single boolean —
 *is this `Canço` a verified recent release* — combining
@@ -257,7 +257,44 @@ wrapper. The function is pure (reads `canco` + its `artista`, never
 writes), so it works against stored `TopSetmanal` rows read-only as
 well as in the live pipeline.
 
-**Scaffolding only:** the fact is computed and exposed but **not
-consumed** by any caption template or detector yet. Wiring it into
-the composer (e.g. gating `a4`/`a6` freshness phrasing) is a
-pending editorial decision, deliberately out of scope.
+**Wired as a class (2026-06-06).** The fact gates every release-novelty
+claim at the detector, with NO new editorial text (logic + selection
+only). The lexicon is a single source of truth —
+`freshness.RELEASE_NOVELTY_MARKERS` + `phrase_asserts_release_novelty()`
+— so any future phrase added to a gated bank is covered automatically
+(asserted by `test_gated_banks_have_neutral_variant_in_every_tier` and
+`test_pick_phrase_blocked_never_yields_release_novelty`). The markers
+target release recency ("estrena", "novetat", "just publicada", "fa
+només … dies", "primera setmana", "estrena absoluta", "inauguració", …)
+and deliberately exclude chart-event words (`debut`, `entra`, `salt`,
+`puja`, `1r`, `podi`), which stay true for a reissue.
+
+- **`a6_canco_recent`** is pure freshness (every phrase asserts "just
+  publicada" / "fa només N dies"). Not verified-recent → the detector
+  returns `None`; no neutral variant exists, so suppression is the honest
+  answer and a movement scenario headlines. (Pau Riba's «Noia de
+  Porcellana», artist deceased before the reissue date, no longer says
+  "just publicada"; SX3's genuinely new release keeps it.)
+- **`a4` / `a9` / `a10` / `a12`** (debut ≤3 / debut 4-40 / first-ever /
+  re-emerging) carry both chart-event and release-novelty phrasings.
+  `_gate_release_novelty(scenario, canco, setmana)` (shared helper): for
+  a non-verified-recent song it sets `freshness_blocked` so
+  `registry.pick_phrase` drops the novelty variants and keeps the neutral
+  position/chart ones — e.g. a10's "estrena absoluta" gives way to
+  "primera vegada al top". If a bank had **no** neutral variant the
+  helper would return `None` (suppress); all four keep neutral variants
+  in every tier today, so none is suppressed and no new phrase is needed.
+- **`a1` / `a3` / `a8` / `a11`** carry no release-novelty claim (their
+  "estrena de 1r" / "nova líder" are chart events); not gated.
+
+## Concentration demotion (2026-06-06)
+
+`a5_artista_multiple` celebrates one artist holding ≥3 cançons in the
+top. When that share becomes **domination** (`n_cancons ≥ 5`, or
+`n_cancons / top_size ≥ 0.25` for small territoris), the detector
+returns `None` instead. Rationale (sonda 2026-06-06): a5 has only
+celebratory phrasing (no neutral variant), and a large concentration
+can be a fusion/score artifact, so celebrating it is editorially wrong;
+suppression lets a movement/position scenario take the headline. Below
+the threshold a5 fires normally (a genuine good week). Maria Jaume's BAL
+weeks (7-9 cançons) no longer headline with concentration celebration.

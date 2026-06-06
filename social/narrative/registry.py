@@ -23,6 +23,7 @@ from typing import Optional
 
 from social.narrative.banks import phrase_id
 from social.narrative.banks.hero import HERO
+from social.narrative.freshness import phrase_asserts_release_novelty
 from social.narrative.utils import dies_str, territori_label, territori_ordinal
 
 
@@ -82,6 +83,15 @@ def pick_phrase(
     `rng` lets tests force a deterministic choice (`random.Random(0)`).
     In production it defaults to the global `random` module."""
     candidates = filter_unused(scenario.code, length, territori, channel, weeks)
+    if scenario.data.get("freshness_blocked"):
+        # The scenario's song is not a verified recent release; drop the
+        # phrase variants that assert release novelty and keep the pure
+        # position/movement ones. The detector only sets this flag after
+        # checking the bank has a neutral variant (else it suppresses),
+        # so the filtered pool is non-empty; the `or candidates` is a
+        # runtime backstop (the post must go out).
+        non_fresh = [c for c in candidates if not phrase_asserts_release_novelty(c[1])]
+        candidates = non_fresh or candidates
     if not candidates:
         return ("", "")
     chooser = rng.choice if rng is not None else random.choice

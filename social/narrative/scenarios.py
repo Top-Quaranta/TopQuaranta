@@ -1,6 +1,6 @@
 """Scenario detectors over `TopSetmanal` (Fase 4 reset, 2026-05-18).
 
-# Spec: docs/architecture/social.md
+# Spec: docs/architecture/social-narrative.md
 
 Thirteen detectors + a fallback (a1-a12 per ADR-0008; a13_top1_return
 added 2026-06-01). Each detector returns at most one
@@ -67,6 +67,28 @@ def _previous_positions(territori: str, setmana: datetime.date) -> dict[int, int
         setmana=_previous_monday(setmana),
     ).values_list("canco_id", "posicio")
     return {cid: p for cid, p in prev if cid is not None}
+
+
+def _has_previous_week(territori: str, setmana: datetime.date) -> bool:
+    """True when a `TopSetmanal` exists for the previous week of this
+    territori — i.e. there is a real baseline to compare against.
+
+    Detectors that read "absent from last week" as news (a1's "fora del
+    top", a4/a9's "debut") MUST guard on this. On the very first ranking
+    week of a territori — or the first time a new territori crosses the
+    `min_cancons_ranking_propi` floor and starts ranking — there is no
+    previous week, so EVERY entry is trivially "new". Firing a1/a4/a9
+    there manufactures a false-freshness claim ("debuta a la primera
+    setmana", "la setmana anterior estava fora del top") for what may be
+    long-standing catalogue. With no baseline these detectors simply do
+    not fire and the composer falls back to the baseline-free detectors
+    (a5/a6/a7/...) or `fallback_scenario`; no new phrasing is invented."""
+    from ranking.models import TopSetmanal
+
+    return TopSetmanal.objects.filter(
+        territori=territori,
+        setmana=_previous_monday(setmana),
+    ).exists()
 
 
 def _row_data(row, territori: str) -> tuple[str, str]:
@@ -143,6 +165,9 @@ def detect_a1_outside_to_top1(
         return None
     top1 = rows[0]
     if top1.posicio != 1 or not top1.canco_id:
+        return None
+    # No baseline week → cannot claim "estava fora del top" honestly.
+    if not _has_previous_week(territori, setmana):
         return None
     prev = _previous_positions(territori, setmana)
     prev_pos = prev.get(top1.canco_id)
@@ -229,6 +254,10 @@ def detect_a4_debut_alt(territori: str, setmana: datetime.date) -> Optional[Scen
     """Cançó nova al top que debuta a #<=3. Severity = 10 - posicio."""
     rows = list(_load_week(territori, setmana))
     if not rows:
+        return None
+    # No baseline week → every entry is trivially "new"; suppress the
+    # debut claim rather than assert false freshness on a cold start.
+    if not _has_previous_week(territori, setmana):
         return None
     prev = _previous_positions(territori, setmana)
     candidate = None
@@ -368,6 +397,10 @@ def detect_a9_debut_anywhere(
     rows = list(_load_week(territori, setmana))
     if not rows:
         return None
+    # Same cold-start guard as a4: without a baseline week the "debut"
+    # framing is unverifiable.
+    if not _has_previous_week(territori, setmana):
+        return None
     prev = _previous_positions(territori, setmana)
     candidate = None
     for r in rows:
@@ -401,6 +434,11 @@ def detect_a10_artista_first_ever(
 
     rows = list(_load_week(territori, setmana))
     if not rows:
+        return None
+    # No baseline week → EVERY artist is trivially "first ever" in the
+    # territori's (just-started) top history, so "estrena absoluta" /
+    # "primera vegada al top" would be false freshness. Suppress.
+    if not _has_previous_week(territori, setmana):
         return None
     candidate = None
     for r in rows:

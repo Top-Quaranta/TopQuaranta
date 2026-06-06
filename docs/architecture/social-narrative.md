@@ -11,6 +11,29 @@ over the `TopSetmanal` for a given week and territory; returns at
 most one `Scenario(code, severity, data)`. `detect_all` returns
 the list sorted by severity desc.
 
+### Cold-start guard (no baseline week, 2026-06-05)
+
+The freshness/novelty detectors read *absence from last week* as
+news: `a1` ("la setmana anterior estava fora del top"), `a4` /
+`a9` ("debut"), and `a10` ("estrena absoluta" / first-ever artist
+in the territori's top history). On the **first ranking week of a
+territori** — or the first time a new territori crosses the
+`min_cancons_ranking_propi` floor and starts ranking — there is no
+previous week, so *every* entry is trivially "new" and *every*
+artist is trivially "first ever". Firing these there manufactures a
+false-freshness claim for what may be long-standing catalogue (the
+cold-start week stamped "debuta a la primera setmana" on four
+territoris at once in the 2026-04-13 data).
+
+The helper `_has_previous_week(territori, setmana)` checks whether a
+`TopSetmanal` exists for the previous week. `a1`, `a4`, `a9` and
+`a10` return `None` when it does not, so the composer falls back to
+the baseline-free detectors (`a5`/`a6`/`a7`/…) or
+`fallback_scenario`. No new phrasing is invented — the guard only
+suppresses the unverifiable claims. Detectors that already require
+explicit previous-week rows (`a2`, `a3`, `a8`, `a11`, `a12`, `a13`)
+need no guard: they naturally do not fire without a baseline.
+
 ### Distinct-subject slot selection (2026-06-01, audit #1/#6)
 
 `select_slots(scenarios, max_slots)` picks up to `max_slots`
@@ -202,3 +225,39 @@ territori, phrase_id, setmana). The `registry.pick_phrase` helper
 filters phrases already used at the same (channel, territori) in
 a recent window; falls back to the full bank if exhausted (a post
 must go out).
+
+## Verified-recent-release fact (2026-06-05, scaffolding)
+
+`social/narrative/freshness.py` computes a single boolean —
+*is this `Canço` a verified recent release* — combining
+`data_llancament` recency with a plausibility check that the stored
+date is not obviously a reissue / alternate-version date.
+
+Motivation (2026-06-05 measurement): `data_llancament` is the
+Deezer/MusicBrainz date we hold, which for catalogue is frequently
+the **reissue** date, not the original studio release. The
+`age_factor` in `ranking/algorisme.py` therefore treats a reissued
+1971 song as fresh, and the freshness beats (`a4`/`a6`) inherit
+that — the canonical case being Pau Riba's «Noia de Porcellana»
+(reissue dated 2026, artist deceased 2022).
+
+`assess_recent_release(canco, *, ref_date, max_age_days=30)` returns
+a `FreshnessVerdict(is_verified_recent_release, age_days, reasons)`.
+A release is verified-recent when ALL hold:
+
+1. `data_llancament` is known and within `max_age_days` of
+   `ref_date` (future / same-day dates count as age 0);
+2. the title carries no version marker (live / remix / remaster /
+   reissue / acoustic / versió);
+3. the artist was not deceased before the release date
+   (`Artista.mb_end_date < data_llancament` → posthumous reissue).
+
+`is_verified_recent_release(...)` is the boolean convenience
+wrapper. The function is pure (reads `canco` + its `artista`, never
+writes), so it works against stored `TopSetmanal` rows read-only as
+well as in the live pipeline.
+
+**Scaffolding only:** the fact is computed and exposed but **not
+consumed** by any caption template or detector yet. Wiring it into
+the composer (e.g. gating `a4`/`a6` freshness phrasing) is a
+pending editorial decision, deliberately out of scope.

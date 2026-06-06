@@ -46,6 +46,60 @@ _VERSION_MARKER = re.compile(
 # window so the two notions stay aligned if wired together later.
 DEFAULT_MAX_AGE_DAYS = 30
 
+# ── Release-novelty lexicon (single source of truth) ────────────────
+# Substrings (case-insensitive) that assert a song is a NEW / FRESH /
+# just-arrived RELEASE — claims that are false for a reissue. This is
+# the ONE place the narrative engine defines that lexicon: any hero
+# phrase added to a release-novelty scenario (a4/a9/a10/a12, gated via
+# `freshness_blocked` in `registry.pick_phrase`) is covered automatically
+# by the exhaustive test, with no per-phrase tagging.
+#
+# Deliberately ABSENT: chart-event words (`debut`, `entra`, `salt`,
+# `puja`, `1r`, `podi`, `nou 1r`, `nova líder`). Those claims stay true
+# for a reissue (a 1971 song really can debut in / leap up the chart),
+# so the gated scenarios keep their pure position/movement variants.
+RELEASE_NOVELTY_MARKERS = (
+    "estrena",
+    "estren",
+    "novetat",
+    "nova de pes",
+    "nou material",
+    "cançó nova",
+    "nova entrada",
+    "nova presència",
+    "nou nom",
+    "nou al top",
+    "nova al top",
+    "just publicada",
+    "just sortida",
+    "just surt",
+    "acaba de sortir",
+    "acabada de",
+    "acabat de",
+    "primera setmana",
+    "tot just",
+    "fresc",
+    "des de la publicació",
+    "des de l'estrena",
+    "des de la sortida",
+    "que va sortir",
+    "dies de vida",
+    "d'aquest mes",
+    "fa només",
+    "inauguraci",
+    "absolut",
+    "naixement",
+    "neix",
+    "material acabat",
+)
+
+
+def phrase_asserts_release_novelty(text: str) -> bool:
+    """True if `text` makes a release-novelty / freshness claim per the
+    `RELEASE_NOVELTY_MARKERS` lexicon. Pure string check; no Django."""
+    low = text.lower()
+    return any(marker in low for marker in RELEASE_NOVELTY_MARKERS)
+
 
 @dataclass(frozen=True)
 class FreshnessVerdict:

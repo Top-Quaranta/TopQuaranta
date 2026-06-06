@@ -257,24 +257,35 @@ wrapper. The function is pure (reads `canco` + its `artista`, never
 writes), so it works against stored `TopSetmanal` rows read-only as
 well as in the live pipeline.
 
-**Wired (2026-06-06).** The fact gates the freshness scenarios at the
-detector, with NO new editorial text (logic + selection only):
+**Wired as a class (2026-06-06).** The fact gates every release-novelty
+claim at the detector, with NO new editorial text (logic + selection
+only). The lexicon is a single source of truth —
+`freshness.RELEASE_NOVELTY_MARKERS` + `phrase_asserts_release_novelty()`
+— so any future phrase added to a gated bank is covered automatically
+(asserted by `test_gated_banks_have_neutral_variant_in_every_tier` and
+`test_pick_phrase_blocked_never_yields_release_novelty`). The markers
+target release recency ("estrena", "novetat", "just publicada", "fa
+només … dies", "primera setmana", "estrena absoluta", "inauguració", …)
+and deliberately exclude chart-event words (`debut`, `entra`, `salt`,
+`puja`, `1r`, `podi`), which stay true for a reissue.
 
-- **`a6_canco_recent`** is a pure freshness scenario (every phrase
-  asserts "just publicada" / "fa només N dies"). When its candidate is
-  not `is_verified_recent_release`, the detector returns `None`: there
-  is no non-freshness variant to fall back to, so suppression is the
-  honest answer, and a movement/position scenario headlines. (Pau Riba's
-  «Noia de Porcellana» — artist deceased before the reissue date — no
-  longer says "just publicada"; SX3's genuinely new release keeps it.)
-- **`a4_debut_alt`** still fires for a non-verified-recent debut (the
-  "debuta al N" claim is chart-accurate) but sets `freshness_blocked` in
-  its `data`. `registry.pick_phrase` then drops the phrase variants that
-  carry the "first week" touch (`_FRESHNESS_MARKERS`) and keeps a4's
-  pure debut-position variants. a4 has such variants, so no STOP / no
-  new phrase.
-- **`a1_outside_to_top1`** carries no release-freshness claim (all
-  variants are chart-movement: "salt de … al 1r"); no change.
+- **`a6_canco_recent`** is pure freshness (every phrase asserts "just
+  publicada" / "fa només N dies"). Not verified-recent → the detector
+  returns `None`; no neutral variant exists, so suppression is the honest
+  answer and a movement scenario headlines. (Pau Riba's «Noia de
+  Porcellana», artist deceased before the reissue date, no longer says
+  "just publicada"; SX3's genuinely new release keeps it.)
+- **`a4` / `a9` / `a10` / `a12`** (debut ≤3 / debut 4-40 / first-ever /
+  re-emerging) carry both chart-event and release-novelty phrasings.
+  `_gate_release_novelty(scenario, canco, setmana)` (shared helper): for
+  a non-verified-recent song it sets `freshness_blocked` so
+  `registry.pick_phrase` drops the novelty variants and keeps the neutral
+  position/chart ones — e.g. a10's "estrena absoluta" gives way to
+  "primera vegada al top". If a bank had **no** neutral variant the
+  helper would return `None` (suppress); all four keep neutral variants
+  in every tier today, so none is suppressed and no new phrase is needed.
+- **`a1` / `a3` / `a8` / `a11`** carry no release-novelty claim (their
+  "estrena de 1r" / "nova líder" are chart events); not gated.
 
 ## Concentration demotion (2026-06-06)
 

@@ -20,7 +20,10 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
-from social.narrative.freshness import is_verified_recent_release
+from social.narrative.freshness import (
+    is_verified_recent_release,
+    phrase_asserts_release_novelty,
+)
 from social.narrative.utils import (
     dies_str,
     ordinal_ca,
@@ -99,6 +102,34 @@ def _has_previous_week(territori: str, setmana: datetime.date) -> bool:
         territori=territori,
         setmana=_previous_monday(setmana),
     ).exists()
+
+
+def _has_freshness_safe_variant(code: str) -> bool:
+    """True if `code`'s hero bank has at least one phrase (any tier) that
+    makes NO release-novelty claim. Cheap: the bank is a constant."""
+    from social.narrative.banks.hero import HERO
+
+    bank = HERO.get(code) or {}
+    return any(
+        not phrase_asserts_release_novelty(p) for tier in bank.values() for p in tier
+    )
+
+
+def _gate_release_novelty(scenario, candidate_canco, setmana):
+    """Verified-recent-release gate for a release-novelty scenario
+    (a4/a9/a10/a12). When the song is a verified recent release, returns
+    the scenario unchanged. When it is NOT (reissue / deceased-before-
+    release artist / live-remix-remaster title), flags `freshness_blocked`
+    so `registry.pick_phrase` drops the novelty phrasing and keeps a
+    neutral position/chart variant — or, if the bank has no neutral
+    variant at all, returns None to suppress the scenario so another beat
+    takes the headline. No new editorial text is ever produced."""
+    if is_verified_recent_release(candidate_canco, ref_date=setmana):
+        return scenario
+    if not _has_freshness_safe_variant(scenario.code):
+        return None
+    scenario.data["freshness_blocked"] = True
+    return scenario
 
 
 def _row_data(row, territori: str) -> tuple[str, str]:
@@ -284,13 +315,8 @@ def detect_a4_debut_alt(territori: str, setmana: datetime.date) -> Optional[Scen
     data = _base_data(artista, canco, territori, row=candidate)
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
-    # If the debut is not a verified recent release (reissue / deceased
-    # artist / live-remaster title), block the "first-week" freshness
-    # touch: the composer keeps a4's pure debut-position phrasing. The
-    # "debuta al N" claim itself stays (it is chart-accurate).
-    if not is_verified_recent_release(candidate.canco, ref_date=setmana):
-        data["freshness_blocked"] = True
-    return Scenario("a4_debut_alt", 10 - candidate.posicio, data)
+    scenario = Scenario("a4_debut_alt", 10 - candidate.posicio, data)
+    return _gate_release_novelty(scenario, candidate.canco, setmana)
 
 
 def detect_a5_artista_multiple(
@@ -454,7 +480,8 @@ def detect_a9_debut_anywhere(
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
     severity = max(1, (41 - candidate.posicio) // 8)
-    return Scenario("a9_debut_anywhere", severity, data)
+    scenario = Scenario("a9_debut_anywhere", severity, data)
+    return _gate_release_novelty(scenario, candidate.canco, setmana)
 
 
 def detect_a10_artista_first_ever(
@@ -497,7 +524,12 @@ def detect_a10_artista_first_ever(
     data = _base_data(artista, canco, territori, row=candidate)
     data["posicio"] = candidate.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate.posicio))
-    return Scenario("a10_artista_first_ever", 8, data)
+    scenario = Scenario("a10_artista_first_ever", 8, data)
+    # First-ever in the top is a chart fact, true even for a reissue, but
+    # the bank also carries release-novelty phrasings ("estrena absoluta",
+    # "inauguració"). When the song is not a verified recent release the
+    # gate keeps the neutral "primera vegada al top" variants instead.
+    return _gate_release_novelty(scenario, candidate.canco, setmana)
 
 
 def detect_a11_top5_drop_generic(
@@ -597,7 +629,8 @@ def detect_a12_artista_emerging(
     data = _base_data(artista, canco, territori, row=candidate_row)
     data["posicio"] = candidate_row.posicio
     data["posicio_ordinal"] = ordinal_ca(int(candidate_row.posicio))
-    return Scenario("a12_artista_emerging", 3, data)
+    scenario = Scenario("a12_artista_emerging", 3, data)
+    return _gate_release_novelty(scenario, candidate_row.canco, setmana)
 
 
 def detect_a13_top1_return(

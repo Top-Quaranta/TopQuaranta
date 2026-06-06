@@ -6,9 +6,13 @@ For each configured `SpotifyPlaylist`:
   * kind=novetats: Canco with data_llancament = yesterday, activa=True,
     capped at 100. Currently parked (no row in prod since FASE C).
   * kind=no_verificades: Canco.objects.pendents() (verificada=False AND
-    activa=True), ordered by ml_confianca desc, sliced into 7 non-
+    activa=True), ordered by ml_confianca desc, sliced into 6 non-
     overlapping chunks of 100. Mirrors the /staff/cancons workbench
     exactly (single source of truth via Canco.objects.pendents()).
+  * kind=novetats_per_verificar: a single PERMANENT work list of the 100
+    most recent unverified releases (Canco.objects.pendents() ordered by
+    data_llancament desc, NULLs last). Process A also pushes its name +
+    description so the rename flows through the sanctioned pipeline.
 
 DESIGN: This command is the DISTRIBUTION half of the Process A / B
 split. It NEVER calls /v1/search. It reads spotify_id from
@@ -42,11 +46,26 @@ from ingesta.clients.spotify import RateLimitedError, UserSpotifyClient
 from music.models import Canco, SpotifyAuth, SpotifyMetadata, SpotifyPlaylist
 from ranking.models import TopProvisional, TopSetmanal
 
-# Total window pulled from the unverified backlog. 7 chunks * 100 = 700
-# slots across 7 Spotify playlists; the rest of the backlog (anything
-# older) is not surfaced for triage.
-NO_VERIF_WINDOW = 700
+# Total window pulled from the unverified backlog. 6 chunks * 100 = 600
+# slots across 6 triage Spotify playlists; the rest of the backlog
+# (anything older / lower confidence) is not surfaced. Capped from 7 to
+# 6 on 2026-06-06: the 7th chunk was the lowest-confidence dead tail
+# (≈0% Spotify coverage by design) and its playlist was repurposed as
+# the permanent "Novetats per verificar" work list.
+NO_VERIF_WINDOW = 600
 NO_VERIF_CHUNK_SIZE = 100
+
+# Size of the permanent "Novetats per verificar" work list.
+NOVETATS_PER_VERIFICAR_SIZE = 100
+
+# Exact name + description Process A pushes to the repurposed playlist
+# on every sync, so the rename flows through the sanctioned pipeline.
+NOVETATS_PER_VERIFICAR_NOM = "Novetats per verificar"
+NOVETATS_PER_VERIFICAR_DESC = (
+    "Les 100 novetats en català més recents pendents de verificació, "
+    "ordenades per data de llançament. Llista de treball, s'actualitza "
+    "automàticament."
+)
 
 
 class Command(BaseCommand):
@@ -201,6 +220,14 @@ class Command(BaseCommand):
         ok = True
         try:
             client.replace_playlist_tracks(pl.spotify_playlist_id, uris)
+            if pl.kind == SpotifyPlaylist.KIND_NOVETATS_PER_VERIFICAR:
+                # Push the rename through the same sync so the operator
+                # never edits Spotify by hand.
+                client.update_playlist_details(
+                    pl.spotify_playlist_id,
+                    NOVETATS_PER_VERIFICAR_NOM,
+                    NOVETATS_PER_VERIFICAR_DESC,
+                )
         except RateLimitedError:
             # Propagate so the outer handle() loop can stop cleanly.
             raise
@@ -282,6 +309,16 @@ class Command(BaseCommand):
             start = pl.chunk_index * NO_VERIF_CHUNK_SIZE
             end = start + NO_VERIF_CHUNK_SIZE
             return self._no_verif_window[start:end]
+
+        if pl.kind == SpotifyPlaylist.KIND_NOVETATS_PER_VERIFICAR:
+            # Permanent work list: the most recent unverified releases by
+            # data_llancament. NULL release dates sort last so they never
+            # jump ahead of dated novetats.
+            return list(
+                Canco.objects.pendents().order_by(
+                    F("data_llancament").desc(nulls_last=True)
+                )[:NOVETATS_PER_VERIFICAR_SIZE]
+            )
 
         return []
 

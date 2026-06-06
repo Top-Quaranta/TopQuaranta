@@ -175,7 +175,10 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
     `no_verificades` rows are excluded from the per-row CRIT/WARN gate
     (they lag by design — see the threshold constants) and only feed the
     aggregate WARN net; their per-chunk coverage is still reported in the
-    payload for staff visibility.
+    payload for staff visibility. Only `top` / `novetats` rows drive the
+    strict per-row severity; any other kind (e.g. `novetats_per_verificar`,
+    a curated work list) is reported in the payload but kept out of the
+    alert entirely.
 
     Silenced gate (added 2026-05-22 after FASE F false-positive
     review): when `actualitzar_playlists_spotify` is silenced in
@@ -223,8 +226,8 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
     nv_matched = 0
     nv_tracks = 0
 
+    strict_kinds = (SpotifyPlaylist.KIND_TOP, SpotifyPlaylist.KIND_NOVETATS)
     for pl in rows:
-        is_no_verif = pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES
         if pl.last_n_tracks == 0:
             # Never synced — count separately. If NONE of the rows
             # have ever synced and the cron isn't silenced, that's
@@ -250,10 +253,15 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
                 "last_sync_ok": pl.last_sync_ok,
             }
         )
-        if is_no_verif:
+        if pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES:
             # Lags by design — aggregated below, excluded from per-row.
             nv_matched += pl.last_n_matched
             nv_tracks += pl.last_n_tracks
+            continue
+        if pl.kind not in strict_kinds:
+            # e.g. novetats_per_verificar: a curated work list, not a
+            # synced chart. Reported in the payload but outside the gate
+            # (neither the strict per-row check nor the no-verif net).
             continue
         if ratio < COVERAGE_CRIT_BELOW:
             severity = "CRIT"

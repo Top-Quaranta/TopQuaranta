@@ -92,8 +92,9 @@ sync each cadence in isolation:
    (TopProvisional sources). Same KPI layout, dedicated
    `--freq daily` buttons.
 
-3. **Triage no verificades**. The 7 chunks of 100 cançons each.
-   No per-section sync button (they ride the daily cron).
+3. **Triage no verificades**. 6 chunks of 100 cançons each (capped from 7
+   on 2026-06-06: the old no-verif-7 became the permanent
+   `novetats_per_verificar` work list). They ride the daily cron.
 
 The `target_coverage` field is computed on every `/estat/` call. For
 weekly rows it reads `TopSetmanal` for the latest `setmana` per

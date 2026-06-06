@@ -37,6 +37,19 @@ Severity = Literal["OK", "WARN", "CRIT"]
 COVERAGE_WARN_BELOW = 0.85
 COVERAGE_CRIT_BELOW = 0.50
 
+# `no_verificades` triage chunks lag by DESIGN and must not trip the
+# strict per-row gate above. `enriquir_spotify` enriches the pending
+# pool in `ml_confianca`-desc order — the same order the chunks are
+# built in — so the low-confidence tail (high chunk index) sits near 0%
+# coverage as a steady state, not a regression (audit 2026-06-06: no
+# stall in any enrichment path; the gradient is backlog by confidence
+# order with slow pending throughput). We exclude these rows from the
+# per-row CRIT/WARN and instead watch only their AGGREGATE coverage: a
+# collapse there is the one signal that pending enrichment has really
+# stalled, and that is a WARN nudge, never an operator-critical CRIT.
+NO_VERIF_AGG_WARN_BELOW = 0.10
+NO_VERIF_AGG_MIN_TRACKS = 100  # don't alert on a tiny / just-seeded set
+
 # `me().product` values we treat as healthy. Spotify returns
 # "premium" for any active paid subscription (Individual, Family,
 # Duo, Student). Anything else fails the gate because the cron
@@ -150,10 +163,19 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
                                     Process A cron is silenced (no
                                     sync expected so low coverage is
                                     not actionable).
-      ("WARN", message, payload)  — at least one row below WARN, or
-                                    the cron is active and no row has
-                                    ever synced.
-      ("CRIT", message, payload)  — at least one row below CRIT.
+      ("WARN", message, payload)  — at least one VERIFIED (top/novetats)
+                                    row below WARN, the cron is active
+                                    and no row has ever synced, or the
+                                    no-verif AGGREGATE coverage has
+                                    collapsed below NO_VERIF_AGG_WARN_BELOW
+                                    (the one real-stall signal for
+                                    pending enrichment).
+      ("CRIT", message, payload)  — at least one VERIFIED row below CRIT.
+
+    `no_verificades` rows are excluded from the per-row CRIT/WARN gate
+    (they lag by design — see the threshold constants) and only feed the
+    aggregate WARN net; their per-chunk coverage is still reported in the
+    payload for staff visibility.
 
     Silenced gate (added 2026-05-22 after FASE F false-positive
     review): when `actualitzar_playlists_spotify` is silenced in
@@ -198,8 +220,11 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
     severity: Severity = "OK"
     bad_msgs: list[str] = []
     no_sync_ok_count = 0
+    nv_matched = 0
+    nv_tracks = 0
 
     for pl in rows:
+        is_no_verif = pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES
         if pl.last_n_tracks == 0:
             # Never synced — count separately. If NONE of the rows
             # have ever synced and the cron isn't silenced, that's
@@ -225,6 +250,11 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
                 "last_sync_ok": pl.last_sync_ok,
             }
         )
+        if is_no_verif:
+            # Lags by design — aggregated below, excluded from per-row.
+            nv_matched += pl.last_n_matched
+            nv_tracks += pl.last_n_tracks
+            continue
         if ratio < COVERAGE_CRIT_BELOW:
             severity = "CRIT"
             bad_msgs.append(f"{pl.codi}={ratio:.0%}")
@@ -232,7 +262,22 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
             severity = "WARN"
             bad_msgs.append(f"{pl.codi}={ratio:.0%}")
 
-    payload = {"rows": summary}
+    # No-verif aggregate safety net: only a collapse signals a real
+    # pending-enrichment stall, and it is a WARN nudge, not a CRIT.
+    nv_agg = (nv_matched / nv_tracks) if nv_tracks else None
+    if (
+        nv_agg is not None
+        and nv_tracks >= NO_VERIF_AGG_MIN_TRACKS
+        and nv_agg < NO_VERIF_AGG_WARN_BELOW
+        and severity != "CRIT"
+    ):
+        severity = "WARN"
+        bad_msgs.append(f"no-verif aggregate={nv_agg:.0%}")
+
+    payload = {
+        "rows": summary,
+        "no_verif_aggregate": (round(nv_agg, 3) if nv_agg is not None else None),
+    }
 
     if severity == "OK" and no_sync_ok_count == len(rows):
         # Nothing has ever synced. The cron may have been silenced
@@ -244,10 +289,18 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
             payload,
         )
 
+    nv_note = (
+        f" (no-verif aggregate {nv_agg:.0%}, lags by design)"
+        if nv_agg is not None
+        else ""
+    )
     if severity == "OK":
-        msg = f"Coverage OK for {len(rows)} playlists."
+        msg = f"Coverage OK for {len(rows)} playlists{nv_note}."
     else:
-        msg = f"{severity}: coverage below threshold for " f"{', '.join(bad_msgs)}."
+        msg = (
+            f"{severity}: coverage below threshold for "
+            f"{', '.join(bad_msgs)}{nv_note}."
+        )
     return severity, msg, payload
 
 

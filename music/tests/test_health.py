@@ -325,3 +325,34 @@ def test_coverage_verified_crit_even_with_no_verif_present(unsilence_cron):
     sev, msg, payload = check_spotify_coverage()
     assert sev == "CRIT"
     assert "top-cat" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_novetats_per_verificar_outside_alert(unsilence_cron):
+    """The repurposed work-list playlist (novetats_per_verificar) is a
+    curated list, not a synced chart: even at 0% coverage it must not
+    drive CRIT/WARN, nor count toward the no-verif aggregate."""
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.all().delete()
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=40,  # healthy verified playlist
+        last_sync_ok=True,
+    )
+    SpotifyPlaylist.objects.create(
+        codi="novetats-per-verificar",
+        kind=SpotifyPlaylist.KIND_NOVETATS_PER_VERIFICAR,
+        last_n_tracks=100,
+        last_n_matched=0,  # 0% — must be ignored by the alert
+        last_sync_ok=True,
+    )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "OK"
+    # Reported in the payload, but it does not feed the no-verif aggregate.
+    assert payload["no_verif_aggregate"] is None
+    codis = {r["codi"] for r in payload["rows"]}
+    assert "novetats-per-verificar" in codis

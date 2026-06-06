@@ -275,9 +275,9 @@ def test_no_verificades_nulls_last_and_created_at_tiebreak(auth_present, client_
 
 
 def test_window_constants_are_consistent():
-    """Sanity guard: chunk count must be int and slot in 0..6 must fit
-    inside the window (700 / 100 = 7 chunks)."""
-    assert NO_VERIF_WINDOW == 7 * NO_VERIF_CHUNK_SIZE
+    """Sanity guard: the window holds exactly 6 chunks of 100 (capped
+    from 7 on 2026-06-06 when the 7th playlist was repurposed)."""
+    assert NO_VERIF_WINDOW == 6 * NO_VERIF_CHUNK_SIZE
 
 
 @pytest.mark.django_db
@@ -568,3 +568,75 @@ def test_freq_flag_filters_playlists(auth_present, client_mock):
     calls = client_mock.replace_playlist_tracks.call_args_list
     pushed_pids = {c.args[0] for c in calls}
     assert pushed_pids == {"fake-w-pl"}
+
+
+@pytest.mark.django_db
+def test_novetats_per_verificar_recent_by_release_and_pushes_name(
+    auth_present, client_mock
+):
+    """The repurposed permanent work list returns the most recent
+    unverified releases ordered by data_llancament desc (NULL last) and
+    pushes its exact name + description through Process A."""
+    import datetime
+
+    from ingesta.management.commands.actualitzar_playlists_spotify import (
+        NOVETATS_PER_VERIFICAR_DESC,
+        NOVETATS_PER_VERIFICAR_NOM,
+    )
+
+    artista = Artista.objects.create(nom="EXEMPLE NPV", lastfm_nom="EXEMPLE NPV")
+    album = Album.objects.create(artista=artista, nom="EXEMPLE NPV Album")
+    dates = {
+        1: datetime.date(2026, 6, 1),
+        2: datetime.date(2026, 6, 5),  # newest
+        3: datetime.date(2026, 6, 3),
+        4: None,  # NULL → must sort last, never jump ahead
+        5: datetime.date(2026, 6, 4),
+    }
+    for ord_idx, dl in dates.items():
+        c = _make_canco(artista, album, ord_idx, ml_confianca=0.1)
+        c.data_llancament = dl
+        c.save(update_fields=["data_llancament"])
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds
+    SpotifyPlaylist.objects.create(
+        codi="novetats-per-verificar",
+        kind=SpotifyPlaylist.KIND_NOVETATS_PER_VERIFICAR,
+        spotify_playlist_id="fake-npv",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+
+    pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
+    order = [uri.removeprefix("spotify:track:URI-ZZ00X")[-1] for uri in pushed]
+    # data_llancament desc, NULL (ord 4) last.
+    assert order == ["2", "5", "3", "1", "4"]
+    # Name + description pushed through the sanctioned pipeline.
+    client_mock.update_playlist_details.assert_called_once_with(
+        "fake-npv", NOVETATS_PER_VERIFICAR_NOM, NOVETATS_PER_VERIFICAR_DESC
+    )
+
+
+@pytest.mark.django_db
+def test_other_kinds_do_not_push_playlist_details(auth_present, client_mock):
+    """Only the work list renames itself; a top playlist sync must not
+    touch the playlist name/description."""
+    from ranking.models import TopProvisional
+
+    artista = Artista.objects.create(nom="EXEMPLE TOP", lastfm_nom="EXEMPLE TOP")
+    album = Album.objects.create(artista=artista, nom="EXEMPLE TOP Album")
+    c = _make_canco(artista, album, 700, ml_confianca=0.9)
+    TopProvisional.objects.create(
+        canco=c, territori="CAT", posicio=1, score_setmanal=1.0
+    )
+
+    SpotifyPlaylist.objects.all().delete()
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        spotify_playlist_id="fake-top",
+    )
+
+    call_command("actualitzar_playlists_spotify")
+    client_mock.update_playlist_details.assert_not_called()

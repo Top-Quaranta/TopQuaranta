@@ -498,3 +498,19 @@ class UserSpotifyClient:
                 f"/playlists/{playlist_id}/items",
                 json={"uris": chunk},
             )
+
+    def update_playlist_details(
+        self, playlist_id: str, name: str, description: str
+    ) -> None:
+        """Set a playlist's name and description in place.
+
+        `PUT /playlists/<id>` with `{"name": ..., "description": ...}`.
+        Same Spotify endpoint Process A uses for everything else, so a
+        rename flows through the sanctioned sync pipeline rather than a
+        manual edit in the Spotify UI. Idempotent: Spotify accepts the
+        same values on every call."""
+        self._request(
+            "PUT",
+            f"/playlists/{playlist_id}",
+            json={"name": name, "description": description},
+        )

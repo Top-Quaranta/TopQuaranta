@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from ranking.algorisme import _compute_weekly_plays
+from ranking.algorisme import _compute_weekly_plays, _robust_weekly_from_series
 
 # ── Lightweight fakes (no DB) ──────────────────────────────────────
 
@@ -233,3 +233,149 @@ def test_legacy_signal_with_empty_returned_track_falls_through():
     # Delta = 100, gap = 7 d → 100 plays. No track filter applied
     # because `ref_track_n` is empty.
     assert _compute_weekly_plays(canco, signals, today) == 100.0
+
+
+# ── Step-robust merge guard (2026-06-06) ───────────────────────────
+#
+# Last.fm merges scrobbles onto a canonical recording, doubling a
+# track's CUMULATIVE playcount overnight (same track NAME, so the
+# track-switch guard above does not fire). The strict 7-day delta then
+# reads that one-day step as a week of plays. `_robust_weekly_from_series`
+# excises the step and back-fills with the clean daily rhythm. The four
+# named cases below are the sonda's no-regression net.
+
+
+def _daily_series(start, base, increments):
+    """Build ascending `(date, cumulative)` pairs from per-day
+    `increments` starting at `base` on `start`."""
+    out = [(start, base)]
+    pc = base
+    for i, inc in enumerate(increments, start=1):
+        pc += inc
+        out.append((start + timedelta(days=i), pc))
+    return out
+
+
+def test_robust_series_returns_none_without_merge():
+    """Smooth daily growth → no merge → None (caller keeps legacy)."""
+    series = _daily_series(date(2026, 5, 16), 1000, [10, 12, 11, 9, 13, 10, 12])
+    assert _robust_weekly_from_series(series) is None
+
+
+def test_robust_series_excises_merge_step():
+    """A single overnight doubling (+8133 on a ~4/day rhythm) is
+    excised; the week reflects the clean rhythm, not the step."""
+    # Pau Riba «Noia de Porcellana» shape (sonda 2026-06-05).
+    series = _daily_series(
+        date(2026, 5, 16),
+        8116,
+        [0, 3, 4, 6, 8133, 6, 4],  # the 8133 step is the merge
+    )
+    out = _robust_weekly_from_series(series)
+    assert out is not None
+    # Clean rhythm ~3.8/day → ~27/week, not the 8156 the legacy delta
+    # would have produced.
+    assert out < 60
+
+
+def test_robust_series_catches_sub_thousand_doubling():
+    """«Sa Madona» (Júlia Colom) in BAL: a 956→1914 overnight doubling
+    (+958, under the old 1000 floor) was a real merge that faked a #1
+    in a small territory. The low absolute floor must still flag it."""
+    series = _daily_series(
+        date(2026, 5, 16),
+        956,
+        [0, 0, 0, 1, 957, 6, 0],  # +957 doubling on day 5
+    )
+    out = _robust_weekly_from_series(series)
+    assert out is not None
+    assert out < 30  # cleaned to its near-silent real rhythm
+
+
+def test_robust_series_ignores_tiny_doubling():
+    """A 3→7 "doubling" on a near-silent track is below the noise floor
+    and left alone (no merge claim on trivial counts)."""
+    series = _daily_series(date(2026, 5, 16), 3, [0, 1, 0, 4, 1, 0, 1])
+    assert _robust_weekly_from_series(series) is None
+
+
+def test_robust_series_too_few_points_returns_none():
+    series = [(date(2026, 5, 20), 8129), (date(2026, 5, 23), 16262)]
+    assert _robust_weekly_from_series(series) is None
+
+
+# Calibration cases — the four sonda labels. `_compute_weekly_plays`
+# end-to-end (fresh branch + track guard + robust + legacy).
+
+
+def test_calib_pau_riba_noia_de_porcellana_is_cleaned():
+    """Reissue (dl 2026-04-24, 29 d old) whose cumulative doubled on
+    2026-05-21. Must NOT score the 8 156-play merge delta."""
+    today = date(2026, 5, 23)
+    canco = _Canco(data_llancament=date(2026, 4, 24))
+    series = _daily_series(
+        date(2026, 5, 16),
+        8116,
+        [0, 3, 4, 6, 8133, 6, 4],
+    )
+    signals = [_Senyal(d, pc, "Noia de Porcellana") for d, pc in series]
+    out = _compute_weekly_plays(canco, signals, today)
+    assert out < 60  # cleaned; legacy would have been ~8156
+
+
+def test_calib_la_fumiga_gracies_per_tant_is_cleaned():
+    """Long-runner (dl 2025-10-23) doubled on 2026-05-21 from a
+    ~10/day rhythm. Must be cleaned to its real weekly rhythm."""
+    today = date(2026, 5, 23)
+    canco = _Canco(data_llancament=date(2025, 10, 23))
+    series = _daily_series(
+        date(2026, 5, 16),
+        4297,
+        [0, 8, 11, 8, 4383, 12, 24],  # 4383 step = merge
+    )
+    signals = [_Senyal(d, pc, "Gràcies per Tant") for d, pc in series]
+    out = _compute_weekly_plays(canco, signals, today)
+    assert out < 200  # cleaned; legacy would have been ~4456
+
+
+def test_calib_rosalia_divinize_untouched():
+    """Genuine high-play song: smooth ~3 500/day growth, no single-day
+    outlier. Robust must defer (None) and the legacy delta is kept."""
+    today = date(2026, 5, 23)
+    canco = _Canco(data_llancament=date(2025, 11, 7))
+    series = _daily_series(
+        date(2026, 5, 16),
+        3_074_025,
+        [3787, 3194, 3329, 3895, 4130, 3836, 3859],
+    )
+    signals = [_Senyal(d, pc, "Divinize") for d, pc in series]
+    out = _compute_weekly_plays(canco, signals, today)
+    # Equals the legacy endpoint delta (last - first over 7 d): unchanged.
+    assert out == float(series[-1][1] - series[0][1])
+    assert out > 20_000
+
+
+def test_calib_sx3_tots_som_supers_fresh_untouched():
+    """Genuinely new release (dl 1 day before the run): the fresh
+    branch returns the full count and the robust path is never reached."""
+    today = date(2026, 5, 30)
+    canco = _Canco(data_llancament=date(2026, 5, 29))  # 1 d old
+    signals = [_Senyal(date(2026, 5, 30), 4656, "Tots Som Súpers")]
+    assert _compute_weekly_plays(canco, signals, today) == 4656.0
+
+
+def test_robust_next_week_after_merge_is_legacy_identical():
+    """The week AFTER a merge: the step is before `today - 7`, so the
+    strict window sees no merge and the value is the plain legacy delta
+    (here ~20), never inflated."""
+    today = date(2026, 5, 30)
+    canco = _Canco(data_llancament=date(2026, 4, 24))
+    # 05-21 step is now outside the [05-23, 05-30] window.
+    series = _daily_series(
+        date(2026, 5, 23),
+        16272,
+        [2, 4, 4, 4, 4, 6, 4],
+    )
+    signals = [_Senyal(d, pc, "Noia de Porcellana") for d, pc in series]
+    out = _compute_weekly_plays(canco, signals, today)
+    assert out == float(series[-1][1] - series[0][1])  # plain 7-day delta

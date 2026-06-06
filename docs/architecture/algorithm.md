@@ -52,9 +52,32 @@ weekly_plays = playcount_today − playcount_fa_7_dies
 
 Casuístiques:
 
-- **Release < 7 dies**: extrapolation lineal assumint creixement
-  constant des del dia del llançament →
-  `playcount_today × 7 / dies_des_del_llancament`.
+- **Release < 7 dies**: la cançó no existia fa una setmana, així que
+  `weekly_plays = playcount_today` (tot el comptador és d'aquesta
+  setmana). Sense extrapolation: projectar un ritme de 2 dies a 7
+  fabricava xifres fantasma (decisió 2026-05-07).
+- **Esglaó de fusió de Last.fm** (`_robust_weekly_from_series`,
+  2026-06-06): Last.fm fusiona periòdicament els scrobbles d'una
+  cançó cap a la gravació canònica i **duplica el comptador acumulat
+  en una nit** amb el mateix NOM de track (events del 2026-04-22 i
+  2026-05-21; la sonda en va trobar ~101 entrades inflades i diversos
+  #1 falsos). El delta de 7 dies per extrems llegiria aquest esglaó
+  com una setmana sencera. Quan dins la finestra estricta `(today-7,
+  today]` hi ha un increment d'un sol dia que és alhora (a) ≥ 8× la
+  mediana del ritme diari propi de la cançó, (b) ≥ 40 % de l'acumulat
+  (una quasi-duplicació) i (c) ≥ 300 absoluts, s'**exclou** aquell dia
+  i la setmana es reompli amb el ritme net dels altres dies. Una
+  viralitat real s'escampa en diversos dies i no es toca. Actua només
+  quan detecta l'esglaó; altrament cau al càlcul per extrems de sota
+  (les setmanes sense fusió no canvien, i la setmana posterior a una
+  fusió ja té l'esglaó al baseline, fora de finestra).
+- **Track-switch guard** (2026-05-08): un baseline només val si es va
+  mostrejar contra la MATEIXA gravació que el senyal d'avui
+  (`lastfm_returned_track` normalitzat). Quan Last.fm canvia de track
+  (live → studio, remix → original) el delta cru deixa de ser
+  activitat setmanal; aquests casos cauen a 0 fins que SenyalDiari
+  acumula un baseline nou. Diferent de l'esglaó de fusió (allà el nom
+  NO canvia); els dos guards són additius.
 - **Gap de dades** (no hi ha fila exactament a -7d): agafem la fila
   més propera dins d'una finestra de ±3 dies; si cap encaixa, caiem
   a qualsevol fila anterior ≥ 4 dies enrere i rescalem a denominador 7.

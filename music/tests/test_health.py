@@ -229,3 +229,99 @@ def test_coverage_crit_at_below_50(unsilence_cron):
     sev, msg, payload = check_spotify_coverage()
     assert sev == "CRIT"
     assert "top-cat" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_no_verif_gradient_does_not_crit(unsilence_cron):
+    """The real-world no-verif gradient (96% down to 0% by ml_confianca
+    order) must NOT trip CRIT: those chunks lag by design. A healthy
+    verified playlist keeps the overall verdict OK."""
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration-seeded rows
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=40,  # 100%
+        last_sync_ok=True,
+    )
+    for i, matched in enumerate([96, 68, 28, 10, 2, 0, 0], start=1):
+        SpotifyPlaylist.objects.create(
+            codi=f"no-verif-{i}",
+            kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+            territori="",
+            chunk_index=i - 1,
+            last_n_tracks=100,
+            last_n_matched=matched,
+            last_sync_ok=True,
+        )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "OK"
+    # Aggregate (204/700) is reported but does not drive severity.
+    assert payload["no_verif_aggregate"] == round(204 / 700, 3)
+    assert "no-verif aggregate" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_no_verif_aggregate_collapse_warns(unsilence_cron):
+    """If pending enrichment really stalled, the no-verif AGGREGATE
+    collapses toward 0; that is the one real-stall signal and surfaces
+    as WARN (never CRIT)."""
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration-seeded rows
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=40,
+        last_sync_ok=True,
+    )
+    for i in range(1, 6):
+        SpotifyPlaylist.objects.create(
+            codi=f"no-verif-{i}",
+            kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+            territori="",
+            chunk_index=i - 1,
+            last_n_tracks=100,
+            last_n_matched=1,  # ~1% aggregate → below the 10% floor
+            last_sync_ok=True,
+        )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "WARN"
+    assert "no-verif aggregate" in msg
+
+
+@pytest.mark.django_db
+def test_coverage_verified_crit_even_with_no_verif_present(unsilence_cron):
+    """A verified playlist below CRIT still escalates to CRIT regardless
+    of the no-verif rows — the strict gate on public playlists stays."""
+    from music.models import SpotifyPlaylist
+
+    SpotifyPlaylist.objects.all().delete()  # wipe migration-seeded rows
+
+    SpotifyPlaylist.objects.create(
+        codi="top-cat",
+        kind=SpotifyPlaylist.KIND_TOP,
+        territori="CAT",
+        last_n_tracks=40,
+        last_n_matched=10,  # 25% → CRIT
+        last_sync_ok=True,
+    )
+    SpotifyPlaylist.objects.create(
+        codi="no-verif-1",
+        kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+        territori="",
+        chunk_index=0,
+        last_n_tracks=100,
+        last_n_matched=96,
+        last_sync_ok=True,
+    )
+    sev, msg, payload = check_spotify_coverage()
+    assert sev == "CRIT"
+    assert "top-cat" in msg

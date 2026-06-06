@@ -209,8 +209,9 @@ Holds the admin's Spotify OAuth refresh token after the one-time
 
 ### `SpotifyPlaylist` — `music_spotifyplaylist`
 One row per managed Spotify playlist. Fields: `codi` (slug, unique),
-`kind` (`top` | `novetats`), `territori` (when kind=top), plus last-sync
-metadata: `spotify_playlist_id`, `last_sync_at`, `last_sync_ok`,
+`kind` (`top` | `novetats` | `no_verificades` | `novetats_per_verificar`),
+`territori` (when kind=top), `chunk_index` (no_verificades only), plus
+last-sync metadata: `spotify_playlist_id`, `last_sync_at`, `last_sync_ok`,
 `last_sync_msg`, `last_n_tracks`, `last_n_matched`. Populated by
 `seed_spotify_playlists` (archived) + `configurar_spotify_playlists`
 once per deployment.

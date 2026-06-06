@@ -1460,15 +1460,25 @@ class SpotifyPlaylist(models.Model):
     KIND_TOP = "top"
     KIND_NOVETATS = "novetats"
     # FASE C (2026-05-22): the no_verificades kind sources Canco rows
-    # with verificada=False, sorted by created_at desc, chunked into
-    # windows of 100. `chunk_index` (0..6) selects which window each
-    # playlist gets so staff can triage 700 of the most recently
-    # ingested tracks across 7 Spotify playlists.
+    # with verificada=False, sorted by ml_confianca desc, chunked into
+    # windows of 100. `chunk_index` selects which window each playlist
+    # gets so staff can triage the most recently ingested tracks across
+    # the triage Spotify playlists. The window is capped at 6 chunks
+    # (2026-06-06): the 7th chunk was always the 0%-coverage dead tail
+    # and was repurposed (see KIND_NOVETATS_PER_VERIFICAR below).
     KIND_NO_VERIFICADES = "no_verificades"
+    # 2026-06-06: a single PERMANENT work-list playlist (independent of
+    # backlog size) holding the most recent unverified releases, ordered
+    # by data_llancament desc. Repurposed in place from the old
+    # no-verif-7 row so it keeps the same spotify_playlist_id / URL. Kept
+    # OUT of the coverage health alert (it is a curated work list, not a
+    # synced chart): see `music.health.check_spotify_coverage`.
+    KIND_NOVETATS_PER_VERIFICAR = "novetats_per_verificar"
     KIND_CHOICES = [
         (KIND_TOP, "Top provisional"),
         (KIND_NOVETATS, "Novetats"),
         (KIND_NO_VERIFICADES, "No verificades (triage)"),
+        (KIND_NOVETATS_PER_VERIFICAR, "Novetats per verificar"),
     ]
 
     # Cadence the sync cron applies. "daily" rows source from
@@ -1483,7 +1493,7 @@ class SpotifyPlaylist(models.Model):
     ]
 
     codi = models.SlugField(max_length=50, unique=True)
-    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    kind = models.CharField(max_length=30, choices=KIND_CHOICES)
     # Only used when kind=top. Empty string for kind=novetats / no_verificades.
     territori = models.CharField(max_length=10, blank=True)
     spotify_playlist_id = models.CharField(max_length=100, blank=True)

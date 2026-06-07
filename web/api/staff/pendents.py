@@ -114,8 +114,17 @@ def _compute_propostes_per_artista_map() -> dict[int, int]:
 
 
 def _artista_card(a) -> dict:
-    """Compact artist shape for staff tables (pendents + artistes)."""
-    loc = a.localitats.select_related("municipi__territori").first()
+    """Compact artist shape for staff tables (pendents + artistes).
+
+    Callers MUST `prefetch_related("localitats__municipi", "deezer_ids",
+    "territoris", "lastfm_aliases")` — the card reads all four from the
+    prefetch cache (no per-row query). Before 2026-06-07 the localitat
+    line called `.select_related().first()`, which re-queried per row and
+    defeated the prefetch (N+1 ×up-to-200 on the list endpoints)."""
+    # Pick the first localitat from the prefetched cache rather than
+    # re-querying. `municipi.territori_id` is a column, so reading it
+    # needs no extra join beyond `localitats__municipi`.
+    loc = next(iter(a.localitats.all()), None)
     loc_out = None
     if loc:
         if loc.municipi:
@@ -143,10 +152,10 @@ def _artista_card(a) -> dict:
         "pendent_review": a.pendent_review,
         "auto_descobert": a.auto_descobert,
         "font_descoberta": a.font_descoberta or "",
-        "deezer_ids": list(a.deezer_ids.values_list("deezer_id", flat=True)),
-        "territoris": list(
-            a.territoris.values_list("codi", flat=True).order_by("codi")
-        ),
+        # Read from the prefetch cache (`.values_list()` would bypass it
+        # and re-query per row — the N+1 caught 2026-06-07).
+        "deezer_ids": [d.deezer_id for d in a.deezer_ids.all()],
+        "territoris": sorted(t.codi for t in a.territoris.all()),
         "localitat": loc_out,
         "musicbrainz_id": a.musicbrainz_id or "",
         "mb_end_date": a.mb_end_date.isoformat() if a.mb_end_date else None,
@@ -193,7 +202,9 @@ def pendents_list(request: Request) -> Response:
     # collab tracks reported 12 verified, not 7.
     qs = (
         Artista.objects.filter(aprovat=False, pendent_review=True)
-        .prefetch_related("territoris", "deezer_ids", "localitats__municipi")
+        .prefetch_related(
+            "territoris", "deezer_ids", "localitats__municipi", "lastfm_aliases"
+        )
         .annotate(
             nb_verif_main=Count(
                 "cancons", filter=Q(cancons__verificada=True), distinct=True

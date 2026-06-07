@@ -337,6 +337,17 @@ urlpatterns = [
         social_public.render_public,
         name="social_render_public",
     ),
+    # ── Newsletter review draft (opt-out flow) ──
+    path(
+        "staff/newsletter/esborrany/",
+        staff_views.newsletter_esborrany,
+        name="staff_newsletter_esborrany",
+    ),
+    path(
+        "staff/newsletter/esborrany/cancellar/",
+        staff_views.newsletter_esborrany_cancellar,
+        name="staff_newsletter_esborrany_cancellar",
+    ),
     # ── Sprint I — social distribution (staff) ──
     path("staff/social/", staff_views.social_list, name="staff_social_list"),
     path(

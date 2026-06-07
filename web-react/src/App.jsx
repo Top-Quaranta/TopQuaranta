@@ -72,6 +72,7 @@ const UsuarisPage = lazy(() => import('./pages/staff/UsuarisPage'))
 const UsuariDetailPage = lazy(() => import('./pages/staff/UsuariDetailPage'))
 const FeedbackPage = lazy(() => import('./pages/staff/FeedbackPage'))
 const StaffSocialPage = lazy(() => import('./pages/staff/StaffSocialPage'))
+const NewsletterDraftPage = lazy(() => import('./pages/staff/NewsletterDraftPage'))
 const StaffSocialSpotifyPage = lazy(() => import('./pages/staff/StaffSocialSpotifyPage'))
 const EstatPage = lazy(() => import('./pages/staff/EstatPage'))
 const StaffPublicacionsPage = lazy(() => import('./pages/staff/StaffPublicacionsPage'))
@@ -243,6 +244,7 @@ function AppContent() {
                   <Route path="/usuaris/:pk" element={<UsuariDetailPage />} />
                   <Route path="/feedback" element={<FeedbackPage />} />
                   <Route path="/social" element={<StaffSocialPage />} />
+                  <Route path="/social/esborrany" element={<NewsletterDraftPage />} />
                   <Route path="/social/spotify" element={<StaffSocialSpotifyPage />} />
                   <Route path="/estat" element={<EstatPage />} />
                   <Route path="/publicacions" element={<StaffPublicacionsPage />} />

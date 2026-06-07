@@ -234,20 +234,55 @@ def _build_top_context(
     return context, subject
 
 
+def build_draft_text(
+    tipus: str,
+    territori: str,
+    setmana: datetime.date,
+    publish_date: datetime.date,
+    entries: list[dict],
+) -> tuple[str, str]:
+    """Compose the newsletter's editorial text WITHOUT sending.
+
+    Returns `(subject, narrative_html)` from the narrative engine via
+    `_build_top_context`. Side-effect-free: the anti-repeat registry's
+    `mark_used` is never called here (it fires only on a real publish),
+    so generating a draft never poisons future phrase selection. This is
+    the seam the Saturday draft-generation step uses."""
+    context, subject = _build_top_context(
+        tipus, territori, setmana, publish_date, entries
+    )
+    return subject, context.get("narrative_html", "")
+
+
 def send_top_newsletter(
     tipus: str,
     territori: str,
     setmana: datetime.date,
     publish_date: datetime.date,
     entries: list[dict],
+    *,
+    subject_override: str | None = None,
+    narrative_html_override: str | None = None,
 ) -> str:
     """Send the weekly newsletter to every opted-in user. Returns
     a summary string (e.g. "sent=42 fail=1") that the calling
     command stores in the SocialPost.metadata for traceability.
+
+    `subject_override` / `narrative_html_override` (the draft-review flow,
+    2026-06-07): when given, the editorial text shipped is the
+    (possibly human-edited) draft, while the rest of the context — podi,
+    entries, covers — is still rebuilt fresh from `entries` (the FINAL
+    top at send time). Pass `narrative_html_override=""` to ship an empty
+    editorial block intentionally.
     """
     base_context, subject = _build_top_context(
         tipus, territori, setmana, publish_date, entries
     )
+    if subject_override:
+        subject = subject_override
+        base_context["subject"] = subject_override
+    if narrative_html_override is not None:
+        base_context["narrative_html"] = narrative_html_override
 
     qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")
     sent = 0

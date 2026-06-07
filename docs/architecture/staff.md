@@ -140,6 +140,8 @@ Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
 | POST | `/staff/social/eliminar-remot/` | **(2026-05-03)** Platform-aware delete. Dispatches by `post.platform` to `instagram_client` (DELETE Graph node), `mastodon_client.delete_status`, `bluesky_client.delete_post` (parses AT URI → deleteRecord), or `telegram_client.delete_messages` (uses `metadata.message_ids` captured at publish time). |
 | POST | `/staff/social/toggle/` | Distribution switch. `channel=global` writes the master `distribucio_activa`; `channel=instagram\|mastodon\|bluesky\|telegram\|newsletter\|rss` writes the per-channel switch. `channel` is REQUIRED (2026-06-07: removed the default-to-`instagram` footgun). See `social.md` for the gate. |
 | GET | `/staff/social/estat-canals/` | **(2026-06-07)** Honest per-channel state: `efectiu` (actiu / pausat_global / pausat_canal) + raw `mestre_actiu`/`canal_actiu` + `ultim_enviament` = max `SocialPost.published_at` (status=publicat) with `StaffAuditLog *_publicat` as a reset-proof fallback (`font`=socialpost\|audit\|none). Instagram carries `fase_distribucio`. |
+| GET/PATCH | `/staff/newsletter/esborrany/` | **(2026-06-07)** Newsletter review draft (opt-out flow, `web/api/staff/newsletter.py`). GET → draft + the live top it will ship with + Sunday `send_date`; PATCH edits `subject`/`narrative_html` (sets `editat`, only while `pendent`). `?setmana=` selects the week (default latest). See `comptes.md`. |
+| POST | `/staff/newsletter/esborrany/cancellar/` | **(2026-06-07)** Cancel the week's draft (`estat=cancellat`) so it is NOT sent on Sunday. |
 
 `publicar_canal` (Mastodon + Bluesky variants) publishes a 4-image
 carousel since 2026-05-03 — portada + first three list slides via

@@ -174,6 +174,42 @@ under `web/static/web/img/newsletter/`, regenerable run-once via
 SVG through `social.svg_assets`): `cover_placeholder.png` (500×500,
 ink + white logo) and `logo_email.png` (full-colour header mark).
 
+### Opt-out review flow (2026-06-07)
+
+The subscriber newsletter is sent through a **review draft**, still fed
+by the narrative engine (an LLM is a later phase). Model
+`comptes.NewsletterDraft` — `unique(tipus, territori, setmana)`,
+`estat` ∈ `pendent`/`enviat`/`cancellat` (NO "approved": `pendent` =
+will send), `font` (`motor`/`llm`), `editat`.
+
+1. **Saturday 12:00 — `generar_esborrany_newsletter`**: composes
+   `subject` + `narrative_html` via `newsletter.build_draft_text` (wraps
+   `_build_top_context`, side-effect-free — no `mark_used`), persists a
+   `pendent` draft (idempotent: never overwrites an existing week),
+   emails staff a link to `/staff/social/esborrany`. Runs at 12:00 (not
+   09:00) because `calcular_top` starts 08:00 but can finish ~10:30, and
+   an **anti-stale guard** refuses to generate unless the TopSetmanal for
+   THIS week (`date.today() − weekday`) already exists — so it never
+   builds the draft from last week's top.
+2. **Review** — staff endpoints (`web/api/staff/newsletter.py`, IsStaff):
+   `GET /staff/newsletter/esborrany/` (draft + the live top it will ship
+   with, to spot mismatches + the Sunday send date), `PATCH` (edit
+   subject/narrative → `editat=True`, only while `pendent`), `POST
+   …/cancellar/` (→ `cancellat`). SPA page `NewsletterDraftPage`.
+3. **Sunday 10:00 — `enviar_newsletter`**: gated by
+   `ConfiguracioGlobal.pot_publicar("newsletter")`; reads the week's
+   draft — `cancellat` → skip; else sends the (possibly edited)
+   `subject`+`narrative_html` via `send_top_newsletter(...,
+   subject_override=, narrative_html_override=)`, **rebuilding the list
+   (podi/entries/covers) from the FINAL top at send time**; writes the
+   `newsletter` `SocialPost` + `newsletter_publicat` audit; marks the
+   draft `enviat`. Idempotent (already-`enviat` skipped unless
+   `--force`).
+
+The other channels stay on Saturday (`publicar_canal`); only the
+newsletter moved to the Sunday draft path. `publicar_canal --channel
+newsletter` remains as the manual immediate-send fallback (no draft).
+
 ## Related
 
 - ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`

@@ -12,6 +12,7 @@
  * to scroll on mobile via the Table wrapper.
  */
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { Table, Select, Input } from '../../components/staff/StaffTable'
 
@@ -597,6 +598,11 @@ export default function StaffSocialPage() {
             {config.distribucio_activa ? 'Pausar-ho tot' : 'Reactivar distribució'}
           </button>
         </div>
+        <p className="text-xs mt-2">
+          <Link to="/staff/social/esborrany" className="underline decoration-dotted hover:decoration-solid">
+            Esborrany de la newsletter (revisió) →
+          </Link>
+        </p>
       </div>
 
       {/* ── Config controls ───────────────────────────────────── */}

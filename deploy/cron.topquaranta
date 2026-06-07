@@ -336,14 +336,18 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # Newsletter — opt-out review flow (2026-06-07). Only the weekly top
 # global goes by email (spamming subscribers 5×/week is a fast unsub
-# trigger). Two steps:
-#   - Saturday 12:00: generate the review draft from the consolidated
-#     top + email staff a review link. calcular_top starts at 08:00 but
-#     can finish late (~10:30 observed), so generation runs at 12:00
-#     with margin; an anti-stale guard in the command refuses to build
-#     from last week's top if this week isn't consolidated yet.
+# trigger). Steps:
+#   - The cloud routine (set up separately) reads
+#     /api/v1/newsletter-routine/brief/ and leaves the draft via
+#     /api/v1/newsletter-routine/esborrany/ (font=llm) sometime Saturday.
+#   - Saturday 16:00: ENGINE FALLBACK. generar_esborrany_newsletter only
+#     creates a draft if none exists for the week, so it runs LATE enough
+#     for the routine to have had its turn; if the routine failed, the
+#     engine still leaves a draft. calcular_top (08:00, can finish ~10:30)
+#     is consolidated well before, and an anti-stale guard refuses to
+#     build from last week's top if this week isn't consolidated.
 #   - Sunday 10:00: send the draft (subject + narrative, possibly
 #     edited) unless cancelled, rebuilding the list from the final top.
 # The other channels stay on Saturday; the per-channel split allows it.
-0 12 * * 6  topquaranta  /home/topquaranta/bin/tq-run generar_esborrany_newsletter >> /var/log/topquaranta/social.log 2>&1
+0 16 * * 6  topquaranta  /home/topquaranta/bin/tq-run generar_esborrany_newsletter >> /var/log/topquaranta/social.log 2>&1
 0 10 * * 0  topquaranta  /home/topquaranta/bin/tq-run enviar_newsletter >> /var/log/topquaranta/social.log 2>&1

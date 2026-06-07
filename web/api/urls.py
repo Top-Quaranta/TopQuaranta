@@ -11,6 +11,7 @@ from . import (
     comunitat_views,
     home_views,
     mapa_views,
+    newsletter_routine,
     social_public,
     staff_views,
     top_views,
@@ -32,6 +33,17 @@ urlpatterns = [
         name="analytics_pageview",
     ),
     path("analytics/event/", analytics_ingest.event, name="analytics_event"),
+    # ── Newsletter cloud routine (token-authed, NOT staff session) ──
+    path(
+        "newsletter-routine/brief/",
+        newsletter_routine.brief,
+        name="newsletter_routine_brief",
+    ),
+    path(
+        "newsletter-routine/esborrany/",
+        newsletter_routine.esborrany,
+        name="newsletter_routine_esborrany",
+    ),
     # Authenticated user area
     path("compte/dashboard/", compte_views.dashboard, name="compte_dashboard"),
     path("compte/perfil/", compte_views.perfil, name="compte_perfil"),

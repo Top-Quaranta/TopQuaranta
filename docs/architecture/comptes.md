@@ -176,21 +176,44 @@ ink + white logo) and `logo_email.png` (full-colour header mark).
 
 ### Opt-out review flow (2026-06-07)
 
-The subscriber newsletter is sent through a **review draft**, still fed
-by the narrative engine (an LLM is a later phase). Model
+The subscriber newsletter is sent through a **review draft**. The text
+is produced by a **cloud routine** (set up separately, in the UI) with
+the narrative engine as fallback (`font` = `llm` vs `motor`). Model
 `comptes.NewsletterDraft` — `unique(tipus, territori, setmana)`,
 `estat` ∈ `pendent`/`enviat`/`cancellat` (NO "approved": `pendent` =
-will send), `font` (`motor`/`llm`), `editat`.
+will send), `font`, `editat`.
 
-1. **Saturday 12:00 — `generar_esborrany_newsletter`**: composes
-   `subject` + `narrative_html` via `newsletter.build_draft_text` (wraps
-   `_build_top_context`, side-effect-free — no `mark_used`), persists a
-   `pendent` draft (idempotent: never overwrites an existing week),
-   emails staff a link to `/staff/social/esborrany`. Runs at 12:00 (not
-   09:00) because `calcular_top` starts 08:00 but can finish ~10:30, and
-   an **anti-stale guard** refuses to generate unless the TopSetmanal for
-   THIS week (`date.today() − weekday`) already exists — so it never
-   builds the draft from last week's top.
+0. **Cloud routine (token-authed, `web/api/newsletter_routine.py`)** —
+   two narrow endpoints, authed by a static bearer
+   `settings.NEWSLETTER_ROUTINE_TOKEN` (from the server env, NOT a staff
+   session; `HasNewsletterRoutineToken` permission, blank token denies
+   all):
+   - `GET /api/v1/newsletter-routine/brief/` — grounded weekly brief
+     (`comptes.newsletter_brief.build_brief`): context (week, Global, real
+     top age), top-10 (movement, `can_call_new` via the freshness gate
+     `is_verified_recent_release`, first-appearance with the
+     week-1-birth vs genuine-debut distinction, per-artist top history),
+     group facts for the top-5 (origin municipi/comarca/territori,
+     collaborators + their origin only when known, release date), leader
+     fact (`detect_all[0]`, gated, with `freshness_blocked`), `actualitat`
+     (recent VilaWeb RSS headlines, best-effort), and a separate
+     LOW-CONFIDENCE section with Last.fm tags. Returns
+     `{"status": "not_ready"}` when this week's top isn't consolidated
+     (same anti-stale guard).
+   - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
+     draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
+     Idempotent; **can never** set approved/sent (any non-`pendent`
+     `estat` rejected; an already `enviat`/`cancellat` week is terminal →
+     409). It reads/leaves only; it never sends.
+1. **Saturday 16:00 — `generar_esborrany_newsletter` (engine fallback)**:
+   composes `subject` + `narrative_html` via `newsletter.build_draft_text`
+   (wraps `_build_top_context`, side-effect-free — no `mark_used`),
+   persists a `pendent` draft **only if none exists for the week**
+   (idempotent), emails staff a link to `/staff/social/esborrany`. Runs
+   LATE (16:00) so the routine has had its turn first; if the routine
+   failed, the engine still leaves a draft. An **anti-stale guard**
+   refuses to generate unless the TopSetmanal for THIS week
+   (`date.today() − weekday`) already exists.
 2. **Review** — staff endpoints (`web/api/staff/newsletter.py`, IsStaff):
    `GET /staff/newsletter/esborrany/` (draft + the live top it will ship
    with, to spot mismatches + the Sunday send date), `PATCH` (edit

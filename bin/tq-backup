@@ -11,10 +11,43 @@
 set -euo pipefail
 
 BACKUP_DIR=/home/topquaranta/backups
+STATUS_DIR=/var/log/topquaranta/status
 DB=topquaranta
 DATE=$(date +%Y%m%d-%H%M%S)
 DOW=$(date +%u)   # 1..7, 7=Sunday
 DOM=$(date +%d)   # 01..31
+
+# Status file so tq-health monitors the backup (caught 2026-06-07: the
+# Postgres backup ran outside the tq-run contract and was monitored by
+# nothing). Same key=value format as tq-run / tq-restore-test. The
+# status dir is group-writable by `postgres` (sticky), so this works
+# despite the backup running as the postgres user.
+ts=$(date -Iseconds)
+status_file="$STATUS_DIR/tq-backup.status"
+mkdir -p "$STATUS_DIR"
+write_status() {
+    local rc="$1" extra="$2" tmp
+    tmp=$(mktemp)
+    {
+        echo "command=tq-backup"
+        echo "args="
+        echo "last_run=$ts"
+        echo "exit_code=$rc"
+        if [[ "$rc" -eq 0 ]]; then echo "status=OK"; else echo "status=FAIL"; fi
+        echo "last_output<<EOF"
+        echo "$extra"
+        echo "EOF"
+    } > "$tmp"
+    chmod 644 "$tmp"  # tq-health (topquaranta) must read a postgres-written file
+    mv "$tmp" "$status_file"
+}
+# set -e would exit before recording a FAIL; the ERR trap leaves one.
+on_error() {
+    local rc=$?
+    write_status "$rc" "aborted at line $1 (exit $rc)" || true
+    exit "$rc"
+}
+trap 'on_error $LINENO' ERR
 
 mkdir -p "$BACKUP_DIR/daily" "$BACKUP_DIR/weekly" "$BACKUP_DIR/monthly"
 
@@ -35,4 +68,5 @@ find "$BACKUP_DIR/daily"   -name "tq-*.sql.gz"       -mtime +7   -delete
 find "$BACKUP_DIR/weekly"  -name "tq-week-*.sql.gz"  -mtime +30  -delete
 find "$BACKUP_DIR/monthly" -name "tq-month-*.sql.gz" -mtime +365 -delete
 
+write_status 0 "file=$out size_bytes=$size date=$DATE"
 echo "backup_ok=1 file=$out size_bytes=$size date=$DATE"

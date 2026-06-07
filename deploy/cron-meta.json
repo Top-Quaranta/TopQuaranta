@@ -82,6 +82,18 @@
     "skip_concern": 1,
     "description": "Smoke-test mensual: restaura el darrer dump dins una BD temporal i verifica les fila-counts. No Django command (script bash a `/home/topquaranta/bin/`)."
   },
+  "tq-backup": {
+    "frequency_label": "Cada nit 03:00",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "description": "Còpia de seguretat diària de PostgreSQL amb retenció escalonada (daily 7d / weekly 4w / monthly 12m). Script bash a `/home/topquaranta/bin/`, corre com a usuari postgres. Caçat 2026-06-07: el backup corria fora del contracte tq-run i no el vigilava res."
+  },
+  "tq-recover": {
+    "frequency_label": "Cada 30 min",
+    "max_age_hours": 2,
+    "skip_concern": 1,
+    "description": "Escombrada de recuperació: detecta runs de cron diaris perduts o fallits i els rellança via tq-run, amb un tope diari per comanda. Script bash a `/home/topquaranta/bin/`. Caçat 2026-06-07: la mateixa xarxa de recuperació no estava monitorada."
+  },
   "arxivar_senyal_vell": {
     "frequency_label": "Trimestral (1 jan/abr/jul/oct)",
     "max_age_hours": 2400,
@@ -92,10 +104,29 @@
     "max_age_hours": 72,
     "skip_concern": 1
   },
-  "publicar_canal": {
-    "frequency_label": "Multi-canal social (escalat)",
+  "publicar_canal_mastodon": {
+    "frequency_label": "5×setmana (+10 min després d'IG)",
     "max_age_hours": 72,
-    "skip_concern": 1
+    "skip_concern": 1,
+    "description": "Distribució multicanal al canal Mastodon (variant `publicar_canal --channel mastodon`). Mateix calendari que publicar_social, 10 min després de la publicació d'Instagram."
+  },
+  "publicar_canal_bluesky": {
+    "frequency_label": "5×setmana (+20 min després d'IG)",
+    "max_age_hours": 72,
+    "skip_concern": 1,
+    "description": "Distribució multicanal al canal Bluesky (variant `publicar_canal --channel bluesky`). Mateix calendari que publicar_social, 20 min després de la publicació d'Instagram."
+  },
+  "publicar_canal_telegram": {
+    "frequency_label": "5×setmana (+25 min després d'IG)",
+    "max_age_hours": 72,
+    "skip_concern": 1,
+    "description": "Distribució multicanal al canal Telegram (variant `publicar_canal --channel telegram`). Mateix calendari que publicar_social, 25 min després; envia el carrusel sencer."
+  },
+  "publicar_canal_newsletter": {
+    "frequency_label": "Dissabte 10:00 (+30 min després d'IG)",
+    "max_age_hours": 170,
+    "skip_concern": 1,
+    "description": "Distribució multicanal del top global per email (variant `publicar_canal --channel newsletter --tipus top_ppcc`). Només dissabte per no saturar la llista de subscriptors."
   },
   "renovar_token_instagram": {
     "frequency_label": "Mensual (dia 1, 03:00)",

@@ -255,6 +255,22 @@ a STABLE dedup key over the anomaly identity (escalating crons by
 that `tq-health` uses so a persistent failure emails once (2026-06-07).
 See `pipeline.md` §7. Tested at `analytics/tests/test_health_report.py`.
 
+Two coverage states beyond the bash original (auditoria 2026-06-07):
+
+- **MISSING** — a cron declared in `cron-meta.json` whose status file is
+  entirely absent. Benign only for genuinely-infrequent crons (weekly/
+  monthly) that may not have hit their first run yet; those stay
+  **WAITING**. For a frequent cron (`max_age_hours <= 48`,
+  `WAITING_ESCALATE_MAX_AGE_H`) an absent tag means it was never
+  written (cron line dropped, tag mismatch, tq-run broken) and
+  escalates. We split on cadence because no timestamp exists to measure
+  "how long absent".
+- **ORPHAN** — the reverse reconciliation: a `*.status` file in the
+  status dir with no `cron-meta.json` entry. `gather_crons` surfaces it
+  (escalating) instead of ignoring it, so a tag written by an
+  unregistered cron, or stale residue from a removed/renamed command,
+  gets cleaned up (`rm` the file, or add the meta entry).
+
 ### Pruning
 
 We never delete from these tables. At current scale (~thousands of

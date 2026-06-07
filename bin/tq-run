@@ -34,11 +34,31 @@ if [[ -z "$cmd" ]]; then
 fi
 shift
 
-# Derive a status tag. calcular_ranking runs twice (provisional vs official)
-# with different cadences, so we want separate status entries.
+# Derive a status tag. A command can run under several distinguishing
+# variants on different cadences; each variant needs its OWN status file
+# so one variant's run doesn't overwrite/hide another's (caught
+# 2026-06-07: `actualitzar_playlists_spotify --freq weekly` shared the
+# daily tag → the weekly slice was never monitored, and the 4
+# `publicar_canal --channel X` runs all shared one tag so a consistently
+# failing channel was masked by a later-succeeding one). Variant axes:
+#   --provisional            → <cmd>_provisional
+#   --freq weekly            → <cmd>_weekly   (--freq daily keeps <cmd>)
+#   --channel X              → <cmd>_X
+# Last variant flag wins; in practice a command has one variant axis.
+# Keep this in sync with `_derive_tag` in topquaranta/tests/test_deploy_safety.py.
 tag="$cmd"
-for a in "$@"; do
-    if [[ "$a" == "--provisional" ]]; then tag="${cmd}_provisional"; fi
+args=("$@")
+nargs=$#
+for ((i = 0; i < nargs; i++)); do
+    a="${args[i]}"
+    nxt="${args[i + 1]:-}"
+    case "$a" in
+        --provisional) tag="${cmd}_provisional" ;;
+        --freq) [[ "$nxt" == "weekly" ]] && tag="${cmd}_weekly" ;;
+        --freq=weekly) tag="${cmd}_weekly" ;;
+        --channel) [[ -n "$nxt" ]] && tag="${cmd}_${nxt}" ;;
+        --channel=*) tag="${cmd}_${a#--channel=}" ;;
+    esac
 done
 
 # Per-command retry policy. The default applies to anything not listed.

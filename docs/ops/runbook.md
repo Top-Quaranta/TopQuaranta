@@ -129,6 +129,39 @@ tail -50 /var/log/topquaranta/<tag>.log     # e.g. senyal.log for obtenir_senyal
 sudo -u topquaranta /home/topquaranta/bin/tq-run <command>
 ```
 
+**Other states you may see** (auditoria 2026-06-07):
+
+- **MISSING** — a frequent cron (`max_age_hours <= 48`) with no status
+  file at all. The tag was never written: a cron line was dropped, the
+  `tq-run` tag derivation doesn't match the registered tag, or `tq-run`
+  itself is broken. Check `deploy/cron.topquaranta` has the line and
+  that its derived tag (see below) matches a `deploy/cron-meta.json`
+  key. Weekly/monthly crons with no file yet stay the benign WAITING.
+- **ORPHAN** — a `*.status` file with no `cron-meta.json` entry. Either
+  register the cron in `cron-meta.json`, or, if it is stale residue
+  from a removed/renamed command, just `rm` the file:
+  `sudo -u topquaranta rm /var/log/topquaranta/status/<tag>.status`.
+
+**Status-file contract — what writes a tag.** Every cron run through
+`tq-run` writes `/var/log/topquaranta/status/<tag>.status`. The `<tag>`
+is the command name plus its distinguishing variant, so runs on
+different cadences don't overwrite each other:
+
+| invocation | tag |
+|---|---|
+| `calcular_top --provisional` | `calcular_top_provisional` |
+| `actualitzar_playlists_spotify --freq weekly` | `actualitzar_playlists_spotify_weekly` |
+| `actualitzar_playlists_spotify --freq daily` | `actualitzar_playlists_spotify` |
+| `publicar_canal --channel mastodon` | `publicar_canal_mastodon` |
+
+The Postgres backup (`tq-backup`) and the recovery sweep (`tq-recover`)
+are bash scripts, not `tq-run` commands, but they now write their own
+`tq-backup.status` / `tq-recover.status` in the same format, so the
+backup and the recovery net are themselves monitored by `tq-health`
+(before 2026-06-07 they ran outside the contract and nothing watched
+them). A CI test (`test_every_cron_invocation_has_meta_entry`) asserts
+every cron line resolves to a registered tag.
+
 ---
 
 ## 3. Ranking is wrong / a week is missing
@@ -136,12 +169,12 @@ sudo -u topquaranta /home/topquaranta/bin/tq-run <command>
 **Weekly official ranking missing** (Saturday didn't publish):
 
 ```bash
-grep calcular_ranking /var/log/topquaranta/status/*.status
+grep calcular_top /var/log/topquaranta/status/*.status
 # If FAIL, re-run manually:
-sudo -u topquaranta tq-run calcular_ranking
+sudo -u topquaranta tq-run calcular_top
 
 # Compute a specific week:
-sudo -u topquaranta tq-run calcular_ranking --setmana 2026-04-13
+sudo -u topquaranta tq-run calcular_top --setmana 2026-04-13
 ```
 
 **Provisional is obviously wrong** (e.g. a known-popular track missing):

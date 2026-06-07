@@ -139,7 +139,7 @@ size:
         completed sprints quarterly, but the live file stays long.
   grandfathered:
     - path: docs/ops/runbook.md
-      current_lines: 760
+      current_lines: 793
       reason: >-
         Exceeds the local 400 threshold. Rule 3's split row in
         docs-maintenance.md only covers docs/architecture/<X>.md,

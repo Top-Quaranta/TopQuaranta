@@ -337,10 +337,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # Newsletter — opt-out review flow (2026-06-07). Only the weekly top
 # global goes by email (spamming subscribers 5×/week is a fast unsub
 # trigger). Two steps:
-#   - Saturday 09:00: generate the review draft from the consolidated
-#     top (after calcular_top at 08:00) + email staff a review link.
+#   - Saturday 12:00: generate the review draft from the consolidated
+#     top + email staff a review link. calcular_top starts at 08:00 but
+#     can finish late (~10:30 observed), so generation runs at 12:00
+#     with margin; an anti-stale guard in the command refuses to build
+#     from last week's top if this week isn't consolidated yet.
 #   - Sunday 10:00: send the draft (subject + narrative, possibly
 #     edited) unless cancelled, rebuilding the list from the final top.
 # The other channels stay on Saturday; the per-channel split allows it.
-0 9 * * 6   topquaranta  /home/topquaranta/bin/tq-run generar_esborrany_newsletter >> /var/log/topquaranta/social.log 2>&1
+0 12 * * 6  topquaranta  /home/topquaranta/bin/tq-run generar_esborrany_newsletter >> /var/log/topquaranta/social.log 2>&1
 0 10 * * 0  topquaranta  /home/topquaranta/bin/tq-run enviar_newsletter >> /var/log/topquaranta/social.log 2>&1

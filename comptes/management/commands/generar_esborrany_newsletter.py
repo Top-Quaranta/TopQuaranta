@@ -20,7 +20,6 @@ import logging
 from django.conf import settings
 from django.core.mail import mail_admins
 from django.core.management.base import BaseCommand
-from django.db.models import Max
 
 from comptes.models import NewsletterDraft
 from comptes.newsletter import build_draft_text
@@ -44,14 +43,25 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         dry_run = bool(opts.get("dry_run"))
 
-        # The week to send for: the latest consolidated PPCC top. Stable
-        # between Saturday (generate) and Sunday (send) because
-        # `calcular_top` ran before both.
-        setmana = TopSetmanal.objects.filter(territori=TERRITORI).aggregate(
-            m=Max("setmana")
-        )["m"]
-        if setmana is None:
-            self.stdout.write("Cap TopSetmanal PPCC consolidat encara. Surt.")
+        # The week we generate for is THIS week's Monday, computed exactly
+        # like `calcular_top` (`date.today() - weekday`). Anti-stale guard
+        # (2026-06-07): we require the TopSetmanal for THAT week to already
+        # exist — NOT just any latest row. `calcular_top` runs Saturday and
+        # can finish late (~10:30 observed), so if it hasn't consolidated
+        # this week yet we exit cleanly rather than build the draft from
+        # last week's stale top. The cron is scheduled with ample margin
+        # (Saturday 12:00); this guard is the belt for a late ranking.
+        today = datetime.date.today()
+        setmana = today - datetime.timedelta(days=today.weekday())
+        if not TopSetmanal.objects.filter(
+            territori=TERRITORI, setmana=setmana
+        ).exists():
+            self.stdout.write(
+                f"TopSetmanal {TERRITORI} de la setmana {setmana} encara no "
+                "consolidat (calcular_top no ha acabat?). No genero per no "
+                "construir des d'un top vell."
+            )
+            self.stdout.write("WORK_DONE=0")
             return
 
         existing = NewsletterDraft.objects.filter(

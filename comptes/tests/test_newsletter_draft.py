@@ -31,12 +31,17 @@ def _enable_newsletter():
     cfg.save()
 
 
-def _seed_top(posicio=1, nom="Cançó A"):
+def _current_monday():
+    today = datetime.date.today()
+    return today - datetime.timedelta(days=today.weekday())
+
+
+def _seed_top(posicio=1, nom="Cançó A", setmana=SETMANA):
     a = Artista.objects.create(nom=f"Art {nom}", lastfm_nom=f"Art {nom}", aprovat=True)
     al = Album.objects.create(artista=a, nom=f"Al {nom}")
     c = Canco.objects.create(artista=a, album=al, nom=nom, verificada=True, activa=True)
     TopSetmanal.objects.create(
-        canco=c, territori="PPCC", setmana=SETMANA, posicio=posicio, score_setmanal=10.0
+        canco=c, territori="PPCC", setmana=setmana, posicio=posicio, score_setmanal=10.0
     )
     return c
 
@@ -62,11 +67,12 @@ def staff_client(db, django_user_model):
 @pytest.mark.django_db
 @patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
 @patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
-def test_generation_creates_draft_and_emails(mock_build, mock_mail):
-    _seed_top()
+def test_generation_creates_draft_when_current_week_consolidated(mock_build, mock_mail):
+    monday = _current_monday()
+    _seed_top(setmana=monday)  # THIS week's top exists
     mock_build.return_value = ("Subjecte motor", "<p>narrativa</p>")
     call_command("generar_esborrany_newsletter", stdout=StringIO())
-    d = NewsletterDraft.objects.get(setmana=SETMANA)
+    d = NewsletterDraft.objects.get(setmana=monday)
     assert d.estat == NewsletterDraft.ESTAT_PENDENT
     assert d.font == NewsletterDraft.FONT_MOTOR
     assert d.subject == "Subjecte motor"
@@ -77,12 +83,29 @@ def test_generation_creates_draft_and_emails(mock_build, mock_mail):
 @pytest.mark.django_db
 @patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
 @patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
+def test_generation_skips_when_current_week_top_missing(mock_build, mock_mail):
+    """Anti-stale guard: only a STALE (previous-week) top exists →
+    calcular_top hasn't consolidated this week yet → do NOT generate
+    (never build the draft from last week's top)."""
+    stale = _current_monday() - datetime.timedelta(days=7)
+    _seed_top(setmana=stale)
+    mock_build.return_value = ("X", "<p>x</p>")
+    call_command("generar_esborrany_newsletter", stdout=StringIO())
+    assert NewsletterDraft.objects.count() == 0
+    assert not mock_build.called  # never even composed
+    assert not mock_mail.called
+
+
+@pytest.mark.django_db
+@patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
+@patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
 def test_generation_idempotent_does_not_overwrite(mock_build, mock_mail):
-    _seed_top()
+    monday = _current_monday()
+    _seed_top(setmana=monday)
     mock_build.return_value = ("Subjecte 1", "<p>1</p>")
     call_command("generar_esborrany_newsletter", stdout=StringIO())
     # Staff edits it.
-    d = NewsletterDraft.objects.get(setmana=SETMANA)
+    d = NewsletterDraft.objects.get(setmana=monday)
     d.subject = "Editat per staff"
     d.editat = True
     d.save()
@@ -91,7 +114,7 @@ def test_generation_idempotent_does_not_overwrite(mock_build, mock_mail):
     call_command("generar_esborrany_newsletter", stdout=StringIO())
     d.refresh_from_db()
     assert d.subject == "Editat per staff"
-    assert NewsletterDraft.objects.filter(setmana=SETMANA).count() == 1
+    assert NewsletterDraft.objects.filter(setmana=monday).count() == 1
 
 
 # ── send ─────────────────────────────────────────────────────────────

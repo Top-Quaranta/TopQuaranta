@@ -123,7 +123,7 @@
     "description": "Distribució multicanal al canal Telegram (variant `publicar_canal --channel telegram`). Mateix calendari que publicar_social, 25 min després; envia el carrusel sencer."
   },
   "generar_esborrany_newsletter": {
-    "frequency_label": "Dissabte 09:00",
+    "frequency_label": "Dissabte 12:00",
     "max_age_hours": 170,
     "skip_concern": 1,
     "description": "Genera l'esborrany de revisió de la newsletter setmanal des del top consolidat (motor narratiu, sense efectes secundaris) i envia un enllaç de revisió a l'staff. Flux opt-out: s'enviarà diumenge tret que es cancel·li."

@@ -182,12 +182,15 @@ by the narrative engine (an LLM is a later phase). Model
 `estat` ∈ `pendent`/`enviat`/`cancellat` (NO "approved": `pendent` =
 will send), `font` (`motor`/`llm`), `editat`.
 
-1. **Saturday 09:00 — `generar_esborrany_newsletter`** (after
-   `calcular_top`): composes `subject` + `narrative_html` via
-   `newsletter.build_draft_text` (wraps `_build_top_context`,
-   side-effect-free — no `mark_used`), persists a `pendent` draft
-   (idempotent: never overwrites an existing week), emails staff a link
-   to `/staff/social/esborrany`.
+1. **Saturday 12:00 — `generar_esborrany_newsletter`**: composes
+   `subject` + `narrative_html` via `newsletter.build_draft_text` (wraps
+   `_build_top_context`, side-effect-free — no `mark_used`), persists a
+   `pendent` draft (idempotent: never overwrites an existing week),
+   emails staff a link to `/staff/social/esborrany`. Runs at 12:00 (not
+   09:00) because `calcular_top` starts 08:00 but can finish ~10:30, and
+   an **anti-stale guard** refuses to generate unless the TopSetmanal for
+   THIS week (`date.today() − weekday`) already exists — so it never
+   builds the draft from last week's top.
 2. **Review** — staff endpoints (`web/api/staff/newsletter.py`, IsStaff):
    `GET /staff/newsletter/esborrany/` (draft + the live top it will ship
    with, to spot mismatches + the Sunday send date), `PATCH` (edit

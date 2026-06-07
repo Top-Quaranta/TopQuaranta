@@ -29,23 +29,55 @@ MAX_RECOVER_PER_DAY=5
 
 mkdir -p "$STATUS_DIR"
 
+# Status file for tq-recover's own run, so the recovery net is itself
+# monitored (caught 2026-06-07: tq-recover ran every 30 min outside the
+# tq-run contract and nothing watched it — a broken recover net would be
+# silent). Same key=value format tq-health reads. tq-recover runs as
+# `topquaranta`, so writing here is unrestricted.
+RECOVER_TS=$(date -Iseconds)
+RECOVER_STATUS_FILE="$STATUS_DIR/tq-recover.status"
+write_self_status() {
+    local rc="$1" extra="$2" tmp
+    tmp=$(mktemp)
+    {
+        echo "command=tq-recover"
+        echo "args="
+        echo "last_run=$RECOVER_TS"
+        echo "exit_code=$rc"
+        if [[ "$rc" -eq 0 ]]; then echo "status=OK"; else echo "status=FAIL"; fi
+        echo "last_output<<EOF"
+        echo "$extra"
+        echo "EOF"
+    } > "$tmp"
+    chmod 644 "$tmp"
+    mv "$tmp" "$RECOVER_STATUS_FILE"
+}
+# A relaunched command failing is expected (it's why we're recovering it)
+# and is recorded in that command's own status file, so we do NOT trap ERR
+# here — that would misclassify a normal recovery attempt as a tq-recover
+# failure. tq-recover has no `set -e`; it runs best-effort to completion
+# and stamps its own OK status at the end.
+RELAUNCHED=0
+
 # Daily commands: tag → "HH:MM" cutoff (if NOW < cutoff, do nothing).
 # The cutoff is the original cron time + a small grace window so we don't
 # race the regular cron run.
 declare -A DAILY_AT=(
     [netejar_caducades]="04:30"
     [obtenir_senyal]="06:30"
-    [calcular_ranking_provisional]="07:30"
+    [calcular_top_provisional]="07:30"
 )
-# When the tag does NOT equal the manage.py command name (e.g. the
-# provisional ranking is a flag on calcular_ranking), map it explicitly.
-# Value = full argv passed to tq-run.
+# When the tag does NOT equal the manage.py command name (the provisional
+# ranking is a flag on calcular_top), map it explicitly. Value = full
+# argv passed to tq-run. (2026-06-07: renamed from the stale
+# calcular_ranking → calcular_top; the old name no longer exists as a
+# command, so the ranking recovery net had been dead since the rename.)
 declare -A RUN_ARGS=(
-    [calcular_ranking_provisional]="calcular_ranking --provisional"
+    [calcular_top_provisional]="calcular_top --provisional"
 )
 
 # Weekly: only on Saturday after the cutoff.
-WEEKLY_TAG=calcular_ranking
+WEEKLY_TAG=calcular_top
 WEEKLY_AT="08:30"
 WEEKLY_DOW=6
 
@@ -108,6 +140,7 @@ for tag in "${!DAILY_AT[@]}"; do
     cutoff_ts=$(date -d "$TODAY ${DAILY_AT[$tag]}" +%s)
     if needs_recovery "$tag" "$cutoff_ts"; then
         relaunch "$tag"
+        RELAUNCHED=$((RELAUNCHED + 1))
     fi
 done
 
@@ -116,5 +149,8 @@ if (( DOW == WEEKLY_DOW )); then
     cutoff_ts=$(date -d "$TODAY $WEEKLY_AT" +%s)
     if needs_recovery "$WEEKLY_TAG" "$cutoff_ts"; then
         relaunch "$WEEKLY_TAG"
+        RELAUNCHED=$((RELAUNCHED + 1))
     fi
 fi
+
+write_self_status 0 "relaunched=$RELAUNCHED"

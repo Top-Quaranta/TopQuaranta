@@ -59,7 +59,10 @@ CRON_GROUPS: list[tuple[str, list[str]]] = [
             "actualitzar_playlists_spotify",
             "actualitzar_playlists_spotify_weekly",
             "publicar_social",
-            "publicar_canal",
+            "publicar_canal_mastodon",
+            "publicar_canal_bluesky",
+            "publicar_canal_telegram",
+            "publicar_canal_newsletter",
             "renovar_token_instagram",
             "enviar_digest_setmanal",
         ],
@@ -77,10 +80,19 @@ CRON_GROUPS: list[tuple[str, list[str]]] = [
             "recollir_metrics_psi",
             "generar_goaccess",
             "analitzar_whisper",
+            "tq-backup",
+            "tq-recover",
             "tq-restore-test",
         ],
     ),
 ]
+
+# A cron expected to run at least this often is treated as "frequent":
+# if its status file is entirely ABSENT we surface it as an anomaly
+# (the tag should already have been written) rather than the benign
+# WAITING used for genuinely-infrequent weekly/monthly crons that may
+# not have hit their first scheduled run yet. See classify_cron.
+WAITING_ESCALATE_MAX_AGE_H = 48
 
 # State → emoji + whether it is an anomaly worth surfacing up top.
 _EMOJI = {
@@ -88,6 +100,8 @@ _EMOJI = {
     "SKIP": "🟡",
     "WAITING": "⚪",
     "WARN": "🟠",
+    "ORPHAN": "🟠",
+    "MISSING": "🔴",
     "STALE": "🔴",
     "STUCK": "🔴",
     "FAIL": "🔴",
@@ -145,10 +159,29 @@ def classify_cron(
     with state/display/age_h/escalates/is_anomaly. `escalates` is the
     cron's contribution to `overall`.
 
-    `status is None` means the status file is absent → WAITING (a
-    weekly/monthly cron that hasn't had its first run; informational,
-    never escalates)."""
+    `status is None` means the status file is absent. That is benign
+    only for genuinely-infrequent crons: a weekly/monthly job may simply
+    not have hit its first scheduled run yet (state WAITING, never
+    escalates). For a FREQUENT cron (expected at least every
+    WAITING_ESCALATE_MAX_AGE_H hours) a missing status file means the tag
+    was never written — the wrapper never ran (cron line dropped, tag
+    mismatch, tq-run broken). That must NOT stay benign forever, so it is
+    surfaced as MISSING and escalates (unless silenced). We split on the
+    cron's own cadence because there is no timestamp to measure "how long
+    absent" against (caught 2026-06-07: a never-written tag stayed an
+    invisible WAITING)."""
     if status is None:
+        if max_age_h and max_age_h <= WAITING_ESCALATE_MAX_AGE_H:
+            return {
+                "name": name,
+                "state": "MISSING",
+                "display": "MISSING (cap status file)",
+                "age_h": None,
+                "last_run": "(cap status file escrit)",
+                "escalates": not silenced,
+                "is_anomaly": True,
+                "silenced": silenced,
+            }
         return {
             "name": name,
             "state": "WAITING",
@@ -222,12 +255,34 @@ def _read_status_file(path: Path) -> dict[str, str]:
     return out
 
 
+def _orphan_row(name: str, sf: dict[str, str], now_ts: int) -> dict:
+    """A *.status file with no cron-meta entry. Either a tag written by a
+    cron we forgot to register, or stale residue from a removed/renamed
+    command. Surfaced (not silently ignored) so it gets cleaned up —
+    `rm` the file or add the missing cron-meta entry. (Patró 5, auditoria
+    2026-06-07.)"""
+    last_iso = sf.get("last_run", "")
+    return {
+        "name": name,
+        "state": "ORPHAN",
+        "display": "ORPHAN (sense entrada a cron-meta)",
+        "age_h": None,
+        "last_run": cest_label(last_iso, now_ts) if last_iso else "(desconegut)",
+        "escalates": True,
+        "is_anomaly": True,
+        "silenced": False,
+    }
+
+
 def gather_crons(status_dir: Path, meta: dict, now_ts: int) -> list[dict]:
-    """Classify every cron declared in cron-meta.json."""
+    """Classify every cron declared in cron-meta.json, then surface any
+    orphan *.status files that have no cron-meta entry."""
     rows: list[dict] = []
+    known: set[str] = set()
     for name, m in meta.items():
         if name.startswith("_"):
             continue
+        known.add(name)
         max_age = int(m.get("max_age_hours") or 0)
         silenced = bool(m.get("silenced"))
         f = status_dir / f"{name}.status"
@@ -258,6 +313,18 @@ def gather_crons(status_dir: Path, meta: dict, now_ts: int) -> list[dict]:
                 now_ts=now_ts,
             )
         )
+    # Reconcile the OTHER direction: status files with no cron-meta entry.
+    # tq-run writes <tag>.status; a tag with no registered metadata is an
+    # inconsistency between the two consumers of the contract.
+    try:
+        files = sorted(status_dir.glob("*.status"))
+    except OSError:
+        files = []
+    for f in files:
+        stem = f.stem
+        if stem in known or stem.startswith("_"):
+            continue
+        rows.append(_orphan_row(stem, _read_status_file(f), now_ts))
     return rows
 
 
@@ -418,6 +485,12 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     out.append("⚪ WAITING  programat però encara no ha corregut cap cop")
     out.append("🟡 SKIP(N)  saltat per lock (un run llarg en curs); normal si N baix")
     out.append("🟠 WARN     watchdog: N skips/fails consecutius; vigilar")
+    out.append(
+        "🟠 ORPHAN   status file sense entrada a cron-meta; cal netejar o registrar"
+    )
+    out.append(
+        "🔴 MISSING  cron freqüent sense cap status file escrit; el tag no s'ha escrit mai"
+    )
     out.append("🔴 STALE    sense córrer més enllà del llindar (diaris >36h, etc.)")
     out.append("🔴 STUCK    saltat per lock i ja passat de llindar")
     out.append("🔴 FAIL     últim run amb exit-code != 0")

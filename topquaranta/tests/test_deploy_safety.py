@@ -235,6 +235,111 @@ def test_tq_health_emits_migration_status_row():
     )
 
 
+# ── cron table ↔ cron-meta tag correspondence ───────────────────────
+
+# Scripts invoked directly from cron (not via tq-run) that legitimately
+# do NOT have a cron-meta entry: tq-health is the watchdog itself and
+# writes no status file.
+_CRON_SCRIPTS_WITHOUT_META = {"tq-health"}
+
+
+def _derive_tag(cmd: str, args: list[str]) -> str:
+    """Python mirror of the tag derivation in `bin/tq-run`. Keep in sync
+    with the `for`-loop there: a command runs under distinguishing
+    variants (--provisional, --freq weekly, --channel X), each needing
+    its own status tag so one variant's run doesn't hide another's."""
+    tag = cmd
+    for i, a in enumerate(args):
+        nxt = args[i + 1] if i + 1 < len(args) else ""
+        if a == "--provisional":
+            tag = f"{cmd}_provisional"
+        elif a == "--freq":
+            if nxt == "weekly":
+                tag = f"{cmd}_weekly"
+        elif a == "--freq=weekly":
+            tag = f"{cmd}_weekly"
+        elif a == "--channel":
+            if nxt:
+                tag = f"{cmd}_{nxt}"
+        elif a.startswith("--channel="):
+            tag = f"{cmd}_{a[len('--channel=') :]}"
+    return tag
+
+
+def _parse_cron_invocations(text: str) -> list[tuple[str, str, list[str]]]:
+    """Yield (kind, name, args) for each cron line that runs a
+    /home/topquaranta/bin/ entrypoint. kind is "tq-run" (name is the
+    manage.py command) or "script" (name is the bin script)."""
+    invs: list[tuple[str, str, list[str]]] = []
+    marker = "/home/topquaranta/bin/"
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or marker not in line:
+            continue
+        # Drop shell redirections (>> logfile 2>&1, > /dev/null 2>&1).
+        cut = line.find(">")
+        if cut != -1:
+            line = line[:cut]
+        parts = line.split()
+        bin_idx = next(i for i, p in enumerate(parts) if p.startswith(marker))
+        script = parts[bin_idx].rsplit("/", 1)[1]
+        rest = parts[bin_idx + 1 :]
+        if script == "tq-run":
+            invs.append(("tq-run", rest[0], rest[1:]))
+        else:
+            invs.append(("script", script, rest))
+    return invs
+
+
+def _load_cron_meta() -> dict:
+    import json
+
+    with (PROJECT_ROOT / "deploy" / "cron-meta.json").open() as fh:
+        raw = json.load(fh)
+    return {k: v for k, v in raw.items() if not k.startswith("_")}
+
+
+def test_every_cron_invocation_has_meta_entry():
+    """Every cron line in `deploy/cron.topquaranta` must resolve to a
+    status tag that has a `deploy/cron-meta.json` entry, so tq-health
+    monitors it. Caught 2026-06-07: `--freq weekly` and the four
+    `--channel X` runs shared a tag (or had none) and slipped past the
+    watchdog entirely."""
+    text = (PROJECT_ROOT / "deploy" / "cron.topquaranta").read_text()
+    meta = _load_cron_meta()
+    missing = []
+    for kind, name, args in _parse_cron_invocations(text):
+        if kind == "script":
+            if name in _CRON_SCRIPTS_WITHOUT_META:
+                continue
+            tag = name
+        else:
+            tag = _derive_tag(name, args)
+        if tag not in meta:
+            missing.append(tag)
+    assert not missing, (
+        "Cron invocations with no cron-meta.json entry (tq-health would "
+        f"not monitor them): {sorted(set(missing))}"
+    )
+
+
+def test_no_orphan_cron_meta_entries():
+    """The reverse: every cron-meta.json entry must correspond to a real
+    cron invocation. An orphan meta entry means a removed/renamed cron
+    left stale metadata that would show as a perpetual WAITING/MISSING
+    row."""
+    text = (PROJECT_ROOT / "deploy" / "cron.topquaranta").read_text()
+    meta = _load_cron_meta()
+    produced: set[str] = set()
+    for kind, name, args in _parse_cron_invocations(text):
+        produced.add(name if kind == "script" else _derive_tag(name, args))
+    orphan = set(meta) - produced
+    assert not orphan, (
+        "cron-meta.json entries with no matching cron invocation "
+        f"(stale metadata): {sorted(orphan)}"
+    )
+
+
 # ── Multi-tenant Caddy: import contract + conf.d isolation ──────────
 
 

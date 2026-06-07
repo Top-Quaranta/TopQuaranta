@@ -78,15 +78,99 @@ def test_classify_fail():
     assert r["state"] == "FAIL" and r["escalates"]
 
 
-def test_classify_waiting():
-    r = _c(status=None)
+def test_classify_waiting_infrequent_is_benign():
+    # A weekly/monthly cron with no status file yet: genuinely awaiting
+    # its first run → benign WAITING, never escalates.
+    r = _c(status=None, max_age_h=170)
     assert r["state"] == "WAITING" and not r["escalates"]
+    assert not r["is_anomaly"]
+
+
+def test_classify_missing_frequent_escalates():
+    # A frequent cron (max_age within the escalate threshold) with no
+    # status file at all: the tag was never written → MISSING, escalates.
+    r = _c(status=None, max_age_h=2)
+    assert r["state"] == "MISSING"
+    assert r["escalates"] and r["is_anomaly"]
+
+
+def test_classify_missing_frequent_silenced_does_not_escalate():
+    r = _c(status=None, max_age_h=2, silenced=True)
+    assert r["state"] == "MISSING"
+    assert not r["escalates"]  # silenced: surfaced but no email
+    assert r["is_anomaly"]
+
+
+def test_classify_missing_threshold_boundary():
+    # Exactly at the threshold is still "frequent" → MISSING; just over
+    # it flips to benign WAITING.
+    assert (
+        _c(status=None, max_age_h=hr.WAITING_ESCALATE_MAX_AGE_H)["state"] == "MISSING"
+    )
+    assert (
+        _c(status=None, max_age_h=hr.WAITING_ESCALATE_MAX_AGE_H + 1)["state"]
+        == "WAITING"
+    )
 
 
 def test_classify_watchdog_crit_escalates_even_silenced():
     r = _c(status="OK", last_run_iso=_iso(1), max_age_h=26, skips=10, silenced=True)
     assert r["escalates"]
     assert "watchdog CRIT" in r["display"]
+
+
+# ── gather_crons: orphan + missing surfacing ─────────────────────────
+
+
+def _write_status(path: Path, *, status="OK", last_run_iso=None):
+    last_run_iso = last_run_iso or _iso(1)
+    path.write_text(
+        "command=x\n"
+        "args=\n"
+        f"last_run={last_run_iso}\n"
+        "exit_code=0\n"
+        f"status={status}\n"
+        "consecutive_skips=0\n"
+        "consecutive_failures=0\n"
+    )
+
+
+def test_gather_surfaces_orphan_status_file(tmp_path):
+    # A *.status file with no cron-meta entry must surface as ORPHAN
+    # (escalating) instead of being silently ignored.
+    _write_status(tmp_path / "obtenir_novetats.status")
+    _write_status(tmp_path / "backfill_album_source.status")
+    meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
+    rows = hr.gather_crons(tmp_path, meta, NOW)
+    by_name = {r["name"]: r for r in rows}
+    assert by_name["obtenir_novetats"]["state"] == "OK"
+    assert "backfill_album_source" in by_name
+    orphan = by_name["backfill_album_source"]
+    assert orphan["state"] == "ORPHAN"
+    assert orphan["escalates"] and orphan["is_anomaly"]
+
+
+def test_gather_no_orphans_when_all_registered(tmp_path):
+    _write_status(tmp_path / "obtenir_novetats.status")
+    meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
+    rows = hr.gather_crons(tmp_path, meta, NOW)
+    assert all(r["state"] != "ORPHAN" for r in rows)
+
+
+def test_gather_missing_frequent_cron(tmp_path):
+    # Frequent cron declared in meta but no status file → MISSING.
+    meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
+    rows = hr.gather_crons(tmp_path, meta, NOW)
+    assert rows[0]["state"] == "MISSING" and rows[0]["escalates"]
+
+
+def test_gather_ignores_non_status_files(tmp_path):
+    # .recover and .controller.json files are not cron tags.
+    (tmp_path / "calcular_top.recover").write_text("date=2026-05-30\nattempts=1\n")
+    (tmp_path / "enriquir_spotify_rebuigs.controller.json").write_text("{}\n")
+    meta = {"calcular_top": {"max_age_hours": 170, "skip_concern": 1}}
+    rows = hr.gather_crons(tmp_path, meta, NOW)
+    assert all(r["state"] != "ORPHAN" for r in rows)
 
 
 # ── render ───────────────────────────────────────────────────────────

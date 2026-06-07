@@ -425,7 +425,7 @@ export default function EstatPage() {
   const whisperPendentTotal = whisperPendentAmbPreview + whisperPendentSensePreview
   const whisperAnalitzat = whisper.ca + whisper.no_ca
   const whisperTotal = whisperAnalitzat + whisperPendentTotal
-  const whisperDailyLimit = whisper.daily_limit || 100
+  const whisperDailyLimit = whisper.daily_limit || 200
   const whisperEtaDies = whisperPendentAmbPreview > 0
     ? Math.ceil(whisperPendentAmbPreview / whisperDailyLimit)
     : 0
@@ -904,21 +904,21 @@ export default function EstatPage() {
                 ]}
               />
               <p className="text-[11px] opacity-60 mt-3">
-                {sp.not_attempted > 0 && sp.enrich_per_hour ? (
+                {sp.not_attempted > 0 && sp.enrich_per_day ? (
                   <>
                     Cua pendent: <strong>{(sp.not_attempted).toLocaleString('ca')}</strong> cançons.
-                    A {sp.enrich_per_hour}/h, la cron arribarà al fons
+                    A {sp.enrich_per_day}/dia, la cron arribarà al fons
                     en{' '}
                     <strong>
-                      {sp.eta_hours_to_clear_backlog != null
-                        ? `${sp.eta_hours_to_clear_backlog} h`
+                      {sp.eta_days_to_clear_backlog != null
+                        ? `${sp.eta_days_to_clear_backlog} dies`
                         : '—'}
                     </strong>.
                   </>
                 ) : (
                   <>
                     Cua al dia. Process B (enriquir_spotify) processa les
-                    noves entrades cada hora :30.
+                    noves entrades cada nit a les 03:00.
                   </>
                 )}
               </p>

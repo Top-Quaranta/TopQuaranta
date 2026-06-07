@@ -340,6 +340,37 @@ def test_no_orphan_cron_meta_entries():
     )
 
 
+# ── estat.py ETA constants ↔ cron `--limit` (Patró 3) ───────────────
+
+
+def _cron_limit(text: str, command: str) -> int | None:
+    """Return the int after `--limit` on the `tq-run <command>` line in
+    the cron table. Exact command match so `enriquir_spotify` does not
+    pick up `enriquir_spotify_rebuigs`."""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("#") or "tq-run" not in line:
+            continue
+        toks = line.split("tq-run", 1)[1].split()
+        if not toks or toks[0] != command or "--limit" not in toks:
+            continue
+        return int(toks[toks.index("--limit") + 1])
+    return None
+
+
+def test_estat_constants_match_cron_table():
+    """The per-day budgets `estat.py` uses for backlog ETAs are mirrored
+    from the cron `--limit`. Caught 2026-06-07: `WHISPER_DAILY_LIMIT` was
+    stuck at 100 while the cron moved to `--limit 200` (ETA 2×
+    pessimistic), and the Spotify enrich rate was reported per-hour while
+    the cron is nightly. This guards the mirror against future drift."""
+    from web.api.staff.estat import ENRICH_SPOTIFY_DAILY_LIMIT, WHISPER_DAILY_LIMIT
+
+    text = (PROJECT_ROOT / "deploy" / "cron.topquaranta").read_text()
+    assert _cron_limit(text, "analitzar_whisper") == WHISPER_DAILY_LIMIT
+    assert _cron_limit(text, "enriquir_spotify") == ENRICH_SPOTIFY_DAILY_LIMIT
+
+
 # ── Multi-tenant Caddy: import contract + conf.d isolation ──────────
 
 

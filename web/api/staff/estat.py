@@ -114,6 +114,17 @@ def _load_cron_meta() -> dict[str, dict]:
 
 CRON_META: dict[str, dict] = _load_cron_meta()
 
+# Per-day budgets the dashboard uses to compute backlog ETAs. These MUST
+# match the `--limit` on the corresponding cron line in
+# `deploy/cron.topquaranta` (the real source of truth). They are mirrored
+# here only because the ETA math needs them; drift is guarded by
+# `topquaranta/tests/test_deploy_safety.py::test_estat_constants_match_cron_table`.
+# Caught 2026-06-07: WHISPER_DAILY_LIMIT was stuck at 100 while the cron
+# moved to --limit 200 (ETA 2× pessimistic), and the Spotify enrich rate
+# was reported per-hour while the cron is nightly (ETA ~24× optimistic).
+WHISPER_DAILY_LIMIT = 200
+ENRICH_SPOTIFY_DAILY_LIMIT = 50
+
 
 def _resolve_cron_description(cron_name: str, meta: dict) -> str:
     """Return a one-line description for a cron entry.
@@ -486,12 +497,17 @@ def _spotify_enrichment_stats() -> dict:
         round(found_pending / pending_total, 3) if pending_total else None
     )
 
-    # ETA on the unattempted backlog at the regime cron rate (--limit
-    # 50 every hour after the 2026-05-23 calibration, see ADR-0013).
-    enrich_per_hour = 50
-    eta_hours = (
-        round(not_attempted / enrich_per_hour, 1)
-        if enrich_per_hour and not_attempted
+    # ETA on the unattempted backlog at the regime cron rate. Process B
+    # (`enriquir_spotify`) moved hourly → nightly on 2026-05-24, so the
+    # `--limit 50` is 50 PER DAY, not per hour (see ADR-0013 and the
+    # cron line in deploy/cron.topquaranta). Reporting it as 50/h made
+    # the dashboard ETA ~24× optimistic (caught 2026-06-07). Source of
+    # truth for the rate is the cron `--limit`; guarded by
+    # `test_estat_constants_match_cron_table`.
+    enrich_per_day = ENRICH_SPOTIFY_DAILY_LIMIT
+    eta_days = (
+        round(not_attempted / enrich_per_day, 1)
+        if enrich_per_day and not_attempted
         else None
     )
 
@@ -507,8 +523,8 @@ def _spotify_enrichment_stats() -> dict:
         "coverage_total": coverage_total,
         "coverage_public": coverage_public,
         "coverage_pending": coverage_pending,
-        "enrich_per_hour": enrich_per_hour,
-        "eta_hours_to_clear_backlog": eta_hours,
+        "enrich_per_day": enrich_per_day,
+        "eta_days_to_clear_backlog": eta_days,
     }
 
 
@@ -740,10 +756,10 @@ def estat(request: Request) -> Response:
     w_pend_sense_preview = w_pend_qs.filter(
         Q(preview_url="") | Q(preview_url__isnull=True)
     ).count()
-    # Daily Whisper budget — kept in sync with the cron line in
-    # deploy/cron.topquaranta. Used to surface a realistic ETA on the
-    # processable backlog.
-    WHISPER_DAILY_LIMIT = 100
+    # Daily Whisper budget — module constant WHISPER_DAILY_LIMIT, kept in
+    # sync with the cron `--limit` and guarded by
+    # test_estat_constants_match_cron_table. Used to surface a realistic
+    # ETA on the processable backlog.
 
     # ── Ranking ─────────────────────────────────────────────────────────
     setmanes = TopSetmanal.objects.values("setmana").distinct().count()

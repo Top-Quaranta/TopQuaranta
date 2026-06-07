@@ -173,6 +173,37 @@ def test_gather_ignores_non_status_files(tmp_path):
     assert all(r["state"] != "ORPHAN" for r in rows)
 
 
+# ── per-cron skip_concern as the WARN threshold (Patró 3) ────────────
+
+
+def test_classify_skip_concern_lowers_warn_threshold():
+    # skip_concern=1 (daily crons): a single skip already WARNs.
+    r = _c(status="OK", skips=1, skip_concern=1)
+    assert "watchdog WARN, 1 consecutive" in r["display"]
+
+
+def test_classify_default_warn_threshold_when_unset():
+    # No skip_concern → default 3: a single skip does NOT warn.
+    r = _c(status="OK", skips=1, skip_concern=None)
+    assert "watchdog" not in r["display"]
+    # hourly skip_concern=3 behaves the same as the old hardcoded 3.
+    assert "watchdog" not in _c(status="OK", skips=2, skip_concern=3)["display"]
+    assert "WARN, 3 consecutive" in _c(status="OK", skips=3, skip_concern=3)["display"]
+
+
+def test_classify_skip_concern_silenced_escalates_at_threshold():
+    # A silenced cron that crosses its per-cron WARN floor re-escalates.
+    r = _c(status="OK", fails=1, skip_concern=1, silenced=True)
+    assert r["escalates"]
+
+
+def test_classify_crit_threshold_stays_fixed():
+    # CRIT is a fixed ceiling (10) regardless of a low skip_concern.
+    assert "watchdog WARN" in _c(status="OK", skips=9, skip_concern=1)["display"]
+    crit = _c(status="OK", skips=10, skip_concern=1)
+    assert "watchdog CRIT" in crit["display"] and crit["escalates"]
+
+
 # ── render ───────────────────────────────────────────────────────────
 
 

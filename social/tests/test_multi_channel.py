@@ -193,3 +193,37 @@ def test_publicar_canal_kill_switch_blocks_real_run():
     )
     assert "Kill switch" in out.getvalue()
     assert not SocialPost.objects.filter(platform=SocialPost.PLATFORM_BLUESKY).exists()
+
+
+@pytest.mark.django_db
+def test_master_switch_blocks_newsletter_real_run():
+    """The headline fix (2026-06-07): the master `distribucio_activa`
+    now gates the newsletter, which the old IG-only pause never did."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.distribucio_activa = False
+    cfg.newsletter_actiu = True  # channel ON; master must still block it
+    cfg.save()
+    out = StringIO()
+    call_command(
+        "publicar_canal",
+        "--channel",
+        "newsletter",
+        "--data",
+        "2026-04-25",
+        stdout=out,
+    )
+    assert "mestre" in out.getvalue().lower()
+    assert not SocialPost.objects.filter(
+        platform=SocialPost.PLATFORM_NEWSLETTER
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_master_switch_blocks_rss_feed(client):
+    """Master off → RSS feeds 503 even with rss_actiu True."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.distribucio_activa = False
+    cfg.rss_actiu = True
+    cfg.save()
+    resp = client.get("/rss/top.xml")
+    assert resp.status_code == 503

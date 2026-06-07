@@ -61,14 +61,15 @@ class Command(BaseCommand):
         data = opts.get("data")
         target = datetime.date.fromisoformat(data) if data else datetime.date.today()
         cfg = ConfiguracioGlobal.load()
-        switch = {
-            "mastodon": cfg.mastodon_actiu,
-            "bluesky": cfg.bluesky_actiu,
-            "telegram": cfg.telegram_actiu,
-            "newsletter": cfg.newsletter_actiu,
-        }[channel]
-        if not switch and not opts["dry_run"]:
-            self.stdout.write(f"Kill switch tancat ({channel}_actiu=False). Surt.")
+        # Gate on the shared master+channel predicate (2026-06-07): the
+        # master switch `distribucio_activa` AND `<channel>_actiu`. This
+        # is what makes the master truly pause the newsletter and the
+        # other channels (before, only the per-channel flag was checked).
+        if not cfg.pot_publicar(channel) and not opts["dry_run"]:
+            if not cfg.distribucio_activa:
+                self.stdout.write("Distribució pausada (mestre). Surt.")
+            else:
+                self.stdout.write(f"Kill switch tancat ({channel}_actiu=False). Surt.")
             return
 
         # Sprint Distribució v2 lot B: per-channel publish delay.

@@ -38,6 +38,7 @@ from .controls import social_delay, social_fase, social_story_cap, social_toggle
 from .posts import (
     social_eliminar_instagram,
     social_eliminar_remot,
+    social_estat_canals,
     social_list,
     social_preview,
     social_preview_all,
@@ -56,6 +57,7 @@ from .spotify import (
 
 __all__ = [
     "social_list",
+    "social_estat_canals",
     "social_credentials_save",
     "social_credentials_test",
     "social_credentials_clear",

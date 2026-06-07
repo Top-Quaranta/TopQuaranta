@@ -91,3 +91,55 @@ class TestRankingSetmanal:
         assert "#3" in str(rs)
         assert "Llum" in str(rs)
         assert "VAL" in str(rs)
+
+
+@pytest.mark.django_db
+class TestPotPublicar:
+    """The master switch `distribucio_activa` + per-channel `*_actiu`
+    gate, shared by every publisher (2026-06-07)."""
+
+    ALL = ["instagram", "mastodon", "bluesky", "telegram", "newsletter", "rss"]
+
+    def _cfg(self, **kw):
+        cfg = ConfiguracioGlobal.load()
+        # Turn every channel ON so the test isolates the master.
+        for c in self.ALL:
+            setattr(cfg, f"{c}_actiu", True)
+        cfg.distribucio_activa = True
+        for k, v in kw.items():
+            setattr(cfg, k, v)
+        cfg.save()
+        return cfg
+
+    def test_master_off_blocks_all_six(self):
+        cfg = self._cfg(distribucio_activa=False)
+        for c in self.ALL:
+            assert cfg.pot_publicar(c) is False, c
+
+    def test_master_on_all_channels_on(self):
+        cfg = self._cfg()
+        for c in self.ALL:
+            assert cfg.pot_publicar(c) is True, c
+
+    def test_channel_off_blocks_only_that_channel(self):
+        cfg = self._cfg(newsletter_actiu=False)
+        assert cfg.pot_publicar("newsletter") is False
+        for c in [x for x in self.ALL if x != "newsletter"]:
+            assert cfg.pot_publicar(c) is True, c
+
+    def test_master_overrides_channel_on(self):
+        # Master off wins even if the channel switch is on.
+        cfg = self._cfg(distribucio_activa=False, instagram_actiu=True)
+        assert cfg.pot_publicar("instagram") is False
+
+    def test_unknown_channel_raises(self):
+        cfg = self._cfg()
+        with pytest.raises(ValueError):
+            cfg.pot_publicar("tiktok")
+
+    def test_default_is_active(self):
+        # A freshly-loaded config does not pause anything new (default
+        # True): the per-channel switch decides.
+        cfg = ConfiguracioGlobal.load()
+        assert cfg.distribucio_activa is True
+        assert cfg.pot_publicar("instagram") == cfg.instagram_actiu

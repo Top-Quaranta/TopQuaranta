@@ -102,11 +102,25 @@ class ConfiguracioGlobal(models.Model):
         "#1 entra al 100 %, la #2 al 96 %, la #25 al 4 %.",
     )
 
+    # ── Master distribution switch (2026-06-07) ─────────────────────
+    # The REAL global pause: gates every channel via `pot_publicar`.
+    # Default True so deploying changes nothing (the existing
+    # per-channel state, e.g. instagram_actiu=False, is preserved).
+    # Distinct from the per-channel `*_actiu` switches and from
+    # `fase_distribucio` (the Instagram-only per-slot rollout phase).
+    distribucio_activa = models.BooleanField(
+        default=True,
+        help_text="Interruptor mestre de distribució. Si False, cap dels "
+        "sis canals publica (IG, Mastodon, Bluesky, Telegram, newsletter, "
+        "RSS). Independent dels switches per canal i de fase_distribucio.",
+    )
+
     # ── Sprint I: Instagram distribution controls ───────────────────────
     instagram_actiu = models.BooleanField(
         default=True,
-        help_text="Kill switch global. Si False, `publicar_social` surt "
-        "immediatament sense fer res (els cron entries marquen 'omès').",
+        help_text="Switch per canal d'Instagram. Si False (o el mestre "
+        "`distribucio_activa` False), `publicar_social` surt sense fer res. "
+        "NO és el switch global; per a això hi ha `distribucio_activa`.",
     )
     fase_distribucio = models.PositiveSmallIntegerField(
         default=1,
@@ -189,6 +203,30 @@ class ConfiguracioGlobal(models.Model):
         default=0,
         help_text="Minuts de retard addicional per a newsletter. Tope 180.",
     )
+
+    # Channel arg → its per-channel `*_actiu` field. Single source of
+    # truth for the set of distribution channels the master gates.
+    CHANNEL_SWITCH_FIELDS = {
+        "instagram": "instagram_actiu",
+        "mastodon": "mastodon_actiu",
+        "bluesky": "bluesky_actiu",
+        "telegram": "telegram_actiu",
+        "newsletter": "newsletter_actiu",
+        "rss": "rss_actiu",
+    }
+
+    def pot_publicar(self, canal: str) -> bool:
+        """True iff `canal` may publish: the master switch
+        (`distribucio_activa`) AND the channel's own `*_actiu`.
+
+        Does NOT consider `fase_distribucio` — that's the Instagram-only
+        per-slot rollout phase, handled separately in `publicar_social`
+        (an off-phase slot is 'omès', not paused). Single gate shared by
+        every publisher so the master truly stops all six channels."""
+        field = self.CHANNEL_SWITCH_FIELDS.get(canal)
+        if field is None:
+            raise ValueError(f"unknown canal {canal!r}")
+        return bool(self.distribucio_activa and getattr(self, field))
 
     class Meta:
         verbose_name = "Configuració global"

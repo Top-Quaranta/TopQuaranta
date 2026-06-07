@@ -242,3 +242,98 @@ def test_premium_cache_hit_emits_valid_json(tmp_path):
     assert parsed["message"] == payload["message"]
     assert "cache_age_seconds" in parsed
     assert "(cached" not in line
+
+
+# ── anomaly_signature (stable dedup key, 2026-06-07) ───────────────
+
+
+def _extras(**kw):
+    base = {
+        "disk": {"used_pct": 50},
+        "web": [{"label": "Web SPA shell", "ok": True}],
+        "spotify": {"premium": {"ok": True}, "coverage": {"ok": True}},
+        "migrations_ok": True,
+        "errors": {"count": 0},
+        "git": {"ok": True},
+    }
+    base.update(kw)
+    return base
+
+
+def test_signature_ignores_age_and_error_count():
+    """Same anomaly set, only age + (present) error count differ → same key."""
+    a1 = _c(name="whisper", status="FAIL", last_run_iso=_iso(1), max_age_h=48)
+    a2 = _c(name="whisper", status="FAIL", last_run_iso=_iso(20), max_age_h=48)
+    assert hr.anomaly_signature([a1], _extras(errors={"count": 5})) == (
+        hr.anomaly_signature([a2], _extras(errors={"count": 99}))
+    )
+
+
+def test_signature_stale_hours_do_not_change_it():
+    s1 = _c(name="senyal", status="OK", last_run_iso=_iso(40), max_age_h=26)
+    s2 = _c(name="senyal", status="OK", last_run_iso=_iso(300), max_age_h=26)
+    assert s1["state"] == "STALE" and s2["state"] == "STALE"
+    assert hr.anomaly_signature([s1], _extras()) == hr.anomaly_signature(
+        [s2], _extras()
+    )
+
+
+def test_signature_changes_on_new_anomaly():
+    a = _c(name="whisper", status="FAIL", last_run_iso=_iso(1), max_age_h=48)
+    b = _c(name="senyal", status="FAIL", last_run_iso=_iso(1), max_age_h=26)
+    assert hr.anomaly_signature([a], _extras()) != hr.anomaly_signature(
+        [a, b], _extras()
+    )
+
+
+def test_signature_changes_on_threshold_crossing():
+    a = _c(name="whisper", status="FAIL", last_run_iso=_iso(1), max_age_h=48)
+    base = hr.anomaly_signature([a], _extras(errors={"count": 0}))
+    assert base != hr.anomaly_signature([a], _extras(errors={"count": 1}))
+    assert base != hr.anomaly_signature([a], _extras(disk={"used_pct": 92}))
+    assert base != hr.anomaly_signature([a], _extras(git={"ok": False}))
+
+
+def test_signature_excludes_silenced_nonescalating():
+    sil = _c(name="x", status="FAIL", last_run_iso=_iso(1), max_age_h=48, silenced=True)
+    esc = _c(name="y", status="FAIL", last_run_iso=_iso(1), max_age_h=48)
+    assert not sil["escalates"]
+    assert hr.anomaly_signature([esc, sil], _extras()) == (
+        hr.anomaly_signature([esc], _extras())
+    )
+
+
+def test_print_signature_cli(tmp_path):
+    """The `--print-signature` mode tq-health calls prints a 64-hex
+    signature (not the report) and still exits with `overall`."""
+    status_dir = tmp_path / "status"
+    status_dir.mkdir()
+    (status_dir / "whisper.status").write_text(
+        "command=whisper\nlast_run=2026-05-30T00:00:00+00:00\nstatus=FAIL\n"
+        "consecutive_failures=1\n"
+    )
+    meta = tmp_path / "cron-meta.json"
+    meta.write_text(json.dumps({"whisper": {"max_age_hours": 48, "skip_concern": 1}}))
+    root = Path(__file__).resolve().parents[2]
+    out = subprocess.run(
+        [
+            "python3",
+            "-m",
+            "analytics.health_report",
+            "--status-dir",
+            str(status_dir),
+            "--meta-file",
+            str(meta),
+            "--extras-json",
+            "{}",
+            "--now",
+            str(NOW),
+            "--print-signature",
+        ],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+    )
+    sig = out.stdout.strip()
+    assert out.returncode == 1  # one FAILing cron → overall anomaly
+    assert len(sig) == 64 and all(ch in "0123456789abcdef" for ch in sig)

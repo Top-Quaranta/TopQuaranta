@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -425,12 +426,55 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     return "\n".join(out).rstrip() + "\n", overall
 
 
+def anomaly_signature(crons: list[dict], extras: dict) -> str:
+    """Stable dedup key for the alert email: the IDENTITY of the current
+    anomaly set, not its rendered text.
+
+    Two reports that differ only in timestamps, ages ("fa Xh"), or
+    monotonic counters (STALE/STUCK hours, today's Django error count)
+    map to the SAME signature, so a persistent failure is emailed ONCE
+    and only a NEW or CLEARED problem re-alerts. The components mirror
+    `render`'s `overall` gate, but reduced to stable tokens: escalating
+    crons by `(name, state)` (state tokens carry no numbers) plus a
+    boolean per system threshold crossing. Caught 2026-06-07: the old
+    signature grep'd the rendered report (timestamps + ages + error
+    count) so every hourly tick produced a new key and re-spammed."""
+    parts: list[str] = []
+    for c in sorted(crons, key=lambda c: c["name"]):
+        if c.get("escalates"):
+            parts.append(f"cron:{c['name']}={c['state']}")
+    disk = extras.get("disk", {})
+    if int(disk.get("used_pct") or 0) >= 90:
+        parts.append("disk:over90")
+    for w in extras.get("web", []):
+        if not w.get("ok", True):
+            parts.append(f"web:{w.get('label', '?')}")
+    spotify = extras.get("spotify", {})
+    if not spotify.get("premium", {}).get("ok", True):
+        parts.append("spotify:premium")
+    if not spotify.get("coverage", {}).get("ok", True):
+        parts.append("spotify:coverage")
+    if not bool(extras.get("migrations_ok", True)):
+        parts.append("migrations:pending")
+    if not bool(extras.get("git", {}).get("ok", True)):
+        parts.append("git:drift")
+    if int(extras.get("errors", {}).get("count") or 0) > 0:
+        parts.append("errors:present")
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--status-dir", required=True)
     p.add_argument("--meta-file", required=True)
     p.add_argument("--extras-json", default="{}")
     p.add_argument("--now", type=int, default=None)
+    p.add_argument(
+        "--print-signature",
+        action="store_true",
+        help="Print the stable anomaly-set signature instead of the report "
+        "(used by tq-health's email dedup). Exit code is still `overall`.",
+    )
     args = p.parse_args(argv)
 
     now_ts = args.now if args.now is not None else int(_dt.datetime.now().timestamp())
@@ -438,7 +482,10 @@ def main(argv: list[str] | None = None) -> int:
     extras = json.loads(args.extras_json)
     crons = gather_crons(Path(args.status_dir), meta, now_ts)
     text, overall = render(crons, extras, now_ts)
-    sys.stdout.write(text)
+    if args.print_signature:
+        sys.stdout.write(anomaly_signature(crons, extras) + "\n")
+    else:
+        sys.stdout.write(text)
     return overall
 
 

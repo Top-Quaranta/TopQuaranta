@@ -205,14 +205,21 @@ overall=$?
 
 if (( EMAIL_ON_FAIL )); then
     if (( overall != 0 )); then
-        # Signature-based dedup (2026-05-07): only email when the
-        # failure summary CHANGES, so a persistent failure doesn't
-        # refill the inbox every hour. The Anomalies section still
-        # carries STALE/STUCK/FAIL tokens, so this grep keeps working.
+        # Signature-based dedup: only email when the anomaly SET changes,
+        # so a persistent failure doesn't refill the inbox every hour.
+        # The signature is computed by the renderer over the STABLE
+        # identity of the anomalies — escalating crons by (name, state)
+        # plus per-threshold booleans — NOT over the rendered text.
+        # Caught 2026-06-07: the previous grep over $REPORT captured the
+        # summary timestamp, "fa Xh" ages and the daily error count, so
+        # every hourly tick produced a fresh key and re-spammed.
+        # `bad` is still derived from the text but used ONLY for the
+        # human subject line, never for dedup.
         bad=$(grep -E "STALE|STUCK|FAIL|DRIFT" <<<"$REPORT" | head -3 | tr '\n' ' | ')
-        sig_input="$bad|errors=${ERRORS_COUNT}"
         SIG_FILE="$STATUS_DIR/_health.alert_sig"
-        current_sig=$(printf '%s' "$sig_input" | sha256sum | cut -d' ' -f1)
+        current_sig=$("$PY" "$RENDER" --status-dir "$STATUS_DIR" \
+            --meta-file "$META_FILE" --extras-json "$EXTRAS" --now "$NOW" \
+            --print-signature)
         last_sig=$(cat "$SIG_FILE" 2>/dev/null || echo "")
         if [[ "$current_sig" != "$last_sig" ]]; then
             cd "$APP_DIR"

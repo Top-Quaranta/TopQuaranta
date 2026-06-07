@@ -356,7 +356,14 @@ Exit codes: 1 migration failed, 2 build failed, 3 reload failed,
 row (added 2026-05-07). If somehow a deploy bypasses `tq-deploy`
 and leaves the DB behind the code, the next hourly tick of the
 `tq-health --email-on-fail` cron flags it. The signature-dedup
-limits inbox noise to one alert per distinct failure state.
+limits inbox noise to one alert per distinct failure state: the
+signature is computed (by `health_report.py --print-signature`) over
+the STABLE identity of the anomaly set — escalating crons by
+`(name, state)` plus a boolean per system threshold crossing — NOT
+over the rendered text. So a persistent failure mails ONCE; only a
+new or cleared problem re-alerts. (Before 2026-06-07 the signature
+grep'd the report, which embedded the summary timestamp, the "fa Xh"
+ages and the daily error count, so every hourly tick re-spammed.)
 
 **Git-tree drift detection** (added 2026-06-02): `tq-health` also
 emits a `Git tree: ...` row. Because `tq-deploy` does

@@ -249,6 +249,10 @@ the exit code is unchanged), groups them by logical area
 summary + Anomalies block + Sistema/Spotify sections + a legend, and
 localises timestamps to **CEST** (UTC stays in logs). It lives in the
 analytics app purely for code organisation; it does not touch the DB.
+It also exposes `anomaly_signature()` / a `--print-signature` CLI mode:
+a STABLE dedup key over the anomaly identity (escalating crons by
+`(name, state)` + per-threshold booleans, no ages/timestamps/counters)
+that `tq-health` uses so a persistent failure emails once (2026-06-07).
 See `pipeline.md` §7. Tested at `analytics/tests/test_health_report.py`.
 
 ### Pruning

@@ -33,6 +33,27 @@ function StatusBadge({ status }) {
   )
 }
 
+// Effective per-channel state from /staff/social/estat-canals/.
+const EFECTIU_TONE = {
+  actiu:         'bg-emerald-100 text-emerald-900',
+  pausat_global: 'bg-gray-300 text-gray-800',
+  pausat_canal:  'bg-red-100 text-red-900',
+}
+const EFECTIU_LABEL = {
+  actiu:         'Actiu',
+  pausat_global: 'Pausat pel mestre',
+  pausat_canal:  'Pausat (canal)',
+}
+
+function fmtLastSend(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d)) return '—'
+  return d.toLocaleString('ca', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export default function StaffSocialPage() {
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -54,7 +75,16 @@ export default function StaffSocialPage() {
   // when the operator clicks "Veure slides" on a row.
   const [slidesByPk, setSlidesByPk] = useState({})
 
-  const reload = () => api.get('/staff/social/').then(setData).catch(() => setData(null))
+  // Per-channel honest state (effective state + last send) from the
+  // dedicated endpoint, alongside the main social_list payload.
+  const [estat, setEstat] = useState(null)
+  const reload = () =>
+    Promise.all([
+      api.get('/staff/social/'),
+      api.get('/staff/social/estat-canals/').catch(() => null),
+    ])
+      .then(([d, e]) => { setData(d); setEstat(e) })
+      .catch(() => setData(null))
   useEffect(() => { reload() }, [])
 
   if (!data) return <p className="p-6">Carregant…</p>
@@ -69,10 +99,19 @@ export default function StaffSocialPage() {
     config.token_days_left <  21     ? 'bg-yellow-100 text-yellow-900' :
                                        'bg-emerald-100 text-emerald-900'
 
-  async function toggle() {
+  // Master distribution switch (distribucio_activa). Gates ALL six
+  // channels — the real global pause (replaces the old "Kill switch"
+  // that only wrote instagram_actiu).
+  async function toggleMaster() {
+    const next = !config.distribucio_activa
+    if (next === false && !confirm(
+      'Pausar TOTA la distribució?\n\nCap canal publicarà (Instagram, ' +
+      'Mastodon, Bluesky, Telegram, newsletter, RSS) fins que reactivis ' +
+      'el mestre. Els switches per canal es conserven.'
+    )) return
     setBusy(true)
     try {
-      await api.post('/staff/social/toggle/', { actiu: !config.instagram_actiu })
+      await api.post('/staff/social/toggle/', { channel: 'global', actiu: next })
       await reload()
     } finally { setBusy(false) }
   }
@@ -526,27 +565,44 @@ export default function StaffSocialPage() {
         </details>
       </div>
 
-      {/* ── Config controls ───────────────────────────────────── */}
-      <div className="grid sm:grid-cols-3 gap-3">
-        <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Kill switch</p>
+      {/* ── Master distribution switch ────────────────────────── */}
+      <div className={
+        'p-4 rounded-md border-2 ' +
+        (config.distribucio_activa
+          ? 'border-emerald-300 bg-emerald-50'
+          : 'border-red-400 bg-red-50')
+      }>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-tq-ink/75">
+              Interruptor mestre de distribució
+            </p>
+            <p className="text-sm mt-1 font-semibold">
+              {config.distribucio_activa
+                ? 'Distribució ACTIVA — cada canal segueix el seu propi switch'
+                : 'Distribució PAUSADA — cap canal publica (els sis)'}
+            </p>
+          </div>
           <button
             type="button"
-            onClick={toggle}
+            onClick={toggleMaster}
             disabled={busy}
             className={
-              'mt-2 px-3 py-1.5 rounded-md text-sm font-semibold ' +
-              (config.instagram_actiu
-                ? 'bg-emerald-700 text-white hover:bg-emerald-800'
-                : 'bg-red-700 text-white hover:bg-red-800')
+              'px-4 py-2 rounded-md text-sm font-semibold ' +
+              (config.distribucio_activa
+                ? 'bg-red-700 text-white hover:bg-red-800'
+                : 'bg-emerald-700 text-white hover:bg-emerald-800')
             }
           >
-            {config.instagram_actiu ? 'ACTIU — clica per pausar' : 'PAUSAT — clica per activar'}
+            {config.distribucio_activa ? 'Pausar-ho tot' : 'Reactivar distribució'}
           </button>
         </div>
+      </div>
 
+      {/* ── Config controls ───────────────────────────────────── */}
+      <div className="grid sm:grid-cols-2 gap-3">
         <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Fase distribució</p>
+          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Fase distribució (només Instagram)</p>
           <div className="flex gap-1 mt-2">
             {[1, 2, 3, 4, 5].map(n => (
               <button
@@ -594,15 +650,16 @@ export default function StaffSocialPage() {
         </p>
       </div>
 
-      {/* ── Canals addicionals ────────────────────────────────── */}
+      {/* ── Canals de distribució ─────────────────────────────── */}
       <section>
         <h2 className="text-base font-bold font-display mb-2">
-          Canals addicionals
+          Canals de distribució
         </h2>
         <p className="text-xs text-tq-ink/75 mb-3">
-          Mateix payload setmanal que Instagram, distribuït a 4 canals més.
-          Cada canal té el seu kill switch independent. Activa'ls quan
-          tinguis les credencials posades; sense credencials el cron salta
+          Els sis canals com a iguals. El mestre de dalt els gateja tots;
+          cada canal té a més el seu propi switch independent. Amb el
+          mestre pausat, tots mostren «Pausat pel mestre» encara que el
+          seu switch propi estigui actiu. Sense credencials, el cron salta
           aquell canal en silenci.
         </p>
 
@@ -614,27 +671,46 @@ export default function StaffSocialPage() {
             { key: 'telegram',  label: 'Telegram',  val: config.telegram_actiu },
             { key: 'newsletter',label: 'Newsletter',val: config.newsletter_actiu },
             { key: 'rss',       label: 'RSS',       val: config.rss_actiu },
-          ].map(c => (
-            <div key={c.key} className="p-3 border rounded-md flex items-center justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">{c.label}</p>
-                <p className="text-sm mt-1">{c.val ? 'Actiu' : 'Pausat'}</p>
+          ].map(c => {
+            const st = estat?.canals?.[c.key]
+            const efectiu = st?.efectiu || (c.val ? 'actiu' : 'pausat_canal')
+            return (
+              <div key={c.key} className="p-3 border rounded-md flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">{c.label}</p>
+                  <span className={
+                    'inline-block mt-1 text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full ' +
+                    (EFECTIU_TONE[efectiu] || 'bg-gray-200 text-gray-800')
+                  }>
+                    {EFECTIU_LABEL[efectiu] || efectiu}
+                  </span>
+                  {c.key === 'instagram' && st?.fase_distribucio != null && (
+                    <p className="text-[10px] text-tq-ink/75 mt-1">Fase {st.fase_distribucio}/5</p>
+                  )}
+                  {c.key !== 'rss' && (
+                    <p className="text-[10px] text-tq-ink/75 mt-1">
+                      Últim enviament: {fmtLastSend(st?.ultim_enviament)}
+                      {st?.font === 'audit' && ' (audit)'}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => toggleChannel(c.key)}
+                  title={c.val ? 'Pausar aquest canal' : 'Activar aquest canal'}
+                  className={
+                    'shrink-0 px-3 py-1 rounded text-xs font-semibold ' +
+                    (c.val
+                      ? 'bg-emerald-700 text-white hover:bg-emerald-800'
+                      : 'bg-red-700 text-white hover:bg-red-800')
+                  }
+                >
+                  {c.val ? 'Pausar' : 'Activar'}
+                </button>
               </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => toggleChannel(c.key)}
-                className={
-                  'px-3 py-1 rounded text-xs font-semibold ' +
-                  (c.val
-                    ? 'bg-emerald-700 text-white hover:bg-emerald-800'
-                    : 'bg-red-700 text-white hover:bg-red-800')
-                }
-              >
-                {c.val ? 'Pausar' : 'Activar'}
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Mastodon credentials */}

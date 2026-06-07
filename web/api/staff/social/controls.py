@@ -14,14 +14,17 @@ from web.api.staff._common import IsStaff
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def social_toggle(request: Request) -> Response:
-    """Flip a per-channel kill switch.
+    """Flip a distribution switch.
 
-    Accepts an optional `channel` to target a specific switch
-    (`instagram` | `mastodon` | `bluesky` | `newsletter` | `rss`).
-    Default is `instagram` for backward-compat with the old UI
-    button that didn't pass a channel.
+    `channel` is REQUIRED and explicit (2026-06-07: the old
+    default-to-`instagram` was a footgun — the "global" UI button sent
+    no channel and silently toggled Instagram only). Accepted values:
+    `global` → the master `distribucio_activa`; or a per-channel switch
+    (`instagram` | `mastodon` | `bluesky` | `telegram` | `newsletter`
+    | `rss`).
     """
     field_map = {
+        "global": "distribucio_activa",
         "instagram": "instagram_actiu",
         "mastodon": "mastodon_actiu",
         "bluesky": "bluesky_actiu",
@@ -29,15 +32,20 @@ def social_toggle(request: Request) -> Response:
         "newsletter": "newsletter_actiu",
         "rss": "rss_actiu",
     }
-    channel = (request.data.get("channel") or "instagram").strip()
+    channel = (request.data.get("channel") or "").strip()
     field = field_map.get(channel)
     if field is None:
-        return Response({"error": f"unknown channel '{channel}'"}, status=400)
+        return Response(
+            {
+                "error": f"unknown channel '{channel}'; expected one of {list(field_map)}"
+            },
+            status=400,
+        )
     cfg = ConfiguracioGlobal.load()
     new_val = bool(request.data.get("actiu", not getattr(cfg, field)))
     setattr(cfg, field, new_val)
     cfg.save(update_fields=[field])
-    return Response({channel + "_actiu": new_val})
+    return Response({field: new_val})
 
 
 @api_view(["POST"])

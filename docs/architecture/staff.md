@@ -138,7 +138,8 @@ Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
 | POST | `/staff/social/publicar-ara/` | Force-run `publicar_social` / `publicar_canal` for a `(data, tipus, platform)` triple. |
 | POST | `/staff/social/eliminar-instagram/` | Legacy IG-only delete. Kept for back-compat. |
 | POST | `/staff/social/eliminar-remot/` | **(2026-05-03)** Platform-aware delete. Dispatches by `post.platform` to `instagram_client` (DELETE Graph node), `mastodon_client.delete_status`, `bluesky_client.delete_post` (parses AT URI → deleteRecord), or `telegram_client.delete_messages` (uses `metadata.message_ids` captured at publish time). |
-| POST | `/staff/social/toggle/` | Per-channel kill switch (`channel=instagram\|mastodon\|bluesky\|telegram\|newsletter\|rss`). |
+| POST | `/staff/social/toggle/` | Distribution switch. `channel=global` writes the master `distribucio_activa`; `channel=instagram\|mastodon\|bluesky\|telegram\|newsletter\|rss` writes the per-channel switch. `channel` is REQUIRED (2026-06-07: removed the default-to-`instagram` footgun). See `social.md` for the gate. |
+| GET | `/staff/social/estat-canals/` | **(2026-06-07)** Honest per-channel state: `efectiu` (actiu / pausat_global / pausat_canal) + raw `mestre_actiu`/`canal_actiu` + `ultim_enviament` = max `SocialPost.published_at` (status=publicat) with `StaffAuditLog *_publicat` as a reset-proof fallback (`font`=socialpost\|audit\|none). Instagram carries `fase_distribucio`. |
 
 `publicar_canal` (Mastodon + Bluesky variants) publishes a 4-image
 carousel since 2026-05-03 — portada + first three list slides via

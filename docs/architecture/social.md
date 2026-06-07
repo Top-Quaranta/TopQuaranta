@@ -91,6 +91,32 @@ per channel:
 | Telegram | `social.TelegramAuth` row | `@topquaranta_bot` |
 | Newsletter | `.env::EMAIL_HOST_PASSWORD` (Brevo SMTP) | `admin@topquaranta.cat` |
 
+## Distribution gate — master + per-channel (2026-06-07)
+
+Every publisher gates on the shared predicate
+`ConfiguracioGlobal.pot_publicar(canal)` =
+`distribucio_activa AND <canal>_actiu`:
+
+- **`distribucio_activa`** — the master switch. The REAL global pause:
+  False stops all six channels (IG, Mastodon, Bluesky, Telegram,
+  newsletter, RSS). Default True (deploying changes nothing).
+- **`<canal>_actiu`** — the per-channel switch (one each).
+
+Consumers: `publicar_social` (`pot_publicar("instagram")`),
+`publicar_canal` (`pot_publicar(channel)` for the four non-IG channels),
+and the RSS feeds (`web/feeds.py` → `pot_publicar("rss")`, 503 when off).
+
+`fase_distribucio` is NOT part of this gate: it is the Instagram-only
+per-slot rollout phase (an off-phase slot is marked `omès`, not paused).
+
+Staff controls (`web/api/staff/social/controls.py::social_toggle`):
+`channel=global` writes `distribucio_activa`; `channel=<name>` writes the
+per-channel switch. `channel` is required (no default — the old
+default-to-`instagram` silently toggled IG and was the reason the
+newsletter ignored the "global" pause before this fix). Honest
+per-channel state (effective state + last send) at
+`/staff/social/estat-canals/` (see `staff.md`).
+
 ## Calendar
 
 Driven by `social/calendari.py`. Slots per weekday with

@@ -39,15 +39,17 @@ SITE = "https://www.topquaranta.cat"
 
 
 def _kill_switch_or(view, *, name: str):
-    """Wrap a `Feed` instance in a callable that honours
-    `ConfiguracioGlobal.rss_actiu` — returns 503 when False.
+    """Wrap a `Feed` instance in a callable that honours the shared
+    distribution gate `ConfiguracioGlobal.pot_publicar("rss")` (the
+    master switch `distribucio_activa` AND `rss_actiu`) — returns 503
+    when off.
 
     `Feed.__call__` is the regular view entry point; we just front
     it with a kill-switch check.
     """
 
     def wrapped(request, *a, **kw):
-        if not ConfiguracioGlobal.load().rss_actiu:
+        if not ConfiguracioGlobal.load().pot_publicar("rss"):
             return HttpResponse(
                 "RSS temporalment desactivat", status=503, content_type="text/plain"
             )

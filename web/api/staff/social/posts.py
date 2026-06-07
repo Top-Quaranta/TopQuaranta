@@ -48,6 +48,7 @@ def social_list(request: Request) -> Response:
         {
             "results": [_serialize(p) for p in qs],
             "config": {
+                "distribucio_activa": cfg.distribucio_activa,
                 "instagram_actiu": cfg.instagram_actiu,
                 "mastodon_actiu": cfg.mastodon_actiu,
                 "bluesky_actiu": cfg.bluesky_actiu,
@@ -71,6 +72,91 @@ def social_list(request: Request) -> Response:
             "calendari": _calendari_payload(),
         }
     )
+
+
+# Channel → (per-channel switch field, SocialPost platforms for the
+# last-send timestamp, StaffAuditLog *_publicat action for the
+# reset-proof fallback). RSS is pull-based (no SocialPost, no audit).
+_CHANNEL_ESTAT = {
+    "instagram": (
+        "instagram_actiu",
+        [SocialPost.PLATFORM_INSTAGRAM_FEED, SocialPost.PLATFORM_INSTAGRAM_STORY],
+        "social_publicat",
+    ),
+    "mastodon": ("mastodon_actiu", [SocialPost.PLATFORM_MASTODON], "mastodon_publicat"),
+    "bluesky": ("bluesky_actiu", [SocialPost.PLATFORM_BLUESKY], "bluesky_publicat"),
+    "telegram": ("telegram_actiu", [SocialPost.PLATFORM_TELEGRAM], "telegram_publicat"),
+    "newsletter": (
+        "newsletter_actiu",
+        [SocialPost.PLATFORM_NEWSLETTER],
+        "newsletter_publicat",
+    ),
+    "rss": ("rss_actiu", [], None),
+}
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def social_estat_canals(request: Request) -> Response:
+    """Honest per-channel distribution state for the staff view.
+
+    For each of the six channels returns:
+      - `efectiu`: actiu | pausat_global (master off) | pausat_canal
+        (this channel's switch off, master on)
+      - `mestre_actiu` / `canal_actiu`: the raw booleans so the UI can
+        show "pausat pel mestre" AND "pausat pel canal" independently
+      - `ultim_enviament`: max(SocialPost.published_at) where
+        status=publicat, with StaffAuditLog `*_publicat` (max
+        created_at) as a reset-proof fallback (republicar/reset NULLs
+        published_at). `font` = socialpost | audit | none.
+    Instagram also carries `fase_distribucio` (its per-slot rollout
+    phase — an off-phase slot is 'omès', not a pause)."""
+    from django.db.models import Max
+
+    from music.models import StaffAuditLog
+
+    cfg = ConfiguracioGlobal.load()
+    master = cfg.distribucio_activa
+    out = {}
+    for canal, (field, platforms, audit_action) in _CHANNEL_ESTAT.items():
+        canal_actiu = bool(getattr(cfg, field))
+        if not master:
+            efectiu = "pausat_global"
+        elif not canal_actiu:
+            efectiu = "pausat_canal"
+        else:
+            efectiu = "actiu"
+
+        last_iso = None
+        font = "none"
+        if platforms:
+            last_dt = SocialPost.objects.filter(
+                platform__in=platforms, status=SocialPost.STATUS_PUBLICAT
+            ).aggregate(m=Max("published_at"))["m"]
+            if last_dt is not None:
+                last_iso = last_dt.isoformat()
+                font = "socialpost"
+            elif audit_action:
+                # Fallback: published_at was reset/republicat → NULL.
+                audit_dt = StaffAuditLog.objects.filter(action=audit_action).aggregate(
+                    m=Max("created_at")
+                )["m"]
+                if audit_dt is not None:
+                    last_iso = audit_dt.isoformat()
+                    font = "audit"
+
+        entry = {
+            "efectiu": efectiu,
+            "mestre_actiu": master,
+            "canal_actiu": canal_actiu,
+            "ultim_enviament": last_iso,
+            "font": font,
+        }
+        if canal == "instagram":
+            entry["fase_distribucio"] = cfg.fase_distribucio
+        out[canal] = entry
+
+    return Response({"mestre_actiu": master, "canals": out})
 
 
 @api_view(["GET"])

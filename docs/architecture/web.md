@@ -58,8 +58,10 @@ loading.
 
 ## RSS feeds (`web/feeds.py`)
 
-Two Atom 1.0 feeds, both honour `ConfiguracioGlobal.rss_actiu` as
-a hard kill switch returning 503 when False:
+Two Atom 1.0 feeds, both honour the shared distribution gate
+`ConfiguracioGlobal.pot_publicar("rss")` (the master `distribucio_activa`
+AND `rss_actiu`) — returning 503 when off (2026-06-07; was `rss_actiu`
+alone):
 
 | Path | Window | One item per |
 |---|---|---|

@@ -93,8 +93,14 @@ class Command(BaseCommand):
         data = opts.get("data")
         target = datetime.date.fromisoformat(data) if data else datetime.date.today()
         cfg = ConfiguracioGlobal.load()
-        if not cfg.instagram_actiu and not opts["dry_run"]:
-            self.stdout.write("Kill switch actiu (instagram_actiu=False). Surt.")
+        # Master + per-channel gate (2026-06-07): `distribucio_activa`
+        # AND `instagram_actiu`. fase_distribucio is applied per-slot
+        # below (an off-phase slot is 'omès', not a pause).
+        if not cfg.pot_publicar("instagram") and not opts["dry_run"]:
+            if not cfg.distribucio_activa:
+                self.stdout.write("Distribució pausada (mestre). Surt.")
+            else:
+                self.stdout.write("Kill switch actiu (instagram_actiu=False). Surt.")
             return
 
         # Sprint Distribució v2 lot B: configurable per-channel delay.

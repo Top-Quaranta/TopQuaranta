@@ -334,7 +334,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 25 10 * * 5 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
 25 10 * * 2 topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel telegram >> /var/log/topquaranta/social.log 2>&1
 
-# Newsletter — only the Saturday top global goes by email (spamming
-# subscribers with 5 emails a week is a fast unsub trigger). +30 min
-# after the IG post.
-0 10 * * 6  topquaranta  /home/topquaranta/bin/tq-run publicar_canal --channel newsletter --tipus top_ppcc >> /var/log/topquaranta/social.log 2>&1
+# Newsletter — opt-out review flow (2026-06-07). Only the weekly top
+# global goes by email (spamming subscribers 5×/week is a fast unsub
+# trigger). Two steps:
+#   - Saturday 09:00: generate the review draft from the consolidated
+#     top (after calcular_top at 08:00) + email staff a review link.
+#   - Sunday 10:00: send the draft (subject + narrative, possibly
+#     edited) unless cancelled, rebuilding the list from the final top.
+# The other channels stay on Saturday; the per-channel split allows it.
+0 9 * * 6   topquaranta  /home/topquaranta/bin/tq-run generar_esborrany_newsletter >> /var/log/topquaranta/social.log 2>&1
+0 10 * * 0  topquaranta  /home/topquaranta/bin/tq-run enviar_newsletter >> /var/log/topquaranta/social.log 2>&1

@@ -122,11 +122,17 @@
     "skip_concern": 1,
     "description": "Distribució multicanal al canal Telegram (variant `publicar_canal --channel telegram`). Mateix calendari que publicar_social, 25 min després; envia el carrusel sencer."
   },
-  "publicar_canal_newsletter": {
-    "frequency_label": "Dissabte 10:00 (+30 min després d'IG)",
+  "generar_esborrany_newsletter": {
+    "frequency_label": "Dissabte 09:00",
     "max_age_hours": 170,
     "skip_concern": 1,
-    "description": "Distribució multicanal del top global per email (variant `publicar_canal --channel newsletter --tipus top_ppcc`). Només dissabte per no saturar la llista de subscriptors."
+    "description": "Genera l'esborrany de revisió de la newsletter setmanal des del top consolidat (motor narratiu, sense efectes secundaris) i envia un enllaç de revisió a l'staff. Flux opt-out: s'enviarà diumenge tret que es cancel·li."
+  },
+  "enviar_newsletter": {
+    "frequency_label": "Diumenge 10:00",
+    "max_age_hours": 194,
+    "skip_concern": 1,
+    "description": "Envia la newsletter setmanal des de l'esborrany de revisió (subject + narrativa, possiblement editats) tret que estigui cancel·lat, reconstruint la llista des del top final. Flux opt-out del top global per email."
   },
   "renovar_token_instagram": {
     "frequency_label": "Mensual (dia 1, 03:00)",

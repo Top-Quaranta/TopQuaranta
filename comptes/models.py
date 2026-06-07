@@ -603,3 +603,71 @@ class SolicitudRevisio(models.Model):
     @property
     def n_rebutjades(self) -> int:
         return len(self.rebutjades_snapshot or [])
+
+
+class NewsletterDraft(models.Model):
+    """Opt-out review draft for the weekly subscriber newsletter.
+
+    Generated on Saturday from the consolidated weekly top by the
+    narrative engine (`generar_esborrany_newsletter`), reviewed by staff
+    via an email link, and sent on Sunday (`enviar_newsletter`) unless
+    cancelled. There is deliberately NO "approved" state: `pendent` means
+    "will be sent" — review is opt-out, not opt-in.
+
+    Only `subject` + `narrative_html` are stored. The rest of the email
+    context (podi, entries, covers) is rebuilt from the FINAL top at send
+    time, so a draft generated Saturday reflects any ranking change up to
+    Sunday. `font` records who produced the text (the engine today; an
+    LLM in a later phase).
+    """
+
+    ESTAT_PENDENT = "pendent"
+    ESTAT_ENVIAT = "enviat"
+    ESTAT_CANCELLAT = "cancellat"
+    ESTAT_CHOICES = [
+        (ESTAT_PENDENT, "Pendent (s'enviarà)"),
+        (ESTAT_ENVIAT, "Enviat"),
+        (ESTAT_CANCELLAT, "Cancel·lat"),
+    ]
+
+    FONT_MOTOR = "motor"
+    FONT_LLM = "llm"
+    FONT_CHOICES = [
+        (FONT_MOTOR, "Motor narratiu"),
+        (FONT_LLM, "LLM"),
+    ]
+
+    tipus = models.CharField(max_length=30)
+    territori = models.CharField(max_length=4, blank=True, default="")
+    setmana = models.DateField(
+        db_index=True, help_text="Dilluns de la setmana ISO del top."
+    )
+    subject = models.CharField(max_length=300)
+    narrative_html = models.TextField(blank=True, default="")
+    estat = models.CharField(
+        max_length=20,
+        choices=ESTAT_CHOICES,
+        default=ESTAT_PENDENT,
+        db_index=True,
+    )
+    font = models.CharField(max_length=10, choices=FONT_CHOICES, default=FONT_MOTOR)
+    editat = models.BooleanField(
+        default=False, help_text="True si l'staff ha editat subject o narrative_html."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    enviat_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-setmana"]
+        verbose_name = "Esborrany de newsletter"
+        verbose_name_plural = "Esborranys de newsletter"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tipus", "territori", "setmana"],
+                name="newsletterdraft_unique_slot",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"NewsletterDraft {self.tipus}/{self.territori} {self.setmana} ({self.estat})"

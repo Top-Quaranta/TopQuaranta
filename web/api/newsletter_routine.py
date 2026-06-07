@@ -98,6 +98,12 @@ def esborrany(request: Request) -> Response:
         return Response(
             {"error": f"esborrany {existing.estat}; no es pot reemplaçar"}, status=409
         )
+    # Don't clobber a human edit: once staff has touched the draft
+    # (`editat=True`), the routine must not overwrite it.
+    if existing and existing.editat:
+        return Response(
+            {"error": "esborrany editat per l'staff; no es pot reemplaçar"}, status=409
+        )
 
     draft, created = NewsletterDraft.objects.update_or_create(
         tipus=TIPUS,

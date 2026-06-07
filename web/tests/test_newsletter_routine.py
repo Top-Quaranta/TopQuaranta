@@ -183,6 +183,29 @@ def test_post_terminal_draft_is_409(client_with_token):
     assert r.status_code == 409
 
 
+@pytest.mark.django_db
+def test_post_does_not_clobber_human_edit(client_with_token):
+    """A pendent draft the staff has edited (`editat=True`) is protected:
+    the routine gets 409 and the edit survives."""
+    _seed_top()
+    NewsletterDraft.objects.create(
+        tipus="top_ppcc",
+        territori="PPCC",
+        setmana=_monday(),
+        subject="Editat per staff",
+        narrative_html="<p>humà</p>",
+        estat=NewsletterDraft.ESTAT_PENDENT,
+        editat=True,
+    )
+    r = client_with_token.post(
+        DRAFT_URL, {"subject": "ROUTINE"}, format="json", **_auth()
+    )
+    assert r.status_code == 409
+    d = NewsletterDraft.objects.get(setmana=_monday())
+    assert d.subject == "Editat per staff"
+    assert d.editat is True
+
+
 # ── engine fallback does not overwrite a routine draft ───────────────
 
 

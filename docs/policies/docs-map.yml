@@ -154,7 +154,7 @@ size:
         decay sweep into per-source files (Last.fm signal,
         MusicBrainz reconciliation, Whisper LID).
     - path: docs/architecture/models.md
-      current_lines: 462
+      current_lines: 467
       reason: >-
         Over the local 400 threshold but still under Rule 3's
         500-line ceiling, so no decay-sweep obligation yet.

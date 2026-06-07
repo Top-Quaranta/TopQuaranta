@@ -207,6 +207,11 @@ artist + `contributors_raw` empty). Orphans are deactivated, not deleted:
   (the Irokz case — a song surviving on a pendent collaborator).
 - **Backfill**: migration `music 0090` deactivated the historical
   orphans (149 at audit time).
+- **Recurring net**: the weekly `netejar_cancons_orfes` command
+  (Monday 02:30) re-applies `orphan_pendents_qs()` with a grace window
+  (`--grace-days`, default 7) so the invariant is self-healing whatever
+  the drift source — it never races an in-progress approval on a
+  freshly-ingested song.
 - **Spared**: cançons with non-empty `contributors_raw` (deferred
   collaborators that may yet resolve to an approved artist on approval)
   are never deactivated by this rule.

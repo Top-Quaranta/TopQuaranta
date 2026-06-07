@@ -265,3 +265,56 @@ def test_endpoint_patch_blocked_when_not_pendent(staff_client):
         "/api/v1/staff/newsletter/esborrany/", {"subject": "x"}, format="json"
     )
     assert r.status_code == 409
+
+
+# ── preview endpoint (render-only, honours editor overrides) ─────────
+
+PREVIEW_URL = "/api/v1/staff/newsletter/esborrany/preview/"
+
+
+@pytest.mark.django_db
+def test_preview_renders_override_and_list(staff_client):
+    _seed_top(nom="Cançó Preview")
+    r = staff_client.post(
+        PREVIEW_URL,
+        {
+            "subject": "Assumpte preview",
+            "narrative_html": "<p>MARCA_OVERRIDE_XYZ</p>",
+        },
+        format="json",
+    )
+    assert r.status_code == 200, r.content
+    html = r.data["html"]
+    # Editorial override is in the rendered email...
+    assert "MARCA_OVERRIDE_XYZ" in html
+    # ...and the list is rebuilt from the consolidated top.
+    assert "Cançó Preview" in html
+
+
+@pytest.mark.django_db
+def test_preview_has_no_side_effects(staff_client):
+    _seed_top()
+    _draft(subject="Original", narrative_html="<p>orig</p>")
+    before = NewsletterDraft.objects.get(setmana=SETMANA)
+    r = staff_client.post(
+        PREVIEW_URL,
+        {"subject": "Edit no desat", "narrative_html": "<p>edit</p>"},
+        format="json",
+    )
+    assert r.status_code == 200, r.content
+    after = NewsletterDraft.objects.get(setmana=SETMANA)
+    # The draft row is untouched by a preview render.
+    assert after.subject == before.subject == "Original"
+    assert after.narrative_html == before.narrative_html
+    assert after.estat == before.estat
+    assert NewsletterDraft.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_preview_refuses_without_consolidated_top(staff_client):
+    # No TopSetmanal seeded → no week resolves (400) / no data (409);
+    # either way the preview refuses rather than rendering an empty email.
+    r = staff_client.post(
+        PREVIEW_URL, {"subject": "x", "narrative_html": "<p>x</p>"}, format="json"
+    )
+    assert r.status_code in (400, 409)

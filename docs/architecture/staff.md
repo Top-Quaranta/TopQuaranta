@@ -142,6 +142,7 @@ Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
 | GET | `/staff/social/estat-canals/` | **(2026-06-07)** Honest per-channel state: `efectiu` (actiu / pausat_global / pausat_canal) + raw `mestre_actiu`/`canal_actiu` + `ultim_enviament` = max `SocialPost.published_at` (status=publicat) with `StaffAuditLog *_publicat` as a reset-proof fallback (`font`=socialpost\|audit\|none). Instagram carries `fase_distribucio`. |
 | GET/PATCH | `/staff/newsletter/esborrany/` | **(2026-06-07)** Newsletter review draft (opt-out flow, `web/api/staff/newsletter.py`). GET → draft + the live top it will ship with + Sunday `send_date`; PATCH edits `subject`/`narrative_html` (sets `editat`, only while `pendent`). `?setmana=` selects the week (default latest). See `comptes.md`. |
 | POST | `/staff/newsletter/esborrany/cancellar/` | **(2026-06-07)** Cancel the week's draft (`estat=cancellat`) so it is NOT sent on Sunday. |
+| POST | `/staff/newsletter/esborrany/preview/` | **(2026-06-07)** Render the FULL email HTML exactly as it would be sent (`comptes.newsletter.render_newsletter_preview` → same `_build_top_context` + template), honouring live `subject`/`narrative_html` overrides so unsaved edits show. Returns `{"html": …}`. Render-only: no `mark_used`, no send, no DB write; list + covers rebuilt from the consolidated top. |
 
 `publicar_canal` (Mastodon + Bluesky variants) publishes a 4-image
 carousel since 2026-05-03 — portada + first three list slides via

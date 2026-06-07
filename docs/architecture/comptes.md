@@ -218,7 +218,13 @@ will send), `font`, `editat`.
    `GET /staff/newsletter/esborrany/` (draft + the live top it will ship
    with, to spot mismatches + the Sunday send date), `PATCH` (edit
    subject/narrative → `editat=True`, only while `pendent`), `POST
-   …/cancellar/` (→ `cancellat`). SPA page `NewsletterDraftPage`.
+   …/cancellar/` (→ `cancellat`), `POST …/preview/` (full email HTML via
+   `newsletter.render_newsletter_preview` — same `_build_top_context` +
+   template as the send, honouring live editor overrides; render-only, no
+   side effects). SPA page `NewsletterDraftPage` shows a faithful
+   full-newsletter preview in a sandboxed iframe (no scripts), debounced
+   on edits, with the list + real covers (logo fallback) as the
+   subscriber sees.
 3. **Sunday 10:00 — `enviar_newsletter`**: gated by
    `ConfiguracioGlobal.pot_publicar("newsletter")`; reads the week's
    draft — `cancellat` → skip; else sends the (possibly edited)

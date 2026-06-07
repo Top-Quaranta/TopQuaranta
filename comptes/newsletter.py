@@ -314,3 +314,39 @@ def send_top_newsletter(
             failed += 1
 
     return f"sent={sent} fail={failed}"
+
+
+def render_newsletter_preview(
+    tipus: str,
+    territori: str,
+    setmana: datetime.date,
+    publish_date: datetime.date,
+    entries: list[dict],
+    *,
+    subject_override: str | None = None,
+    narrative_html_override: str | None = None,
+) -> str:
+    """Render the FULL newsletter HTML exactly as it would be sent, for a
+    staff preview. Same path as `send_top_newsletter`: `_build_top_context`
+    + the same subject/narrative overrides + the same email template
+    (`comptes/email_newsletter_top.html`). Returns the complete HTML.
+
+    Pure render: no `mark_used`, no send, no DB write (it never iterates
+    recipients). The list + covers are rebuilt from the consolidated top
+    via `_build_top_context`, identical to the live send. The unsubscribe
+    link is a non-functional placeholder (no recipient in a preview).
+
+    Keep the override block in sync with `send_top_newsletter`."""
+    base_context, subject = _build_top_context(
+        tipus, territori, setmana, publish_date, entries
+    )
+    if subject_override:
+        subject = subject_override
+        base_context["subject"] = subject_override
+    if narrative_html_override is not None:
+        base_context["narrative_html"] = narrative_html_override
+
+    return render_to_string(
+        "comptes/email_newsletter_top.html",
+        {**base_context, "unsub_url": f"{SITE}/compte/perfil"},
+    )

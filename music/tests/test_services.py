@@ -358,3 +358,111 @@ class TestRebutjarArtista:
         assert album1.descartat is True
         assert album2.descartat is True
         assert verified.verificada is True  # untouched
+
+
+# ── Orphan-pendent predicate + de-approval hook (informe 2a) ────────
+
+
+@pytest.mark.django_db
+class TestOrphanPendents:
+    """Guards for the ingest-hole fix: a pendent canço must have ≥1
+    approved artist (main or collaborator) to stay reviewable."""
+
+    @staticmethod
+    def _mk(nom, *, aprovat):
+        return Artista.objects.create(nom=nom, lastfm_nom=nom, aprovat=aprovat)
+
+    def _pendent_song(self, main, collabs=(), contributors_raw=None):
+        c = _mk_canco(main, verificada=False, activa=True)
+        if contributors_raw is not None:
+            c.contributors_raw = contributors_raw
+            c.save(update_fields=["contributors_raw"])
+        for col in collabs:
+            c.artistes_col.add(col)
+        return c
+
+    def test_has_approved_artist_main(self):
+        from music.services import has_approved_artist
+
+        a = self._mk("MainOK", aprovat=True)
+        assert has_approved_artist(self._pendent_song(a)) is True
+
+    def test_has_approved_artist_via_collab(self):
+        from music.services import has_approved_artist
+
+        main = self._mk("MainPend", aprovat=False)
+        col = self._mk("ColOK", aprovat=True)
+        assert has_approved_artist(self._pendent_song(main, [col])) is True
+
+    def test_has_approved_artist_none(self):
+        from music.services import has_approved_artist
+
+        main = self._mk("MainPend", aprovat=False)
+        col = self._mk("ColPend", aprovat=False)
+        assert has_approved_artist(self._pendent_song(main, [col])) is False
+
+    def test_orphan_qs_matches_real_orphan(self):
+        from music.services import orphan_pendents_qs
+
+        main = self._mk("MP", aprovat=False)
+        col = self._mk("CP", aprovat=False)
+        orphan = self._pendent_song(main, [col])
+        assert orphan_pendents_qs().filter(pk=orphan.pk).exists()
+
+    def test_orphan_qs_spares_approved_collab(self):
+        from music.services import orphan_pendents_qs
+
+        main = self._mk("MP2", aprovat=False)
+        col = self._mk("COK", aprovat=True)
+        song = self._pendent_song(main, [col])
+        assert not orphan_pendents_qs().filter(pk=song.pk).exists()
+
+    def test_orphan_qs_spares_pending_deferred_contributors(self):
+        from music.services import orphan_pendents_qs
+
+        main = self._mk("MP3", aprovat=False)
+        song = self._pendent_song(
+            main,
+            contributors_raw=[{"name": "X", "deezer_id": 9, "role": "secondary"}],
+        )
+        # No approved artist, but deferred contributors may yet resolve.
+        assert not orphan_pendents_qs().filter(pk=song.pk).exists()
+
+    def test_orphan_qs_ignores_verified(self):
+        from music.services import orphan_pendents_qs
+
+        main = self._mk("MP4", aprovat=False)
+        song = self._pendent_song(main)
+        Canco.objects.filter(pk=song.pk).update(verificada=True)
+        assert not orphan_pendents_qs().filter(pk=song.pk).exists()
+
+    def test_reject_artista_deactivates_orphaned_collab_song(self):
+        """The Irokz mechanism: rejecting the only approved artist (a
+        collaborator) on a pendent song leaves it with no approved
+        artist → the hook deactivates it."""
+        main = self._mk("IrokzPend", aprovat=False)
+        col = self._mk("AishaOK", aprovat=True)
+        song = self._pendent_song(main, [col])
+        rebutjar_artista(col, "desvincular_artista")
+        song.refresh_from_db()
+        assert song.activa is False
+
+    def test_reject_artista_keeps_song_with_other_approved_artist(self):
+        main = self._mk("ApprovedMain", aprovat=True)
+        col = self._mk("RejectMe", aprovat=True)
+        song = self._pendent_song(main, [col])
+        rebutjar_artista(col, "desvincular_artista")
+        song.refresh_from_db()
+        assert song.activa is True  # main still approved
+
+    def test_reject_artista_spares_song_with_pending_contributors(self):
+        main = self._mk("MainPend5", aprovat=False)
+        col = self._mk("RejectMe5", aprovat=True)
+        song = self._pendent_song(
+            main,
+            [col],
+            contributors_raw=[{"name": "Y", "deezer_id": 7, "role": "secondary"}],
+        )
+        rebutjar_artista(col, "desvincular_artista")
+        song.refresh_from_db()
+        assert song.activa is True  # deferred contributors may resolve

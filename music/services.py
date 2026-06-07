@@ -16,6 +16,40 @@ from .verificacio import crear_historial
 logger = logging.getLogger(__name__)
 
 
+def has_approved_artist(canco: Canco) -> bool:
+    """True if the canço has at least one approved artist — the main
+    `artista` or any `artistes_col` collaborator.
+
+    Single source of truth for "is this song reviewable" (auditoria
+    2026-06-07, informe 2a): a pendent canço whose main and every
+    collaborator are still pendent has no approved anchor and must not
+    sit in the verification queue. Callers iterating many rows should
+    `prefetch_related("artistes_col")` (or use `orphan_pendents_qs`)."""
+    if canco.artista_id and canco.artista and canco.artista.aprovat:
+        return True
+    return any(c.aprovat for c in canco.artistes_col.all())
+
+
+def orphan_pendents_qs(base=None):
+    """Queryset of *orphan* pendent cançons: `verificada=False`,
+    `activa=True`, NO approved artist (main or collab), AND no pending
+    deferred collaborators (`contributors_raw` empty).
+
+    Mirrors `has_approved_artist` at the SQL level for bulk operations
+    (the de-approval hook, the recurring net, the backfill migration).
+    Songs that still carry deferred contributors in `contributors_raw`
+    are SPARED: resolving them on approval may yet attach an approved
+    artist, so deactivating them now would be premature (caught as the
+    explicit caveat of the 2026-06-07 ingest-hole fix)."""
+    qs = base if base is not None else Canco.objects.all()
+    return (
+        qs.filter(verificada=False, activa=True, contributors_raw=[])
+        .exclude(artista__aprovat=True)
+        .exclude(artistes_col__aprovat=True)
+        .distinct()
+    )
+
+
 def rebutjar_canco(canco: Canco, motiu: str) -> None:
     """
     Reject a single track: record historial, set verificada=False and activa=False.
@@ -296,5 +330,27 @@ def rebutjar_artista(artista: Artista, motiu: str) -> int:
     artista.deezer_ids.all().delete()
     Album.objects.filter(artista=artista).update(descartat=True)
     Artista.objects.filter(pk=artista.pk).update(aprovat=False, pendent_review=True)
+
+    # De-approval hook (2026-06-07, informe 2a): rejecting this artista
+    # demotes it to pendent. Cançons where it was a *collaborator* (the
+    # main unverified ones were just deleted above) may now be left with
+    # NO approved artist — exactly the Irokz case, where rejecting the
+    # collaborator left "Love Me (Slowed)" active in the verify queue
+    # with every artist pendent. Deactivate those orphans instead of
+    # leaving them as active "victims". `orphan_pendents_qs` spares songs
+    # still awaiting deferred-collaborator resolution.
+    orphan_ids = list(
+        orphan_pendents_qs(Canco.objects.filter(artistes_col=artista)).values_list(
+            "id", flat=True
+        )
+    )
+    if orphan_ids:
+        Canco.objects.filter(id__in=orphan_ids).update(activa=False)
+        logger.info(
+            "rebutjar_artista(%s): deactivated %d orphan pendent canço(s) "
+            "left with no approved artist",
+            artista.pk,
+            len(orphan_ids),
+        )
 
     return deleted

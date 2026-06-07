@@ -195,6 +195,26 @@ pendent_review=False`. Motivation: Crim-style collisions where one
 Catalan artist keeps the shared Deezer ID and the other lives off
 MusicBrainz alone.
 
+### Reviewable-canço invariant (2026-06-07, informe 2a)
+A pendent canço (`verificada=False, activa=True`) is only reviewable if
+it has **≥ 1 approved artist** — the main `artista` or any `artistes_col`
+collaborator. The canonical predicate is
+`music.services.has_approved_artist(canco)`; the bulk form is
+`music.services.orphan_pendents_qs()` (pendent + active + no approved
+artist + `contributors_raw` empty). Orphans are deactivated, not deleted:
+- **De-approval hook**: `rebutjar_artista` deactivates (`activa=False`)
+  any pendent canço left with no approved artist after the rejection
+  (the Irokz case — a song surviving on a pendent collaborator).
+- **Backfill**: migration `music 0090` deactivated the historical
+  orphans (149 at audit time).
+- **Spared**: cançons with non-empty `contributors_raw` (deferred
+  collaborators that may yet resolve to an approved artist on approval)
+  are never deactivated by this rule.
+
+Not enforced at ingest (P1/P2 of `obtenir_novetats`): gating song
+creation there is entangled with the deferred-collaborator model and was
+left as an open decision (see the audit report).
+
 ### `StaffAuditLog` — `music_staffauditlog`
 R9. Append-only log of every destructive staff action. Written via
 `music/audit.py::log_staff_action(request, action, target=obj,

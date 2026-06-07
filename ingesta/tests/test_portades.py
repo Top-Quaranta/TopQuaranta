@@ -247,3 +247,63 @@ def test_single_entity_mode_unchanged(mock_sleep, mock_dl, portades_root):
     counts = _calls_per_entity(mock_dl)
     assert counts["album"] == 5
     assert counts["canco"] == 0 and counts["artista"] == 0
+
+
+# ── ranking priority (informe 2c follow-up, 2026-06-07) ──────────────
+
+
+@pytest.mark.django_db
+@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
+@patch("ingesta.management.commands.descarregar_portades.time.sleep")
+def test_album_ranking_priority_first(mock_sleep, mock_dl, portades_root):
+    """A top/ranking album is downloaded BEFORE the catalogue backlog,
+    even when it was inserted last (higher id). With limit=1 the single
+    download must be the ranking album."""
+    import datetime
+
+    from ranking.models import TopSetmanal
+
+    struct = Artista.objects.create(nom="struct-prio")
+    # Catalogue backlog: inserted first → lower ids.
+    for i in range(3):
+        Album.objects.create(
+            artista=struct, nom=f"cat{i}", deezer_id=10000 + i, imatge_url=_DZ_URL
+        )
+    # Ranking album: inserted LAST → highest id, so insertion order would
+    # put it last.
+    top_album = Album.objects.create(
+        artista=struct, nom="topalb", deezer_id=19999, imatge_url=_DZ_URL
+    )
+    top_canco = Canco.objects.create(
+        artista=struct, album=top_album, nom="topcanco", deezer_id=29999
+    )
+    TopSetmanal.objects.create(
+        canco=top_canco,
+        territori="PPCC",
+        setmana=datetime.date(2026, 6, 1),
+        posicio=1,
+        score_setmanal=100.0,
+    )
+
+    mock_dl.return_value = True
+    call_command("descarregar_portades", entitat="album", limit=1)
+
+    mock_dl.assert_called_once_with("album", 19999, top_album.imatge_url)
+
+
+@pytest.mark.django_db
+@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
+@patch("ingesta.management.commands.descarregar_portades.time.sleep")
+def test_no_ranking_keeps_insertion_order(mock_sleep, mock_dl, portades_root):
+    """With no rankings at all, the first inserted album is processed
+    first (priority set empty → stable id order)."""
+    struct = Artista.objects.create(nom="struct-noprio")
+    first = Album.objects.create(
+        artista=struct, nom="first", deezer_id=11111, imatge_url=_DZ_URL
+    )
+    Album.objects.create(
+        artista=struct, nom="second", deezer_id=22222, imatge_url=_DZ_URL
+    )
+    mock_dl.return_value = True
+    call_command("descarregar_portades", entitat="album", limit=1)
+    mock_dl.assert_called_once_with("album", 11111, first.imatge_url)

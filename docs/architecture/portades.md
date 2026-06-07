@@ -108,6 +108,23 @@ consume budget. (Surfaced in the Fase 1 manual validation, where a
 plain re-run with the same `--limit` fetched the next batch rather
 than reporting all-skipped.)
 
+### Ranking priority (2026-06-07)
+
+Within each entity, candidates are yielded **ranking-first**: entities
+linked to the CURRENT rankings (the latest weekly `TopSetmanal` + every
+`TopProvisional`) are downloaded before the catalogue backlog, then the
+rest in id order. This protects every consumer surface (newsletter,
+social feed/stories) — the cover of a current top entry can no longer be
+starved by the unordered backlog within the nightly `--limit` (caught
+2026-06-07: Rosalía's 7-week #1 cover was missing from the newsletter
+because the cron, iterating by insertion order, had never reached it).
+Priority sets: album = albums of ranking cançons; canco = ranking
+cançons; artista = main artistes of ranking cançons. With no rankings
+the priority set is empty and ordering falls back to stable id order.
+Complements `newsletter_covers.ensure_cover_downloaded` (#160), which is
+a last-resort synchronous pull at send time; this makes the nightly cron
+itself top-aware.
+
 ### Budget split across entitats (`--entitat all`)
 
 With `--entitat all` the budget is divided evenly — `limit // 3` per

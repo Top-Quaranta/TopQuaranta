@@ -94,6 +94,14 @@ CRON_GROUPS: list[tuple[str, list[str]]] = [
 # not have hit their first scheduled run yet. See classify_cron.
 WAITING_ESCALATE_MAX_AGE_H = 48
 
+# Watchdog escalation thresholds on consecutive skips/fails. The WARN
+# threshold is per-cron (the `skip_concern` field in cron-meta.json):
+# hourly crons tolerate a couple of long-running ticks, daily ones
+# shouldn't skip at all. Before 2026-06-07 a uniform 3/10 was hardcoded
+# here and `skip_concern` was dead config the watchdog never read.
+DEFAULT_WARN_PERSISTENT = 3
+DEFAULT_CRIT_PERSISTENT = 10
+
 # State → emoji + whether it is an anomaly worth surfacing up top.
 _EMOJI = {
     "OK": "🟢",
@@ -154,10 +162,17 @@ def classify_cron(
     fails: int,
     silenced: bool,
     now_ts: int,
+    skip_concern: int | None = None,
 ) -> dict:
     """Port of bin/tq-health's per-cron classifier. Returns a dict
     with state/display/age_h/escalates/is_anomaly. `escalates` is the
     cron's contribution to `overall`.
+
+    `skip_concern` is the per-cron WARN threshold from cron-meta.json:
+    the number of consecutive skips/fails at which a still-running (or
+    repeatedly-failing) instance becomes suspicious. Daily crons declare
+    1 (they shouldn't skip at all), hourly ones 3. Defaults to
+    DEFAULT_WARN_PERSISTENT when unset.
 
     `status is None` means the status file is absent. That is benign
     only for genuinely-infrequent crons: a weekly/monthly job may simply
@@ -198,13 +213,19 @@ def classify_cron(
     age_h = max(0, (now_ts - last_ts) // 3600)
     escalates = False
 
-    # Watchdog escalation on persistent skips/fails (mirrors bash).
+    # Watchdog escalation on persistent skips/fails. The WARN threshold
+    # is the per-cron `skip_concern` (default 3); CRIT stays a fixed
+    # ceiling, never below WARN.
+    warn_at = (
+        skip_concern if skip_concern and skip_concern > 0 else DEFAULT_WARN_PERSISTENT
+    )
+    crit_at = max(DEFAULT_CRIT_PERSISTENT, warn_at)
     persistent = max(skips, fails)
     watchdog_tag = ""
-    if persistent >= 10:
+    if persistent >= crit_at:
         watchdog_tag = f" [watchdog CRIT, {persistent} consecutive]"
         escalates = True
-    elif persistent >= 3:
+    elif persistent >= warn_at:
         watchdog_tag = f" [watchdog WARN, {persistent} consecutive]"
         if silenced:
             escalates = True
@@ -285,6 +306,7 @@ def gather_crons(status_dir: Path, meta: dict, now_ts: int) -> list[dict]:
         known.add(name)
         max_age = int(m.get("max_age_hours") or 0)
         silenced = bool(m.get("silenced"))
+        skip_concern = m.get("skip_concern")
         f = status_dir / f"{name}.status"
         if not f.is_file():
             rows.append(
@@ -297,6 +319,7 @@ def gather_crons(status_dir: Path, meta: dict, now_ts: int) -> list[dict]:
                     fails=0,
                     silenced=silenced,
                     now_ts=now_ts,
+                    skip_concern=skip_concern,
                 )
             )
             continue
@@ -311,6 +334,7 @@ def gather_crons(status_dir: Path, meta: dict, now_ts: int) -> list[dict]:
                 fails=int(sf.get("consecutive_failures") or 0),
                 silenced=silenced,
                 now_ts=now_ts,
+                skip_concern=skip_concern,
             )
         )
     # Reconcile the OTHER direction: status files with no cron-meta entry.

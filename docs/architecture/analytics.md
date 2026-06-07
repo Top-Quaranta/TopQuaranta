@@ -271,6 +271,12 @@ Two coverage states beyond the bash original (auditoria 2026-06-07):
   unregistered cron, or stale residue from a removed/renamed command,
   gets cleaned up (`rm` the file, or add the meta entry).
 
+The watchdog WARN threshold (consecutive skips/fails before a still-
+running or repeatedly-failing instance becomes suspicious) is **per-cron**
+from the `skip_concern` field in `cron-meta.json` (daily crons declare 1,
+hourly ones 3); CRIT stays a fixed 10. Before 2026-06-07 a uniform 3/10
+was hardcoded and `skip_concern` was dead config.
+
 ### Pruning
 
 We never delete from these tables. At current scale (~thousands of

@@ -151,6 +151,17 @@ Helpers:
   at `/portades/album/<id>-{250,500}.jpg` (filesystem check via
   `ingesta.portades.manager`, no network) else the committed
   placeholder.
+- **`newsletter_covers.ensure_cover_downloaded(deezer_id, source_url)`**
+  — called from `_build_top_context` for every cover slot (podi, resta,
+  territorials, novetats) BEFORE composing. If the local JPG is missing
+  it pulls it synchronously via the SAME portades pipeline
+  (`manager.download_and_convert`), so the policy stays self-hosting-only
+  (no Deezer hotlink in the email) yet the logo fallback only shows for
+  albums genuinely without a Deezer cover. Best-effort: never raises;
+  an album with no `source_url` stays on the placeholder. Closes the
+  2026-06-07 gap where a long-standing #1 (Rosalía · "Divinize") showed
+  the logo because the nightly `descarregar_portades` cron — unordered,
+  200/run, no ranking priority — had never generated its cover.
 - **`newsletter_meta.trend_indicator(pos, pos_anterior, is_return)`** —
   ↑N / ↓N / → / DEBUT / TORNA (a13) with mm-design colours. Deltas
   come from `payload.build_top`'s `posicio_anterior` (no extra query).

@@ -9,7 +9,7 @@
  *
  * Staff tool, no fancy chrome; reuses the panel's Tailwind tq-* tokens.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { Input } from '../../components/staff/StaffTable'
@@ -28,6 +28,10 @@ export default function NewsletterDraftPage() {
   const [busy, setBusy] = useState(false)
   const [subject, setSubject] = useState('')
   const [narrative, setNarrative] = useState('')
+  // Faithful full-email preview (rendered server-side, render-only).
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [previewErr, setPreviewErr] = useState('')
 
   const qs = setmana ? `?setmana=${encodeURIComponent(setmana)}` : ''
 
@@ -42,6 +46,36 @@ export default function NewsletterDraftPage() {
       .then(d => { hydrate(d); setErr('') })
       .catch(e => setErr(e.payload?.error || e.message))
   useEffect(() => { reload() }, [setmana])
+
+  // Render the full email server-side, sending the editor's LIVE
+  // subject/narrative as overrides so unsaved edits show. The list +
+  // covers are rebuilt from the consolidated top by the endpoint.
+  async function fetchPreview(subj, narr) {
+    setPreviewBusy(true)
+    try {
+      const res = await api.post(`/staff/newsletter/esborrany/preview/${qs}`, {
+        subject: subj,
+        narrative_html: narr,
+      })
+      setPreviewHtml(res.html || '')
+      setPreviewErr('')
+    } catch (e) {
+      setPreviewErr(e.payload?.error || e.message)
+    } finally {
+      setPreviewBusy(false)
+    }
+  }
+
+  // Debounce preview refresh as the editor changes (only once a draft is
+  // loaded). 600 ms after the last keystroke.
+  const debounceRef = useRef(null)
+  useEffect(() => {
+    if (!draft) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => fetchPreview(subject, narrative), 600)
+    return () => debounceRef.current && clearTimeout(debounceRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject, narrative, draft?.setmana])
 
   if (err) return <p className="p-6 text-red-700">Error: {err}</p>
   if (!draft) return <p className="p-6">Carregant…</p>
@@ -127,12 +161,32 @@ export default function NewsletterDraftPage() {
       </label>
 
       <div>
-        <p className="text-[11px] uppercase tracking-widest text-tq-ink/75 mb-1">
-          Vista prèvia
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[11px] uppercase tracking-widest text-tq-ink/75">
+            Vista prèvia (tota la newsletter, tal com s'enviarà)
+          </p>
+          <button
+            type="button"
+            onClick={() => fetchPreview(subject, narrative)}
+            disabled={previewBusy}
+            className="text-xs px-2 py-1 rounded border border-tq-ink/20 hover:bg-gray-100"
+          >
+            {previewBusy ? 'Renderitzant…' : 'Refresca'}
+          </button>
+        </div>
+        <p className="text-[11px] text-tq-ink/60 mb-1">
+          Renderitzada al servidor pel mateix camí que l'enviament (text +
+          llista + caràtules reals; fallback al logo si en falta una).
+          Reflecteix els canvis no desats de l'editor.
         </p>
-        <div
-          className="border rounded-md p-3 text-sm bg-white"
-          dangerouslySetInnerHTML={{ __html: narrative || '<p class="opacity-60">(sense text editorial)</p>' }}
+        {previewErr && (
+          <p className="text-xs text-red-700 mb-1">Error de render: {previewErr}</p>
+        )}
+        <iframe
+          title="Vista prèvia de la newsletter"
+          sandbox=""
+          srcDoc={previewHtml || '<p style="font-family:sans-serif;color:#999;padding:1rem">Carregant vista prèvia…</p>'}
+          className="w-full h-[640px] border rounded-md bg-white"
         />
       </div>
 

@@ -5,6 +5,9 @@ GET    /staff/newsletter/esborrany/            → draft + the entries it
 PATCH  /staff/newsletter/esborrany/            → edit subject /
                                                   narrative_html (editat=True).
 POST   /staff/newsletter/esborrany/cancellar/  → estat=cancellat.
+POST   /staff/newsletter/esborrany/preview/    → full email HTML (render
+                                                  only; honours editor
+                                                  overrides; no DB write).
 
 The draft is keyed by week; `?setmana=<iso>` selects one, default the
 latest. See `docs/architecture/social.md` for the flow.
@@ -126,3 +129,43 @@ def esborrany_cancellar(request: Request) -> Response:
     draft.estat = NewsletterDraft.ESTAT_CANCELLAT
     draft.save(update_fields=["estat", "updated_at"])
     return Response(_draft_payload(draft))
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def esborrany_preview(request: Request) -> Response:
+    """Render the FULL newsletter HTML as it would be sent, honouring the
+    editor's live `subject`/`narrative_html` overrides (so unsaved edits
+    show). Render-only: no `mark_used`, no send, no DB write; the list +
+    covers are rebuilt from the consolidated top exactly like the send.
+    Returns `{"html": "<full email>"}` for an iframe `srcdoc`."""
+    from comptes.newsletter import render_newsletter_preview
+    from social import payload
+
+    setmana = _resolve_setmana(request)
+    if setmana is None:
+        return Response({"error": "setmana invàlida o cap top consolidat"}, status=400)
+    data = payload.build_top(TERRITORI, setmana)
+    if not data:
+        return Response(
+            {"error": f"top {TERRITORI} de la setmana {setmana} no consolidat"},
+            status=409,
+        )
+
+    # Overrides: only apply when the key is present in the request, so an
+    # absent field falls back to the engine/draft text.
+    subject_override = request.data.get("subject")
+    narrative_override = request.data.get("narrative_html")
+    publish_date = setmana + datetime.timedelta(days=5)
+    html = render_newsletter_preview(
+        TIPUS,
+        TERRITORI,
+        setmana,
+        publish_date,
+        data["entries"],
+        subject_override=(subject_override or None),
+        narrative_html_override=(
+            narrative_override if narrative_override is not None else None
+        ),
+    )
+    return Response({"html": html, "setmana": setmana.isoformat()})

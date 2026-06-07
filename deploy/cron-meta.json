@@ -182,5 +182,10 @@
     "frequency_label": "Cada dilluns 02:15",
     "max_age_hours": 170,
     "skip_concern": 1
+  },
+  "netejar_cancons_orfes": {
+    "frequency_label": "Cada dilluns 02:30",
+    "max_age_hours": 170,
+    "skip_concern": 1
   }
 }

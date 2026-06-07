@@ -186,7 +186,14 @@ def cancons_list(request: Request) -> Response:
         qs = Canco.objects.filter(verificada=True)
     else:
         qs = Canco.objects.all()
-    qs = qs.select_related("artista", "album")
+    # select_related: artista + album (FK) and spotify (reverse OneToOne,
+    # read per row in _canco_row). prefetch_related: artistes_col (M2M
+    # iterated per row). Without these the row builder fired one query per
+    # row for the collab list and the Spotify payload — N+1 ×up-to-200
+    # (auditoria 2026-06-07).
+    qs = qs.select_related("artista", "album", "spotify").prefetch_related(
+        "artistes_col"
+    )
     ml_classe = request.GET.get("ml_classe", "")
     if ml_classe in ("A", "B", "C"):
         qs = qs.filter(ml_classe=ml_classe)

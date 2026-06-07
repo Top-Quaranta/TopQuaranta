@@ -26,7 +26,7 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 from comptes.models import Usuari
-from comptes.newsletter_covers import album_cover_url
+from comptes.newsletter_covers import album_cover_url, ensure_cover_downloaded
 from comptes.newsletter_meta import derive_subject, trend_indicator
 from comptes.newsletter_utm import build_newsletter_url
 from music.dates import project_week_number
@@ -60,6 +60,7 @@ def _enrich_entry(e: dict, content: str, week: int, *, hero: bool, torna: bool) 
     mida = 500 if hero else 250
     slug = e.get("canco_slug")
     link_base = f"{SITE}/canco/{slug}" if slug else f"{SITE}/top"
+    ensure_cover_downloaded(e.get("album_deezer_id"), e.get("cover_url"))
     return {
         **e,
         "artistes_display": _join_artists_text(names, max_chars=80),
@@ -82,6 +83,7 @@ def _territorial_cards(setmana: datetime.date, week: int) -> list[dict]:
             continue
         top1 = data["entries"][0]
         names = top1.get("artistes_noms") or [top1.get("artista_nom") or "—"]
+        ensure_cover_downloaded(top1.get("album_deezer_id"), top1.get("cover_url"))
         cards.append(
             {
                 "territori": terr,
@@ -110,6 +112,7 @@ def _novetats_cards(setmana: datetime.date, publish_date: datetime.date, week: i
     for i, it in enumerate(items[:3], start=1):
         slug = it.get("artista_slug")
         link_base = f"{SITE}/artista/{slug}" if slug else f"{SITE}/"
+        ensure_cover_downloaded(it.get("album_deezer_id"), it.get("cover_url"))
         cards.append(
             {
                 "nom": it.get("nom") or "—",

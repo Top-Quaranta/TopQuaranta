@@ -55,7 +55,10 @@ web-react/
     └── pages/              One file per route
         ├── HomePage / TopPage / ArtistesPage / MapaPage / ...
         ├── legal/          7 legal pages + LegalLayout
-        └── staff/          28 staff pages (StaffLayout)
+        └── staff/          Staff pages (StaffLayout)
+            └── social/     Distribution sub-views: a shared,
+                            descriptor-driven ChannelView template
+                            (one page per simple channel)
 ```
 
 Routing is centralised in `App.jsx`: a flat `<Routes>` tree with no
@@ -82,6 +85,18 @@ nested layouts beyond the per-section `<Layout>`, `<StaffLayout>`,
 
 The `AdminRoute` 2FA handoff is the only architecturally interesting
 auth seam; see the file's docstring for the rationale.
+
+The **distribution area** under `/staff/social` is being split from a
+single monolithic page into homogeneous house-style views (slice 1):
+`/staff/social` is the cockpit (master switch + the six-channel grid),
+and the simple channels have their own page at `/staff/social/<canal>`
+(`mastodon`, `bluesky`, `telegram`). Those pages share one
+`pages/staff/social/ChannelView.jsx` template that paints from
+`channelDescriptors.jsx` — adding a channel or a credential field means
+extending the descriptor, not writing a new page. Instagram, the
+newsletter and RSS are still managed in-page on the cockpit until later
+slices; the publications list and Spotify likewise stay on their
+current pages for now.
 
 ## Backend seam
 

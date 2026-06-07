@@ -74,6 +74,7 @@ const FeedbackPage = lazy(() => import('./pages/staff/FeedbackPage'))
 const StaffSocialPage = lazy(() => import('./pages/staff/StaffSocialPage'))
 const NewsletterDraftPage = lazy(() => import('./pages/staff/NewsletterDraftPage'))
 const StaffSocialSpotifyPage = lazy(() => import('./pages/staff/StaffSocialSpotifyPage'))
+const ChannelView = lazy(() => import('./pages/staff/social/ChannelView'))
 const EstatPage = lazy(() => import('./pages/staff/EstatPage'))
 const StaffPublicacionsPage = lazy(() => import('./pages/staff/StaffPublicacionsPage'))
 const StaffAnalyticsPage = lazy(() => import('./pages/staff/StaffAnalyticsPage'))
@@ -246,6 +247,9 @@ function AppContent() {
                   <Route path="/social" element={<StaffSocialPage />} />
                   <Route path="/social/esborrany" element={<NewsletterDraftPage />} />
                   <Route path="/social/spotify" element={<StaffSocialSpotifyPage />} />
+                  <Route path="/social/mastodon" element={<ChannelView canal="mastodon" />} />
+                  <Route path="/social/bluesky" element={<ChannelView canal="bluesky" />} />
+                  <Route path="/social/telegram" element={<ChannelView canal="telegram" />} />
                   <Route path="/estat" element={<EstatPage />} />
                   <Route path="/publicacions" element={<StaffPublicacionsPage />} />
                   <Route path="/analytics" element={<StaffAnalyticsPage />} />

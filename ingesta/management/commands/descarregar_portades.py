@@ -23,9 +23,11 @@ import logging
 import time
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db.models import Case, IntegerField, Max, Value, When
 
 from ingesta.portades import download_and_convert, exists
 from music.models import Album, Artista, Canco
+from ranking.models import TopProvisional, TopSetmanal
 
 logger = logging.getLogger(__name__)
 
@@ -130,14 +132,70 @@ class Command(BaseCommand):
             time.sleep(THROTTLE_S)
         return found, failed, skipped, processed
 
+    # ── ranking priority ────────────────────────────────────────────
+    @staticmethod
+    def _ranking_canco_ids() -> set[int]:
+        """Canço ids in the CURRENT rankings: the latest weekly
+        `TopSetmanal` + every `TopProvisional`. These drive what the
+        newsletter, social posts and stories render this week, so their
+        covers must be on disk before the catalogue backlog."""
+        ids = set(TopProvisional.objects.values_list("canco_id", flat=True))
+        latest = TopSetmanal.objects.aggregate(m=Max("setmana"))["m"]
+        if latest is not None:
+            ids |= set(
+                TopSetmanal.objects.filter(setmana=latest).values_list(
+                    "canco_id", flat=True
+                )
+            )
+        return ids
+
+    def _ranking_priority_ids(self, entitat: str) -> set[int]:
+        """Set of ids to download FIRST for an entity. deezer_ids for
+        album/canco; artista ids for artista (ordered via id__in)."""
+        canco_ids = self._ranking_canco_ids()
+        if not canco_ids:
+            return set()
+        if entitat == "album":
+            return set(
+                Album.objects.filter(cancons__id__in=canco_ids)
+                .exclude(deezer_id__isnull=True)
+                .values_list("deezer_id", flat=True)
+            )
+        if entitat == "canco":
+            return set(
+                Canco.objects.filter(id__in=canco_ids)
+                .exclude(deezer_id__isnull=True)
+                .values_list("deezer_id", flat=True)
+            )
+        if entitat == "artista":
+            return set(
+                Canco.objects.filter(id__in=canco_ids).values_list(
+                    "artista_id", flat=True
+                )
+            )
+        return set()
+
     # ── candidate selection ─────────────────────────────────────────
     def _iter_candidates(self, entitat: str):
-        """Yield (deezer_id, source_url) pairs for an entity. Only rows
-        that carry both a deezer_id and a non-empty image URL."""
+        """Yield (deezer_id, source_url) pairs for an entity, RANKING
+        entities first then the rest, so a top cover (e.g. the #1) is
+        never starved by the catalogue backlog within the nightly limit
+        (caught 2026-06-07: Rosalía's #1 cover was missing from the
+        newsletter). Only rows with both a deezer_id and a non-empty
+        image URL."""
+        prio = self._ranking_priority_ids(entitat)
         if entitat == "album":
             qs = (
                 Album.objects.exclude(deezer_id__isnull=True)
                 .exclude(imatge_url="")
+                .annotate(
+                    _prio=Case(
+                        When(deezer_id__in=prio, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("_prio", "id")
                 .values_list("deezer_id", "imatge_url")
                 .iterator()
             )
@@ -147,6 +205,14 @@ class Command(BaseCommand):
                 Canco.objects.exclude(deezer_id__isnull=True)
                 .exclude(album__imatge_url="")
                 .exclude(album__isnull=True)
+                .annotate(
+                    _prio=Case(
+                        When(deezer_id__in=prio, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("_prio", "id")
                 .values_list("deezer_id", "album__imatge_url")
                 .iterator()
             )
@@ -154,9 +220,19 @@ class Command(BaseCommand):
         elif entitat == "artista":
             # Artista has no direct deezer_id column (M2M via
             # ArtistaDeezer); resolve the principal id per row. Only
-            # artistes with a stored image are candidates.
+            # artistes with a stored image are candidates. Ranking
+            # artistes (by id) come first.
             arts = (
-                Artista.objects.exclude(imatge_url="").prefetch_related("deezer_ids")
+                Artista.objects.exclude(imatge_url="")
+                .annotate(
+                    _prio=Case(
+                        When(id__in=prio, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("_prio", "id")
+                .prefetch_related("deezer_ids")
                 # chunk_size is required by Django when .iterator() follows
                 # prefetch_related().
                 .iterator(chunk_size=500)

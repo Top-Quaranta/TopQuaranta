@@ -194,12 +194,15 @@ will send), `font`, `editat`.
      `is_verified_recent_release`, first-appearance with the
      week-1-birth vs genuine-debut distinction, per-artist top history),
      group facts for the top-5 (origin municipi/comarca/territori,
-     collaborators + their origin only when known, release date), leader
-     fact (`detect_all[0]`, gated, with `freshness_blocked`), `actualitat`
-     (recent VilaWeb RSS headlines, best-effort), and a separate
-     LOW-CONFIDENCE section with Last.fm tags. Returns
-     `{"status": "not_ready"}` when this week's top isn't consolidated
-     (same anti-stale guard).
+     collaborators + their origin only when known, release date, plus a
+     `compromis_llengua` advisory flag — `te_obra_no_catala` /
+     `n_cancons_desvinculades` from `desvincular_canco` rejections, a
+     name-joined proxy for "has non-Catalan work"; see `brief.notes`),
+     leader fact (`detect_all[0]`, gated, with `freshness_blocked`),
+     `actualitat` (the 6-8 most recent VilaWeb RSS headlines so the voice
+     picks by weight, best-effort), and a separate LOW-CONFIDENCE section
+     with Last.fm tags. Returns `{"status": "not_ready"}` when this week's
+     top isn't consolidated (same anti-stale guard).
    - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
      draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`

@@ -30,6 +30,7 @@ import xml.etree.ElementTree as ET
 from django.conf import settings
 from django.db.models import Count, Min
 
+from music.models import HistorialRevisio
 from ranking.models import TopSetmanal
 
 logger = logging.getLogger(__name__)
@@ -81,9 +82,30 @@ def _artista_origen(artista) -> dict | None:
     return None
 
 
-def _fetch_vilaweb(limit: int = 5) -> list[dict]:
-    """Recent VilaWeb headlines (title, source, date). Best-effort: any
-    network/parse failure yields an empty list, never raises."""
+def _llengua_signal(noms: list[str]) -> dict[str, int]:
+    """Per-name count of `desvincular_canco` rejections — a proxy for
+    "this artist has non-Catalan work in our ingest" (a song we unlinked
+    as not-Catalan). The code is ~99.7% the legacy `no_catala` + a few
+    `no_musica` (migration 0083), so it is a reliable-but-fuzzy signal,
+    NOT a verified fact: joined by `artista_nom` (a HistorialRevisio
+    snapshot string, not an FK), so homonyms can blur it. ADVISORY: the
+    voice reads it to calibrate how much to honour an artist as a
+    Catalan-music flag-bearer; absence is weaker evidence than presence."""
+    from collections import Counter
+
+    if not noms:
+        return {}
+    rows = HistorialRevisio.objects.filter(
+        decisio="rebutjada", motiu="desvincular_canco", artista_nom__in=noms
+    ).values_list("artista_nom", flat=True)
+    return dict(Counter(rows))
+
+
+def _fetch_vilaweb(limit: int = 8) -> list[dict]:
+    """The most recent VilaWeb headlines (title, source, date) — up to 8
+    by default so the voice can pick by weight, not decoration.
+    Best-effort: any network/parse failure yields an empty list, never
+    raises (the brief still builds without an actualitat section)."""
     url = getattr(settings, "VILAWEB_RSS_URL", "")
     if not url:
         return []
@@ -194,7 +216,10 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
         )
 
     # Group facts for the top 5: origin + collaborators (+ their origin,
-    # only when we actually have it) + release date.
+    # only when we actually have it) + release date + language-commitment
+    # proxy.
+    noms5 = [r.canco.artista.nom for r in rows[:5] if r.canco and r.canco.artista]
+    lleng = _llengua_signal(noms5)
     fets_grup = []
     for r in rows[:5]:
         canco = r.canco
@@ -203,6 +228,7 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
         if canco:
             for col in canco.artistes_col_ordered():
                 collabs.append({"nom": col.nom, "origen": _artista_origen(col)})
+        n_desv = lleng.get(artista.nom, 0) if artista else 0
         fets_grup.append(
             {
                 "posicio": r.posicio,
@@ -215,6 +241,11 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
                     else None
                 ),
                 "collaboradors": collabs,
+                # Catalan-music rootedness proxy (advisory; see brief.notes).
+                "compromis_llengua": {
+                    "te_obra_no_catala": bool(n_desv),
+                    "n_cancons_desvinculades": n_desv,
+                },
             }
         )
 
@@ -267,6 +298,17 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
         "baixa_confianca": {
             "_avis": "Senyal sorollós (tags crowd-sourced de Last.fm); NO és un fet verificat.",
             "lastfm_tags_top5": tags_top5,
+        },
+        "notes": {
+            "compromis_llengua": (
+                "ADVISORY, no és un fet verificat. `te_obra_no_catala` ve de "
+                "rebuigs `desvincular_canco` (≈ cançó no-catalana al nostre "
+                "ingest; barreja no_catala + uns pocs no_musica). Join per nom "
+                "d'artista (possibles homònims). Presència = té obra no-catalana; "
+                "absència = cap cançó no-catalana rebutjada (evidència més feble). "
+                "Usa'l per calibrar quant honores l'artista com a abanderat del "
+                "català, no per afirmar res categòric."
+            )
         },
     }
 

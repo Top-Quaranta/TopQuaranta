@@ -233,3 +233,64 @@ def test_engine_fallback_does_not_overwrite_routine_draft(mock_build, mock_mail)
     assert d.font == NewsletterDraft.FONT_LLM  # untouched
     assert d.subject == "LLM subject"
     assert not mock_build.called  # never even composed
+
+
+# ── brief enrichment: actualitat (6-8) + language-commitment flag ────
+
+
+@pytest.mark.django_db
+def test_brief_actualitat_carries_multiple_headlines(client_with_token):
+    _seed_top()
+    many = [
+        {"titol": f"Titular {i}", "font": "VilaWeb", "data": f"d{i}"} for i in range(8)
+    ]
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=many):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.status_code == 200
+    assert len(r.data["actualitat"]) == 8
+    assert r.data["actualitat"][0]["font"] == "VilaWeb"
+
+
+@pytest.mark.django_db
+def test_brief_actualitat_best_effort_on_feed_failure(client_with_token, settings):
+    """If the feed fetch fails, the brief still builds with empty
+    actualitat (best-effort)."""
+    _seed_top()
+    settings.VILAWEB_RSS_URL = "http://127.0.0.1:9/does-not-exist"
+    # Real _fetch_vilaweb (not mocked) must swallow the connection error.
+    r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.status_code == 200
+    assert r.data["status"] == "ready"
+    assert r.data["actualitat"] == []
+
+
+@pytest.mark.django_db
+def test_brief_llengua_flag_present_and_false_without_rejects(client_with_token):
+    _seed_top()
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    fet = r.data["fets_grup_top5"][0]
+    assert fet["compromis_llengua"]["te_obra_no_catala"] is False
+    assert fet["compromis_llengua"]["n_cancons_desvinculades"] == 0
+    assert "compromis_llengua" in r.data["notes"]
+
+
+@pytest.mark.django_db
+def test_brief_llengua_flag_true_with_desvincular_canco(client_with_token):
+    from music.models import HistorialRevisio
+
+    c = _seed_top()
+    nom = c.artista.nom
+    # Two non-Catalan song rejections recorded against this artist.
+    for i in range(2):
+        HistorialRevisio.objects.create(
+            artista_nom=nom,
+            decisio="rebutjada",
+            motiu="desvincular_canco",
+            canco_nom=f"Other-lang {i}",
+        )
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    fet = next(f for f in r.data["fets_grup_top5"] if f["artista"] == nom)
+    assert fet["compromis_llengua"]["te_obra_no_catala"] is True
+    assert fet["compromis_llengua"]["n_cancons_desvinculades"] == 2

@@ -1,0 +1,1 @@
+{% spaceless %}{% for a in arts %}{% if not forloop.first %}<span>, </span>{% endif %}{% if a.url %}<strong><a href="{{ a.url }}" style="color:inherit;text-decoration:none;">{{ a.nom }}</a></strong>{% else %}<strong>{{ a.nom }}</strong>{% endif %}{% endfor %}{% if trunc %}…{% endif %}{% endspaceless %}

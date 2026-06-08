@@ -27,6 +27,7 @@ from django.utils.html import strip_tags
 
 from comptes.models import Usuari
 from comptes.newsletter_covers import album_cover_url, ensure_cover_downloaded
+from comptes.newsletter_linkify import linkify_narrative
 from comptes.newsletter_meta import derive_subject, trend_indicator
 from comptes.newsletter_utm import build_newsletter_url
 from music.dates import project_week_number
@@ -54,6 +55,44 @@ def _unsub_url(user: Usuari) -> str:
     return f"{UNSUB_BASE}?token={token}"
 
 
+def _artistes_render(
+    names: list[str],
+    artista_slug: str | None,
+    content: str,
+    week: int,
+    *,
+    max_chars: int = 80,
+) -> tuple[list[dict], bool]:
+    """Per-artist template rows mirroring `_join_artists_text`'s budget.
+
+    The principal (index 0) carries a `/artista/{slug}` URL when known;
+    collaborators carry `url=None` (bold without link until slice 2 adds
+    their slugs to the payload). Returns `(rows, truncated)` where
+    `truncated` signals an appended ellipsis for an over-long list (e.g.
+    a 39-collaborator track), keeping the card bounded like the legacy
+    joined string did."""
+    if not names:
+        return [{"nom": "—", "url": None}], False
+    full = ", ".join(names)
+    if len(full) <= max_chars:
+        shown, truncated = names, False
+    else:
+        shown, truncated = names[:1], True
+        for i in range(len(names) - 1, 0, -1):
+            if len(", ".join(names[:i]) + "…") <= max_chars:
+                shown, truncated = names[:i], True
+                break
+    rows = []
+    for idx, nom in enumerate(shown):
+        url = None
+        if idx == 0 and artista_slug:
+            url = build_newsletter_url(
+                f"{SITE}/artista/{artista_slug}", f"{content}_art", week
+            )
+        rows.append({"nom": nom, "url": url})
+    return rows, truncated
+
+
 def _enrich_entry(e: dict, content: str, week: int, *, hero: bool, torna: bool) -> dict:
     """One top entry → template-ready row (cover, trend, UTM link)."""
     names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
@@ -61,9 +100,14 @@ def _enrich_entry(e: dict, content: str, week: int, *, hero: bool, torna: bool) 
     slug = e.get("canco_slug")
     link_base = f"{SITE}/canco/{slug}" if slug else f"{SITE}/top"
     ensure_cover_downloaded(e.get("album_deezer_id"), e.get("cover_url"))
+    artistes_render, artistes_truncated = _artistes_render(
+        names, e.get("artista_slug"), content, week
+    )
     return {
         **e,
         "artistes_display": _join_artists_text(names, max_chars=80),
+        "artistes_render": artistes_render,
+        "artistes_truncated": artistes_truncated,
         "cover": album_cover_url(e.get("album_deezer_id"), mida),
         "trend": trend_indicator(
             e.get("posicio"), e.get("posicio_anterior"), is_return=torna
@@ -134,6 +178,43 @@ def _share_links(week: int) -> list[dict]:
     ]
 
 
+def _name_map_from_entries(
+    entries: list[dict], week: int
+) -> list[tuple[str, str | None, str]]:
+    """Canonical name -> (url, kind) map for the prose linkifier, built
+    from the top entries. Songs link to `/canco/{slug}`, principal
+    artists to `/artista/{slug}` (UTM-tagged like the rest); collaborator
+    names get `url=None` (bold without link until slice 2 adds their
+    slugs). Each canonical string appears once; the first entry that
+    introduces it (top position first) decides its url."""
+    seen: set[str] = set()
+    out: list[tuple[str, str | None, str]] = []
+    for e in entries:
+        cn = e.get("canco_nom")
+        cs = e.get("canco_slug")
+        if cn and cn != "—" and cn not in seen:
+            url = (
+                build_newsletter_url(f"{SITE}/canco/{cs}", "prosa_canco", week)
+                if cs
+                else None
+            )
+            out.append((cn, url, "canco"))
+            seen.add(cn)
+        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+        aslug = e.get("artista_slug")
+        for idx, nom in enumerate(names):
+            if not nom or nom == "—" or nom in seen:
+                continue
+            url = None
+            if idx == 0 and aslug:
+                url = build_newsletter_url(
+                    f"{SITE}/artista/{aslug}", "prosa_artista", week
+                )
+            out.append((nom, url, "artista"))
+            seen.add(nom)
+    return out
+
+
 def _build_top_context(
     tipus: str,
     territori: str,
@@ -184,6 +265,12 @@ def _build_top_context(
         except Exception:  # noqa: BLE001
             logger.exception("newsletter narrative engine failed; legacy intro")
 
+    # Prose linkifier map (deterministic, applied to engine + injected
+    # narrative). Built from the entries, which carry the slugs.
+    name_map = _name_map_from_entries(entries, week)
+    if narrative_html:
+        narrative_html = linkify_narrative(narrative_html, name_map)
+
     subject = (
         derive_subject(hero, week)
         if hero is not None
@@ -226,6 +313,9 @@ def _build_top_context(
         "share_links": _share_links(week),
         "browser_url": browser_url,
         "cta_url": cta_url,
+        # Name map for the prose linkifier; the override paths
+        # (preview / send) read it to linkify the injected narrative.
+        "name_map": name_map,
         # legacy keys still read by the old template/tests:
         "heading": f"Top {territori_nom or 'Global'} · setmana {week}",
         "top_url": cta_url,
@@ -282,7 +372,9 @@ def send_top_newsletter(
         subject = subject_override
         base_context["subject"] = subject_override
     if narrative_html_override is not None:
-        base_context["narrative_html"] = narrative_html_override
+        base_context["narrative_html"] = linkify_narrative(
+            narrative_html_override, base_context.get("name_map") or []
+        )
 
     qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")
     sent = 0
@@ -344,7 +436,9 @@ def render_newsletter_preview(
         subject = subject_override
         base_context["subject"] = subject_override
     if narrative_html_override is not None:
-        base_context["narrative_html"] = narrative_html_override
+        base_context["narrative_html"] = linkify_narrative(
+            narrative_html_override, base_context.get("name_map") or []
+        )
 
     return render_to_string(
         "comptes/email_newsletter_top.html",

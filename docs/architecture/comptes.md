@@ -141,6 +141,25 @@ sans, `@media` responsive + dark mode), no longer extends
 `email_base.html`. The `_trend_badge.html` partial renders the
 per-entry movement.
 
+**Name links (Slice 1, 2026-06-08).** Song titles render in italic and
+link to `/canco/{slug}`; artist names render in bold, and the **principal**
+artist links to `/artista/{slug}` (collaborators are bold without a link
+until Slice 2 adds their slugs to the social payload). In the cards/list
+this is data-driven: `_enrich_entry` emits `artistes_render`
+(`[{nom, url}]`, principal-only URL) + `artistes_truncated` (mirrors the
+legacy 80-char ellipsis budget so a 39-collaborator row stays bounded),
+rendered by the `_nl_artistes.html` partial. In the **editorial prose** a
+deterministic post-processor `newsletter_linkify.linkify_narrative(html,
+name_map)` (NEVER an LLM) wraps the FIRST occurrence of each canonical
+name: songs `<em><a>`, artists `<strong><a>`/`<strong>`. Rules:
+case-sensitive exact match, longest-match-first with consumed spans,
+Unicode word boundaries, offset-preserving apostrophe normalisation, walks
+text nodes only and skips the interior of existing `<a>/<strong>/<em>`
+(idempotent), escapes the matched display + href. The `name_map` is built
+in `_build_top_context` from the entries (which carry the slugs) and
+applied to BOTH the engine narrative and the injected/override narrative
+(preview + send paths).
+
 Helpers:
 - **`newsletter_utm.build_newsletter_url(base, content, setmana)`** —
   every body link gets `utm_source=newsletter`, `utm_medium=email`,

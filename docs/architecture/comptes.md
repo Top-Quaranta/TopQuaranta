@@ -190,21 +190,29 @@ will send), `font`, `editat`.
    all):
    - `GET /api/v1/newsletter-routine/brief/` — grounded weekly brief
      (`comptes.newsletter_brief.build_brief`): context (week, Global, real
-     top age), top-10 (movement, `can_call_new` via the freshness gate
-     `is_verified_recent_release`, first-appearance with the
-     week-1-birth vs genuine-debut distinction, per-artist top history),
-     group facts for the top-5 (origin municipi/comarca/territori,
-     collaborators + their origin only when known, release date, plus a
-     `compromis_llengua` advisory flag — `te_obra_no_catala` /
-     `n_cancons_desvinculades` from `desvincular_canco` rejections, a
-     name-joined proxy for "has non-Catalan work"; see `brief.notes`),
-     leader fact (`detect_all[0]`, gated, with `freshness_blocked`),
-     `actualitat` (the 6-8 most recent VilaWeb RSS headlines so the voice
-     picks by weight, best-effort), and a separate LOW-CONFIDENCE section
-     with Last.fm tags. Returns `{"status": "not_ready"}` when the week's
-     top isn't consolidated (same anti-stale guard). Accepts an optional
-     `?setmana=<iso Monday>` (2026-06-08) for a specific week; absent →
-     this week (production path unchanged).
+     top age); the **full top-40** in `top40` (movement, `can_call_new`
+     via the freshness gate `is_verified_recent_release`, first-appearance
+     with the week-1-birth vs genuine-debut distinction, per-artist top
+     history); **group facts for all 40** in `fets_grup` (origin
+     municipi/comarca/territori, collaborators + their origin only when
+     known, release date, plus a `compromis_llengua` advisory flag —
+     `te_obra_no_catala` / `n_cancons_desvinculades` from
+     `desvincular_canco` rejections, a name-joined proxy for "has
+     non-Catalan work"; see `brief.notes`); `fets_destacats`, up to
+     `FETS_DESTACATS_K` (8) distinct-subject detector scenarios from
+     `detect_all` + `select_slots` (each `{code, severity, data,
+     freshness_blocked}`); `actualitat` (the 6-8 most recent VilaWeb RSS
+     headlines so the voice picks by weight, best-effort), and a separate
+     LOW-CONFIDENCE section with Last.fm tags for the top-5. The expansion
+     (2026-06-08) is strictly **additive**: `top10` is an alias of
+     `top40[:10]`, `fets_grup_top5` of `fets_grup[:5]`, and `fet_lider` of
+     `fets_destacats[0]` (`detect_all[0]`), all byte-identical to their
+     pre-expansion shape, so the token contract never breaks. Origin +
+     collaborators are prefetched/batched (constant query budget, no N+1
+     across the 40 rows). Returns `{"status": "not_ready"}` when the
+     week's top isn't consolidated (same anti-stale guard). Accepts an
+     optional `?setmana=<iso Monday>` (2026-06-08) for a specific week;
+     absent → this week (production path unchanged).
    - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
      draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`

@@ -61,8 +61,12 @@ from web.api.staff.newsletter import (  # noqa: F401
     esborrany_cancellar as newsletter_esborrany_cancellar,
 )
 from web.api.staff.newsletter import (  # noqa: F401
+    esborrany_generar as newsletter_esborrany_generar,
+)
+from web.api.staff.newsletter import (  # noqa: F401
     esborrany_preview as newsletter_esborrany_preview,
 )
+from web.api.staff.newsletter import setmanes as newsletter_setmanes  # noqa: F401
 from web.api.staff.pendents import (  # noqa: F401
     _artista_card,
     _compute_propostes_per_artista_map,

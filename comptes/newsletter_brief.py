@@ -28,7 +28,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from django.conf import settings
-from django.db.models import Count, Min
+from django.db.models import Count, Min, Prefetch
 
 from music.models import HistorialRevisio
 from ranking.models import TopSetmanal
@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 
 TIPUS = "top_ppcc"
 TERRITORI = "PPCC"
+
+# How many distinct-subject detector scenarios to surface in
+# `fets_destacats`. Generous on purpose: the newsletter now writes the
+# whole top 40, so the voice gets more candidate stories to pick from.
+# `select_slots` already caps at the number of distinct subjects, so a
+# week with fewer real beats simply yields a shorter list.
+FETS_DESTACATS_K = 8
 
 
 def current_monday(today: datetime.date | None = None) -> datetime.date:
@@ -63,14 +70,30 @@ def _moviment(posicio: int, anterior: int | None) -> str:
     return "="
 
 
+def _localitats_queryset():
+    """`localitats` queryset ordered by pk with `municipi` joined. The pk
+    ordering makes the prefetched `localitats.all()[0]` identical to the
+    legacy `localitats.first()` (which auto-orders by pk), so
+    `_artista_origen` reads the prefetch cache instead of issuing one
+    query per artista (the 11-40 N+1 risk)."""
+    from music.models import ArtistaLocalitat
+
+    return ArtistaLocalitat.objects.select_related("municipi").order_by("pk")
+
+
 def _artista_origen(artista) -> dict | None:
     """First known origin for an artista: municipi (→ comarca +
-    territori) when present, else free-text, else None. Read-only."""
+    territori) when present, else free-text, else None. Read-only.
+
+    Reads from the prefetched `localitats` cache (see
+    `_localitats_queryset`); falls back to a query only if the caller
+    did not prefetch. Output is identical to the legacy `.first()`."""
     if artista is None:
         return None
-    loc = artista.localitats.select_related("municipi__territori").first()
-    if loc is None:
+    locs = list(artista.localitats.all())
+    if not locs:
         return None
+    loc = locs[0]
     if loc.municipi:
         return {
             "municipi": loc.municipi.nom,
@@ -80,6 +103,40 @@ def _artista_origen(artista) -> dict | None:
     if loc.localitat_manual:
         return {"municipi": None, "comarca": None, "manual": loc.localitat_manual}
     return None
+
+
+def _collaborators_by_canco(cancons) -> dict[int, list]:
+    """`{canco_id: [Artista, ...]}` collaborators, ordered exactly like
+    `Canco.artistes_col_ordered()` (by the M2M through-table insertion
+    id), but batched: three queries total regardless of how many cançons
+    (through rows, the collaborator Artistes, their localitats) instead
+    of the per-canco N+1 that `artistes_col_ordered()` does. Read-only."""
+    from music.models import Artista, Canco
+
+    canco_ids = [c.pk for c in cancons if c is not None]
+    if not canco_ids:
+        return {}
+    through = Canco.artistes_col.through
+    pairs = list(
+        through.objects.filter(canco_id__in=canco_ids)
+        .order_by("id")
+        .values_list("canco_id", "artista_id")
+    )
+    if not pairs:
+        return {}
+    collab_ids = {aid for _, aid in pairs}
+    artistes = {
+        a.id: a
+        for a in Artista.objects.filter(pk__in=collab_ids).prefetch_related(
+            Prefetch("localitats", queryset=_localitats_queryset())
+        )
+    }
+    out: dict[int, list] = {}
+    for cid, aid in pairs:
+        a = artistes.get(aid)
+        if a is not None:
+            out.setdefault(cid, []).append(a)
+    return out
 
 
 def _llengua_signal(noms: list[str]) -> dict[str, int]:
@@ -136,7 +193,10 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
     rows = list(
         TopSetmanal.objects.filter(territori=TERRITORI, setmana=setmana)
         .select_related("canco", "canco__artista", "canco__album")
-        .order_by("posicio")[:10]
+        .prefetch_related(
+            Prefetch("canco__artista__localitats", queryset=_localitats_queryset())
+        )
+        .order_by("posicio")
     )
     if not rows:
         return {
@@ -157,7 +217,9 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
             )
         )
 
-    # Per-artista top history, one grouped query for the top-10 artistes.
+    # Per-artista top history, one grouped query for every artista in the
+    # top (the full 40, not just the top 10 — the extra keys are inert for
+    # the top-10 alias, whose values are unchanged).
     artista_ids = [
         r.canco.artista_id for r in rows if r.canco_id and r.canco.artista_id
     ]
@@ -172,98 +234,116 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
         )
     }
     global_first = _global_first_setmana()
+    # Collaborators for every canço in one batched lookup, ordered exactly
+    # like `artistes_col_ordered()` — avoids the per-row N+1 across 40 rows.
+    collab_map = _collaborators_by_canco([r.canco for r in rows])
 
-    top10 = []
-    for r in rows:
+    def _top_entry(r) -> dict:
         canco = r.canco
         artista = canco.artista if canco else None
         h = hist.get(artista.id) if artista else None
         primera = h["primera"] if h else None
-        top10.append(
-            {
-                "posicio": r.posicio,
-                "canco": canco.nom if canco else "—",
-                "artistes": (
-                    [artista.nom, *[a.nom for a in canco.artistes_col_ordered()]]
-                    if (canco and artista)
-                    else ["—"]
+        cols = collab_map.get(r.canco_id, []) if r.canco_id else []
+        return {
+            "posicio": r.posicio,
+            "canco": canco.nom if canco else "—",
+            "artistes": (
+                [artista.nom, *[a.nom for a in cols]] if (canco and artista) else ["—"]
+            ),
+            "moviment": _moviment(r.posicio, prev_pos.get(r.canco_id)),
+            "can_call_new": (
+                is_verified_recent_release(canco, ref_date=saturday) if canco else False
+            ),
+            "primera_aparicio": {
+                "setmana": primera.isoformat() if primera else None,
+                # week-1-birth: the artist's first appearance is the
+                # very first top week → "first ever" only because the
+                # top was born then, NOT a genuine debut.
+                "es_naixement_top": bool(
+                    primera and global_first and primera == global_first
                 ),
-                "moviment": _moviment(r.posicio, prev_pos.get(r.canco_id)),
-                "can_call_new": (
-                    is_verified_recent_release(canco, ref_date=saturday)
-                    if canco
-                    else False
+                "debut_genui": bool(
+                    primera
+                    and primera == setmana
+                    and (not global_first or setmana != global_first)
                 ),
-                "primera_aparicio": {
-                    "setmana": primera.isoformat() if primera else None,
-                    # week-1-birth: the artist's first appearance is the
-                    # very first top week → "first ever" only because the
-                    # top was born then, NOT a genuine debut.
-                    "es_naixement_top": bool(
-                        primera and global_first and primera == global_first
-                    ),
-                    "debut_genui": bool(
-                        primera
-                        and primera == setmana
-                        and (not global_first or setmana != global_first)
-                    ),
-                },
-                "historial": {
-                    "setmanes_al_top": h["setmanes"] if h else None,
-                    "millor_posicio": h["millor"] if h else None,
-                },
-            }
-        )
+            },
+            "historial": {
+                "setmanes_al_top": h["setmanes"] if h else None,
+                "millor_posicio": h["millor"] if h else None,
+            },
+        }
 
-    # Group facts for the top 5: origin + collaborators (+ their origin,
-    # only when we actually have it) + release date + language-commitment
-    # proxy.
-    noms5 = [r.canco.artista.nom for r in rows[:5] if r.canco and r.canco.artista]
-    lleng = _llengua_signal(noms5)
-    fets_grup = []
-    for r in rows[:5]:
+    # `top40` is the full list; `top10` is a byte-identical alias of its
+    # first ten (back-compat: the routine + tests still read `top10`).
+    top40 = [_top_entry(r) for r in rows]
+    top10 = top40[:10]
+
+    # Group facts for the WHOLE top: origin + collaborators (+ their
+    # origin, only when we have it) + release date + language-commitment
+    # proxy. The language signal is one grouped query over every artista
+    # name; the per-name count is identical whatever the IN list, so the
+    # top-5 alias is byte-identical to the legacy top-5-only query.
+    noms_all = [r.canco.artista.nom for r in rows if r.canco and r.canco.artista]
+    lleng = _llengua_signal(noms_all)
+
+    def _fet_grup(r) -> dict:
         canco = r.canco
         artista = canco.artista if canco else None
-        collabs = []
-        if canco:
-            for col in canco.artistes_col_ordered():
-                collabs.append({"nom": col.nom, "origen": _artista_origen(col)})
+        cols = collab_map.get(r.canco_id, []) if r.canco_id else []
+        collabs = [{"nom": col.nom, "origen": _artista_origen(col)} for col in cols]
         n_desv = lleng.get(artista.nom, 0) if artista else 0
-        fets_grup.append(
-            {
-                "posicio": r.posicio,
-                "canco": canco.nom if canco else "—",
-                "artista": artista.nom if artista else "—",
-                "origen": _artista_origen(artista),
-                "data_llancament": (
-                    canco.data_llancament.isoformat()
-                    if (canco and canco.data_llancament)
-                    else None
-                ),
-                "collaboradors": collabs,
-                # Catalan-music rootedness proxy (advisory; see brief.notes).
-                "compromis_llengua": {
-                    "te_obra_no_catala": bool(n_desv),
-                    "n_cancons_desvinculades": n_desv,
-                },
-            }
-        )
+        return {
+            "posicio": r.posicio,
+            "canco": canco.nom if canco else "—",
+            "artista": artista.nom if artista else "—",
+            "origen": _artista_origen(artista),
+            "data_llancament": (
+                canco.data_llancament.isoformat()
+                if (canco and canco.data_llancament)
+                else None
+            ),
+            "collaboradors": collabs,
+            # Catalan-music rootedness proxy (advisory; see brief.notes).
+            "compromis_llengua": {
+                "te_obra_no_catala": bool(n_desv),
+                "n_cancons_desvinculades": n_desv,
+            },
+        }
 
-    # Leader fact: the strongest detected scenario, gated (we surface its
-    # freshness_blocked flag so the routine never asserts false novelty).
+    # `fets_grup` covers all 40; `fets_grup_top5` is the identical alias of
+    # its first five (back-compat).
+    fets_grup = [_fet_grup(r) for r in rows]
+    fets_grup_top5 = fets_grup[:5]
+
+    # Detector layer. `detect_all` runs every detector (some already scan
+    # the full 40); `select_slots` greedily picks distinct-subject beats.
+    # Both are pure reads: they query TopSetmanal only and NEVER touch the
+    # anti-repetition registry (its `mark_used` fires solely on a real
+    # publish), so surfacing them keeps build_brief side-effect-free.
+    #
+    # `fet_lider` = the single strongest scenario (unchanged shape and
+    # content). `fets_destacats` = up to K distinct-subject scenarios so
+    # the longer newsletter has more candidate stories from across the
+    # list; its first element equals `fet_lider`.
     fet_lider = None
+    fets_destacats: list[dict] = []
     try:
         from social.narrative import detect_all
+        from social.narrative.scenarios import select_slots
 
-        scenarios = detect_all(TERRITORI, setmana)
-        if scenarios:
-            s = scenarios[0]
-            fet_lider = {
+        def _as_fet(s) -> dict:
+            return {
                 "code": s.code,
                 "severity": s.severity,
                 "data": s.data,
                 "freshness_blocked": bool(s.data.get("freshness_blocked")),
             }
+
+        scenarios = detect_all(TERRITORI, setmana)
+        if scenarios:
+            fet_lider = _as_fet(scenarios[0])
+        fets_destacats = [_as_fet(s) for s in select_slots(scenarios, FETS_DESTACATS_K)]
     except Exception:  # noqa: BLE001
         logger.warning("newsletter_brief: detect_all failed", exc_info=True)
 
@@ -292,8 +372,11 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
             "setmana_projecte": project_week_number(saturday),
         },
         "top10": top10,
-        "fets_grup_top5": fets_grup,
+        "top40": top40,
+        "fets_grup_top5": fets_grup_top5,
+        "fets_grup": fets_grup,
         "fet_lider": fet_lider,
+        "fets_destacats": fets_destacats,
         "actualitat": _fetch_vilaweb(),
         "baixa_confianca": {
             "_avis": "Senyal sorollós (tags crowd-sourced de Last.fm); NO és un fet verificat.",

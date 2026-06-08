@@ -55,7 +55,10 @@ web-react/
     └── pages/              One file per route
         ├── HomePage / TopPage / ArtistesPage / MapaPage / ...
         ├── legal/          7 legal pages + LegalLayout
-        └── staff/          28 staff pages (StaffLayout)
+        └── staff/          Staff pages (StaffLayout)
+            └── social/     Distribution sub-views: a shared,
+                            descriptor-driven ChannelView template
+                            (one page per simple channel)
 ```
 
 Routing is centralised in `App.jsx`: a flat `<Routes>` tree with no
@@ -82,6 +85,33 @@ nested layouts beyond the per-section `<Layout>`, `<StaffLayout>`,
 
 The `AdminRoute` 2FA handoff is the only architecturally interesting
 auth seam; see the file's docstring for the rationale.
+
+The **distribution area** under `/staff/social` is being split from a
+single monolithic page into homogeneous house-style views. `/staff/social`
+is the cockpit (master switch + the six-channel grid); the simple
+channels have their own page at `/staff/social/<canal>` (`mastodon`,
+`bluesky`, `telegram`), all sharing one `pages/staff/social/ChannelView.jsx`
+template that paints from `channelDescriptors.jsx` — adding a channel or
+a credential field means extending the descriptor, not writing a new
+page. The **unified publications table** lives at
+`/staff/social/publicacions` (`StaffSocialPublicacionsPage` →
+`PublicacionsTable`, fed by the paginated `social_list`): one house-kit
+table with search, a FilterPanel (canal/estat/tipus/setmana), deep-link
+query params, a per-row clickable link, and the lifecycle actions. The
+channel views embed that same `PublicacionsTable` scoped to their
+channel. Each descriptor also declares a **4-section schema** (`section1`
+/ `kpis` / `control` / `analytics`), and `ChannelView` renders those
+sections generically — a missing KPI/metric for a channel paints an
+honest dash, never a fake 0. **Newsletter** is the first complete
+instance: a first-class view at `/staff/social/newsletter` whose Section
+1 (`NewsletterSection`) adds a live can-generate indicator + a
+consolidated-week selector + on-demand "Generate (engine)" + the shared
+`NewsletterDraftEditor` (extracted from the legacy
+`/staff/social/esborrany` page, now a thin wrapper kept for the cron
+email links). Instagram and RSS are still managed in-page on the cockpit
+(which keeps the week calendar + slide-render button); Spotify stays on
+its own page for now. Not to be confused with `/staff/publicacions`
+(community posts).
 
 ## Backend seam
 

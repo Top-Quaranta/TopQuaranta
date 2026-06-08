@@ -63,10 +63,16 @@ def require_routine_token(view_func):
 @api_view(["GET"])
 @require_routine_token
 def brief(request: Request) -> Response:
-    """Weekly brief for (Global, this week). 200 with the brief, or 200
-    `{"status": "not_ready"}` when the top isn't consolidated yet (the
-    routine should retry later, not treat it as an error)."""
-    return Response(build_brief())
+    """Weekly brief for Global. Default = this week (production path,
+    unchanged). Optional `?setmana=<iso Monday>` requests a specific
+    week's brief; an unparseable value falls back to this week, and a
+    not-yet-consolidated week returns 200 `{"status": "not_ready"}` so
+    the routine retries later rather than treating it as an error."""
+    from django.utils.dateparse import parse_date
+
+    raw = (request.GET.get("setmana") or "").strip()
+    setmana = parse_date(raw) if raw else None
+    return Response(build_brief(setmana))
 
 
 @api_view(["POST"])

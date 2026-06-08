@@ -97,7 +97,10 @@ page. The **unified publications table** lives at
 `/staff/social/publicacions` (`StaffSocialPublicacionsPage` →
 `PublicacionsTable`, fed by the paginated `social_list`): one house-kit
 table with search, a FilterPanel (canal/estat/tipus/setmana), deep-link
-query params, a per-row clickable link, and the lifecycle actions. The
+query params, a per-row clickable link, and the lifecycle actions. Above
+the table, a self-fetching `MetricsStrip` shows per-platform engagement
+totals from `/staff/social/metrics-summary/` (renders nothing while
+loading, on error, or before any post has a metric snapshot). The
 channel views embed that same `PublicacionsTable` scoped to their
 channel. Each descriptor also declares a **4-section schema** (`section1`
 / `kpis` / `control` / `analytics`), and `ChannelView` renders those

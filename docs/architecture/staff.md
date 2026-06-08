@@ -137,6 +137,7 @@ channel views embed that same table scoped to their channel.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/staff/social/` | Publications list — paginated via `_paginate` (default 50, cap 200) with filters (`canal`, `estat`, `tipus`, `setmana`), free-text `q` (platform/tipus/territori), and `sort` (`data`\|`setmana`\|`canal`\|`estat`). Default order: `published_at` (nulls-last → `created_at`). Each row carries a best-effort clickable `url` (`_public_url`: Mastodon status URL, Bluesky AT-URI → `bsky.app/profile/<did>/post/<rkey>`, Telegram `metadata.url`; IG only if a permalink was stored — no Graph call; newsletter none). Also returns the channel + per-credential payloads the cockpit/channel views consume. |
+| GET | `/staff/social/metrics-summary/` | Per-platform engagement totals (additive, 2026-06). Sums the LATEST `MetricaSocialPost` snapshot of each post grouped by `SocialPost.platform`: `{"per_platform": [{platform, n_posts, likes, replies, shares, reach, impressions, clicks}]}` sorted by platform. Read-only and decoupled from the row list (no `_serialize` change, no N+1); posts with no snapshot yet don't contribute. Feeds the `MetricsStrip` above the publications table. |
 | POST | `/staff/social/preview/` | Render dry-run for a slot; returns the rendered PNG paths. |
 | POST | `/staff/social/publicar-ara/` | Force-run `publicar_social` / `publicar_canal` for a `(data, tipus, platform)` triple. |
 | POST | `/staff/social/eliminar-instagram/` | Legacy IG-only delete. Kept for back-compat. |

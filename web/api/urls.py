@@ -378,6 +378,11 @@ urlpatterns = [
     # ── Sprint I — social distribution (staff) ──
     path("staff/social/", staff_views.social_list, name="staff_social_list"),
     path(
+        "staff/social/metrics-summary/",
+        staff_views.social_metrics_summary,
+        name="staff_social_metrics_summary",
+    ),
+    path(
         "staff/social/estat-canals/",
         staff_views.social_estat_canals,
         name="staff_social_estat_canals",

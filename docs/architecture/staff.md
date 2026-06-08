@@ -127,13 +127,16 @@ at the new + old URLs.
 
 ### Distribució multi-canal (`/staff/social`)
 
-Six channels share the same `SocialPost` model and the same staff
-surface. Channel column tints in the UI: IG pink, Mastodon indigo,
-Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
+Six channels share the same `SocialPost` model. The staff surface is
+split (distribution-views redistribution, 2026-06): the cockpit at
+`/staff/social` (master switch + channel grid), per-channel views at
+`/staff/social/<canal>`, and the **unified publications table** at
+`/staff/social/publicacions` (house kit, filters + deep links). The
+channel views embed that same table scoped to their channel.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/staff/social/` | Posts list ordered by `published_at` (nulls-last → `created_at`), Data column first, Setmana N second. Channel + per-credential payloads. |
+| GET | `/staff/social/` | Publications list — paginated via `_paginate` (default 50, cap 200) with filters (`canal`, `estat`, `tipus`, `setmana`), free-text `q` (platform/tipus/territori), and `sort` (`data`\|`setmana`\|`canal`\|`estat`). Default order: `published_at` (nulls-last → `created_at`). Each row carries a best-effort clickable `url` (`_public_url`: Mastodon status URL, Bluesky AT-URI → `bsky.app/profile/<did>/post/<rkey>`, Telegram `metadata.url`; IG only if a permalink was stored — no Graph call; newsletter none). Also returns the channel + per-credential payloads the cockpit/channel views consume. |
 | POST | `/staff/social/preview/` | Render dry-run for a slot; returns the rendered PNG paths. |
 | POST | `/staff/social/publicar-ara/` | Force-run `publicar_social` / `publicar_canal` for a `(data, tipus, platform)` triple. |
 | POST | `/staff/social/eliminar-instagram/` | Legacy IG-only delete. Kept for back-compat. |

@@ -100,14 +100,15 @@ const GROUPS = [
       // simple channels below have their own house-style views (slice 1
       // of the distribution-views redistribution).
       { to: '/staff/social', label: 'Social', end: true },
+      { to: '/staff/social/publicacions', label: 'Publicacions' },
       { to: '/staff/social/mastodon', label: 'Mastodon' },
       { to: '/staff/social/bluesky', label: 'Bluesky' },
       { to: '/staff/social/telegram', label: 'Telegram' },
       { to: '/staff/social/esborrany', label: 'Newsletter (esborrany)' },
       // Spotify is a separate landing because the OAuth + Premium
-      // monitoring shape doesn't fit inside the SocialPost-centric
-      // table on /staff/social. Surfaced as a sibling under the same
-      // "Distribució" group so it's discoverable next to the rest.
+      // monitoring shape doesn't fit the publications table. Surfaced as
+      // a sibling under the same "Distribució" group so it's discoverable
+      // next to the rest.
       { to: '/staff/social/spotify', label: 'Spotify' },
     ],
   },

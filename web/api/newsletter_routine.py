@@ -78,10 +78,16 @@ def brief(request: Request) -> Response:
 @api_view(["POST"])
 @require_routine_token
 def esborrany(request: Request) -> Response:
-    """Upsert THIS week's draft from the routine: subject +
-    narrative_html, `font=llm`, `estat=pendent`. The routine can NEVER
-    mark a draft approved/sent — any `estat` other than `pendent` is
-    rejected, and a draft already `enviat`/`cancellat` is terminal."""
+    """Upsert a week's draft from the routine: subject + narrative_html,
+    `font=llm`, `estat=pendent`. The routine can NEVER mark a draft
+    approved/sent — any `estat` other than `pendent` is rejected, and a
+    draft already `enviat`/`cancellat` is terminal.
+
+    Target week: optional `?setmana=<iso Monday>`. Absent → this week
+    (the automatic Saturday routine, unchanged). Present → that week,
+    with the same guards as the staff on-demand path: the week's PPCC
+    top must be consolidated (409 otherwise), so the refinement loop
+    (read `brief?setmana=X`, write here for the same X) lands on X."""
     estat_req = (request.data.get("estat") or "").strip()
     if estat_req and estat_req != NewsletterDraft.ESTAT_PENDENT:
         return Response(
@@ -93,7 +99,29 @@ def esborrany(request: Request) -> Response:
         return Response({"error": "subject obligatori"}, status=400)
     narrative_html = request.data.get("narrative_html") or ""
 
-    setmana = current_monday()
+    raw = (request.GET.get("setmana") or request.data.get("setmana") or "").strip()
+    if raw:
+        from django.utils.dateparse import parse_date
+
+        from ranking.models import TopSetmanal
+
+        setmana = parse_date(raw)
+        if setmana is None:
+            return Response({"error": "setmana invàlida"}, status=400)
+        if not TopSetmanal.objects.filter(
+            territori=TERRITORI, setmana=setmana
+        ).exists():
+            return Response(
+                {
+                    "error": (
+                        f"el top {TERRITORI} de la setmana {setmana} "
+                        "no està consolidat"
+                    )
+                },
+                status=409,
+            )
+    else:
+        setmana = current_monday()
     existing = NewsletterDraft.objects.filter(
         tipus=TIPUS, territori=TERRITORI, setmana=setmana
     ).first()

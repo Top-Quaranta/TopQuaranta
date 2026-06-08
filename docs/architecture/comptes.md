@@ -205,11 +205,15 @@ will send), `font`, `editat`.
      top isn't consolidated (same anti-stale guard). Accepts an optional
      `?setmana=<iso Monday>` (2026-06-08) for a specific week; absent →
      this week (production path unchanged).
-   - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
-     draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
+   - `POST /api/v1/newsletter-routine/esborrany/` — upsert a week's draft
+     (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`
      `estat` rejected; an already `enviat`/`cancellat` week is terminal →
-     409). It reads/leaves only; it never sends.
+     409). It reads/leaves only; it never sends. Target week: optional
+     `?setmana=` (2026-06-08), symmetric with `brief?setmana=` so the
+     refinement loop (read brief for week X → write draft for X) lands on
+     X; absent → this week (the Saturday routine, unchanged); a present
+     but non-consolidated week is rejected (409).
 1. **Saturday 16:00 — `generar_esborrany_newsletter` (engine fallback)**:
    composes `subject` + `narrative_html` via `newsletter.build_draft_text`
    (wraps `_build_top_context`, side-effect-free — no `mark_used`),

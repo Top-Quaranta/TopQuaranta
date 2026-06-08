@@ -23,6 +23,7 @@ from ranking.models import TopSetmanal
 
 TOKEN = "secret-routine-token"
 BRIEF_URL = "/api/v1/newsletter-routine/brief/"
+ROUTINE_DRAFT_URL = "/api/v1/newsletter-routine/esborrany/"
 GENERAR_URL = "/api/v1/staff/newsletter/esborrany/generar/"
 SETMANES_URL = "/api/v1/staff/newsletter/setmanes/"
 
@@ -249,3 +250,84 @@ def test_setmanes_current_status_ready_when_consolidated(staff_client):
     with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
         r = staff_client.get(SETMANES_URL)
     assert r.data["current"]["status"] == "ready"
+
+
+# ── routine POST ?setmana= symmetry (LLM cloud refinement loop) ──────
+
+
+@pytest.mark.django_db
+def test_routine_post_without_param_writes_current_week(token_client):
+    # Production path unchanged: no param → current week.
+    _seed_top()
+    r = token_client.post(ROUTINE_DRAFT_URL, {"subject": "S"}, format="json", **_auth())
+    assert r.status_code == 201, r.content
+    assert r.data["setmana"] == _monday().isoformat()
+    assert NewsletterDraft.objects.filter(setmana=_monday()).exists()
+
+
+@pytest.mark.django_db
+def test_routine_post_with_setmana_targets_that_week(token_client):
+    past = _monday() - datetime.timedelta(weeks=3)
+    _seed_top(setmana=past)
+    r = token_client.post(
+        f"{ROUTINE_DRAFT_URL}?setmana={past.isoformat()}",
+        {"subject": "S"},
+        format="json",
+        **_auth(),
+    )
+    assert r.status_code == 201, r.content
+    assert r.data["setmana"] == past.isoformat()
+    d = NewsletterDraft.objects.get(setmana=past)
+    assert d.font == NewsletterDraft.FONT_LLM
+    # The draft lands on the brief's week, NOT the current week.
+    assert not NewsletterDraft.objects.filter(setmana=_monday()).exists()
+
+
+@pytest.mark.django_db
+def test_routine_post_unconsolidated_setmana_is_409(token_client):
+    past = _monday() - datetime.timedelta(weeks=4)  # no TopSetmanal
+    r = token_client.post(
+        f"{ROUTINE_DRAFT_URL}?setmana={past.isoformat()}",
+        {"subject": "S"},
+        format="json",
+        **_auth(),
+    )
+    assert r.status_code == 409
+    assert not NewsletterDraft.objects.exists()
+
+
+@pytest.mark.django_db
+def test_routine_post_with_setmana_never_sends(token_client):
+    past = _monday() - datetime.timedelta(weeks=2)
+    _seed_top(setmana=past)
+    r = token_client.post(
+        f"{ROUTINE_DRAFT_URL}?setmana={past.isoformat()}",
+        {"subject": "S"},
+        format="json",
+        **_auth(),
+    )
+    assert r.status_code == 201
+    assert len(mail.outbox) == 0
+    assert NewsletterDraft.objects.get(setmana=past).estat == "pendent"
+
+
+@pytest.mark.django_db
+def test_routine_post_with_setmana_no_clobber_edited(token_client):
+    past = _monday() - datetime.timedelta(weeks=5)
+    _seed_top(setmana=past)
+    NewsletterDraft.objects.create(
+        tipus="top_ppcc",
+        territori="PPCC",
+        setmana=past,
+        subject="Editat per staff",
+        estat=NewsletterDraft.ESTAT_PENDENT,
+        editat=True,
+    )
+    r = token_client.post(
+        f"{ROUTINE_DRAFT_URL}?setmana={past.isoformat()}",
+        {"subject": "ROUTINE"},
+        format="json",
+        **_auth(),
+    )
+    assert r.status_code == 409
+    assert NewsletterDraft.objects.get(setmana=past).subject == "Editat per staff"

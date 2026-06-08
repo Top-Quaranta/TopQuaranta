@@ -1,15 +1,15 @@
 /**
  * StaffSocialPage — /staff/social
  *
- * Operations cockpit for the Instagram distribution. Shows:
- *  - The active phase + kill switch + token TTL.
- *  - The list of recent SocialPost rows with status badges.
- *  - A preview button per slot that triggers `publicar_social
- *    --dry-run` server-side and prints the captured stdout.
- *  - A "Publicar ara" button that re-publishes with --force.
+ * Distribution cockpit (house kit). Shows:
+ *  - The master distribution switch + the six-channel grid (effective
+ *    state + last send; links to the per-channel views).
+ *  - Instagram config (credentials, phase, story cap, token TTL).
+ *  - The week calendar + "Generar totes les slides" dry-run button.
  *
- * No fancy chrome — staff tool, not public-facing. Lists collapse
- * to scroll on mobile via the Table wrapper.
+ * The publications list (search, filters, links, lifecycle actions) and
+ * the slide gallery moved to /staff/social/publicacions
+ * (PublicacionsTable). Mastodon/Bluesky/Telegram have their own views.
  */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -20,27 +20,8 @@ import {
   PageHeader,
   Pill,
   Select,
-  Table,
   TableCard,
 } from '../../components/staff/StaffTable'
-
-const STATUS_TONE = {
-  pendent:  'bg-yellow-100 text-yellow-900',
-  publicat: 'bg-emerald-100 text-emerald-900',
-  error:    'bg-red-100 text-red-900',
-  omes:     'bg-gray-200 text-gray-800',
-}
-
-function StatusBadge({ status }) {
-  return (
-    <span className={
-      'inline-block text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full ' +
-      (STATUS_TONE[status] || 'bg-gray-200 text-gray-800')
-    }>
-      {status}
-    </span>
-  )
-}
 
 // Effective per-channel state from /staff/social/estat-canals/, mapped
 // to house Pill tones (semantic, token-driven — no raw palette).
@@ -81,9 +62,6 @@ export default function StaffSocialPage() {
   // token (we only ever show first/last 4 chars of what's already saved).
   const [tokenDraft, setTokenDraft] = useState('')
   const [userIdDraft, setUserIdDraft] = useState('')
-  // pk → {feed:[…], stories:[…]} of rendered slide thumbnails. Populated
-  // when the operator clicks "Veure slides" on a row.
-  const [slidesByPk, setSlidesByPk] = useState({})
 
   // Per-channel honest state (effective state + last send) from the
   // dedicated endpoint, alongside the main social_list payload.
@@ -98,7 +76,7 @@ export default function StaffSocialPage() {
   useEffect(() => { reload() }, [])
 
   if (!data) return <p className="p-6">Carregant…</p>
-  const { config, results, credentials, calendari } = data
+  const { config, credentials, calendari } = data
 
   const tokenTone =
     config.token_days_left == null  ? 'bg-gray-200 text-gray-700' :
@@ -134,25 +112,6 @@ export default function StaffSocialPage() {
     await reload()
   }
 
-  async function loadSlides(post) {
-    setBusy(true)
-    try {
-      // `platform` scopes the response so a feed row only shows
-      // feed PNGs and a story row only shows stories — without it
-      // the gallery mixed both because they share tipus/setmana.
-      const params = new URLSearchParams({
-        tipus: post.tipus,
-        territori: post.territori || 'general',
-        setmana: post.setmana,
-        platform: post.platform,
-      })
-      const res = await api.get(`/staff/social/slides/?${params}`)
-      setSlidesByPk(prev => ({ ...prev, [post.pk]: res }))
-    } catch (e) {
-      alert(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-
   async function previewAll() {
     setBusy(true)
     setOutput('▶ Generant totes les slides de la setmana (PPCC + territoris + novetats)…')
@@ -167,27 +126,6 @@ export default function StaffSocialPage() {
       lines.push(res.output || '(sense sortida)')
       setOutput(lines.join('\n'))
       await reload()
-      requestAnimationFrame(() => {
-        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-    } catch (e) {
-      setOutput(`✖ Error: ${e.payload?.error || e.message || e}\n\n${e.payload?.output || ''}`)
-    } finally { setBusy(false) }
-  }
-
-  async function preview(post) {
-    setBusy(true)
-    setOutput('▶ Executant preview… (genera els PNGs però no publica)')
-    try {
-      const res = await api.post('/staff/social/preview/', {
-        data: post.setmana, tipus: post.tipus, platform: post.platform,
-      })
-      const lines = []
-      if (res.args) lines.push(`$ manage.py ${res.args.join(' ')}`)
-      lines.push(res.output || '(sense sortida)')
-      if (res.error) lines.push(`\n⚠ ${res.error}`)
-      setOutput(lines.join('\n'))
-      // Scroll the output into view in case the click happens far down.
       requestAnimationFrame(() => {
         document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
@@ -257,99 +195,12 @@ export default function StaffSocialPage() {
     } finally { setBusy(false) }
   }
 
-  async function resetPost(post) {
-    if (!confirm(
-      `Reset estat: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'}?\n\n` +
-      `Marca la fila com "pendent" i esborra el media_id local. ` +
-      `NO toca la publicació a Instagram. Útil per a reintentar el procés des de zero.`
-    )) return
-    setBusy(true); setOutput('▶ Reset estat…')
-    try {
-      const res = await api.post('/staff/social/reset/', { pk: post.pk })
-      setOutput(`✓ Reset: status era ${res.previous?.status}, media_id era "${res.previous?.instagram_media_id || '(buit)'}"`)
-      await reload()
-    } catch (e) {
-      setOutput(`✖ Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-
-  async function eliminarRemot(post) {
-    if (!post.instagram_media_id) {
-      alert('Aquest post no té id remota (mai s\'ha publicat o ja s\'ha resetejat).')
-      return
-    }
-    const platLabel = post.platform.replace('instagram_', 'IG ')
-    if (!confirm(
-      `ESBORRAR DE ${platLabel.toUpperCase()}: ${post.tipus} · ${post.territori_label || '—'}\n` +
-      `id remota: ${post.instagram_media_id}\n\n` +
-      `Això elimina la publicació remota i deixa la fila llesta per re-publicar. ` +
-      `És DESTRUCTIU. Confirmes?`
-    )) return
-    setBusy(true); setOutput(`▶ Esborrant publicació de ${platLabel}…`)
-    try {
-      // Single backend endpoint that dispatches by platform.
-      const res = await api.post('/staff/social/eliminar-remot/', { pk: post.pk })
-      setOutput(`${res.ok ? '✓' : '✖'} ${res.msg || ''}`)
-      await reload()
-    } catch (e) {
-      setOutput(`✖ Error: ${e.payload?.error || e.message}\n\n${e.payload?.msg || ''}`)
-    } finally { setBusy(false) }
-  }
-
-  async function publicarAra(post) {
-    if (!confirm(`Publicar ara: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'} · setmana del ${post.publication_date}?`)) return
-    setBusy(true)
-    setOutput('▶ Publicant… (això sí truca l\'API d\'Instagram si hi ha token vàlid)')
-    try {
-      const res = await api.post('/staff/social/publicar-ara/', {
-        data: post.setmana, tipus: post.tipus, platform: post.platform,
-      })
-      const lines = []
-      if (res.args) lines.push(`$ manage.py ${res.args.join(' ')}`)
-      lines.push(res.output || '(sense sortida)')
-      if (res.error) lines.push(`\n⚠ ${res.error}`)
-      setOutput(lines.join('\n'))
-      requestAnimationFrame(() => {
-        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-      await reload()
-    } catch (e) {
-      setOutput(`✖ Error: ${e.payload?.error || e.message || e}\n\n${e.payload?.output || ''}`)
-    } finally { setBusy(false) }
-  }
-
-  async function republicar(post) {
-    // Lot C — Sprint Distribució v2: one-click delete-remote +
-    // re-render + re-publish. Use case: a cançó from a published top
-    // is rejected after publication, the renderer now produces a
-    // corrected slide, but the live post still shows the wrong row.
-    // Manual workflow before this was Esborrar → Reset → Publicar
-    // (3 clicks across 3 endpoints).
-    const platLabel = post.platform.replace('instagram_', 'IG ')
-    if (!confirm(
-      `RE-PUBLICAR ${platLabel.toUpperCase()}: ${post.tipus} · ${post.territori_label || '—'}\n\n` +
-      `Això esborra la publicació remota actual (${post.instagram_media_id}) i en publica una de nova ` +
-      `amb el contingut actualitzat. És DESTRUCTIU.\n\n` +
-      `Confirmes?`
-    )) return
-    setBusy(true)
-    setOutput(`▶ Re-publicant ${platLabel}: esborrant remot + re-publicant…`)
-    try {
-      const res = await api.post('/staff/social/republicar/', { pk: post.pk })
-      const lines = []
-      lines.push(`✓ ${res.delete_msg || 'remot esborrat'}`)
-      if (res.args) lines.push(`$ manage.py ${res.args.join(' ')}`)
-      lines.push(res.publish_output || '(sense sortida)')
-      setOutput(lines.join('\n'))
-      requestAnimationFrame(() => {
-        document.getElementById('social-output')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-      await reload()
-    } catch (e) {
-      const stepMsg = e.payload?.step ? ` (fallat al pas: ${e.payload.step})` : ''
-      setOutput(`✖ Error${stepMsg}: ${e.payload?.msg || e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
+  // Per-publication lifecycle actions (preview / publicar / reset /
+  // re-publicar / eliminar-remot) + the slides gallery now live on the
+  // unified publications table (pages/staff/social/PublicacionsTable.jsx
+  // → /staff/social/publicacions). This cockpit keeps the master switch,
+  // the channel grid, the Instagram config + the week calendar (whose
+  // "Generar totes les slides" button renders the week in dry-run).
 
   return (
     <section className="space-y-6">
@@ -734,209 +585,16 @@ export default function StaffSocialPage() {
         </pre>
       )}
 
-      {/* ── Posts list ───────────────────────────────────────── */}
-      <Table>
-        <thead>
-          <tr>
-            <th className="text-left">Data</th>
-            <th className="text-left">Setmana</th>
-            <th className="text-left">Plataforma</th>
-            <th className="text-left">Tipus</th>
-            <th className="text-left">Territori</th>
-            <th className="text-left">Estat</th>
-            <th className="text-left">Accions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {results.flatMap((p) => {
-            // Per-platform row tint so the operator scans the table
-            // by channel at a glance. Tints are deliberately faint
-            // (~5-8 % opacity) to keep text contrast high; brand
-            // colours follow each platform's identity:
-            //  · IG → soft pink (Instagram gradient endpoint)
-            //  · Mastodon → soft indigo/violet
-            //  · Bluesky → soft sky-blue
-            //  · Telegram → soft cyan
-            //  · Newsletter → soft amber
-            //  · RSS → soft orange
-            const platformTints = {
-              instagram_feed: 'bg-pink-50',
-              instagram_story: 'bg-pink-50/60',
-              mastodon: 'bg-indigo-50',
-              bluesky: 'bg-sky-50',
-              telegram: 'bg-cyan-50',
-              newsletter: 'bg-amber-50',
-              rss: 'bg-orange-50',
-            }
-            const rowBg = platformTints[p.platform] || 'bg-white'
-            return [
-            <tr key={p.pk} className={`${rowBg} align-top border-t border-tq-ink/10`}>
-              <td className="text-xs whitespace-nowrap font-mono">
-                {p.published_at
-                  ? p.published_at.slice(0, 16).replace('T', ' ')
-                  : <span className="text-tq-ink/50 italic" title={`Creat: ${p.created_at?.slice(0, 16).replace('T', ' ')}`}>
-                      {p.created_at?.slice(0, 10) || '—'}
-                    </span>}
-              </td>
-              <td className="font-semibold whitespace-nowrap" title={`Publicació prevista: ${p.publication_date}`}>
-                Setmana {p.project_week}
-                <div className="text-[10px] text-tq-ink/70 font-normal">
-                  {p.publication_date}
-                </div>
-              </td>
-              <td className="text-xs">{p.platform.replace('instagram_', '')}</td>
-              <td className="text-xs">{p.tipus}</td>
-              <td>{p.territori_label}</td>
-              <td>
-                <StatusBadge status={p.status} />
-                {p.error_msg && (
-                  <p className="text-[10px] text-red-700 mt-1 max-w-[18rem] break-words"
-                     title={p.error_msg}>
-                    {p.error_msg.length > 80
-                      ? p.error_msg.slice(0, 80) + '…'
-                      : p.error_msg}
-                  </p>
-                )}
-              </td>
-              <td>
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    onClick={() => preview(p)}
-                    disabled={busy}
-                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                  >
-                    Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => loadSlides(p)}
-                    disabled={busy}
-                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                  >
-                    Veure slides
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => publicarAra(p)}
-                    disabled={busy}
-                    className="text-xs px-2 py-1 rounded bg-tq-ink text-tq-yellow font-semibold hover:bg-tq-ink/90"
-                  >
-                    Publicar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => resetPost(p)}
-                    disabled={busy}
-                    title="Marca la fila com a pendent. No toca IG. Útil per reintentar."
-                    className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                  >
-                    Reset
-                  </button>
-                  {p.instagram_media_id && (() => {
-                    // Platform-aware delete label. The DB field is
-                    // historically named `instagram_media_id` but we
-                    // reuse it for every channel's external id; the
-                    // backend dispatches by `platform`.
-                    const labels = {
-                      'instagram_feed': 'Esborrar IG',
-                      'instagram_story': 'Esborrar story IG',
-                      'mastodon': 'Esborrar Mastodon',
-                      'bluesky': 'Esborrar Bluesky',
-                      'telegram': 'Esborrar Telegram',
-                    }
-                    const label = labels[p.platform] || `Esborrar ${p.platform}`
-                    return (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => republicar(p)}
-                          disabled={busy}
-                          title="Esborra el remot + re-publica amb el contingut actualitzat. Útil si una cançó del top va ser rebutjada després de publicar."
-                          className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900 hover:bg-amber-200"
-                        >
-                          Re-publicar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => eliminarRemot(p)}
-                          disabled={busy}
-                          title={`Esborra la publicació remota a ${p.platform} + reset local`}
-                          className="text-xs px-2 py-1 rounded bg-red-100 text-red-800 hover:bg-red-200"
-                        >
-                          {label}
-                        </button>
-                      </>
-                    )
-                  })()}
-                </div>
-              </td>
-            </tr>,
-            slidesByPk[p.pk] ? (
-              <tr key={`${p.pk}-slides`} className={rowBg}>
-                <td colSpan={7} className="p-3 border-b border-tq-ink/10">
-                  <SlidesGallery slides={slidesByPk[p.pk]} />
-                </td>
-              </tr>
-            ) : null,
-          ]
-          }).filter(Boolean)}
-        </tbody>
-      </Table>
-
-      {results.length === 0 && (
-        <p className="text-sm text-tq-ink/75 italic">
-          Encara no hi ha cap publicació. Utilitza Preview per generar-ne en mode dry-run.
-        </p>
-      )}
+      {/* ── Posts list (moved) ───────────────────────────────── */}
+      <p className="text-sm text-tq-ink/75">
+        La llista de publicacions (amb cerca, filtres, enllaços i accions de
+        cicle de vida) viu ara a{' '}
+        <Link to="/staff/social/publicacions" className="underline font-semibold">
+          Publicacions
+        </Link>
+        .
+      </p>
       </div>
     </section>
-  )
-}
-
-function SlidesGallery({ slides }) {
-  const both = (slides.feed?.length || 0) + (slides.stories?.length || 0)
-  if (both === 0) {
-    return (
-      <p className="text-xs text-tq-ink/75 italic">
-        Cap PNG renderitzat. Fes "Preview" primer per generar-los.
-      </p>
-    )
-  }
-  return (
-    <div className="space-y-3">
-      {slides.feed?.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1.5">
-            Feed · {slides.feed.length} {slides.feed.length === 1 ? 'slide' : 'slides'}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {slides.feed.map(s => (
-              <a key={s.name} href={s.url} target="_blank" rel="noopener"
-                 title={`${s.name} (${s.size_kb} kB)`}>
-                <img src={s.url} alt={s.name}
-                     className="w-32 h-40 object-cover rounded border border-tq-ink/20 hover:border-tq-ink" />
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-      {slides.stories?.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1.5">
-            Stories · {slides.stories.length} {slides.stories.length === 1 ? 'story' : 'stories'}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {slides.stories.map(s => (
-              <a key={s.name} href={s.url} target="_blank" rel="noopener"
-                 title={`${s.name} (${s.size_kb} kB)`}>
-                <img src={s.url} alt={s.name}
-                     className="w-24 h-44 object-cover rounded border border-tq-ink/20 hover:border-tq-ink" />
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
   )
 }

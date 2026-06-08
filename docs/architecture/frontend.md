@@ -87,16 +87,22 @@ The `AdminRoute` 2FA handoff is the only architecturally interesting
 auth seam; see the file's docstring for the rationale.
 
 The **distribution area** under `/staff/social` is being split from a
-single monolithic page into homogeneous house-style views (slice 1):
-`/staff/social` is the cockpit (master switch + the six-channel grid),
-and the simple channels have their own page at `/staff/social/<canal>`
-(`mastodon`, `bluesky`, `telegram`). Those pages share one
-`pages/staff/social/ChannelView.jsx` template that paints from
-`channelDescriptors.jsx` — adding a channel or a credential field means
-extending the descriptor, not writing a new page. Instagram, the
-newsletter and RSS are still managed in-page on the cockpit until later
-slices; the publications list and Spotify likewise stay on their
-current pages for now.
+single monolithic page into homogeneous house-style views. `/staff/social`
+is the cockpit (master switch + the six-channel grid); the simple
+channels have their own page at `/staff/social/<canal>` (`mastodon`,
+`bluesky`, `telegram`), all sharing one `pages/staff/social/ChannelView.jsx`
+template that paints from `channelDescriptors.jsx` — adding a channel or
+a credential field means extending the descriptor, not writing a new
+page. The **unified publications table** lives at
+`/staff/social/publicacions` (`StaffSocialPublicacionsPage` →
+`PublicacionsTable`, fed by the paginated `social_list`): one house-kit
+table with search, a FilterPanel (canal/estat/tipus/setmana), deep-link
+query params, a per-row clickable link, and the lifecycle actions. The
+channel views embed that same `PublicacionsTable` scoped to their
+channel. Instagram, the newsletter and RSS are still managed in-page on
+the cockpit (which keeps the week calendar + slide-render button);
+Spotify stays on its own page for now. Not to be confused with
+`/staff/publicacions` (community posts).
 
 ## Backend seam
 

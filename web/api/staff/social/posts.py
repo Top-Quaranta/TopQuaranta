@@ -32,21 +32,75 @@ from ._common import (
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def social_list(request: Request) -> Response:
-    # Sort by activity date (when it was published, falling back to
-    # when it was created) so the staff list matches what a human
-    # would expect when scanning "what's new". `F('published_at')`
-    # with `nulls_last` sends pending rows to the bottom; among
-    # them the secondary `-created_at` keeps the freshest scheduled
-    # ones on top.
-    from django.db.models import F
+    # Unified publications table (distribution-views llesca 2). Filters
+    # + search + sort via query params (same shape as the cançons /
+    # artistes staff lists), paginated through the shared `_paginate`
+    # (default 50, cap 200) so the response never scales with rows.
+    # The cockpit + channel views call this without filter params and
+    # ignore `results` (they consume `config`/`credentials`/...); the
+    # publications table calls it with `?canal=...&page=...&...`.
+    from django.db.models import F, Q
+    from django.utils.dateparse import parse_date
 
-    qs = SocialPost.objects.all().order_by(
-        F("published_at").desc(nulls_last=True), "-created_at"
-    )[:200]
+    from web.api.staff._common import _paginate
+
+    qs = SocialPost.objects.all()
+
+    # `canal` maps a friendly channel key to its SocialPost platforms
+    # (Instagram spans feed + story); reuse the single source of truth.
+    canal = (request.GET.get("canal") or "").strip()
+    if canal in _CHANNEL_ESTAT:
+        platforms = _CHANNEL_ESTAT[canal][1]
+        if platforms:
+            qs = qs.filter(platform__in=platforms)
+    estat = (request.GET.get("estat") or "").strip()
+    if estat in {s for s, _ in SocialPost.STATUS_CHOICES}:
+        qs = qs.filter(status=estat)
+    tipus = (request.GET.get("tipus") or "").strip()
+    if tipus in {t for t, _ in SocialPost.TIPUS_CHOICES}:
+        qs = qs.filter(tipus=tipus)
+    setmana_raw = (request.GET.get("setmana") or "").strip()
+    if setmana_raw:
+        d = parse_date(setmana_raw)
+        if d is not None:
+            qs = qs.filter(setmana=d)
+    # Free-text over the human-meaningful char fields on the row. Small
+    # table; a plain icontains is enough (no unaccent machinery needed).
+    cerca = (request.GET.get("q") or "").strip()
+    if cerca:
+        qs = qs.filter(
+            Q(platform__icontains=cerca)
+            | Q(tipus__icontains=cerca)
+            | Q(territori__icontains=cerca)
+        )
+
+    # Sort. `data` (default) keeps the legacy activity order: published
+    # first (nulls last), freshest created among the still-pending.
+    sort_raw = (request.GET.get("sort") or "-data").strip()
+    direction = "-" if sort_raw.startswith("-") else ""
+    key = sort_raw[1:] if sort_raw.startswith("-") else sort_raw
+    sort_map = {
+        "data": "published_at",
+        "setmana": "setmana",
+        "canal": "platform",
+        "estat": "status",
+    }
+    if key not in sort_map:
+        direction, key = "-", "data"
+    if key == "data":
+        if direction == "-":
+            qs = qs.order_by(F("published_at").desc(nulls_last=True), "-created_at")
+        else:
+            qs = qs.order_by(F("published_at").asc(nulls_first=True), "created_at")
+    else:
+        qs = qs.order_by(f"{direction}{sort_map[key]}", "-created_at")
+
+    page, meta = _paginate(qs, request)
     cfg = ConfiguracioGlobal.load()
     return Response(
         {
-            "results": [_serialize(p) for p in qs],
+            "results": [_serialize(p) for p in page.object_list],
+            **meta,
             "config": {
                 "distribucio_activa": cfg.distribucio_activa,
                 "instagram_actiu": cfg.instagram_actiu,

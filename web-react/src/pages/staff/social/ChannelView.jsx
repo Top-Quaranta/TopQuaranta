@@ -10,13 +10,12 @@
  * added to the descriptor later without touching this file.
  *
  * Data comes from the two existing cockpit endpoints (`/staff/social/`
- * for config + credentials + the SocialPost list, and
- * `/staff/social/estat-canals/` for the honest effective state + last
- * send). Recent publications reuse that shared list filtered
- * client-side by platform; the unified, server-paginated publications
- * table lands in slice 2 and this slot will point at it.
+ * for config + credentials, and `/staff/social/estat-canals/` for the
+ * honest effective state + last send). The "Publicacions recents" slot
+ * embeds the shared, server-paginated PublicacionsTable scoped to this
+ * channel (slice 2) — same table as /staff/social/publicacions.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../../lib/api'
 import {
@@ -26,25 +25,15 @@ import {
   Input,
   PageHeader,
   Pill,
-  Table,
   TableCard,
-  Td,
-  Th,
-  THead,
-  Tr,
 } from '../../../components/staff/StaffTable'
 import { CHANNEL_DESCRIPTORS } from './channelDescriptors'
+import PublicacionsTable from './PublicacionsTable'
 
 const EFECTIU = {
   actiu: { tone: 'green', label: 'Actiu' },
   pausat_global: { tone: 'gray', label: 'Pausat pel mestre' },
   pausat_canal: { tone: 'red', label: 'Pausat (canal)' },
-}
-const STATUS = {
-  pendent: { tone: 'yellow', label: 'Pendent' },
-  publicat: { tone: 'green', label: 'Publicat' },
-  error: { tone: 'red', label: 'Error' },
-  omes: { tone: 'gray', label: 'Omès' },
 }
 
 export default function ChannelView({ canal }) {
@@ -70,12 +59,6 @@ export default function ChannelView({ canal }) {
   useEffect(() => {
     reload()
   }, [])
-
-  const rows = useMemo(() => {
-    if (!data?.results || !desc) return []
-    const set = new Set(desc.platforms)
-    return data.results.filter((p) => set.has(p.platform))
-  }, [data, desc])
 
   if (!desc) {
     return (
@@ -259,45 +242,13 @@ export default function ChannelView({ canal }) {
           Publicacions recents
         </h2>
         <p className="mb-2 text-sm text-white/70">
-          Últimes files d'aquest canal (de la llista compartida; la taula unificada
-          amb filtres i paginació arriba a la llesca següent).
+          Files d'aquest canal — la mateixa taula que{' '}
+          <Link className="underline" to="/staff/social/publicacions">
+            Publicacions
+          </Link>
+          , filtrada pel canal.
         </p>
-        <TableCard>
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Data</Th>
-                <Th>Setmana</Th>
-                <Th>Tipus</Th>
-                <Th>Territori</Th>
-                <Th>Estat</Th>
-              </Tr>
-            </THead>
-            <tbody>
-              {rows.map((p) => {
-                const s = STATUS[p.status] || { tone: 'gray', label: p.status }
-                return (
-                  <Tr key={p.pk}>
-                    <Td className="whitespace-nowrap font-mono text-xs">
-                      {p.published_at
-                        ? p.published_at.slice(0, 16).replace('T', ' ')
-                        : p.created_at?.slice(0, 10) || '—'}
-                    </Td>
-                    <Td className="whitespace-nowrap">Setmana {p.project_week}</Td>
-                    <Td className="text-xs">{p.tipus}</Td>
-                    <Td>{p.territori_label}</Td>
-                    <Td>
-                      <Pill tone={s.tone}>{s.label}</Pill>
-                    </Td>
-                  </Tr>
-                )
-              })}
-            </tbody>
-          </Table>
-          {rows.length === 0 && (
-            <EmptyState>Cap publicació d'aquest canal encara.</EmptyState>
-          )}
-        </TableCard>
+        <PublicacionsTable params={{ canal: desc.key }} />
       </div>
 
       {/* ── Diagnostics ─────────────────────────────────────────── */}

@@ -30,7 +30,7 @@ pillow-avif-plugin==1.5.5
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.12.0+cpu            # CPU-only PyTorch for faster-whisper backbone
 faster-whisper==1.2.1        # large-v3 LID via detect_language(), int8 CPU
-soundfile==0.13.1            # WAV loader (no torchcodec dependency)
+soundfile==0.14.0            # WAV loader (no torchcodec dependency)
 
 # SEO monitoring (Sprint S Bloc D, 2026-05-06).
 google-api-python-client>=2.197.0

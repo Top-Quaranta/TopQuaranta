@@ -95,9 +95,15 @@ const GROUPS = [
   {
     label: 'Distribució',
     items: [
-      // Single landing page now covers all 5 channels — Instagram +
-      // Mastodon + Bluesky + Newsletter + RSS — under "Social".
-      { to: '/staff/social', label: 'Social' },
+      // Cockpit: master switch + the six-channel grid. Instagram,
+      // newsletter and RSS are still managed in-page here; the three
+      // simple channels below have their own house-style views (slice 1
+      // of the distribution-views redistribution).
+      { to: '/staff/social', label: 'Social', end: true },
+      { to: '/staff/social/mastodon', label: 'Mastodon' },
+      { to: '/staff/social/bluesky', label: 'Bluesky' },
+      { to: '/staff/social/telegram', label: 'Telegram' },
+      { to: '/staff/social/esborrany', label: 'Newsletter (esborrany)' },
       // Spotify is a separate landing because the OAuth + Premium
       // monitoring shape doesn't fit inside the SocialPost-centric
       // table on /staff/social. Surfaced as a sibling under the same

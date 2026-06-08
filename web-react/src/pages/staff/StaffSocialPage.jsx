@@ -12,9 +12,17 @@
  * to scroll on mobile via the Table wrapper.
  */
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { Table, Select, Input } from '../../components/staff/StaffTable'
+import {
+  Btn,
+  Input,
+  PageHeader,
+  Pill,
+  Select,
+  Table,
+  TableCard,
+} from '../../components/staff/StaffTable'
 
 const STATUS_TONE = {
   pendent:  'bg-yellow-100 text-yellow-900',
@@ -34,17 +42,26 @@ function StatusBadge({ status }) {
   )
 }
 
-// Effective per-channel state from /staff/social/estat-canals/.
-const EFECTIU_TONE = {
-  actiu:         'bg-emerald-100 text-emerald-900',
-  pausat_global: 'bg-gray-300 text-gray-800',
-  pausat_canal:  'bg-red-100 text-red-900',
+// Effective per-channel state from /staff/social/estat-canals/, mapped
+// to house Pill tones (semantic, token-driven — no raw palette).
+const EFECTIU_PILL = {
+  actiu:         { tone: 'green', label: 'Actiu' },
+  pausat_global: { tone: 'gray',  label: 'Pausat pel mestre' },
+  pausat_canal:  { tone: 'red',   label: 'Pausat (canal)' },
 }
-const EFECTIU_LABEL = {
-  actiu:         'Actiu',
-  pausat_global: 'Pausat pel mestre',
-  pausat_canal:  'Pausat (canal)',
-}
+
+// The six channels of the cockpit grid. `field` is the per-channel
+// switch on ConfiguracioGlobal; `view` points at the channel's own
+// house-style page when it has one (slice 1: the three simple
+// channels) — the rest keep an inline toggle until later slices.
+const CHANNELS = [
+  { key: 'instagram',  label: 'Instagram',  field: 'instagram_actiu',  view: null },
+  { key: 'mastodon',   label: 'Mastodon',   field: 'mastodon_actiu',   view: '/staff/social/mastodon' },
+  { key: 'bluesky',    label: 'Bluesky',    field: 'bluesky_actiu',    view: '/staff/social/bluesky' },
+  { key: 'telegram',   label: 'Telegram',   field: 'telegram_actiu',   view: '/staff/social/telegram' },
+  { key: 'newsletter', label: 'Newsletter', field: 'newsletter_actiu', view: null },
+  { key: 'rss',        label: 'RSS',        field: 'rss_actiu',        view: null },
+]
 
 function fmtLastSend(iso) {
   if (!iso) return '—'
@@ -56,6 +73,7 @@ function fmtLastSend(iso) {
 }
 
 export default function StaffSocialPage() {
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState('')
@@ -63,15 +81,6 @@ export default function StaffSocialPage() {
   // token (we only ever show first/last 4 chars of what's already saved).
   const [tokenDraft, setTokenDraft] = useState('')
   const [userIdDraft, setUserIdDraft] = useState('')
-  // Mastodon + Bluesky form drafts — same shape as the IG one
-  // (never pre-filled with the existing secret).
-  const [mstInstance, setMstInstance] = useState('')
-  const [mstToken, setMstToken] = useState('')
-  const [mstHandle, setMstHandle] = useState('')
-  const [bskyHandle, setBskyHandle] = useState('')
-  const [bskyPwd, setBskyPwd] = useState('')
-  const [tgToken, setTgToken] = useState('')
-  const [tgChatId, setTgChatId] = useState('')
   // pk → {feed:[…], stories:[…]} of rendered slide thumbnails. Populated
   // when the operator clicks "Veure slides" on a row.
   const [slidesByPk, setSlidesByPk] = useState({})
@@ -90,9 +99,6 @@ export default function StaffSocialPage() {
 
   if (!data) return <p className="p-6">Carregant…</p>
   const { config, results, credentials, calendari } = data
-  const mastodon = data.mastodon || { configured: false }
-  const bluesky = data.bluesky || { configured: false }
-  const telegram = data.telegram || { configured: false }
 
   const tokenTone =
     config.token_days_left == null  ? 'bg-gray-200 text-gray-700' :
@@ -232,116 +238,15 @@ export default function StaffSocialPage() {
     } finally { setBusy(false) }
   }
 
-  // ── Mastodon ──────────────────────────────────────────────────
-  async function saveMastodon() {
-    if (!mstInstance.trim() || !mstToken.trim()) {
-      alert('Cal instance_url + access_token.')
-      return
-    }
-    setBusy(true)
-    try {
-      await api.post('/staff/social/mastodon/', {
-        instance_url: mstInstance.trim(),
-        access_token: mstToken.trim(),
-        handle: mstHandle.trim(),
-      })
-      setMstInstance(''); setMstToken(''); setMstHandle('')
-      await reload()
-    } catch (e) {
-      alert(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-  async function testMastodon() {
-    setBusy(true); setOutput('')
-    try {
-      const res = await api.post('/staff/social/mastodon/test/')
-      setOutput(JSON.stringify(res, null, 2))
-    } catch (e) {
-      setOutput(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-  async function clearMastodon() {
-    if (!confirm('Esborrar credencials Mastodon? El cron passarà a mode DRY-RUN per a aquest canal.')) return
-    setBusy(true)
-    try {
-      await api.post('/staff/social/mastodon/clear/')
-      await reload()
-    } finally { setBusy(false) }
-  }
+  // Mastodon / Bluesky / Telegram credentials now live in their own
+  // house-style views (web-react/src/pages/staff/social/ChannelView.jsx
+  // + channelDescriptors.jsx) — slice 1 of the distribution-views
+  // redistribution. This cockpit keeps only the master switch, the
+  // six-channel grid and the channels not yet migrated (Instagram,
+  // newsletter, RSS).
 
-  // ── Bluesky ───────────────────────────────────────────────────
-  async function saveBluesky() {
-    if (!bskyHandle.trim() || !bskyPwd.trim()) {
-      alert('Cal handle + app_password.')
-      return
-    }
-    setBusy(true)
-    try {
-      await api.post('/staff/social/bluesky/', {
-        handle: bskyHandle.trim(),
-        app_password: bskyPwd.trim(),
-      })
-      setBskyHandle(''); setBskyPwd('')
-      await reload()
-    } catch (e) {
-      alert(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-  async function testBluesky() {
-    setBusy(true); setOutput('')
-    try {
-      const res = await api.post('/staff/social/bluesky/test/')
-      setOutput(JSON.stringify(res, null, 2))
-    } catch (e) {
-      setOutput(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-  async function clearBluesky() {
-    if (!confirm('Esborrar credencials Bluesky? El cron passarà a mode DRY-RUN per a aquest canal.')) return
-    setBusy(true)
-    try {
-      await api.post('/staff/social/bluesky/clear/')
-      await reload()
-    } finally { setBusy(false) }
-  }
-
-  // ── Telegram ──────────────────────────────────────────────────
-  async function saveTelegram() {
-    if (!tgToken.trim() || !tgChatId.trim()) {
-      alert('Cal bot_token + chat_id.')
-      return
-    }
-    setBusy(true)
-    try {
-      await api.post('/staff/social/telegram/', {
-        bot_token: tgToken.trim(),
-        chat_id: tgChatId.trim(),
-      })
-      setTgToken(''); setTgChatId('')
-      await reload()
-    } catch (e) {
-      alert(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-  async function testTelegram() {
-    setBusy(true); setOutput('')
-    try {
-      const res = await api.post('/staff/social/telegram/test/')
-      setOutput(JSON.stringify(res, null, 2))
-    } catch (e) {
-      setOutput(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-  async function clearTelegram() {
-    if (!confirm('Esborrar credencials Telegram? El cron passarà a mode DRY-RUN per a aquest canal.')) return
-    setBusy(true)
-    try {
-      await api.post('/staff/social/telegram/clear/')
-      await reload()
-    } finally { setBusy(false) }
-  }
-
-  // ── Channel toggles (mastodon / bluesky / telegram / newsletter / rss) ──
+  // ── Channel toggles (instagram / newsletter / rss; the migrated
+  // channels toggle from their own view) ──
   async function toggleChannel(channel) {
     setBusy(true)
     try {
@@ -447,20 +352,121 @@ export default function StaffSocialPage() {
   }
 
   return (
-    // The body of the SPA is `bg-tq-ink` (dark). Wrap the whole
-    // staff page in an explicit white surface so all the
-    // `text-tq-ink` inside reads correctly. Same pattern other
-    // staff pages get implicitly via their tables.
-    <section className="bg-white text-tq-ink rounded-lg shadow-md p-4 md:p-6 space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold font-display">Distribució multi-canal</h1>
-        <p className="text-sm text-tq-ink/75 mt-1">
-          Control del calendari setmanal. Cada slot publica via Graph
-          API. Mode <strong>{config.dry_run ? 'DRY-RUN' : 'PRODUCCIÓ'}</strong>
-          {' '} (les credencials viuen a la fila singleton{' '}
-          <code>InstagramAuth</code>; sense token, mode DRY-RUN automàtic).
+    <section className="space-y-6">
+      <PageHeader
+        title="Distribució"
+        subtitle={`Control del calendari setmanal · mode ${
+          config.dry_run ? 'DRY-RUN' : 'PRODUCCIÓ'
+        }`}
+        right={
+          <Pill tone={config.dry_run ? 'gray' : 'green'}>
+            {config.dry_run ? 'DRY-RUN' : 'Producció'}
+          </Pill>
+        }
+      />
+
+      {/* ── Master distribution switch (kit) ──────────────────── */}
+      <TableCard className="p-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-tq-ink/75">
+              Interruptor mestre de distribució
+            </p>
+            <p className="text-sm mt-1 font-semibold flex items-center gap-2 flex-wrap">
+              <Pill tone={config.distribucio_activa ? 'green' : 'red'}>
+                {config.distribucio_activa ? 'Activa' : 'Pausada'}
+              </Pill>
+              {config.distribucio_activa
+                ? 'cada canal segueix el seu propi switch'
+                : 'cap canal publica (els sis)'}
+            </p>
+          </div>
+          <Btn
+            tone={config.distribucio_activa ? 'danger' : 'primary'}
+            size="md"
+            disabled={busy}
+            onClick={toggleMaster}
+          >
+            {config.distribucio_activa ? 'Pausar-ho tot' : 'Reactivar distribució'}
+          </Btn>
+        </div>
+        <p className="text-xs mt-3">
+          <Link
+            to="/staff/social/esborrany"
+            className="underline decoration-dotted hover:decoration-solid"
+          >
+            Esborrany de la newsletter (revisió) →
+          </Link>
         </p>
-      </header>
+      </TableCard>
+
+      {/* ── Channel grid (kit) ────────────────────────────────── */}
+      <div>
+        <h2 className="text-base font-bold text-white font-display mb-1">Canals</h2>
+        <p className="text-sm text-white/70 mb-3">
+          Els sis canals com a iguals. El mestre de dalt els gateja tots; cada canal
+          té a més el seu propi switch. Mastodon, Bluesky i Telegram tenen vista
+          pròpia; Instagram, newsletter i RSS es gestionen encara aquí sota.
+        </p>
+        <TableCard className="p-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {CHANNELS.map((c) => {
+              const st = estat?.canals?.[c.key]
+              const efectiu = st?.efectiu || (config[c.field] ? 'actiu' : 'pausat_canal')
+              const ef = EFECTIU_PILL[efectiu] || { tone: 'gray', label: efectiu }
+              const actiu = !!config[c.field]
+              return (
+                <div
+                  key={c.key}
+                  className="p-3 border border-tq-ink/10 rounded-md flex items-start justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">
+                      {c.label}
+                    </p>
+                    <div className="mt-1">
+                      <Pill tone={ef.tone}>{ef.label}</Pill>
+                    </div>
+                    {c.key === 'instagram' && st?.fase_distribucio != null && (
+                      <p className="text-[10px] text-tq-ink/75 mt-1">
+                        Fase {st.fase_distribucio}/5
+                      </p>
+                    )}
+                    {c.key !== 'rss' && (
+                      <p className="text-[10px] text-tq-ink/75 mt-1">
+                        Últim: {fmtLastSend(st?.ultim_enviament)}
+                        {st?.font === 'audit' && ' (audit)'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    {c.view ? (
+                      <Btn tone="secondary" onClick={() => navigate(c.view)}>
+                        Gestiona →
+                      </Btn>
+                    ) : (
+                      <Btn
+                        tone={actiu ? 'danger' : 'primary'}
+                        disabled={busy}
+                        onClick={() => toggleChannel(c.key)}
+                        title={actiu ? 'Pausar aquest canal' : 'Activar aquest canal'}
+                      >
+                        {actiu ? 'Pausar' : 'Activar'}
+                      </Btn>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </TableCard>
+      </div>
+
+      {/* ── Legacy controls (not yet migrated: Instagram config,
+          calendar, publications list). Wrapped in an explicit white
+          surface so the `text-tq-ink` inside reads on the dark body —
+          slices 2-4 move these out into their own house-style views. */}
+      <div className="bg-white text-tq-ink rounded-lg shadow-md p-4 md:p-6 space-y-6">
 
       {/* ── Credentials card ──────────────────────────────────── */}
       <div className={
@@ -566,45 +572,6 @@ export default function StaffSocialPage() {
         </details>
       </div>
 
-      {/* ── Master distribution switch ────────────────────────── */}
-      <div className={
-        'p-4 rounded-md border-2 ' +
-        (config.distribucio_activa
-          ? 'border-emerald-300 bg-emerald-50'
-          : 'border-red-400 bg-red-50')
-      }>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-[11px] uppercase tracking-widest text-tq-ink/75">
-              Interruptor mestre de distribució
-            </p>
-            <p className="text-sm mt-1 font-semibold">
-              {config.distribucio_activa
-                ? 'Distribució ACTIVA — cada canal segueix el seu propi switch'
-                : 'Distribució PAUSADA — cap canal publica (els sis)'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={toggleMaster}
-            disabled={busy}
-            className={
-              'px-4 py-2 rounded-md text-sm font-semibold ' +
-              (config.distribucio_activa
-                ? 'bg-red-700 text-white hover:bg-red-800'
-                : 'bg-emerald-700 text-white hover:bg-emerald-800')
-            }
-          >
-            {config.distribucio_activa ? 'Pausar-ho tot' : 'Reactivar distribució'}
-          </button>
-        </div>
-        <p className="text-xs mt-2">
-          <Link to="/staff/social/esborrany" className="underline decoration-dotted hover:decoration-solid">
-            Esborrany de la newsletter (revisió) →
-          </Link>
-        </p>
-      </div>
-
       {/* ── Config controls ───────────────────────────────────── */}
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="p-3 border rounded-md">
@@ -656,205 +623,17 @@ export default function StaffSocialPage() {
         </p>
       </div>
 
-      {/* ── Canals de distribució ─────────────────────────────── */}
-      <section>
-        <h2 className="text-base font-bold font-display mb-2">
-          Canals de distribució
-        </h2>
-        <p className="text-xs text-tq-ink/75 mb-3">
-          Els sis canals com a iguals. El mestre de dalt els gateja tots;
-          cada canal té a més el seu propi switch independent. Amb el
-          mestre pausat, tots mostren «Pausat pel mestre» encara que el
-          seu switch propi estigui actiu. Sense credencials, el cron salta
-          aquell canal en silenci.
-        </p>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-          {[
-            { key: 'instagram', label: 'Instagram', val: config.instagram_actiu },
-            { key: 'mastodon',  label: 'Mastodon',  val: config.mastodon_actiu },
-            { key: 'bluesky',   label: 'Bluesky',   val: config.bluesky_actiu },
-            { key: 'telegram',  label: 'Telegram',  val: config.telegram_actiu },
-            { key: 'newsletter',label: 'Newsletter',val: config.newsletter_actiu },
-            { key: 'rss',       label: 'RSS',       val: config.rss_actiu },
-          ].map(c => {
-            const st = estat?.canals?.[c.key]
-            const efectiu = st?.efectiu || (c.val ? 'actiu' : 'pausat_canal')
-            return (
-              <div key={c.key} className="p-3 border rounded-md flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">{c.label}</p>
-                  <span className={
-                    'inline-block mt-1 text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full ' +
-                    (EFECTIU_TONE[efectiu] || 'bg-gray-200 text-gray-800')
-                  }>
-                    {EFECTIU_LABEL[efectiu] || efectiu}
-                  </span>
-                  {c.key === 'instagram' && st?.fase_distribucio != null && (
-                    <p className="text-[10px] text-tq-ink/75 mt-1">Fase {st.fase_distribucio}/5</p>
-                  )}
-                  {c.key !== 'rss' && (
-                    <p className="text-[10px] text-tq-ink/75 mt-1">
-                      Últim enviament: {fmtLastSend(st?.ultim_enviament)}
-                      {st?.font === 'audit' && ' (audit)'}
-                    </p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => toggleChannel(c.key)}
-                  title={c.val ? 'Pausar aquest canal' : 'Activar aquest canal'}
-                  className={
-                    'shrink-0 px-3 py-1 rounded text-xs font-semibold ' +
-                    (c.val
-                      ? 'bg-emerald-700 text-white hover:bg-emerald-800'
-                      : 'bg-red-700 text-white hover:bg-red-800')
-                  }
-                >
-                  {c.val ? 'Pausar' : 'Activar'}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Mastodon credentials */}
-        <div className="p-3 border rounded-md mb-3">
-          <h3 className="text-sm font-semibold mb-1">Credencials Mastodon</h3>
-          {mastodon.configured ? (
-            <p className="text-xs">
-              <strong>{mastodon.handle || '(handle no establert)'}</strong>
-              {' '}@ <code>{mastodon.instance_url}</code>
-              {' '} · token <code>{mastodon.token_masked}</code>
-              {mastodon.updated_by && <> · per <strong>{mastodon.updated_by}</strong></>}
-              <button type="button" onClick={testMastodon} disabled={busy}
-                className="ml-2 px-2 py-1 text-[11px] rounded bg-gray-100 hover:bg-gray-200">
-                Provar
-              </button>
-              <button type="button" onClick={clearMastodon} disabled={busy}
-                className="ml-1 px-2 py-1 text-[11px] rounded bg-red-100 text-red-800 hover:bg-red-200">
-                Esborrar
-              </button>
-            </p>
-          ) : (
-            <p className="text-xs text-tq-ink/75">
-              Sense credencials. Crea una "App" a la teva instància (Settings → Development →
-              New Application, scopes: <code>write:media write:statuses</code>) i enganxa el token.
-            </p>
-          )}
-          <details className="mt-2">
-            <summary className="text-[11px] cursor-pointer">
-              {mastodon.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
-            </summary>
-            <div className="grid sm:grid-cols-3 gap-2 mt-2">
-              <Input aria-label="Instància de Mastodon" placeholder="https://mastodont.cat" value={mstInstance}
-                     onChange={e => setMstInstance(e.target.value)} />
-              <Input aria-label="Access token de Mastodon" placeholder="access_token" value={mstToken}
-                     onChange={e => setMstToken(e.target.value)} type="password" />
-              <Input aria-label="Handle de Mastodon (opcional)" placeholder="handle (opcional)" value={mstHandle}
-                     onChange={e => setMstHandle(e.target.value)} />
-            </div>
-            <button type="button" onClick={saveMastodon} disabled={busy || !mstInstance || !mstToken}
-              className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50">
-              Desar
-            </button>
-          </details>
-        </div>
-
-        {/* Bluesky credentials */}
-        <div className="p-3 border rounded-md mb-3">
-          <h3 className="text-sm font-semibold mb-1">Credencials Bluesky</h3>
-          {bluesky.configured ? (
-            <p className="text-xs">
-              <strong>@{bluesky.handle}</strong>
-              {' '} · contrasenya <code>{bluesky.password_masked}</code>
-              {bluesky.did && <> · DID <code className="text-[10px]">{bluesky.did}</code></>}
-              {bluesky.updated_by && <> · per <strong>{bluesky.updated_by}</strong></>}
-              <button type="button" onClick={testBluesky} disabled={busy}
-                className="ml-2 px-2 py-1 text-[11px] rounded bg-gray-100 hover:bg-gray-200">
-                Provar
-              </button>
-              <button type="button" onClick={clearBluesky} disabled={busy}
-                className="ml-1 px-2 py-1 text-[11px] rounded bg-red-100 text-red-800 hover:bg-red-200">
-                Esborrar
-              </button>
-            </p>
-          ) : (
-            <p className="text-xs text-tq-ink/75">
-              Sense credencials. Crea una <strong>App Password</strong> a {' '}
-              <a className="underline" href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener">
-                bsky.app/settings/app-passwords
-              </a> {' '} (NO la contrasenya del compte).
-            </p>
-          )}
-          <details className="mt-2">
-            <summary className="text-[11px] cursor-pointer">
-              {bluesky.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
-            </summary>
-            <div className="grid sm:grid-cols-2 gap-2 mt-2">
-              <Input aria-label="Handle de Bluesky" placeholder="topquaranta.bsky.social" value={bskyHandle}
-                     onChange={e => setBskyHandle(e.target.value)} />
-              <Input aria-label="App password de Bluesky" placeholder="app password" value={bskyPwd}
-                     onChange={e => setBskyPwd(e.target.value)} type="password" />
-            </div>
-            <button type="button" onClick={saveBluesky} disabled={busy || !bskyHandle || !bskyPwd}
-              className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50">
-              Desar
-            </button>
-          </details>
-        </div>
-
-        {/* Telegram credentials */}
-        <div className="p-3 border rounded-md mb-3">
-          <h3 className="text-sm font-semibold mb-1">Credencials Telegram</h3>
-          {telegram.configured ? (
-            <p className="text-xs">
-              <strong>{telegram.bot_username ? `@${telegram.bot_username}` : '(bot)'}</strong>
-              {' '}→ canal <code>{telegram.chat_id}</code>
-              {' '} · token <code>{telegram.token_masked}</code>
-              {telegram.updated_by && <> · per <strong>{telegram.updated_by}</strong></>}
-              <button type="button" onClick={testTelegram} disabled={busy}
-                className="ml-2 px-2 py-1 text-[11px] rounded bg-gray-100 hover:bg-gray-200">
-                Provar
-              </button>
-              <button type="button" onClick={clearTelegram} disabled={busy}
-                className="ml-1 px-2 py-1 text-[11px] rounded bg-red-100 text-red-800 hover:bg-red-200">
-                Esborrar
-              </button>
-            </p>
-          ) : (
-            <p className="text-xs text-tq-ink/75">
-              Sense credencials. Parla amb {' '}
-              <a className="underline" href="https://t.me/BotFather" target="_blank" rel="noopener">
-                @BotFather
-              </a>
-              {' '}, fes <code>/newbot</code>, copia el token. Després afegeix el bot al teu canal com a admin amb permís de <em>Post messages</em> i fica el handle (<code>@topquaranta</code>) com a chat_id.
-            </p>
-          )}
-          <details className="mt-2">
-            <summary className="text-[11px] cursor-pointer">
-              {telegram.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
-            </summary>
-            <div className="grid sm:grid-cols-2 gap-2 mt-2">
-              <Input aria-label="Bot token de Telegram" placeholder="bot_token (de @BotFather)" value={tgToken}
-                     onChange={e => setTgToken(e.target.value)} type="password" />
-              <Input aria-label="Canal de Telegram" placeholder="@canal o ID numèric" value={tgChatId}
-                     onChange={e => setTgChatId(e.target.value)} />
-            </div>
-            <button type="button" onClick={saveTelegram} disabled={busy || !tgToken || !tgChatId}
-              className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50">
-              Desar
-            </button>
-          </details>
-        </div>
-
-        <p className="text-[11px] text-tq-ink/75">
-          La <strong>newsletter</strong> usa l'SMTP configurat a <code>EMAIL_HOST</code>;
-          envia automàticament cada dissabte als usuaris amb <code>vol_newsletter=True</code>.
-          L'<strong>RSS</strong> es serveix a <code>/rss/top.xml</code> + <code>/rss/novetats.xml</code> sense altres credencials.
-        </p>
-      </section>
+      {/* Channels not yet migrated to their own view (Mastodon,
+          Bluesky and Telegram now live under /staff/social/<canal> via
+          the channel grid above). */}
+      <p className="text-[11px] text-tq-ink/75">
+        La <strong>newsletter</strong> usa l'SMTP configurat a <code>EMAIL_HOST</code>;
+        envia cada diumenge als usuaris amb <code>vol_newsletter=True</code> (revisa
+        l'<Link to="/staff/social/esborrany" className="underline">esborrany</Link> abans).
+        L'<strong>RSS</strong> es serveix a <code>/rss/top.xml</code> +{' '}
+        <code>/rss/novetats.xml</code> sense altres credencials. Mastodon, Bluesky i
+        Telegram tenen ara la seva pròpia vista (graella de dalt).
+      </p>
 
       {/* ── Calendari de la setmana ───────────────────────────── */}
       <section>
@@ -969,7 +748,7 @@ export default function StaffSocialPage() {
           </tr>
         </thead>
         <tbody>
-          {results.flatMap((p, idx) => {
+          {results.flatMap((p) => {
             // Per-platform row tint so the operator scans the table
             // by channel at a glance. Tints are deliberately faint
             // (~5-8 % opacity) to keep text contrast high; brand
@@ -1110,6 +889,7 @@ export default function StaffSocialPage() {
           Encara no hi ha cap publicació. Utilitza Preview per generar-ne en mode dry-run.
         </p>
       )}
+      </div>
     </section>
   )
 }

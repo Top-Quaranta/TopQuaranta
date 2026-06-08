@@ -270,6 +270,67 @@ def test_brief_query_budget_bounded_no_n_plus_1(django_assert_max_num_queries):
             build_brief(_monday())
 
 
+# ── old==new equivalence pins for the rewritten reads ────────────────
+
+
+@pytest.mark.django_db
+def test_collaborator_order_matches_legacy_method(client_with_token):
+    """The batched collaborator lookup must reproduce the EXACT order of
+    `Canco.artistes_col_ordered()` (through-table insertion id), NOT the
+    alphabetical Artista.Meta.ordering. Collaborators are inserted in an
+    order that is deliberately NOT alphabetical, so a regression to the
+    naive M2M ordering would flip them and fail this pin."""
+    from comptes.newsletter_brief import _collaborators_by_canco
+
+    c = _seed_top()  # main artist "Art X" at posició 1
+    z = Artista.objects.create(nom="Zeta", lastfm_nom="Zeta", aprovat=True)
+    a = Artista.objects.create(nom="Alfa", lastfm_nom="Alfa", aprovat=True)
+    c.artistes_col.add(z)  # inserted first
+    c.artistes_col.add(a)  # inserted second
+    expected = ["Zeta", "Alfa"]  # insertion order, NOT alphabetical
+    # Sanity: the order under test is genuinely non-alphabetical.
+    assert expected != sorted(expected)
+    # 1) the batch helper equals the legacy model method, value-by-value.
+    batched = [art.nom for art in _collaborators_by_canco([c])[c.id]]
+    legacy = [art.nom for art in c.artistes_col_ordered()]
+    assert batched == legacy == expected
+    # 2) the brief surfaces that same order in both top entries and facts.
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.data["top40"][0]["artistes"] == ["Art X", "Zeta", "Alfa"]
+    collabs = r.data["fets_grup"][0]["collaboradors"]
+    assert [x["nom"] for x in collabs] == expected
+
+
+@pytest.mark.django_db
+def test_origen_prefetch_matches_legacy_first(client_with_token):
+    """`_artista_origen` (prefetch-by-pk path) must return the same origin
+    the legacy `localitats.first()` did. The artist gets two localitats in
+    distinct municipis; `.first()` resolves by pk, and the rewrite must
+    pick the identical row and emit the identical dict."""
+    from comptes.newsletter_brief import _artista_origen
+    from music.models import ArtistaLocalitat, Municipi, Territori
+
+    c = _seed_top()
+    art = c.artista
+    terr, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Principat"})
+    m1 = Municipi.objects.create(nom="Primer", comarca="C1", territori=terr)
+    m2 = Municipi.objects.create(nom="Segon", comarca="C2", territori=terr)
+    l1 = ArtistaLocalitat.objects.create(artista=art, municipi=m1)
+    ArtistaLocalitat.objects.create(artista=art, municipi=m2)
+    # Legacy behaviour, recomputed inline for the pin.
+    legacy_loc = art.localitats.select_related("municipi__territori").first()
+    assert legacy_loc.pk == l1.pk  # .first() resolves by pk
+    expected = {"municipi": "Primer", "comarca": "C1", "territori": "CAT"}
+    # Fresh instance so no in-memory prefetch leaks into the comparison.
+    fresh = Artista.objects.get(pk=art.pk)
+    assert _artista_origen(fresh) == expected
+    # End-to-end through the brief (prefetch path).
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.data["fets_grup"][0]["origen"] == expected
+
+
 # ── draft upsert ─────────────────────────────────────────────────────
 
 

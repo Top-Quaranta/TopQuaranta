@@ -365,6 +365,16 @@ urlpatterns = [
         staff_views.newsletter_esborrany_preview,
         name="staff_newsletter_esborrany_preview",
     ),
+    path(
+        "staff/newsletter/esborrany/generar/",
+        staff_views.newsletter_esborrany_generar,
+        name="staff_newsletter_esborrany_generar",
+    ),
+    path(
+        "staff/newsletter/setmanes/",
+        staff_views.newsletter_setmanes,
+        name="staff_newsletter_setmanes",
+    ),
     # ── Sprint I — social distribution (staff) ──
     path("staff/social/", staff_views.social_list, name="staff_social_list"),
     path(

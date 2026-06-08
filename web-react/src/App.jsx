@@ -253,6 +253,7 @@ function AppContent() {
                   <Route path="/social/mastodon" element={<ChannelView canal="mastodon" />} />
                   <Route path="/social/bluesky" element={<ChannelView canal="bluesky" />} />
                   <Route path="/social/telegram" element={<ChannelView canal="telegram" />} />
+                  <Route path="/social/newsletter" element={<ChannelView canal="newsletter" />} />
                   <Route path="/social/publicacions" element={<StaffSocialPublicacionsPage />} />
                   <Route path="/estat" element={<EstatPage />} />
                   <Route path="/publicacions" element={<StaffPublicacionsPage />} />

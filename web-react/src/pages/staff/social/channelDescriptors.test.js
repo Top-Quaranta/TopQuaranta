@@ -36,12 +36,38 @@ const EXPECTED = {
 }
 
 describe('CHANNEL_DESCRIPTORS', () => {
-  it('covers exactly the three simple channels (slice 1)', () => {
+  it('covers the simple channels + newsletter (llesca 3)', () => {
     expect(Object.keys(CHANNEL_DESCRIPTORS).sort()).toEqual([
       'bluesky',
       'mastodon',
+      'newsletter',
       'telegram',
     ])
+  })
+
+  it('every descriptor declares the 4-section schema keys', () => {
+    for (const d of Object.values(CHANNEL_DESCRIPTORS)) {
+      expect('section1' in d).toBe(true) // null or { kind }
+      expect(d.kpis).toBeTruthy()
+      expect(d.control).toBeTruthy()
+      expect(d.analytics).toBeTruthy()
+      expect(['exists', 'missing']).toContain(d.analytics.status)
+    }
+  })
+
+  describe('newsletter', () => {
+    const d = CHANNEL_DESCRIPTORS.newsletter
+    it('is credential-less and is the section-1 channel', () => {
+      expect(d.auth).toBeNull()
+      expect(d.payloadKey).toBeNull()
+      expect(d.section1).toEqual({ kind: 'newsletter' })
+      expect(d.switchField).toBe('newsletter_actiu')
+    })
+    it('publishes only top_ppcc and has no post analytics', () => {
+      expect(d.control.tipus).toEqual(['top_ppcc'])
+      expect(d.analytics.status).toBe('missing')
+      expect(d.kpis.subscriptors.status).toBe('exists')
+    })
   })
 
   for (const [key, exp] of Object.entries(EXPECTED)) {

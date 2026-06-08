@@ -99,10 +99,19 @@ page. The **unified publications table** lives at
 table with search, a FilterPanel (canal/estat/tipus/setmana), deep-link
 query params, a per-row clickable link, and the lifecycle actions. The
 channel views embed that same `PublicacionsTable` scoped to their
-channel. Instagram, the newsletter and RSS are still managed in-page on
-the cockpit (which keeps the week calendar + slide-render button);
-Spotify stays on its own page for now. Not to be confused with
-`/staff/publicacions` (community posts).
+channel. Each descriptor also declares a **4-section schema** (`section1`
+/ `kpis` / `control` / `analytics`), and `ChannelView` renders those
+sections generically — a missing KPI/metric for a channel paints an
+honest dash, never a fake 0. **Newsletter** is the first complete
+instance: a first-class view at `/staff/social/newsletter` whose Section
+1 (`NewsletterSection`) adds a live can-generate indicator + a
+consolidated-week selector + on-demand "Generate (engine)" + the shared
+`NewsletterDraftEditor` (extracted from the legacy
+`/staff/social/esborrany` page, now a thin wrapper kept for the cron
+email links). Instagram and RSS are still managed in-page on the cockpit
+(which keeps the week calendar + slide-render button); Spotify stays on
+its own page for now. Not to be confused with `/staff/publicacions`
+(community posts).
 
 ## Backend seam
 

@@ -21,6 +21,19 @@ export const CHANNEL_DESCRIPTORS = {
     switchField: 'mastodon_actiu',
     payloadKey: 'mastodon',
     platforms: ['mastodon'],
+    // 4-section schema (llesca 3). Each block declares FONT + ESTAT; the
+    // view paints an honest dash for `status: 'missing'`, never a fake 0.
+    section1: null,
+    kpis: {
+      enviaments: { label: 'Enviaments', status: 'exists' },
+      seguidors: { label: 'Seguidors', status: 'exists' },
+      abast: { label: 'Abast', status: 'missing' }, // API doesn't expose reach
+    },
+    control: {
+      tipus: ['top_ppcc', 'top_territorial', 'nous_singles', 'nous_albums'],
+      nota: 'feed-only; tots els tipus del calendari (implícit al codi)',
+    },
+    analytics: { status: 'exists', available: ['likes', 'replies', 'shares'] },
     auth: {
       saveEndpoint: '/staff/social/mastodon/',
       testEndpoint: '/staff/social/mastodon/test/',
@@ -70,6 +83,17 @@ export const CHANNEL_DESCRIPTORS = {
     switchField: 'bluesky_actiu',
     payloadKey: 'bluesky',
     platforms: ['bluesky'],
+    section1: null,
+    kpis: {
+      enviaments: { label: 'Enviaments', status: 'exists' },
+      seguidors: { label: 'Seguidors', status: 'exists' },
+      abast: { label: 'Abast', status: 'missing' },
+    },
+    control: {
+      tipus: ['top_ppcc', 'top_territorial', 'nous_singles', 'nous_albums'],
+      nota: 'feed-only; tots els tipus del calendari (implícit al codi)',
+    },
+    analytics: { status: 'exists', available: ['likes', 'replies', 'shares'] },
     auth: {
       saveEndpoint: '/staff/social/bluesky/',
       testEndpoint: '/staff/social/bluesky/test/',
@@ -129,6 +153,18 @@ export const CHANNEL_DESCRIPTORS = {
     switchField: 'telegram_actiu',
     payloadKey: 'telegram',
     platforms: ['telegram'],
+    section1: null,
+    kpis: {
+      enviaments: { label: 'Enviaments', status: 'exists' },
+      seguidors: { label: 'Membres', status: 'exists' }, // getChatMemberCount
+      abast: { label: 'Abast', status: 'missing' },
+    },
+    control: {
+      tipus: ['top_ppcc', 'top_territorial', 'nous_singles', 'nous_albums'],
+      nota: 'feed-only; tots els tipus del calendari (implícit al codi)',
+    },
+    // Bot API exposes no per-message engagement → no post analytics.
+    analytics: { status: 'missing', available: [] },
     auth: {
       saveEndpoint: '/staff/social/telegram/',
       testEndpoint: '/staff/social/telegram/test/',
@@ -173,5 +209,29 @@ export const CHANNEL_DESCRIPTORS = {
         </>
       ),
     },
+  },
+
+  newsletter: {
+    key: 'newsletter',
+    nom: 'Newsletter',
+    switchField: 'newsletter_actiu',
+    // No per-channel credentials payload: the newsletter uses the
+    // server-side SMTP (EMAIL_HOST), not a row in /staff/social/.
+    payloadKey: null,
+    platforms: ['newsletter'],
+    auth: null,
+    // Section 1 (the on-demand draft surface) is the newsletter's
+    // first-class management area; the credentials slot is skipped.
+    section1: { kind: 'newsletter' },
+    kpis: {
+      enviaments: { label: 'Enviaments', status: 'exists' },
+      subscriptors: { label: 'Subscriptors', status: 'exists' }, // PerfilUsuari.vol_newsletter
+    },
+    control: {
+      tipus: ['top_ppcc'],
+      nota: 'newsletter = només top_ppcc (no segueix el calendari)',
+    },
+    // No metrics handler (Brevo stats not wired) → honest dash, not 0.
+    analytics: { status: 'missing', available: [] },
   },
 }

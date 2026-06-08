@@ -201,8 +201,10 @@ will send), `font`, `editat`.
      leader fact (`detect_all[0]`, gated, with `freshness_blocked`),
      `actualitat` (the 6-8 most recent VilaWeb RSS headlines so the voice
      picks by weight, best-effort), and a separate LOW-CONFIDENCE section
-     with Last.fm tags. Returns `{"status": "not_ready"}` when this week's
-     top isn't consolidated (same anti-stale guard).
+     with Last.fm tags. Returns `{"status": "not_ready"}` when the week's
+     top isn't consolidated (same anti-stale guard). Accepts an optional
+     `?setmana=<iso Monday>` (2026-06-08) for a specific week; absent →
+     this week (production path unchanged).
    - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
      draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`
@@ -217,6 +219,13 @@ will send), `font`, `editat`.
    failed, the engine still leaves a draft. An **anti-stale guard**
    refuses to generate unless the TopSetmanal for THIS week
    (`date.today() − weekday`) already exists.
+   **On-demand generation** (2026-06-08, staff): `POST
+   /staff/newsletter/esborrany/generar/?setmana=` runs this same engine
+   seam for any chosen consolidated week (guards: consolidated-only;
+   never clobbers a terminal/edited draft → 409; never sends), and `GET
+   /staff/newsletter/setmanes/` lists the consolidated weeks + a live
+   can-generate indicator. Surfaced in the SPA at the first-class
+   Newsletter channel view (`/staff/social/newsletter`).
 2. **Review** — staff endpoints (`web/api/staff/newsletter.py`, IsStaff):
    `GET /staff/newsletter/esborrany/` (draft + the live top it will ship
    with, to spot mismatches + the Sunday send date), `PATCH` (edit

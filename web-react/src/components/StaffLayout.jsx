@@ -104,7 +104,7 @@ const GROUPS = [
       { to: '/staff/social/mastodon', label: 'Mastodon' },
       { to: '/staff/social/bluesky', label: 'Bluesky' },
       { to: '/staff/social/telegram', label: 'Telegram' },
-      { to: '/staff/social/esborrany', label: 'Newsletter (esborrany)' },
+      { to: '/staff/social/newsletter', label: 'Newsletter' },
       // Spotify is a separate landing because the OAuth + Premium
       // monitoring shape doesn't fit the publications table. Surfaced as
       // a sibling under the same "Distribució" group so it's discoverable

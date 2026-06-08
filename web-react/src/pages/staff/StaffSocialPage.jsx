@@ -40,7 +40,7 @@ const CHANNELS = [
   { key: 'mastodon',   label: 'Mastodon',   field: 'mastodon_actiu',   view: '/staff/social/mastodon' },
   { key: 'bluesky',    label: 'Bluesky',    field: 'bluesky_actiu',    view: '/staff/social/bluesky' },
   { key: 'telegram',   label: 'Telegram',   field: 'telegram_actiu',   view: '/staff/social/telegram' },
-  { key: 'newsletter', label: 'Newsletter', field: 'newsletter_actiu', view: null },
+  { key: 'newsletter', label: 'Newsletter', field: 'newsletter_actiu', view: '/staff/social/newsletter' },
   { key: 'rss',        label: 'RSS',        field: 'rss_actiu',        view: null },
 ]
 
@@ -243,10 +243,10 @@ export default function StaffSocialPage() {
         </div>
         <p className="text-xs mt-3">
           <Link
-            to="/staff/social/esborrany"
+            to="/staff/social/newsletter"
             className="underline decoration-dotted hover:decoration-solid"
           >
-            Esborrany de la newsletter (revisió) →
+            Newsletter (esborrany + generació) →
           </Link>
         </p>
       </TableCard>

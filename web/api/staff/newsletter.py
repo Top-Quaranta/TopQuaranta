@@ -169,3 +169,107 @@ def esborrany_preview(request: Request) -> Response:
         ),
     )
     return Response({"html": html, "setmana": setmana.isoformat()})
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def setmanes(request: Request) -> Response:
+    """Weeks with a consolidated PPCC `TopSetmanal` (the on-demand
+    generation selector) + a live can-generate indicator for THIS week.
+
+    Each listed week is by definition consolidated, so generatable;
+    `has_draft`/`estat` let the UI flag which already have a draft. The
+    `current` block calls `build_brief()` (the routine's own readiness
+    function) so staff sees whether the automatic Saturday routine could
+    generate the current week right now (status=ready) or not."""
+    from comptes.newsletter_brief import build_brief, current_monday
+
+    weeks = list(
+        TopSetmanal.objects.filter(territori=TERRITORI)
+        .values_list("setmana", flat=True)
+        .distinct()
+        .order_by("-setmana")[:52]
+    )
+    estats = {
+        d["setmana"]: d["estat"]
+        for d in NewsletterDraft.objects.filter(
+            tipus=TIPUS, territori=TERRITORI, setmana__in=weeks
+        ).values("setmana", "estat")
+    }
+    setmanes_out = [
+        {
+            "setmana": w.isoformat(),
+            "has_draft": w in estats,
+            "estat": estats.get(w),
+        }
+        for w in weeks
+    ]
+    brief = build_brief()  # this week; cheap when not consolidated
+    current = {
+        "setmana": current_monday().isoformat(),
+        "status": brief.get("status"),
+        "motiu": brief.get("motiu", ""),
+    }
+    return Response({"setmanes": setmanes_out, "current": current})
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def esborrany_generar(request: Request) -> Response:
+    """Generate an ENGINE draft on demand for a chosen consolidated week.
+
+    Uses the side-effect-free generator (`build_draft_text` — no
+    `mark_used`, no send). Guards: the week's PPCC top must be
+    consolidated (409 otherwise); never clobbers a terminal
+    (`enviat`/`cancellat`) or staff-edited (`editat=True`) draft (409).
+    A `pendent` engine/LLM draft is regenerated in place. NEVER sends."""
+    setmana = _resolve_setmana(request)
+    if setmana is None:
+        return Response({"error": "setmana invàlida o cap top consolidat"}, status=400)
+    if not TopSetmanal.objects.filter(territori=TERRITORI, setmana=setmana).exists():
+        return Response(
+            {"error": f"el top {TERRITORI} de la setmana {setmana} no està consolidat"},
+            status=409,
+        )
+
+    existing = NewsletterDraft.objects.filter(
+        tipus=TIPUS, territori=TERRITORI, setmana=setmana
+    ).first()
+    if existing and existing.estat in (
+        NewsletterDraft.ESTAT_ENVIAT,
+        NewsletterDraft.ESTAT_CANCELLAT,
+    ):
+        return Response(
+            {"error": f"esborrany {existing.estat}; no es pot regenerar"}, status=409
+        )
+    if existing and existing.editat:
+        return Response(
+            {"error": "esborrany editat per l'staff; no es pot regenerar"}, status=409
+        )
+
+    from comptes.newsletter import build_draft_text
+    from social import payload
+
+    data = payload.build_top(TERRITORI, setmana)
+    if not data or not data.get("entries"):
+        return Response(
+            {"error": f"el top {TERRITORI} de {setmana} no té entrades"}, status=409
+        )
+    publish_date = setmana + datetime.timedelta(days=5)
+    subject, narrative_html = build_draft_text(
+        TIPUS, TERRITORI, setmana, publish_date, data["entries"]
+    )
+
+    draft, created = NewsletterDraft.objects.update_or_create(
+        tipus=TIPUS,
+        territori=TERRITORI,
+        setmana=setmana,
+        defaults={
+            "subject": subject[:300],
+            "narrative_html": narrative_html,
+            "font": NewsletterDraft.FONT_MOTOR,
+            "estat": NewsletterDraft.ESTAT_PENDENT,
+            "editat": False,
+        },
+    )
+    return Response(_draft_payload(draft), status=201 if created else 200)

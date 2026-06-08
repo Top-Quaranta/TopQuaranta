@@ -33,6 +33,52 @@ TERRITORI_LABEL = {
 }
 
 
+def _public_url(post: SocialPost) -> str:
+    """Best-effort clickable public URL for a published post.
+
+    Reuses the per-platform external-id semantics the delete path
+    relies on (``posts._delete_remote_and_reset``). Pure string work —
+    NO network calls (notably no Instagram Graph permalink lookup):
+
+      - Mastodon: the external id IS the full status URL (the publish
+        step stores ``post_status()``'s returned ``url``).
+      - Bluesky: the external id is an AT URI
+        ``at://{did}/{collection}/{rkey}`` → rewritten to
+        ``bsky.app/profile/{did}/post/{rkey}``.
+      - Telegram: the ``t.me`` URL, from ``metadata.url`` (or the
+        external id, which the publish step also sets to that URL).
+      - Instagram: only if a permalink was previously stored in
+        ``metadata`` — we never call Graph here, so absent → no link.
+      - Newsletter / anything else: no external URL.
+
+    The ``metadata.external_id`` value (untruncated) is preferred over
+    ``instagram_media_id`` (capped at 80 chars on write)."""
+    meta = post.metadata or {}
+    ext = (meta.get("external_id") or post.instagram_media_id or "").strip()
+    plat = post.platform
+    if plat == SocialPost.PLATFORM_MASTODON:
+        return ext if ext.startswith("http") else ""
+    if plat == SocialPost.PLATFORM_BLUESKY:
+        if ext.startswith("at://"):
+            parts = ext[len("at://") :].split("/")
+            if len(parts) == 3 and parts[0] and parts[2]:
+                did, _collection, rkey = parts
+                return f"https://bsky.app/profile/{did}/post/{rkey}"
+        return ext if ext.startswith("http") else ""
+    if plat == SocialPost.PLATFORM_TELEGRAM:
+        url = (meta.get("url") or "").strip()
+        if url.startswith("http"):
+            return url
+        return ext if ext.startswith("http") else ""
+    if plat in (
+        SocialPost.PLATFORM_INSTAGRAM_FEED,
+        SocialPost.PLATFORM_INSTAGRAM_STORY,
+    ):
+        perma = (meta.get("permalink") or meta.get("url") or "").strip()
+        return perma if perma.startswith("http") else ""
+    return ""
+
+
 def _serialize(post: SocialPost) -> dict:
     # The publication day for this slot's tipus (Saturday for PPCC,
     # Wednesday/Monday for territorial, etc.). Surfaces in the UI as
@@ -50,6 +96,9 @@ def _serialize(post: SocialPost) -> dict:
         "project_week": project_week_number(pub_date),
         "status": post.status,
         "instagram_media_id": post.instagram_media_id or "",
+        # Best-effort clickable URL (see _public_url). "" when the
+        # platform has no public permalink we can build offline.
+        "url": _public_url(post),
         "error_msg": post.error_msg or "",
         "scheduled_at": post.scheduled_at.isoformat() if post.scheduled_at else None,
         "published_at": post.published_at.isoformat() if post.published_at else None,

@@ -121,6 +121,216 @@ def test_brief_ready_shape(client_with_token):
     assert d["actualitat"][0]["font"] == "VilaWeb"
 
 
+# ── brief top-40 additive expansion (2026-06-08) ─────────────────────
+
+
+def _seed_topN(n, *, with_collab=False, prev=False):
+    """Seed an N-row PPCC top for this week. Every artista gets a
+    municipi-backed localitat (so `origen` is populated and the prefetch
+    path is exercised); optionally a collaborator on row 3 and a previous
+    week so the movement / debut detectors have a baseline."""
+    from music.models import ArtistaLocalitat, Municipi, Territori
+
+    terr, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Principat"})
+    muni = Municipi.objects.create(nom="Vila", comarca="Comarca", territori=terr)
+    monday = _monday()
+    cancons = []
+    for i in range(1, n + 1):
+        a = Artista.objects.create(nom=f"Art {i}", lastfm_nom=f"Art {i}", aprovat=True)
+        ArtistaLocalitat.objects.create(artista=a, municipi=muni)
+        al = Album.objects.create(
+            artista=a, nom=f"Al {i}", data_llancament=datetime.date(2026, 1, 1)
+        )
+        c = Canco.objects.create(
+            artista=a,
+            album=al,
+            nom=f"Tema {i}",
+            verificada=True,
+            activa=True,
+            data_llancament=datetime.date(2026, 1, 1),
+        )
+        if with_collab and i == 3:
+            col = Artista.objects.create(nom="Col", lastfm_nom="Col", aprovat=True)
+            ArtistaLocalitat.objects.create(artista=col, municipi=muni)
+            c.artistes_col.add(col)
+        TopSetmanal.objects.create(
+            canco=c,
+            territori="PPCC",
+            setmana=monday,
+            posicio=i,
+            score_setmanal=float(100 - i),
+        )
+        if prev:
+            TopSetmanal.objects.create(
+                canco=c,
+                territori="PPCC",
+                setmana=monday - datetime.timedelta(days=7),
+                posicio=((i % n) + 1),
+                score_setmanal=float(100 - i),
+            )
+        cancons.append(c)
+    return cancons
+
+
+@pytest.mark.django_db
+def test_brief_exposes_top40_with_intact_old_keys(client_with_token):
+    """The dict gains `top40`/`fets_grup`/`fets_destacats` while every
+    legacy key the routine token consumes stays present and unchanged."""
+    _seed_topN(12, with_collab=True, prev=True)
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.status_code == 200
+    d = r.data
+    # Every legacy key still here.
+    for key in (
+        "status",
+        "context",
+        "top10",
+        "fets_grup_top5",
+        "fet_lider",
+        "actualitat",
+        "baixa_confianca",
+        "notes",
+    ):
+        assert key in d, key
+    assert "lastfm_tags_top5" in d["baixa_confianca"]
+    # New additive keys.
+    assert len(d["top40"]) == 12
+    assert "fets_grup" in d and len(d["fets_grup"]) == 12
+    assert "fets_destacats" in d and isinstance(d["fets_destacats"], list)
+
+
+@pytest.mark.django_db
+def test_brief_aliases_are_identical_slices(client_with_token):
+    """top10 == top40[:10]; fets_grup_top5 == fets_grup[:5]; fet_lider is
+    the first highlighted fact (same shape + content as before)."""
+    _seed_topN(12, with_collab=True, prev=True)
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    d = r.data
+    assert d["top10"] == d["top40"][:10]
+    assert d["fets_grup_top5"] == d["fets_grup"][:5]
+    # fet_lider keeps its exact shape.
+    if d["fet_lider"] is not None:
+        assert set(d["fet_lider"]) == {"code", "severity", "data", "freshness_blocked"}
+        # ...and equals the first highlighted fact.
+        assert d["fets_destacats"][0] == d["fet_lider"]
+
+
+@pytest.mark.django_db
+def test_brief_fets_destacats_distinct_subjects(client_with_token):
+    """`fets_destacats` never repeats a song or artist subject and never
+    exceeds the configured cap."""
+    from comptes.newsletter_brief import FETS_DESTACATS_K
+
+    _seed_topN(12, with_collab=True, prev=True)
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    fets = r.data["fets_destacats"]
+    assert len(fets) <= FETS_DESTACATS_K
+    seen_canco, seen_art = set(), set()
+    for f in fets:
+        cid = f["data"].get("canco_id")
+        aid = f["data"].get("artista_id")
+        assert cid is None or cid not in seen_canco
+        assert aid is None or aid not in seen_art
+        if cid is not None:
+            seen_canco.add(cid)
+        if aid is not None:
+            seen_art.add(aid)
+
+
+@pytest.mark.django_db
+def test_brief_not_ready_still_short_circuits(client_with_token):
+    """No consolidated top → the early not_ready return is untouched (no
+    top40/fets_grup work happens)."""
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.status_code == 200
+    assert r.data["status"] == "not_ready"
+    assert "top40" not in r.data and "top10" not in r.data
+
+
+@pytest.mark.django_db
+def test_brief_query_budget_bounded_no_n_plus_1(django_assert_max_num_queries):
+    """Assembling the 40-row facts must NOT scale per-row: origen +
+    collaborators are prefetched/batched. `detect_all` is stubbed out so
+    the ceiling measures only the data-assembly cost (the N+1 risk)."""
+    from comptes.newsletter_brief import build_brief
+
+    _seed_topN(12, with_collab=True, prev=True)
+    with (
+        patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]),
+        patch("social.narrative.detect_all", return_value=[]),
+    ):
+        # Assembly is ~11 queries and constant in N (prefetch + batch). An
+        # origen/collaborator N+1 across 12 rows would push it past 20, so
+        # this 14 ceiling is the regression tripwire.
+        with django_assert_max_num_queries(14):
+            build_brief(_monday())
+
+
+# ── old==new equivalence pins for the rewritten reads ────────────────
+
+
+@pytest.mark.django_db
+def test_collaborator_order_matches_legacy_method(client_with_token):
+    """The batched collaborator lookup must reproduce the EXACT order of
+    `Canco.artistes_col_ordered()` (through-table insertion id), NOT the
+    alphabetical Artista.Meta.ordering. Collaborators are inserted in an
+    order that is deliberately NOT alphabetical, so a regression to the
+    naive M2M ordering would flip them and fail this pin."""
+    from comptes.newsletter_brief import _collaborators_by_canco
+
+    c = _seed_top()  # main artist "Art X" at posició 1
+    z = Artista.objects.create(nom="Zeta", lastfm_nom="Zeta", aprovat=True)
+    a = Artista.objects.create(nom="Alfa", lastfm_nom="Alfa", aprovat=True)
+    c.artistes_col.add(z)  # inserted first
+    c.artistes_col.add(a)  # inserted second
+    expected = ["Zeta", "Alfa"]  # insertion order, NOT alphabetical
+    # Sanity: the order under test is genuinely non-alphabetical.
+    assert expected != sorted(expected)
+    # 1) the batch helper equals the legacy model method, value-by-value.
+    batched = [art.nom for art in _collaborators_by_canco([c])[c.id]]
+    legacy = [art.nom for art in c.artistes_col_ordered()]
+    assert batched == legacy == expected
+    # 2) the brief surfaces that same order in both top entries and facts.
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.data["top40"][0]["artistes"] == ["Art X", "Zeta", "Alfa"]
+    collabs = r.data["fets_grup"][0]["collaboradors"]
+    assert [x["nom"] for x in collabs] == expected
+
+
+@pytest.mark.django_db
+def test_origen_prefetch_matches_legacy_first(client_with_token):
+    """`_artista_origen` (prefetch-by-pk path) must return the same origin
+    the legacy `localitats.first()` did. The artist gets two localitats in
+    distinct municipis; `.first()` resolves by pk, and the rewrite must
+    pick the identical row and emit the identical dict."""
+    from comptes.newsletter_brief import _artista_origen
+    from music.models import ArtistaLocalitat, Municipi, Territori
+
+    c = _seed_top()
+    art = c.artista
+    terr, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Principat"})
+    m1 = Municipi.objects.create(nom="Primer", comarca="C1", territori=terr)
+    m2 = Municipi.objects.create(nom="Segon", comarca="C2", territori=terr)
+    l1 = ArtistaLocalitat.objects.create(artista=art, municipi=m1)
+    ArtistaLocalitat.objects.create(artista=art, municipi=m2)
+    # Legacy behaviour, recomputed inline for the pin.
+    legacy_loc = art.localitats.select_related("municipi__territori").first()
+    assert legacy_loc.pk == l1.pk  # .first() resolves by pk
+    expected = {"municipi": "Primer", "comarca": "C1", "territori": "CAT"}
+    # Fresh instance so no in-memory prefetch leaks into the comparison.
+    fresh = Artista.objects.get(pk=art.pk)
+    assert _artista_origen(fresh) == expected
+    # End-to-end through the brief (prefetch path).
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        r = client_with_token.get(BRIEF_URL, **_auth())
+    assert r.data["fets_grup"][0]["origen"] == expected
+
+
 # ── draft upsert ─────────────────────────────────────────────────────
 
 

@@ -127,13 +127,16 @@ at the new + old URLs.
 
 ### Distribució multi-canal (`/staff/social`)
 
-Six channels share the same `SocialPost` model and the same staff
-surface. Channel column tints in the UI: IG pink, Mastodon indigo,
-Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
+Six channels share the same `SocialPost` model. The staff surface is
+split (distribution-views redistribution, 2026-06): the cockpit at
+`/staff/social` (master switch + channel grid), per-channel views at
+`/staff/social/<canal>`, and the **unified publications table** at
+`/staff/social/publicacions` (house kit, filters + deep links). The
+channel views embed that same table scoped to their channel.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/staff/social/` | Posts list ordered by `published_at` (nulls-last → `created_at`), Data column first, Setmana N second. Channel + per-credential payloads. |
+| GET | `/staff/social/` | Publications list — paginated via `_paginate` (default 50, cap 200) with filters (`canal`, `estat`, `tipus`, `setmana`), free-text `q` (platform/tipus/territori), and `sort` (`data`\|`setmana`\|`canal`\|`estat`). Default order: `published_at` (nulls-last → `created_at`). Each row carries a best-effort clickable `url` (`_public_url`: Mastodon status URL, Bluesky AT-URI → `bsky.app/profile/<did>/post/<rkey>`, Telegram `metadata.url`; IG only if a permalink was stored — no Graph call; newsletter none). Also returns the channel + per-credential payloads the cockpit/channel views consume. |
 | POST | `/staff/social/preview/` | Render dry-run for a slot; returns the rendered PNG paths. |
 | POST | `/staff/social/publicar-ara/` | Force-run `publicar_social` / `publicar_canal` for a `(data, tipus, platform)` triple. |
 | POST | `/staff/social/eliminar-instagram/` | Legacy IG-only delete. Kept for back-compat. |
@@ -143,6 +146,8 @@ Bluesky sky, Telegram cyan, newsletter amber, RSS orange.
 | GET/PATCH | `/staff/newsletter/esborrany/` | **(2026-06-07)** Newsletter review draft (opt-out flow, `web/api/staff/newsletter.py`). GET → draft + the live top it will ship with + Sunday `send_date`; PATCH edits `subject`/`narrative_html` (sets `editat`, only while `pendent`). `?setmana=` selects the week (default latest). See `comptes.md`. |
 | POST | `/staff/newsletter/esborrany/cancellar/` | **(2026-06-07)** Cancel the week's draft (`estat=cancellat`) so it is NOT sent on Sunday. |
 | POST | `/staff/newsletter/esborrany/preview/` | **(2026-06-07)** Render the FULL email HTML exactly as it would be sent (`comptes.newsletter.render_newsletter_preview` → same `_build_top_context` + template), honouring live `subject`/`narrative_html` overrides so unsaved edits show. Returns `{"html": …}`. Render-only: no `mark_used`, no send, no DB write; list + covers rebuilt from the consolidated top. |
+| GET | `/staff/newsletter/setmanes/` | **(2026-06-08)** Weeks with a consolidated PPCC `TopSetmanal` (the on-demand selector), each with `has_draft`/`estat`, plus a `current` block (`build_brief().status`) so staff sees whether the automatic Saturday routine could generate the current week right now. |
+| POST | `/staff/newsletter/esborrany/generar/` | **(2026-06-08)** Generate an ENGINE draft on demand for a chosen consolidated week (`?setmana=`, default latest). Uses the side-effect-free `build_draft_text` (no `mark_used`). Guards: week must be consolidated (409); never clobbers a terminal (`enviat`/`cancellat`) or staff-edited (`editat=True`) draft (409); a `pendent` draft is regenerated in place. `font=motor`. **NEVER sends** — the Sunday cron is the only sender. |
 
 `publicar_canal` (Mastodon + Bluesky variants) publishes a 4-image
 carousel since 2026-05-03 — portada + first three list slides via

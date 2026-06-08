@@ -9,7 +9,7 @@ dj-database-url==3.1.2
 requests==2.34.2
 gunicorn==26.0.0
 djangorestframework==3.17.1
-scikit-learn>=1.8.0
+scikit-learn>=1.9.0
 joblib>=1.5.3
 # Security
 argon2-cffi==25.1.0          # S10: stronger password hashing

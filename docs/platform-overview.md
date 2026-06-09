@@ -7,7 +7,7 @@
 > at the top level of `docs/` (like `docs/EMAIL.md`) rather than under the
 > size-gated `docs/architecture/`.
 >
-> Last verified against the codebase + production DB: 2026-06-02.
+> Last verified against the codebase + production DB: 2026-06-09.
 
 ## Index
 
@@ -20,6 +20,7 @@
 7. [Social / stories subsystem](#7-social--stories-subsystem)
 8. [Recent relevant PRs](#8-recent-relevant-prs)
 9. [Known gaps & debt (+ "per verificar" diagnostic)](#9-known-gaps--debt)
+10. [Community subsystem](#10-community-subsystem)
 
 ---
 
@@ -198,17 +199,13 @@ physical deletion of the `Canco` because HR denormalises both keys.
 `reconsiderada=True` rows no longer block (the staff re-opened them).
 
 **Caducity guard at creation** — `_create_track` calls
-`is_caducat(album.data_llancament, cutoff)` (527-542) and skips creating
-tracks older than `DIES_CADUCITAT`. Helper: `ingesta/caducitat.py`. This
-June-2026 fix closes a hole where ancient albums recreated pendents every
+`is_caducat(album.data_llancament, cutoff)` and skips creating tracks older
+than `DIES_CADUCITAT`. Helper: `ingesta/caducitat.py`. Merged via **PR #131**
+(`021bf03`, *DIES_CADUCITAT guard at every Canco-creation frontier*) with the
+enrich-pool follow-up **PR #141** (`aac3999`); both are ancestors of
+`origin/main`. It closes a hole where ancient albums recreated pendents every
 ~30 days (real case in the docstring: "Tres Fan Ball 1994/1997/2005/2013…
 recreating 38 pendents"). See §9 for the residual NULL hole.
-
-> ⚠️ **Repo-state caveat (2026-06-02):** `ingesta/caducitat.py` and the
-> `obtenir_novetats.py` guard edits are **deployed on the server but not yet
-> committed to `origin/main`** (uncommitted local WIP; in no git commit).
-> The line numbers above are for the local/deployed version. Commit this
-> guard so GitHub matches production — see §9.
 
 ### Signal — `obtenir_senyal`
 
@@ -320,35 +317,26 @@ requests (`solicituds.py`); manager song-review requests
 
 Same endpoint, `GET`/`PATCH /api/v1/staff/cancons/<pk>/` → `canco_detail`
 (`web/api/staff/cancons.py:350`). The React form is `web-react/src/pages/
-staff/` (the cançons workbench). Editable fields (PATCH whitelist,
-352-417): `nom`, `isrc`, `lastfm_nom`, `verificada`, `activa`,
-`data_llancament`, `deezer_id`, `artista_pk` (reassign main artist),
-`artistes_col_pks` (replace collaborators). Each save calls `canco.save()`
-and logs `canco_edit`. Works on verified and unverified tracks alike.
+staff/` (the cançons workbench). Editable fields (PATCH whitelist):
+`nom`, `isrc`, `lastfm_nom`, `verificada`, `activa`, `data_llancament`,
+`deezer_id`, `artista_pk` (reassign main artist), `artistes_col_pks`
+(replace collaborators), and **`spotify_url`** (manual Spotify id). Each
+save calls `canco.save()` and logs `canco_edit`. Works on verified and
+unverified tracks alike.
 
-### Where a manual Spotify URL would slot in (backlog) — and the Wagtail tie-in
+### Manual Spotify URL — now implemented (PR #139)
 
-There is currently **no Spotify field in the song edit form**. `Canco`
-has `spotify_id` (`music/models.py:958`), but it is populated only by
-Process B enrichment (§3); the PATCH whitelist above does **not** include
-`spotify_id`/`spotify_url`, and `SpotifyMetadata` (the live id cache) is
-likewise machine-written. A backlog "manual Spotify URL" override would
-require, in order:
-
-1. A model field to hold the manual value (e.g. `Canco.spotify_url_manual`,
-   or reuse `Canco.spotify_id` with a "locked" flag so Process B doesn't
-   overwrite it) + migration.
-2. Add it to the `canco_detail` PATCH whitelist (`cancons.py:352`) and the
-   `_canco_row` serializer (`cancons.py:82`).
-3. Add the input to the React staff song form + the "Escolta-ho a" link
-   builder so the manual URL wins over the derived ISRC deep-link.
-
-**Why Wagtail surfaces here:** in the *old* Wagtail-admin era a field like
-this was a one-line `FieldPanel` on a `ModelAdmin`/page. That era is gone
-(§1) — there is no auto-generated admin form to drop a field into. Adding any
-editable field now means touching three layers (model → DRF endpoint/
-serializer → React form), which is the practical reason the backlog item is
-bigger than "just add a Wagtail panel".
+The earlier backlog item ("no Spotify field in the song edit form") is
+**done**. `canco_detail` PATCH accepts **`spotify_url`**
+(`web/api/staff/cancons.py:417`); the raw value is parsed through
+`web/api/staff/_spotify_url.py::parse_track_id`, and the resulting id is
+stored id-first then hydrated **without a `/v1/search` call** (PR #139,
+*manual Spotify id with /search-free hydration*). The `_canco_row`
+serializer surfaces the current `SpotifyMetadata` state with a `hydration`
+field — `ok` (artist id resolved), `pending` (id saved, not yet hydrated),
+or `failed` (hydration ran but couldn't resolve the id / bad URL). A manual
+id behaves like a `found` row for playlist purposes; Process B hydrates the
+remaining fields on its next tick.
 
 ---
 
@@ -357,6 +345,15 @@ bigger than "just add a Wagtail panel".
 Five-channel weekly distribution (Instagram, Mastodon, Bluesky, Telegram,
 Newsletter) + RSS, all from one payload. Code in `social/`; full doc
 `docs/architecture/social.md`.
+
+What fires on a given day is no longer a fixed staggered cron alone — it is
+gated at publish time by an **editable distribution matrix** plus a master
+switch (`ranking/models.py::MatriuPublicacio`, gate in
+`social/management/commands/publicar_canal.py:137`). Three gates run in
+order: master `distribucio_activa` AND `<channel>_actiu`
+(`ConfiguracioGlobal.pot_publicar`, PR #163), idempotency on the `SocialPost`
+row, then `MatriuPublicacio.actiu_per(channel, tipus)` per cell (PR #180) —
+an off cell marks the post `omès` instead of publishing.
 
 - **Renderer** `social/renderer.py` — PIL/Pillow image builders, JPEG q90.
   The **PPCC story set is 7 editorial slides** via `render_stories_ppcc`
@@ -378,6 +375,10 @@ Newsletter) + RSS, all from one payload. Code in `social/`; full doc
   `publicar_canal --channel <name>` (others). `_publish_story`
   (`social/management/commands/publicar_social.py:353`) renders → uploads
   each slide → publishes; idempotent per `SocialPost` row; dry-run safe.
+- **Territorial story set (Step 3c) — done.** The territorial editorial story
+  set shipped in **PR #146** (`render_stories_territorial`,
+  `social/renderer.py`), recoloured per territory via
+  `colors.story_palette(...)`. Step 3c is no longer a future item.
 - **Manual outro link sticker** — the outro story's tap-through link must be
   added by hand each week in the Instagram app; the Graph API does not expose
   story stickers programmatically (documented in `social.md`).
@@ -392,9 +393,19 @@ Newsletter) + RSS, all from one payload. Code in `social/`; full doc
 | #123 (`6a41c57`) | Newsletter HTML rework — 9 blocks, album covers, trend cues, UTM tagging, dark-mode support. |
 | #125 (`94cd994`) | Social Step 3b — rewrote the PPCC story set from 42 slides to 7 editorial slides ordered toward the #1 climax. |
 | #127 (`ef41fea`) | Ported the validated Claude-Design canvas into the 7 Pillow builders; bundled 4 OFL fonts (Anton, Bricolage Grotesque, Instrument Serif, Playfair 800). |
-| #128 (`75e4f52`) | Docs/nomenclature: relabel that redesign as **Step 3b** (territorial redesign stays the future Step 3c). |
+| #128 (`75e4f52`) | Docs/nomenclature: relabel the PPCC redesign as **Step 3b**. |
 | #129 (`5489ea3`) | PPCC story polish — dynamic grid row heights (2-line titles no longer crowd) + hard-omit the novetats slide when empty. |
-| caducity guard (June 2026, `ingesta/caducitat.py`) | `is_caducat` guard at every Canco-creation frontier — stops ancient re-scanned albums from recreating pendents every ~30 days. |
+| #131 (`021bf03`) | **Caducity guard** — `is_caducat` at every Canco-creation frontier; stops ancient re-scanned albums recreating pendents every ~30 days. Merged 2026-06-02 (closes the prior "deployed but uncommitted" drift). |
+| #139 | **Manual Spotify id** in the song edit form (`spotify_url` PATCH) with /search-free hydration (see §6). |
+| #141 (`aac3999`) | Exclude caducats from the `enriquir_spotify` pending pool (caducity-guard follow-up). |
+| #146 | **Territorial editorial story set (Step 3c)** — `render_stories_territorial`, recoloured per territory (see §7). |
+| #159 (`e597486`) | **Pendent gate** — a `Canco` now needs ≥1 *approved* artist to be reviewable; trimmed the pending queue (see §9). |
+| #176 | Brief: additive top-40 expansion for `build_brief`. |
+| #177 | Newsletter: link + emphasise artist/song names (Slice 1). |
+| #178 | Staff/social: per-platform engagement summary on the publications table. |
+| #182 | **Catalog-wide Spotify enrichment-coverage KPI** on the `estat` endpoint (`coverage_total/_public/_pending`, `web/api/staff/estat.py`). |
+| #187 | Newsletter: `editorial_veu` prompt on `ConfiguracioGlobal` (`ranking/models.py:245`), served in the brief. |
+| #163 / #180 | Distribution: real master switch + honest per-channel view (#163); editable canal×tipus matrix gate (#180). See §7. |
 
 ---
 
@@ -422,16 +433,15 @@ through the day. Observed 2026-06-02: the 04:30 run deleted 0; by midday
 bug — but old-dated tracks are briefly verifiable by staff before the next
 sweep.
 
-### Caducity guard is deployed but uncommitted (prod ahead of GitHub)
+### Git/prod alignment — resolved
 
-The June-2026 creation-frontier guard (`ingesta/caducitat.py`,
-`ingesta/tests/test_caducitat_guard.py`, and the `obtenir_novetats.py` /
-`obtenir_metadata.py` edits that import `is_caducat`) is **running in
-production but exists in no git commit** — it sits as uncommitted local WIP,
-and `origin/main` does not contain it. So `origin/main` ≠ the deployed code
-for this slice, which also means the deploy happened **out-of-band** (the
-sanctioned path is push-to-main → GHA `bin/tq-deploy`, `CLAUDE.md` §11). It
-should be committed via a normal PR so GitHub is the source of truth again.
+The earlier "caducity guard deployed but uncommitted (prod ahead of GitHub)"
+debt is **closed**. `ingesta/caducitat.py`, its test, and the
+`obtenir_novetats.py` guard edits were committed via **PR #131** (`021bf03`)
+with the enrich-pool follow-up **PR #141** (`aac3999`); both are ancestors of
+`origin/main`. As of 2026-06-09 production `HEAD == origin/main == 56a43f4`
+with a clean working tree — no drift. The hourly `tq-health` git-drift check
+(`CLAUDE.md` §11) guards against a recurrence.
 
 ### Other tracked debt
 
@@ -457,32 +467,86 @@ should be committed via a normal PR so GitHub is the source of truth again.
 ### Diagnostic: why does "per verificar" look tiny?
 
 **Production is healthy — this is not an ingestion failure.** As of
-2026-06-02 the live pending queue (`verificada=False, activa=True`) is:
+2026-06-09 the live pending queue (`Canco.objects.pendents()`,
+`verificada=False, activa=True`, `web/api/staff/dashboard.py:91`) is:
 
-- **784 total** (`web/api/staff/dashboard.py:91` counter). By ML class:
-  C = 651, A = 84, B = 49. By main-artist territory: CAT 437, VAL 84,
-  BAL 28, plus 235 whose artist isn't approved yet (no territory).
-- **Growing**: 88 approved-artist pending created in the last 7 days; newest
-  created today. Rejections are also brisk (12 264 `rebutjada` HR rows total;
-  4 309 in the last 30 days), so reviewers + ML are actively working it.
+- **341 total** (was 784 on 2026-06-02). By ML class: **C = 325, B = 16,
+  A = 0**. By main-artist territory: **CAT 234, VAL 44, BAL 23**, plus **40**
+  with no approved main artist (no territory).
+- **The drop is mostly definitional, not a stall.** **PR #159** now requires
+  a pending `Canco` to have ≥1 *approved* artist to be reviewable, which is
+  why the "no approved artist" bucket fell from 235 → 40; the caducity guard
+  (#131) and the recurring orphan sweep (#161) further trimmed churn.
+- Rejections stay brisk: **15 608** `HistorialRevisio` rows total. Latent NULL
+  hole is quiet: **0** unverified tracks with `data_llancament IS NULL`.
 
-So **hypothesis (b) "real ingestion problem" is ruled out** — tracks are
-flowing in. A surface that reads "**per verificar 1**" is therefore one of:
+So a surface that reads "**per verificar 1**" is the **filter/scope**, not a
+broken pipeline: `cancons_list` supports `ml_classe`, `whisper`, `mb`,
+`recent`, `q`, `artista_pk` filters (`cancons.py:166-262`), and an optional/
+aggregate territory (AND/CNO/ALT/PPCC) currently has ~0 pending — any of these
+easily yields 1. A genuinely empty surface in a fresh checkout is a local/dev
+DB, not production.
 
-1. A **local / empty dev DB** (a fresh clone with ~1 seeded track), not
-   production — the most likely explanation if you see it in a new session;
-   or
-2. A **narrowly-filtered view** — `cancons_list` supports `ml_classe`,
-   `whisper`, `mb`, `recent`, `q`, `artista_pk` filters (`cancons.py:166-262`);
-   a specific combination (or an optional/aggregate territory like AND/CNO/
-   ALT/PPCC, which currently have ~0 pending) easily yields 1.
+### Spotify enrichment coverage
 
-**Hypothesis (a) is partly right but not the cause of a "1":** the recent
-caducity-guard fix (`ingesta/caducitat.py`) *does* reduce queue churn by
-stopping ancient albums from recreating pendents every ~30 days — so the
-queue is *cleaner* than before — but it does not (and cannot) drive the live
-784-row queue down to 1. If a production surface genuinely shows 1, it is the
-filter/scope, not the caducity sweep.
+A catalog-wide coverage KPI is exposed on the `estat` endpoint
+(`web/api/staff/estat.py::_spotify_enrichment_stats`, PR #182):
+`coverage_total`, `coverage_public`, `coverage_pending`. As of 2026-06-09,
+enriched (`found`+`manual`) over the active+verified+ISRC pool is **≈60.3 %
+(2 088 / 3 463)**; the remaining ~1.3 k are `not_attempted`, drained nightly
+by `enriquir_spotify` (Process B, §3).
+
+---
+
+## 10. Community subsystem
+
+A logged-in-user community lives in the `comptes` app + `web/api/comunitat_views/`
++ React `web-react/src/pages/` (full model reference: `docs/architecture/comptes.md`).
+
+- **Registration** — `Usuari` (`comptes/models.py:18`) + `PerfilUsuari`
+  (`:263`, auto-created on signup). `POST /api/v1/auth/register/` sends a
+  token activation email; RGPD consent + `vol_newsletter` captured at signup.
+  SPA: `AuthPage.jsx`.
+- **Direct messages** — `Missatge` (`comptes/models.py:443`), 1-to-1, no
+  threading. `GET /api/v1/missatges/`, `POST /missatges/nou/`,
+  `GET /missatges/amb/<pk>/` (`web/api/comunitat_views/missatgeria.py`,
+  send-throttled). SPA: `MissatgesPage.jsx`.
+- **Directory / user search** — `PerfilUsuari.visible_directori`.
+  `GET /api/v1/comunitat/directori/` (`perfil.py`) — search by
+  name/instrument/bio + filters; **staff see all profiles** (incl.
+  `visible_directori=False`) for moderation reach. SPA:
+  `ComunitatDirectoriPage.jsx`.
+- **Artist accounts** — `UserArtista` (`comptes/models.py:32`, claim/manage an
+  existing artist: `estat ∈ {pendent,aprovat,rebutjat}`, `verificat`, audit
+  fields) and `PropostaArtista` (`:103`, propose a *new* artist). User
+  endpoints `/compte/{propostes,solicituds}/` + `/compte/artista/<pk>/editar/`
+  (verified managers self-edit); staff `/staff/{propostes,solicituds}/`. SPA:
+  `ProposarArtistaPage.jsx`, `SolicitarGestioPage.jsx`, staff queues.
+- **Public feed** — `Publicacio` (`comptes/models.py:371`,
+  `visibilitat ∈ {interna,publica}` × `estat ∈ {esborrany,pendent,publicat,
+  rebutjat}`) + `Comentari` (`:479`). Authenticated CRUD at
+  `/api/v1/comunitat/publicacions/`; **anonymous** read at
+  `/api/v1/comunitat/publicacions-publiques/` (`web/api/urls.py:700`). Staff
+  moderation `/staff/publicacions/` + `/decidir/`. A regular user choosing
+  `publica` lands in `pendent` (staff approval); `interna` publishes directly.
+  SPA: `ComunitatPage.jsx`, public `ComunitatPublicaPage.jsx`, editor
+  `ComunitatPublicarPage.jsx`, staff `StaffPublicacionsPage.jsx`.
+- **Admin pseudo-user + DM relay** — a seed `Usuari(username="admin")`
+  (`ADMIN_INBOX_USERNAME`, `topquaranta/settings/base.py:99`; seeded by
+  migration `comptes/migrations/0016_admin_pseudouser.py`) fronts a community
+  inbox. Any user can DM it; the notification helper fans the alert out by
+  email to every `is_staff` user (the pseudo-user's own opt-out is ignored on
+  that branch). Replies use the real staff user as `remitent`.
+
+### Known gap: no Newsletter → Publicacio bridge
+
+The weekly newsletter and the public feed are **separate systems**. The
+newsletter is email-only: `NewsletterDraft` (`comptes/models.py:608`,
+`subject` + `narrative_html` + `estat`) has **no FK to `Publicacio`**, and no
+endpoint or staff action turns a draft into a public post. Surfacing the
+newsletter on `/comunitat/public` would only need a small bridge (a link/FK +
+a "publish as community post" action) — **the destination already exists**
+(`Publicacio` with `visibilitat=publica, estat=publicat`), the wiring does not.
 
 ---
 

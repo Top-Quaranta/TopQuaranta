@@ -113,8 +113,10 @@ consolidated-week selector + on-demand "Generate (engine)" + the shared
 `/staff/social/esborrany` page, now a thin wrapper kept for the cron
 email links). Instagram and RSS are still managed in-page on the cockpit
 (which keeps the week calendar + slide-render button); Spotify stays on
-its own page for now. The **distribution matrix** (third gate,
-`MatriuPublicacio`) is edited per channel, not in one central grid:
+its own page for now (whose header carries a catalog-wide
+enrichment-coverage KPI from `spotify/estat`'s `enrichment_coverage`). The
+**distribution matrix** (third gate, `MatriuPublicacio`) is edited per
+channel, not in one central grid:
 `pages/staff/social/MatriuCanalToggles.jsx` (`canal` prop) renders only
 that channel's tipus toggles over `/staff/social/matriu/` (fetched whole,
 filtered client-side) + `/staff/social/matriu/toggle/`. It lives in each

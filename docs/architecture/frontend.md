@@ -43,7 +43,10 @@ web-react/
     ├── components/         Cross-page UI (Layout, AdminRoute,
     │                       editorial primitives, MmIcon, ...)
     │   ├── ui/             Buttons, inputs, modals
-    │   └── staff/          Staff-only widgets
+    │   └── staff/          Staff-only widgets. `StaffTable.jsx` is the
+    │                       house kit: Table/TableCard, Btn, Pill, Input,
+    │                       Select, Pagination, and `Callout` (tone-driven
+    │                       wide banner, the counterpart of Pill).
     ├── context/            React contexts:
     │                       - AuthContext (profile, login, refresh)
     │                       - FeedbackContext (toast bus)

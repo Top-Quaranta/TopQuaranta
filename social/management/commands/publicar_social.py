@@ -30,7 +30,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from music.audit import log_staff_action
-from ranking.models import ConfiguracioGlobal
+from ranking.models import ConfiguracioGlobal, MatriuPublicacio
 from social import calendari, captions, instagram_client, payload, renderer
 from social.calendari import tq_week_start
 from social.captions import instagram_username
@@ -175,6 +175,15 @@ class Command(BaseCommand):
                 f"min_fase {slot.min_fase} → omès"
             )
             self._record_omes(slot, territori, setmana, motiu=f"fase < {slot.min_fase}")
+            return
+
+        # Distribution-matrix gate (third gate; master + per-channel were
+        # checked at command entry). An off (instagram × tipus) cell is
+        # recorded 'omès' so the slot shows inactive in the publications
+        # table instead of vanishing. The phase gate above is untouched.
+        if not MatriuPublicacio.actiu_per("instagram", slot.tipus):
+            self.stdout.write("  · matriu de distribució desactivada → omès")
+            self._record_omes(slot, territori, setmana, motiu="matriu desactivada")
             return
 
         post, _ = SocialPost.objects.get_or_create(

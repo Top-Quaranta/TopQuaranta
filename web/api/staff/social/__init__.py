@@ -34,7 +34,14 @@ from .accounts import (
     social_telegram_save,
     social_telegram_test,
 )
-from .controls import social_delay, social_fase, social_story_cap, social_toggle
+from .controls import (
+    social_delay,
+    social_fase,
+    social_matriu,
+    social_matriu_toggle,
+    social_story_cap,
+    social_toggle,
+)
 from .posts import (
     social_eliminar_instagram,
     social_eliminar_remot,
@@ -85,6 +92,8 @@ __all__ = [
     "social_fase",
     "social_story_cap",
     "social_delay",
+    "social_matriu",
+    "social_matriu_toggle",
     "spotify_estat",
     "spotify_oauth_callback",
     "spotify_oauth_start",

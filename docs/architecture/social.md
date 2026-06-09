@@ -109,6 +109,29 @@ and the RSS feeds (`web/feeds.py` → `pot_publicar("rss")`, 503 when off).
 `fase_distribucio` is NOT part of this gate: it is the Instagram-only
 per-slot rollout phase (an off-phase slot is marked `omès`, not paused).
 
+**Distribution matrix — third gate (`MatriuPublicacio`, 2026-06).** On
+top of the master switch and the per-channel switch sits a per-(canal ×
+tipus) toggle: `ConfiguracioGlobal.pot_publicar_tipus(canal, tipus)` =
+`pot_publicar(canal) AND MatriuPublicacio.actiu_per(canal, tipus)`. With
+`actiu=False`, that channel does NOT distribute that content type that
+week. The model lives in `ranking/models.py` next to
+`ConfiguracioGlobal`; migration `0020` SEEDS one active row per (canal ×
+tipus) actually published today (instagram/mastodon/bluesky/telegram ×
+the four feed tipus, plus newsletter × top_ppcc — 17 rows, all on), so
+the default is byte-identical to before. A MISSING row is fail-open
+(True) — the matrix only ever blocks via an explicit off row.
+Conceptual model: only the five PUSH channels are governed
+(instagram, mastodon, bluesky, telegram, newsletter); the website
+generates and shows the top regardless and is never gated, and RSS
+stays on its own `rss_actiu` switch. Consumers: `publicar_social` (per
+slot, `instagram × tipus`, ADDITIONAL to the phase gate which stays
+intact), `publicar_canal` (per slot, `channel × tipus`), and
+`enviar_newsletter` (`pot_publicar_tipus("newsletter", "top_ppcc")` —
+off ⇒ the Sunday send does not run). An off cell records the slot as
+`omès` so it shows inactive in the publications table rather than
+vanishing. Staff edit it via
+`/staff/social/matriu/` (GET) + `/staff/social/matriu/toggle/` (POST).
+
 Staff controls (`web/api/staff/social/controls.py::social_toggle`):
 `channel=global` writes `distribucio_activa`; `channel=<name>` writes the
 per-channel switch. `channel` is required (no default — the old

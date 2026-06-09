@@ -421,6 +421,16 @@ urlpatterns = [
         name="staff_social_republicar",
     ),
     path("staff/social/toggle/", staff_views.social_toggle, name="staff_social_toggle"),
+    path(
+        "staff/social/matriu/",
+        staff_views.social_matriu,
+        name="staff_social_matriu",
+    ),
+    path(
+        "staff/social/matriu/toggle/",
+        staff_views.social_matriu_toggle,
+        name="staff_social_matriu_toggle",
+    ),
     path("staff/social/fase/", staff_views.social_fase, name="staff_social_fase"),
     path(
         "staff/social/story-cap/",

@@ -228,6 +228,19 @@ class ConfiguracioGlobal(models.Model):
             raise ValueError(f"unknown canal {canal!r}")
         return bool(self.distribucio_activa and getattr(self, field))
 
+    def pot_publicar_tipus(self, canal: str, tipus: str) -> bool:
+        """`pot_publicar(canal)` AND the `(canal × tipus)` matrix cell.
+
+        The THIRD distribution gate, after the master switch and the
+        per-channel switch: an `actiu=False` row in `MatriuPublicacio`
+        means this channel does not distribute this content type. The
+        website and RSS are never gated by the matrix. For Instagram this
+        is an ADDITIONAL gate over the per-slot phase gating, which stays
+        intact (an off-phase slot is still 'omès' on its own)."""
+        if not self.pot_publicar(canal):
+            return False
+        return MatriuPublicacio.actiu_per(canal, tipus)
+
     class Meta:
         verbose_name = "Configuració global"
         verbose_name_plural = "Configuració global"
@@ -401,3 +414,66 @@ class TopProvisional(models.Model):
 # next migration; the aliases just point to the new classes.
 RankingSetmanal = TopSetmanal
 RankingProvisional = TopProvisional
+
+
+class MatriuPublicacio(models.Model):
+    """Per-(canal × tipus) distribution toggle.
+
+    A THIRD gate on top of `ConfiguracioGlobal.distribucio_activa`
+    (master) and `<canal>_actiu` (per-channel): with `actiu=False`, that
+    channel does NOT distribute that content type that week. Seeded
+    (migration 0020) with one active row per (canal × tipus) combination
+    actually published today, so the default behaviour is identical to
+    before the matrix existed.
+
+    Conceptual model: the website generates and shows the top regardless
+    and is NEVER governed here; RSS (pull-based) is likewise out. Only the
+    five push channels are: instagram, mastodon, bluesky, telegram,
+    newsletter. A content type (top global / top territorial / nous
+    singles / nous albums) is NOT a channel — it is distributed across
+    several channels, and the newsletter is just one of them.
+    """
+
+    CANAL_INSTAGRAM = "instagram"
+    CANAL_MASTODON = "mastodon"
+    CANAL_BLUESKY = "bluesky"
+    CANAL_TELEGRAM = "telegram"
+    CANAL_NEWSLETTER = "newsletter"
+    CANALS = [
+        (CANAL_INSTAGRAM, "Instagram"),
+        (CANAL_MASTODON, "Mastodon"),
+        (CANAL_BLUESKY, "Bluesky"),
+        (CANAL_TELEGRAM, "Telegram"),
+        (CANAL_NEWSLETTER, "Newsletter"),
+    ]
+
+    canal = models.CharField(max_length=20, choices=CANALS)
+    # A `SocialPost.TIPUS_*` value (top_ppcc / top_territorial /
+    # nous_singles / nous_albums). Kept as a plain CharField (no FK) to
+    # avoid a cross-app constraint; the seed only inserts real combos.
+    tipus = models.CharField(max_length=20)
+    actiu = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Matriu de publicació"
+        verbose_name_plural = "Matriu de publicació"
+        ordering = ["canal", "tipus"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["canal", "tipus"], name="matriu_canal_tipus_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.canal} × {self.tipus} = {'on' if self.actiu else 'off'}"
+
+    @classmethod
+    def actiu_per(cls, canal: str, tipus: str) -> bool:
+        """True iff `(canal, tipus)` may distribute.
+
+        A MISSING row defaults to True: that is the fail-open default
+        matching the pre-matrix world (no per-tipus gate existed), so a
+        combo nobody seeded never silently blocks. The matrix only ever
+        BLOCKS via an explicit `actiu=False` row."""
+        row = cls.objects.filter(canal=canal, tipus=tipus).only("actiu").first()
+        return True if row is None else row.actiu

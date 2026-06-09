@@ -109,3 +109,90 @@ def social_delay(request: Request) -> Response:
     setattr(cfg, field, n)
     cfg.save(update_fields=[field])
     return Response({field: n})
+
+
+# Distribution matrix (canal × tipus) — the third gate over the master
+# switch and the per-channel switches.
+_MATRIU_TIPUS = [
+    ("top_ppcc", "Top global"),
+    ("top_territorial", "Top territorial"),
+    ("nous_singles", "Nous singles"),
+    ("nous_albums", "Nous àlbums"),
+]
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def social_matriu(request: Request) -> Response:
+    """The distribution matrix: every `MatriuPublicacio` cell plus the
+    canal/tipus dimensions the grid renders. Read-only.
+
+    Cells the seed never created (e.g. newsletter × nous_albums) are
+    reported with `seeded=False`; the publishers treat a missing row as
+    on (fail-open to the pre-matrix world), so the grid shows them as a
+    non-toggleable blank rather than a real switch."""
+    from ranking.models import MatriuPublicacio
+
+    existing = {(m.canal, m.tipus): m.actiu for m in MatriuPublicacio.objects.all()}
+    cells = []
+    for canal, canal_label in MatriuPublicacio.CANALS:
+        for tipus, _ in _MATRIU_TIPUS:
+            key = (canal, tipus)
+            cells.append(
+                {
+                    "canal": canal,
+                    "tipus": tipus,
+                    "actiu": existing.get(key, True),
+                    "seeded": key in existing,
+                }
+            )
+    return Response(
+        {
+            "canals": [{"canal": c, "label": l} for c, l in MatriuPublicacio.CANALS],
+            "tipus": [{"tipus": t, "label": l} for t, l in _MATRIU_TIPUS],
+            "cells": cells,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def social_matriu_toggle(request: Request) -> Response:
+    """Set one matrix cell. Body: `canal`, `tipus`, `actiu` (bool;
+    defaults to flipping the current value). Only seeded cells can be
+    toggled (a non-seeded combo is not a real distribution slot)."""
+    from ranking.models import MatriuPublicacio
+
+    canal = (request.data.get("canal") or "").strip()
+    tipus = (request.data.get("tipus") or "").strip()
+    valid_canals = {c for c, _ in MatriuPublicacio.CANALS}
+    valid_tipus = {t for t, _ in _MATRIU_TIPUS}
+    if canal not in valid_canals or tipus not in valid_tipus:
+        return Response({"error": "canal o tipus desconegut"}, status=400)
+    cell = MatriuPublicacio.objects.filter(canal=canal, tipus=tipus).first()
+    if cell is None:
+        return Response(
+            {"error": "aquesta combinació no és un slot de distribució"},
+            status=400,
+        )
+    raw = request.data.get("actiu", None)
+    prev = cell.actiu
+    new_val = (not cell.actiu) if raw is None else bool(raw)
+    cell.actiu = new_val
+    cell.save(update_fields=["actiu"])
+    # Audit: this toggle changes what actually gets distributed (an off
+    # newsletter cell silences the Sunday send), so it is a consequential
+    # config change — record who/when/what.
+    from music.audit import log_staff_action
+
+    log_staff_action(
+        request,
+        "config_update",
+        target=cell,
+        camp="matriu_distribucio",
+        canal=canal,
+        tipus=tipus,
+        anterior=prev,
+        nou=new_val,
+    )
+    return Response({"canal": canal, "tipus": tipus, "actiu": new_val})

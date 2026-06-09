@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
+import MatriuGrid from './social/MatriuGrid'
 import {
   Btn,
   Input,
@@ -485,6 +486,9 @@ export default function StaffSocialPage() {
         <code>/rss/novetats.xml</code> sense altres credencials. Mastodon, Bluesky i
         Telegram tenen ara la seva pròpia vista (graella de dalt).
       </p>
+
+      {/* ── Matriu de distribució (canal × tipus) ─────────────── */}
+      <MatriuGrid />
 
       {/* ── Calendari de la setmana ───────────────────────────── */}
       <section>

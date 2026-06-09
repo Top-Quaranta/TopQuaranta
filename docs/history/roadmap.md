@@ -3,7 +3,37 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-06-02.
+> Last updated: 2026-06-09.
+
+---
+
+## Sprint 2026-06-09 — gate Deezer, throughput Spotify, matriu dia+actiu
+
+Macro autònom de 5 ítems (PRs #185-190, tots mergejats):
+
+1. **Gate Deezer obligatori + persistència + neteja de fantasmes**
+   (#185). Aprovar/verificar un artista exigeix ≥1 `ArtistaDeezer` als
+   dos camins (pendent_aprovar + artista_detail PATCH); l'edició de
+   Deezer ja no s'empassa l'`IntegrityError` (409 amb el propietari).
+   Command idempotent `tornar_pendents_sense_deezer` — **15 artistes
+   aprovats sense Deezer tornats a pendents** (0 cançons al top públic
+   actual → impacte aigües avall nul; 14 amb MBID, 1 fantasma real
+   «Lur»). Poor Tràmit pk=14253 entre els moguts.
+2. **Enriquiment Spotify per trams + throughput** (#186).
+   `_select_candidates` prioritza top públic → provisional → pending
+   ML → pending data → resta. Cron `--limit 50→250 --throttle 1.0→0.5`
+   (drena ~1.5k backlog en ~6 dies vs ~31). El 41% no-enriquit era
+   backlog, no un problema de match (0.4% not_found).
+3. **Fontaneria newsletter** (#187). `ConfiguracioGlobal.editorial_veu`
+   (TextField, blank) + migració; `build_brief` el serveix. La rutina
+   cloud queda per cablejar (fora del repo).
+4. **Registre únic de views staff** (#188). `staffViews.jsx` alimenta
+   barra esquerra + panell; Instagram i Spotify ara surten als dos.
+5. **Matriu amb dia + actiu, mort de fases** (#189 5a + #190 5b).
+   `MatriuPublicacio.dia_setmana` (additiu, neutre) + gate
+   `pot_distribuir_avui`; UI taula per canal (dia + actiu). Sistema de
+   fases retirat (`fase_distribucio` + `min_fase`) — neutre perquè prod
+   estava a fase 5. Instagram queda com a canal estàndard.
 
 ---
 

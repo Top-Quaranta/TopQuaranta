@@ -1,14 +1,14 @@
-"""Guards for the matrix `dia_setmana` weekday gate (5a, 2026-06).
+"""Guards for the matrix day INDICATOR (item C, 2026-06).
 
-Additive + neutral: with `dia_setmana=None` (the default) the new
-`pot_distribuir_avui` gate behaves exactly like `actiu_per`, so the
-publishers are unchanged until staff pins a day. NEVER triggers a real
-publication.
+The editable `MatriuPublicacio.dia_setmana` field + `pot_distribuir_avui`
+gate were removed (redundant with the calendar, and a no-op since every
+cell was null). The matrix now exposes a READ-ONLY publish-day indicator
+derived from the real calendar/cron (`social.calendari.publish_weekdays_for`),
+including the newsletter's Sunday send. The only editable control is
+`actiu`. NEVER triggers a real publication.
 """
 
 from __future__ import annotations
-
-import datetime
 
 import pytest
 from rest_framework.test import APIClient
@@ -16,17 +16,13 @@ from rest_framework.test import APIClient
 from comptes.models import Usuari
 from music.models import StaffAuditLog
 from ranking.models import MatriuPublicacio
-
-MON = datetime.date(2026, 6, 1)  # Monday → weekday() == 0
-TUE = datetime.date(2026, 6, 2)  # Tuesday → weekday() == 1
+from social.calendari import NEWSLETTER_PUBLISH_WEEKDAY, publish_weekdays_for
 
 
-def _set(*, canal, tipus, actiu=True, dia_setmana=None):
+def _set(*, canal, tipus, actiu=True):
     """Upsert a matrix cell (migration 0020 seeds rows → create collides)."""
     MatriuPublicacio.objects.update_or_create(
-        canal=canal,
-        tipus=tipus,
-        defaults={"actiu": actiu, "dia_setmana": dia_setmana},
+        canal=canal, tipus=tipus, defaults={"actiu": actiu}
     )
 
 
@@ -40,105 +36,54 @@ def staff_client(db):
     return c
 
 
-# ── gate semantics ───────────────────────────────────────────────────
+# ── indicator derivation (publish_weekdays_for) ──────────────────────
+
+
+def test_push_channels_follow_calendar():
+    # weekday(): Mon=0 … Sun=6. top_ppcc=Sat, territorial=Mon+Wed,
+    # singles=Fri, albums=Tue (matches social/calendari.py CALENDARI).
+    for canal in ("instagram", "mastodon", "bluesky", "telegram"):
+        assert publish_weekdays_for(canal, "top_ppcc") == [5]
+        assert publish_weekdays_for(canal, "top_territorial") == [0, 2]
+        assert publish_weekdays_for(canal, "nous_singles") == [4]
+        assert publish_weekdays_for(canal, "nous_albums") == [1]
+
+
+def test_newsletter_is_sunday_for_ppcc_only():
+    # Newsletter only sends the PPCC top, on Sunday (its own enviar_newsletter
+    # cron, NOT the calendari). Everything else → empty (not published).
+    assert NEWSLETTER_PUBLISH_WEEKDAY == 6  # Sunday — must match the cron
+    assert publish_weekdays_for("newsletter", "top_ppcc") == [6]
+    assert publish_weekdays_for("newsletter", "top_territorial") == []
+    assert publish_weekdays_for("newsletter", "nous_singles") == []
+    assert publish_weekdays_for("newsletter", "nous_albums") == []
+
+
+# ── GET exposes the indicator ────────────────────────────────────────
 
 
 @pytest.mark.django_db
-def test_missing_row_is_fail_open():
-    assert MatriuPublicacio.pot_distribuir_avui("mastodon", "top_ppcc", today=MON)
-
-
-@pytest.mark.django_db
-def test_inactive_cell_never_distributes():
-    _set(canal="mastodon", tipus="top_ppcc", actiu=False)
-    assert not MatriuPublicacio.pot_distribuir_avui("mastodon", "top_ppcc", today=MON)
-
-
-@pytest.mark.django_db
-def test_null_day_is_neutral_any_day():
-    """dia_setmana=None → publishes on any day (same as actiu_per)."""
-    _set(canal="mastodon", tipus="top_ppcc", actiu=True, dia_setmana=None)
-    for d in (MON, TUE):
-        assert MatriuPublicacio.pot_distribuir_avui("mastodon", "top_ppcc", today=d)
-        # Neutrality: with a null day the day-gate matches the pure actiu bit.
-        assert MatriuPublicacio.pot_distribuir_avui(
-            "mastodon", "top_ppcc", today=d
-        ) == MatriuPublicacio.actiu_per("mastodon", "top_ppcc")
-
-
-@pytest.mark.django_db
-def test_pinned_day_gates_to_that_weekday():
-    _set(canal="mastodon", tipus="top_ppcc", actiu=True, dia_setmana=0)  # Monday
-    assert MatriuPublicacio.pot_distribuir_avui("mastodon", "top_ppcc", today=MON)
-    assert not MatriuPublicacio.pot_distribuir_avui("mastodon", "top_ppcc", today=TUE)
-
-
-@pytest.mark.django_db
-def test_pinned_day_still_respects_inactive():
-    _set(canal="mastodon", tipus="top_ppcc", actiu=False, dia_setmana=0)
-    assert not MatriuPublicacio.pot_distribuir_avui("mastodon", "top_ppcc", today=MON)
-
-
-# ── endpoint ─────────────────────────────────────────────────────────
-
-
-@pytest.mark.django_db
-def test_get_matriu_exposes_dia_setmana_and_dies(staff_client):
-    _set(canal="mastodon", tipus="top_ppcc", actiu=True, dia_setmana=5)
+def test_get_matriu_exposes_dies_publicacio(staff_client):
     r = staff_client.get("/api/v1/staff/social/matriu/")
     assert r.status_code == 200
-    assert any(d["value"] == 5 and d["label"] == "Dissabte" for d in r.data["dies"])
-    cell = next(
-        c
-        for c in r.data["cells"]
-        if c["canal"] == "mastodon" and c["tipus"] == "top_ppcc"
-    )
-    assert cell["dia_setmana"] == 5
+    cells = {(c["canal"], c["tipus"]): c for c in r.data["cells"]}
+    # No editable day field is leaked anymore.
+    assert "dia_setmana" not in cells[("mastodon", "top_ppcc")]
+    # Push channel: top_ppcc → Saturday.
+    assert cells[("mastodon", "top_ppcc")]["dies_publicacio"] == [5]
+    # Territorial → Monday + Wednesday.
+    assert cells[("mastodon", "top_territorial")]["dies_publicacio"] == [0, 2]
+    # Newsletter top_ppcc → Sunday.
+    assert cells[("newsletter", "top_ppcc")]["dies_publicacio"] == [6]
+    # Newsletter never publishes territorial → empty (UI renders "—").
+    assert cells[("newsletter", "top_territorial")]["dies_publicacio"] == []
+
+
+# ── toggle is actiu-only ─────────────────────────────────────────────
 
 
 @pytest.mark.django_db
-def test_toggle_sets_day_without_flipping_actiu(staff_client):
-    _set(canal="mastodon", tipus="top_ppcc", actiu=True, dia_setmana=None)
-    r = staff_client.post(
-        "/api/v1/staff/social/matriu/toggle/",
-        {"canal": "mastodon", "tipus": "top_ppcc", "dia_setmana": 5},
-        format="json",
-    )
-    assert r.status_code == 200
-    assert r.data["dia_setmana"] == 5
-    assert r.data["actiu"] is True  # NOT flipped by a day edit
-    cell = MatriuPublicacio.objects.get(canal="mastodon", tipus="top_ppcc")
-    assert cell.dia_setmana == 5 and cell.actiu is True
-    # The day change is audited.
-    assert StaffAuditLog.objects.filter(action="config_update").exists()
-
-
-@pytest.mark.django_db
-def test_toggle_clears_day_with_null(staff_client):
-    _set(canal="mastodon", tipus="top_ppcc", actiu=True, dia_setmana=3)
-    r = staff_client.post(
-        "/api/v1/staff/social/matriu/toggle/",
-        {"canal": "mastodon", "tipus": "top_ppcc", "dia_setmana": None},
-        format="json",
-    )
-    assert r.status_code == 200
-    assert r.data["dia_setmana"] is None
-
-
-@pytest.mark.django_db
-def test_toggle_rejects_out_of_range_day(staff_client):
-    _set(canal="mastodon", tipus="top_ppcc", actiu=True)
-    r = staff_client.post(
-        "/api/v1/staff/social/matriu/toggle/",
-        {"canal": "mastodon", "tipus": "top_ppcc", "dia_setmana": 9},
-        format="json",
-    )
-    assert r.status_code == 400
-
-
-@pytest.mark.django_db
-def test_toggle_actiu_still_works_unchanged(staff_client):
-    """The legacy actiu-flip path (no dia_setmana in body) is preserved."""
+def test_toggle_flips_actiu_only(staff_client):
     _set(canal="mastodon", tipus="top_ppcc", actiu=True)
     r = staff_client.post(
         "/api/v1/staff/social/matriu/toggle/",
@@ -147,3 +92,20 @@ def test_toggle_actiu_still_works_unchanged(staff_client):
     )
     assert r.status_code == 200
     assert r.data["actiu"] is False  # flipped
+    assert "dia_setmana" not in r.data  # no day field anymore
+    assert StaffAuditLog.objects.filter(action="config_update").exists()
+
+
+@pytest.mark.django_db
+def test_toggle_explicit_actiu_value(staff_client):
+    _set(canal="mastodon", tipus="top_ppcc", actiu=True)
+    r = staff_client.post(
+        "/api/v1/staff/social/matriu/toggle/",
+        {"canal": "mastodon", "tipus": "top_ppcc", "actiu": False},
+        format="json",
+    )
+    assert r.status_code == 200
+    assert r.data["actiu"] is False
+    assert (
+        MatriuPublicacio.objects.get(canal="mastodon", tipus="top_ppcc").actiu is False
+    )

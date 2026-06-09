@@ -5,17 +5,17 @@
  * header, clickable row links, occasional action buttons in the last
  * column. Centralising the chrome keeps pages short and consistent.
  */
-export function TableCard({ children, className = '' }) {
+export function TableCard({ children, className = "" }) {
   return (
     <div
       className={
-        'bg-white text-tq-ink rounded-lg border border-black/5 overflow-hidden ' +
+        "bg-white text-tq-ink rounded-lg border border-black/5 overflow-hidden " +
         className
       }
     >
       {children}
     </div>
-  )
+  );
 }
 
 /**
@@ -40,7 +40,7 @@ export function Table({ children }) {
     >
       <table className="w-full min-w-[640px] text-sm">{children}</table>
     </div>
-  )
+  );
 }
 
 export function THead({ children }) {
@@ -48,18 +48,15 @@ export function THead({ children }) {
     <thead className="bg-tq-ink/5 text-[11px] uppercase tracking-wide">
       {children}
     </thead>
-  )
+  );
 }
 
-export function Th({ children, className = '', ...rest }) {
+export function Th({ children, className = "", ...rest }) {
   return (
-    <th
-      className={'text-left font-semibold px-3 py-2 ' + className}
-      {...rest}
-    >
+    <th className={"text-left font-semibold px-3 py-2 " + className} {...rest}>
       {children}
     </th>
-  )
+  );
 }
 
 /**
@@ -69,31 +66,31 @@ export function Th({ children, className = '', ...rest }) {
  * a silent drop before, which made checkboxes in clickable rows
  * behave as if they navigated instead of toggling.
  */
-export function Td({ children, className = '', ...rest }) {
+export function Td({ children, className = "", ...rest }) {
   return (
-    <td className={'px-3 py-2 align-middle ' + className} {...rest}>
+    <td className={"px-3 py-2 align-middle " + className} {...rest}>
       {children}
     </td>
-  )
+  );
 }
 
-export function Tr({ children, onClick, className = '' }) {
+export function Tr({ children, onClick, className = "" }) {
   return (
     <tr
       onClick={onClick}
       className={
-        'border-t border-black/5 ' +
-        (onClick ? 'hover:bg-tq-yellow/10 cursor-pointer ' : '') +
+        "border-t border-black/5 " +
+        (onClick ? "hover:bg-tq-yellow/10 cursor-pointer " : "") +
         className
       }
     >
       {children}
     </tr>
-  )
+  );
 }
 
 export function EmptyState({ children }) {
-  return <p className="px-3 py-6 text-sm opacity-60 text-center">{children}</p>
+  return <p className="px-3 py-6 text-sm opacity-60 text-center">{children}</p>;
 }
 
 // Callout — a full-width banner for inline feedback (errors, success
@@ -101,41 +98,50 @@ export function EmptyState({ children }) {
 // counterpart of Pill (which is for short inline states). Tones go
 // through the mm-design semantic tokens so a palette change reaches every
 // callout in one edit; a soft tint background keeps it readable on white.
-export function Callout({ tone = 'info', children, className = '' }) {
+export function Callout({ tone = "info", children, className = "" }) {
   const sem = {
-    red: { bg: 'rgba(239, 68, 68, 0.12)', fg: 'var(--color-tq-danger-deep)' },
-    green: { bg: 'rgba(16, 185, 129, 0.12)', fg: 'var(--color-tq-success-deep)' },
-    yellow: { bg: 'rgba(250, 204, 21, 0.18)', fg: 'var(--color-tq-yellow-deep, #ca8a04)' },
-    info: { bg: 'rgba(156, 163, 175, 0.18)', fg: 'var(--color-tq-neutral-deep, #4b5563)' },
-  }
-  const s = sem[tone] || sem.info
+    red: { bg: "rgba(239, 68, 68, 0.12)", fg: "var(--color-tq-danger-deep)" },
+    green: {
+      bg: "rgba(16, 185, 129, 0.12)",
+      fg: "var(--color-tq-success-deep)",
+    },
+    yellow: {
+      bg: "rgba(250, 204, 21, 0.18)",
+      fg: "var(--color-tq-yellow-deep, #ca8a04)",
+    },
+    info: {
+      bg: "rgba(156, 163, 175, 0.18)",
+      fg: "var(--color-tq-neutral-deep, #4b5563)",
+    },
+  };
+  const s = sem[tone] || sem.info;
   return (
     <div
-      role={tone === 'red' ? 'alert' : 'status'}
+      role={tone === "red" ? "alert" : "status"}
       className={`p-3 rounded-md text-sm ${className}`}
       style={{ background: s.bg, color: s.fg }}
     >
       {children}
     </div>
-  )
+  );
 }
 
-export function Pill({ children, tone = 'ink' }) {
+export function Pill({ children, tone = "ink" }) {
   // Brand tones use Tailwind utilities; semantic ones go through the
   // design tokens (`--color-tq-success/danger/neutral`) so a palette
   // change reaches every pill in one edit.
-  if (tone === 'ink' || tone === 'yellow') {
+  if (tone === "ink" || tone === "yellow") {
     const cls =
-      tone === 'yellow'
-        ? 'bg-tq-yellow text-tq-ink'
-        : 'bg-tq-ink/10 text-tq-ink'
+      tone === "yellow"
+        ? "bg-tq-yellow text-tq-ink"
+        : "bg-tq-ink/10 text-tq-ink";
     return (
       <span
         className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${cls}`}
       >
         {children}
       </span>
-    )
+    );
   }
   // Pills sit on white card backgrounds in the staff panel. The
   // foreground uses the *-deep tokens (AA on white at small text);
@@ -143,11 +149,17 @@ export function Pill({ children, tone = 'ink' }) {
   // here would break the design-system rule, so we go through the
   // mm-design CSS variables.
   const sem = {
-    green: { bg: 'rgba(16, 185, 129, 0.18)', fg: 'var(--color-tq-success-deep)' },
-    red:   { bg: 'rgba(239, 68, 68, 0.18)',  fg: 'var(--color-tq-danger-deep)' },
-    gray:  { bg: 'rgba(156, 163, 175, 0.25)', fg: 'var(--color-tq-neutral-deep)' },
-  }
-  const s = sem[tone] || sem.gray
+    green: {
+      bg: "rgba(16, 185, 129, 0.18)",
+      fg: "var(--color-tq-success-deep)",
+    },
+    red: { bg: "rgba(239, 68, 68, 0.18)", fg: "var(--color-tq-danger-deep)" },
+    gray: {
+      bg: "rgba(156, 163, 175, 0.25)",
+      fg: "var(--color-tq-neutral-deep)",
+    },
+  };
+  const s = sem[tone] || sem.gray;
   return (
     <span
       className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full"
@@ -155,44 +167,44 @@ export function Pill({ children, tone = 'ink' }) {
     >
       {children}
     </span>
-  )
+  );
 }
 
 export function Btn({
   children,
-  tone = 'primary',
-  size = 'sm',
+  tone = "primary",
+  size = "sm",
   disabled,
   ...rest
 }) {
   const tones = {
-    primary: 'bg-tq-ink text-tq-yellow hover:bg-tq-ink/90',
+    primary: "bg-tq-ink text-tq-yellow hover:bg-tq-ink/90",
     secondary:
-      'bg-transparent text-tq-ink border border-tq-ink/20 hover:bg-tq-ink/5',
+      "bg-transparent text-tq-ink border border-tq-ink/20 hover:bg-tq-ink/5",
     outline:
-      'bg-transparent text-white border border-white/30 hover:bg-white/10',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
-    ghost: 'text-tq-ink/70 hover:text-tq-ink hover:bg-tq-ink/5',
-  }
+      "bg-transparent text-white border border-white/30 hover:bg-white/10",
+    danger: "bg-red-600 text-white hover:bg-red-700",
+    ghost: "text-tq-ink/70 hover:text-tq-ink hover:bg-tq-ink/5",
+  };
   const sizes = {
-    sm: 'text-xs font-semibold px-2.5 py-1 rounded',
-    md: 'text-sm font-semibold px-3 py-1.5 rounded',
-  }
+    sm: "text-xs font-semibold px-2.5 py-1 rounded",
+    md: "text-sm font-semibold px-3 py-1.5 rounded",
+  };
   return (
     <button
       type="button"
       disabled={disabled}
       className={
         (tones[tone] || tones.primary) +
-        ' ' +
+        " " +
         (sizes[size] || sizes.sm) +
-        ' transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+        " transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       }
       {...rest}
     >
       {children}
     </button>
-  )
+  );
 }
 
 export function Input(props) {
@@ -200,11 +212,23 @@ export function Input(props) {
     <input
       {...props}
       className={
-        'text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink placeholder-tq-ink/40 focus:outline-none focus:ring-2 focus:ring-tq-yellow ' +
-        (props.className || '')
+        "text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink placeholder-tq-ink/40 focus:outline-none focus:ring-2 focus:ring-tq-yellow " +
+        (props.className || "")
       }
     />
-  )
+  );
+}
+
+export function Textarea(props) {
+  return (
+    <textarea
+      {...props}
+      className={
+        "text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink placeholder-tq-ink/40 focus:outline-none focus:ring-2 focus:ring-tq-yellow resize-y min-h-[8rem] font-normal leading-snug " +
+        (props.className || "")
+      }
+    />
+  );
 }
 
 export function Select({ children, ...props }) {
@@ -212,17 +236,17 @@ export function Select({ children, ...props }) {
     <select
       {...props}
       className={
-        'text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink focus:outline-none focus:ring-2 focus:ring-tq-yellow ' +
-        (props.className || '')
+        "text-sm px-2.5 py-1.5 rounded border border-tq-ink/20 bg-white text-tq-ink focus:outline-none focus:ring-2 focus:ring-tq-yellow " +
+        (props.className || "")
       }
     >
       {children}
     </select>
-  )
+  );
 }
 
 export function Pagination({ meta, onPage }) {
-  if (!meta || meta.num_pages <= 1) return null
+  if (!meta || meta.num_pages <= 1) return null;
   return (
     <div className="flex items-center gap-2 px-3 py-2 text-xs text-tq-ink/75">
       <Btn
@@ -243,7 +267,7 @@ export function Pagination({ meta, onPage }) {
         Següent
       </Btn>
     </div>
-  )
+  );
 }
 
 export function PageHeader({ title, subtitle, right }) {
@@ -255,7 +279,7 @@ export function PageHeader({ title, subtitle, right }) {
       </div>
       {right && <div className="flex items-center gap-2">{right}</div>}
     </header>
-  )
+  );
 }
 
 /**
@@ -269,5 +293,5 @@ export function Field({ label, children }) {
       <span>{label}</span>
       {children}
     </label>
-  )
+  );
 }

@@ -9,8 +9,6 @@
                                               triple
   POST /api/v1/staff/social/toggle/         — flip ConfiguracioGlobal
                                               .instagram_actiu
-  POST /api/v1/staff/social/fase/           — set ConfiguracioGlobal
-                                              .fase_distribucio
   POST /api/v1/staff/social/story-cap/      — set ConfiguracioGlobal
                                               .story_max_cancons_ppcc
   GET  /api/v1/staff/social/token-status/   — days until token expires
@@ -36,7 +34,6 @@ from .accounts import (
 )
 from .controls import (
     social_delay,
-    social_fase,
     social_matriu,
     social_matriu_toggle,
     social_story_cap,
@@ -89,7 +86,6 @@ __all__ = [
     "social_eliminar_remot",
     "social_republicar",
     "social_toggle",
-    "social_fase",
     "social_story_cap",
     "social_delay",
     "social_matriu",

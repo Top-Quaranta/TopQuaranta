@@ -1,20 +1,14 @@
 """Sprint I distribution calendar.
 
-Maps each `(weekday, slot)` to the `(platform, tipus, territori,
-min_fase)` tuple it should publish. The territorial top rotates
-across CAT/VAL/BAL by ISO week number so coverage feels balanced
-even when only one territorial day is active.
+Maps each `(weekday, slot)` to the `(platform, tipus, territori)` tuple
+it should publish. The territorial top rotates across CAT/VAL/BAL by ISO
+week number so coverage feels balanced even when only one territorial
+day is active.
 
-`min_fase` gates each entry. `publicar_social` reads
-`ConfiguracioGlobal.fase_distribucio` and skips entries above the
-current phase (status="omes").
-
-Phase ladder (must match ROADMAP + ConfiguracioGlobal help_text):
-    1 — només dissabte (PPCC feed + stories)
-    2 — + dimecres (territorial rotatori)
-    3 — + dilluns (segon territorial)
-    4 — + divendres (singles)
-    5 — + dimarts (àlbums)
+The legacy per-slot `min_fase` rollout gate was removed 2026-06 (prod was
+at the final phase = everything on, so removal is neutral). Per-slot day
+scheduling is now the distribution matrix's `dia_setmana`, uniform across
+every channel — see `docs/architecture/social.md`.
 """
 
 from __future__ import annotations
@@ -48,73 +42,64 @@ class CalendarSlot:
     platform: str
     tipus: str
     territori_pick: str  # "PPCC" | "ROTATORI_A" | "ROTATORI_B" | ""
-    min_fase: int
 
 
 # A "ROTATORI_A" slot uses the (week_no % 3) territori; "ROTATORI_B"
 # uses the next one in the cycle so dilluns and dimecres of the same
 # week never feature the same territori.
 CALENDARI: list[CalendarSlot] = [
-    # Saturday — Phase 1 (always on once instagram_actiu=True)
+    # Saturday — PPCC feed + stories
     CalendarSlot(
         5,
         SocialPost.PLATFORM_INSTAGRAM_FEED,
         SocialPost.TIPUS_TOP_PPCC,
         "PPCC",
-        min_fase=1,
     ),
     CalendarSlot(
         5,
         SocialPost.PLATFORM_INSTAGRAM_STORY,
         SocialPost.TIPUS_TOP_PPCC,
         "PPCC",
-        min_fase=1,
     ),
-    # Wednesday — Phase 2
+    # Wednesday — territorial rotatori A
     CalendarSlot(
         2,
         SocialPost.PLATFORM_INSTAGRAM_FEED,
         SocialPost.TIPUS_TOP_TERRITORIAL,
         "ROTATORI_A",
-        min_fase=2,
     ),
     CalendarSlot(
         2,
         SocialPost.PLATFORM_INSTAGRAM_STORY,
         SocialPost.TIPUS_TOP_TERRITORIAL,
         "ROTATORI_A",
-        min_fase=2,
     ),
-    # Monday — Phase 3 (second territorial of the week)
+    # Monday — second territorial of the week (rotatori B)
     CalendarSlot(
         0,
         SocialPost.PLATFORM_INSTAGRAM_FEED,
         SocialPost.TIPUS_TOP_TERRITORIAL,
         "ROTATORI_B",
-        min_fase=3,
     ),
     CalendarSlot(
         0,
         SocialPost.PLATFORM_INSTAGRAM_STORY,
         SocialPost.TIPUS_TOP_TERRITORIAL,
         "ROTATORI_B",
-        min_fase=3,
     ),
-    # Friday — Phase 4
+    # Friday — nous singles
     CalendarSlot(
         4,
         SocialPost.PLATFORM_INSTAGRAM_FEED,
         SocialPost.TIPUS_NOUS_SINGLES,
         "",
-        min_fase=4,
     ),
-    # Tuesday — Phase 5
+    # Tuesday — nous àlbums
     CalendarSlot(
         1,
         SocialPost.PLATFORM_INSTAGRAM_FEED,
         SocialPost.TIPUS_NOUS_ALBUMS,
         "",
-        min_fase=5,
     ),
 ]
 

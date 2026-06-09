@@ -149,7 +149,7 @@ def analytics_summary(request: Request) -> Response:
     ]
 
     # ── Publicacions OMESES per canal (Fase 3 problem 6, 2026-05-18) ──
-    # Staff should see how much the `fase_distribucio` gate is filtering;
+    # Staff should see how much the distribution matrix is filtering;
     # otherwise the omès queue is invisible. Same shape as `social`.
     social_omes_rows = list(
         SocialPost.objects.filter(

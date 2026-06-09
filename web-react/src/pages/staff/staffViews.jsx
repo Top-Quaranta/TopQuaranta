@@ -159,7 +159,7 @@ export const STAFF_GROUPS = [
         to: "/staff/social/instagram",
         label: "Instagram",
         title: "Instagram",
-        desc: "Credencials, fase, story-cap i matriu del canal Instagram.",
+        desc: "Credencials, story-cap i matriu del canal Instagram.",
       },
       {
         to: "/staff/social/mastodon",

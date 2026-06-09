@@ -32,7 +32,6 @@ SATURDAY = "2026-04-25"
 def cfg_all_on(db):
     cfg = ConfiguracioGlobal.load()
     cfg.distribucio_activa = True
-    cfg.fase_distribucio = 5  # all phases on so the gate under test is the matrix
     cfg.instagram_actiu = True
     cfg.mastodon_actiu = True
     cfg.bluesky_actiu = True

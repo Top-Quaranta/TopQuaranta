@@ -98,7 +98,6 @@ from web.api.staff.social import (  # noqa: F401
     social_eliminar_instagram,
     social_eliminar_remot,
     social_estat_canals,
-    social_fase,
     social_list,
     social_mastodon_clear,
     social_mastodon_save,

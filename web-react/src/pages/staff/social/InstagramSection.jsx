@@ -6,106 +6,110 @@
  *
  *   - Section 1: credentials (token form + test/clear, masked display) +
  *     token TTL badge.
- *   - Control: distribution phase (fase_distribucio) + story cap +
- *     the "Què publica" matrix (MatriuCanalToggles canal=instagram).
+ *   - Control: story cap + the "Què publica" matrix (MatriuCanalToggles
+ *     canal=instagram, with the per-cell dia_setmana weekday gate).
  *
  * Self-fetches `/staff/social/` for config + credentials (same data the
- * cockpit used to). Behaviour is identical to the old in-cockpit block:
- * the same endpoints (`credentials/`, `credentials/test/`,
- * `credentials/clear/`, `fase/`, `story-cap/`).
+ * cockpit used to). Endpoints: `credentials/`, `credentials/test/`,
+ * `credentials/clear/`, `story-cap/`. The legacy per-slot distribution
+ * phase was removed 2026-06 (the matrix's dia_setmana replaces it).
  */
-import { useEffect, useState } from 'react'
-import { api } from '../../../lib/api'
-import { Btn, Pill, Select, TableCard } from '../../../components/staff/StaffTable'
-import MatriuCanalToggles from './MatriuCanalToggles'
+import { useEffect, useState } from "react";
+import { api } from "../../../lib/api";
+import {
+  Btn,
+  Pill,
+  Select,
+  TableCard,
+} from "../../../components/staff/StaffTable";
+import MatriuCanalToggles from "./MatriuCanalToggles";
 
 function tokenTone(daysLeft) {
-  if (daysLeft == null) return 'gray'
-  if (daysLeft < 7) return 'red'
-  if (daysLeft < 21) return 'yellow'
-  return 'green'
+  if (daysLeft == null) return "gray";
+  if (daysLeft < 7) return "red";
+  if (daysLeft < 21) return "yellow";
+  return "green";
 }
 
 export default function InstagramSection() {
-  const [data, setData] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [output, setOutput] = useState('')
-  const [tokenDraft, setTokenDraft] = useState('')
-  const [userIdDraft, setUserIdDraft] = useState('')
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [output, setOutput] = useState("");
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [userIdDraft, setUserIdDraft] = useState("");
 
   function reload() {
     return api
-      .get('/staff/social/')
+      .get("/staff/social/")
       .then(setData)
-      .catch(() => setData(null))
+      .catch(() => setData(null));
   }
 
   useEffect(() => {
-    reload()
-  }, [])
+    reload();
+  }, []);
 
-  if (!data) return null
-  const config = data.config || {}
-  const credentials = data.credentials || { configured: false }
+  if (!data) return null;
+  const config = data.config || {};
+  const credentials = data.credentials || { configured: false };
 
   async function saveCredentials() {
     if (!tokenDraft.trim()) {
-      alert('Enganxa el token.')
-      return
+      alert("Enganxa el token.");
+      return;
     }
-    setBusy(true)
+    setBusy(true);
     try {
-      const res = await api.post('/staff/social/credentials/', {
+      const res = await api.post("/staff/social/credentials/", {
         access_token: tokenDraft.trim(),
         instagram_user_id: userIdDraft.trim(),
-      })
-      setTokenDraft('')
-      setUserIdDraft('')
-      await reload()
+      });
+      setTokenDraft("");
+      setUserIdDraft("");
+      await reload();
       alert(
-        `Credencials desades. Compte detectat: @${res.resolved_username || '?'} ` +
-          `(ID ${res.resolved_user_id}). Comprova-les amb "Provar token".`
-      )
+        `Credencials desades. Compte detectat: @${res.resolved_username || "?"} ` +
+          `(ID ${res.resolved_user_id}). Comprova-les amb "Provar token".`,
+      );
     } catch (e) {
-      alert(`Error: ${e.payload?.error || e.message}`)
+      alert(`Error: ${e.payload?.error || e.message}`);
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
 
   async function testCredentials() {
-    setBusy(true)
-    setOutput('')
+    setBusy(true);
+    setOutput("");
     try {
-      const res = await api.post('/staff/social/credentials/test/')
-      setOutput(JSON.stringify(res, null, 2))
+      const res = await api.post("/staff/social/credentials/test/");
+      setOutput(JSON.stringify(res, null, 2));
     } catch (e) {
-      setOutput(`Error: ${e.payload?.error || e.message}`)
+      setOutput(`Error: ${e.payload?.error || e.message}`);
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
 
   async function clearCredentials() {
-    if (!confirm("Esborrar les credencials d'Instagram desades? Es tornarà a mode DRY-RUN.")) return
-    setBusy(true)
+    if (
+      !confirm(
+        "Esborrar les credencials d'Instagram desades? Es tornarà a mode DRY-RUN.",
+      )
+    )
+      return;
+    setBusy(true);
     try {
-      await api.post('/staff/social/credentials/clear/')
-      await reload()
+      await api.post("/staff/social/credentials/clear/");
+      await reload();
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
 
-  async function setFase(n) {
-    if (!confirm(`Passar a fase ${n}?`)) return
-    await api.post('/staff/social/fase/', { fase: n })
-    await reload()
-  }
-
   async function setStoryCap(n) {
-    await api.post('/staff/social/story-cap/', { n })
-    await reload()
+    await api.post("/staff/social/story-cap/", { n });
+    await reload();
   }
 
   return (
@@ -117,29 +121,31 @@ export default function InstagramSection() {
         </h2>
         <TableCard className="p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Pill tone={credentials.configured ? 'green' : 'yellow'}>
-              {credentials.configured ? 'Configurades' : 'Sense credencials'}
+            <Pill tone={credentials.configured ? "green" : "yellow"}>
+              {credentials.configured ? "Configurades" : "Sense credencials"}
             </Pill>
             <Pill tone={tokenTone(config.token_days_left)}>
               {config.token_days_left == null
-                ? 'Token no configurat'
+                ? "Token no configurat"
                 : `${config.token_days_left} dies fins caducar`}
             </Pill>
           </div>
           {credentials.configured && (
             <p className="text-xs text-tq-ink/70">
-              Token{' '}
+              Token{" "}
               <code className="bg-tq-ink/5 px-1.5 py-0.5 rounded">
                 {credentials.token_masked}
-              </code>{' '}
-              · IG user ID{' '}
+              </code>{" "}
+              · IG user ID{" "}
               <code className="bg-tq-ink/5 px-1.5 py-0.5 rounded">
                 {credentials.instagram_user_id}
               </code>
-              {credentials.expires_at && <> · Caduca {credentials.expires_at.slice(0, 10)}</>}
+              {credentials.expires_at && (
+                <> · Caduca {credentials.expires_at.slice(0, 10)}</>
+              )}
               {credentials.updated_by && (
                 <>
-                  {' '}
+                  {" "}
                   · Desat per <strong>{credentials.updated_by}</strong>
                 </>
               )}
@@ -157,11 +163,15 @@ export default function InstagramSection() {
           )}
           <details>
             <summary className="text-xs cursor-pointer font-semibold text-tq-ink/70">
-              {credentials.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
+              {credentials.configured
+                ? "Substituir credencials…"
+                : "Afegir credencials…"}
             </summary>
             <div className="mt-2 space-y-2">
               <label className="block text-xs">
-                <span className="block mb-1 font-semibold">Long-lived access token</span>
+                <span className="block mb-1 font-semibold">
+                  Long-lived access token
+                </span>
                 <input
                   type="password"
                   autoComplete="off"
@@ -187,7 +197,11 @@ export default function InstagramSection() {
                   className="mt-1 w-full px-2 py-1 border border-tq-ink/20 rounded text-xs font-mono"
                 />
               </details>
-              <Btn tone="primary" onClick={saveCredentials} disabled={busy || !tokenDraft}>
+              <Btn
+                tone="primary"
+                onClick={saveCredentials}
+                disabled={busy || !tokenDraft}
+              >
                 Desar
               </Btn>
             </div>
@@ -200,31 +214,12 @@ export default function InstagramSection() {
         </TableCard>
       </div>
 
-      {/* ── Control: fase + story-cap + matriu ───────────────── */}
+      {/* ── Control: story-cap + matriu ───────────────── */}
       <div>
-        <h2 className="mb-2 text-base font-bold text-white font-display">Què publica</h2>
+        <h2 className="mb-2 text-base font-bold text-white font-display">
+          Què publica
+        </h2>
         <TableCard className="p-4 space-y-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-2">
-              Fase distribució (només Instagram)
-            </p>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Btn
-                  key={n}
-                  tone={config.fase_distribucio === n ? 'primary' : 'secondary'}
-                  disabled={busy}
-                  onClick={() => setFase(n)}
-                >
-                  {n}
-                </Btn>
-              ))}
-            </div>
-            <p className="text-[10px] text-tq-ink/60 mt-1">
-              1=dissabte · 2=+dimecres · 3=+dilluns · 4=+divendres · 5=+dimarts
-            </p>
-          </div>
-
           <div className="max-w-xs">
             <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1">
               Story cap Global (cançons)
@@ -248,12 +243,12 @@ export default function InstagramSection() {
             </p>
             <MatriuCanalToggles canal="instagram" />
             <p className="text-[11px] text-tq-ink/60 mt-2">
-              Desmarcar atura la distribució d'eixe tipus a Instagram (porta
-              addicional sobre la fase).
+              Desmarcar atura la distribució d'eixe tipus a Instagram; el dia
+              fixa el dia de la setmana (sense restricció = qualsevol dia).
             </p>
           </div>
         </TableCard>
       </div>
     </div>
-  )
+  );
 }

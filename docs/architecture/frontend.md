@@ -113,7 +113,11 @@ consolidated-week selector + on-demand "Generate (engine)" + the shared
 `/staff/social/esborrany` page, now a thin wrapper kept for the cron
 email links). Instagram and RSS are still managed in-page on the cockpit
 (which keeps the week calendar + slide-render button); Spotify stays on
-its own page for now. Not to be confused with `/staff/publicacions`
+its own page for now. The cockpit also hosts the **distribution matrix**
+(`pages/staff/social/MatriuGrid.jsx`): a self-fetching canal × tipus grid
+of Actiu checkboxes (the third gate, `MatriuPublicacio`) over
+`/staff/social/matriu/` + `/staff/social/matriu/toggle/`. An off cell
+renders inactive (never hidden); non-seeded combos paint a blank dash. Not to be confused with `/staff/publicacions`
 (community posts).
 
 ## Backend seam

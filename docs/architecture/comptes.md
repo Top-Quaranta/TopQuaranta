@@ -265,7 +265,10 @@ will send), `font`, `editat`.
    on edits, with the list + real covers (logo fallback) as the
    subscriber sees.
 3. **Sunday 10:00 — `enviar_newsletter`**: gated by
-   `ConfiguracioGlobal.pot_publicar("newsletter")`; reads the week's
+   `ConfiguracioGlobal.pot_publicar_tipus("newsletter", "top_ppcc")` —
+   the three distribution gates (master + per-channel + the
+   `MatriuPublicacio` cell; see `docs/architecture/social.md`), so an
+   off matrix cell stops the send too; reads the week's
    draft — `cancellat` → skip; else sends the (possibly edited)
    `subject`+`narrative_html` via `send_top_newsletter(...,
    subject_override=, narrative_html_override=)`, **rebuilding the list

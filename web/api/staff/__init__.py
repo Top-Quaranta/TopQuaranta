@@ -103,6 +103,8 @@ from web.api.staff.social import (  # noqa: F401
     social_mastodon_clear,
     social_mastodon_save,
     social_mastodon_test,
+    social_matriu,
+    social_matriu_toggle,
     social_metrics_summary,
     social_preview,
     social_preview_all,

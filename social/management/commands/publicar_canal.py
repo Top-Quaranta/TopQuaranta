@@ -29,7 +29,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from music.audit import log_staff_action
-from ranking.models import ConfiguracioGlobal
+from ranking.models import ConfiguracioGlobal, MatriuPublicacio
 from social import (
     bluesky_client,
     captions,
@@ -129,6 +129,14 @@ class Command(BaseCommand):
         )
         if post.status == SocialPost.STATUS_PUBLICAT and not opts["force"]:
             self.stdout.write("  · ja publicat (--force per re-publicar). Salta.")
+            return
+
+        # Distribution-matrix gate (third gate; master + per-channel were
+        # checked at command entry). Off (channel × tipus) → omès, shown
+        # inactive in the publications table.
+        if not MatriuPublicacio.actiu_per(channel, slot.tipus):
+            self._mark(post, SocialPost.STATUS_OMES, error_msg="matriu desactivada")
+            self.stdout.write("  · matriu de distribució desactivada → omès")
             return
 
         # Build payload + cover render (slide 0 of the IG carousel).

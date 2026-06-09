@@ -6,8 +6,9 @@ Runs on Sunday. Reads the week's `NewsletterDraft`:
     rebuilding the rest of the context (podi, entries, covers) from the
     FINAL top at send time, then mark the draft `enviat`.
 
-Gated by the shared distribution predicate
-`ConfiguracioGlobal.pot_publicar("newsletter")` (master + per-channel).
+Gated by `ConfiguracioGlobal.pot_publicar_tipus("newsletter", "top_ppcc")`
+— the three distribution gates: master + per-channel + the
+(newsletter × top_ppcc) matrix cell.
 Writes a `SocialPost` row + audit (`newsletter_publicat`) so the
 per-channel "last send" traceability stays consistent with the other
 channels. Idempotent: an already-`enviat` week is skipped unless
@@ -55,11 +56,17 @@ class Command(BaseCommand):
         force = bool(opts.get("force"))
 
         cfg = ConfiguracioGlobal.load()
-        if not cfg.pot_publicar("newsletter") and not dry_run:
+        # Three gates: master (`distribucio_activa`), per-channel
+        # (`newsletter_actiu`), and the distribution-matrix cell
+        # (newsletter × top_ppcc). Any one off → the newsletter is NOT
+        # sent.
+        if not cfg.pot_publicar_tipus("newsletter", TIPUS) and not dry_run:
             if not cfg.distribucio_activa:
                 self.stdout.write("Distribució pausada (mestre). Surt.")
-            else:
+            elif not cfg.newsletter_actiu:
                 self.stdout.write("Kill switch tancat (newsletter_actiu=False). Surt.")
+            else:
+                self.stdout.write("Matriu desactivada (newsletter × top_ppcc). Surt.")
             return
 
         setmana = TopSetmanal.objects.filter(territori=TERRITORI).aggregate(

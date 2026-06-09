@@ -123,7 +123,7 @@ CRON_META: dict[str, dict] = _load_cron_meta()
 # moved to --limit 200 (ETA 2× pessimistic), and the Spotify enrich rate
 # was reported per-hour while the cron is nightly (ETA ~24× optimistic).
 WHISPER_DAILY_LIMIT = 200
-ENRICH_SPOTIFY_DAILY_LIMIT = 50
+ENRICH_SPOTIFY_DAILY_LIMIT = 250
 
 
 def _resolve_cron_description(cron_name: str, meta: dict) -> str:

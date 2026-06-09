@@ -220,6 +220,28 @@ def _live_me(auth: SpotifyAuth) -> tuple[dict, str | None]:
         return {}, f"{type(exc).__name__}: {exc}"
 
 
+def _enrichment_coverage() -> dict:
+    """Catalog-wide Spotify enrichment coverage.
+
+    Denominator = the set the enrichment command (`enriquir_spotify`)
+    targets: active Cançons that carry an ISRC (the universal key it
+    needs to resolve a Spotify id). Numerator = those already holding a
+    usable id — a `SpotifyMetadata` whose `enrichment_status` is in
+    `LOCKED_STATUSES` (auto-`found` + staff-`manual`). Distinct from the
+    per-playlist `target_coverage` (what the next sync of ONE playlist
+    would push): this is the whole catalogue."""
+    target = Canco.objects.filter(activa=True, isrc__isnull=False).exclude(isrc="")
+    total = target.count()
+    enriched = target.filter(
+        spotify__enrichment_status__in=SpotifyMetadata.LOCKED_STATUSES
+    ).count()
+    return {
+        "total": total,
+        "enriched": enriched,
+        "ratio": (enriched / total) if total else None,
+    }
+
+
 # ── Endpoints ──────────────────────────────────────────────────────
 
 
@@ -245,6 +267,7 @@ def spotify_estat(request: Request) -> Response:
             _playlist_payload(pl) for pl in SpotifyPlaylist.objects.order_by("codi")
         ],
         "cron_silenced": _read_cron_silenced(),
+        "enrichment_coverage": _enrichment_coverage(),
     }
     if auth:
         me, err = _live_me(auth)

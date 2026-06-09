@@ -201,6 +201,22 @@ export default function StaffSocialSpotifyPage() {
           Distribució · Spotify
         </p>
         <h1 className="text-2xl font-bold">Sincronització de playlists</h1>
+        {estat.enrichment_coverage && (
+          <div className="mt-2 text-sm">
+            <span className="text-white/60">Cobertura d'enriquiment del catàleg: </span>
+            <span className="font-bold">
+              {estat.enrichment_coverage.ratio == null
+                ? '—'
+                : `${Math.round(estat.enrichment_coverage.ratio * 100)} %`}
+            </span>
+            <span className="text-white/50">
+              {' '}
+              ({estat.enrichment_coverage.enriched.toLocaleString('ca-ES')}/
+              {estat.enrichment_coverage.total.toLocaleString('ca-ES')} cançons amb
+              ISRC)
+            </span>
+          </div>
+        )}
       </header>
 
       {oauthBanner === 'ok' && (

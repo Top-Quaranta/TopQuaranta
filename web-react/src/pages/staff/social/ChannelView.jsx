@@ -35,6 +35,7 @@ import { CHANNEL_DESCRIPTORS } from './channelDescriptors'
 import MatriuCanalToggles from './MatriuCanalToggles'
 import PublicacionsTable from './PublicacionsTable'
 import NewsletterSection from './NewsletterSection'
+import InstagramSection from './InstagramSection'
 
 const EFECTIU = {
   actiu: { tone: 'green', label: 'Actiu' },
@@ -281,6 +282,7 @@ export default function ChannelView({ canal }) {
 
       {/* ── Section 1 — on-demand surface (newsletter only) ──────── */}
       {desc.section1?.kind === 'newsletter' && <NewsletterSection />}
+      {desc.section1?.kind === 'instagram' && <InstagramSection />}
 
       {/* ── Section 2 — KPIs ────────────────────────────────────── */}
       {desc.kpis && <KpiStrip desc={desc} summary={summary} st={st} />}

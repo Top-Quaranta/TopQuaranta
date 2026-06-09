@@ -15,6 +15,26 @@
  */
 
 export const CHANNEL_DESCRIPTORS = {
+  instagram: {
+    key: 'instagram',
+    nom: 'Instagram',
+    switchField: 'instagram_actiu',
+    platforms: ['instagram_feed', 'instagram_story'],
+    // Section 1 + Control are bespoke (credentials with test/clear, the
+    // distribution phase, the story cap and the IG matrix), so they live
+    // in a custom `InstagramSection` (like NewsletterSection) rather than
+    // the generic credentials/control slots — which stay null here so the
+    // generic sections don't double-render.
+    section1: { kind: 'instagram' },
+    kpis: {
+      enviaments: { label: 'Enviaments', status: 'exists' },
+      seguidors: { label: 'Seguidors', status: 'exists' },
+      abast: { label: 'Abast', status: 'missing' },
+    },
+    control: null,
+    auth: null,
+    analytics: { status: 'exists', available: ['likes', 'reach', 'impressions'] },
+  },
   mastodon: {
     key: 'mastodon',
     nom: 'Mastodon',

@@ -250,6 +250,7 @@ function AppContent() {
                   <Route path="/social" element={<StaffSocialPage />} />
                   <Route path="/social/esborrany" element={<NewsletterDraftPage />} />
                   <Route path="/social/spotify" element={<StaffSocialSpotifyPage />} />
+                  <Route path="/social/instagram" element={<ChannelView canal="instagram" />} />
                   <Route path="/social/mastodon" element={<ChannelView canal="mastodon" />} />
                   <Route path="/social/bluesky" element={<ChannelView canal="bluesky" />} />
                   <Route path="/social/telegram" element={<ChannelView canal="telegram" />} />

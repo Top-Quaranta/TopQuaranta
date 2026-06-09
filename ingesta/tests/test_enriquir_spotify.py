@@ -230,15 +230,14 @@ def test_pending_ordering_by_ml_confianca_desc(auth_present, client_mock):
 
 
 @pytest.mark.django_db
-def test_public_ordering_by_latest_senyaldiari_playcount(auth_present, client_mock):
-    """Public Cançons come before pending; within public, ordered by
-    latest SenyalDiari.lastfm_playcount desc."""
+def test_verified_backlog_tier_ordered_by_playcount(auth_present, client_mock):
+    """Within the verified backlog (tier 5, none charting/pending),
+    ordered by latest SenyalDiari.lastfm_playcount desc."""
     a = Artista.objects.create(nom="EXEMPLE A6", lastfm_nom="EXEMPLE A6")
     al = Album.objects.create(artista=a, nom="EXEMPLE Al6")
 
     pub_low = _make_canco(a, al, 300, verificada=True)
     pub_high = _make_canco(a, al, 301, verificada=True)
-    pend_high_ml = _make_canco(a, al, 302, verificada=False, ml=0.99)
 
     today = date.today()
     SenyalDiari.objects.create(canco=pub_low, data=today, lastfm_playcount=50)
@@ -246,16 +245,12 @@ def test_public_ordering_by_latest_senyaldiari_playcount(auth_present, client_mo
 
     client_mock.search_isrc.return_value = None
 
-    # Limit=1 -> only the top public (highest playcount) gets processed.
+    # Limit=1 -> only the highest-playcount verified track gets processed.
     call_command("enriquir_spotify", limit=1)
     pub_high.refresh_from_db()
     pub_low.refresh_from_db()
-    pend_high_ml.refresh_from_db()
     assert pub_high.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_FOUND
     assert pub_low.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_ATTEMPTED
-    assert (
-        pend_high_ml.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_ATTEMPTED
-    )
 
 
 @pytest.mark.django_db
@@ -501,18 +496,51 @@ def test_canco_with_empty_isrc_is_not_a_candidate():
 
 
 @pytest.mark.django_db
-def test_spill_fills_all_slots_when_a_pool_is_short():
-    """(c) When the verified pool can't fill its share, the leftover slots
-    spill to pending so every `limit` slot is used — no wasted API call."""
+def test_all_slots_filled_across_tiers():
+    """Every `limit` slot is used across the tiers — no wasted API call.
+    Pending (tiers 3/4) is processed before the verified backlog (tier 5),
+    so with enough pending available the slots go to pending first."""
     a = Artista.objects.create(nom="EXEMPLE Spill", lastfm_nom="EXEMPLE Spill")
     al = Album.objects.create(artista=a, nom="EXEMPLE SpillAl")
-    for i in range(5):  # 5 pending available
+    for i in range(5):  # 5 pending available (tier 3)
         _make_canco(a, al, 800 + i, verificada=False, ml=0.5 + i * 0.05)
-    _make_canco(a, al, 899, verificada=True)  # only 1 verified
+    _make_canco(a, al, 899, verificada=True)  # 1 verified (tier 5)
 
-    cands = _select(5, frac=0.5)  # 5 slots; verified can only supply 1
-    assert len(cands) == 5  # leftover spilled into pending → all slots used
-    assert sum(1 for c in cands if not c.verificada) == 4  # 1 verified + 4 pending
+    cands = _select(5)
+    assert len(cands) == 5  # all slots used
+    # Pending tier fills first; the lone verified is past the cap.
+    assert sum(1 for c in cands if not c.verificada) == 5
+
+
+@pytest.mark.django_db
+def test_priority_tier_top_before_rest(auth_present, client_mock):
+    """A song in the current public top (TopSetmanal) is enriched before a
+    non-charting 'rest' song, regardless of other signals."""
+    from ranking.models import TopSetmanal
+
+    a = Artista.objects.create(nom="EXEMPLE Tier", lastfm_nom="EXEMPLE Tier")
+    al = Album.objects.create(artista=a, nom="EXEMPLE TierAl")
+    charting = _make_canco(a, al, 900, verificada=True)
+    rest = _make_canco(a, al, 901, verificada=True)
+    # `rest` has the higher playcount, so only the tiering puts `charting`
+    # first.
+    today = date.today()
+    SenyalDiari.objects.create(canco=rest, data=today, lastfm_playcount=9999)
+    SenyalDiari.objects.create(canco=charting, data=today, lastfm_playcount=1)
+    TopSetmanal.objects.create(
+        canco=charting,
+        territori="PPCC",
+        setmana=date(2026, 6, 1),
+        posicio=1,
+        score_setmanal=10.0,
+    )
+
+    client_mock.search_isrc.return_value = None
+    call_command("enriquir_spotify", limit=1)
+    charting.refresh_from_db()
+    rest.refresh_from_db()
+    assert charting.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_FOUND
+    assert rest.spotify.enrichment_status == SpotifyMetadata.STATUS_NOT_ATTEMPTED
 
 
 # ── Caducitat guard on the pending pool (2026-06-03) ──────────────────

@@ -51,7 +51,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import F, OuterRef, Q, Subquery
+from django.db.models import F, Max, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from ingesta.caducitat import exclude_caducats
@@ -276,32 +276,35 @@ class Command(BaseCommand):
         target_playlists: bool,
         pending_floor_frac: float = 0.5,
     ) -> list[Canco]:
-        """Build the ordered candidate list per FASE 0 "opció C" rules,
-        with a reserved floor of slots for pending cançons.
+        """Build the ordered candidate list by PRIORITY TIERS (2026-06).
 
-        Returns a Python list (not a queryset) because we splice from
-        two differently-ordered subsets (public by Last.fm playcount,
-        pending by ml_confianca) and apply the equity floor in Python.
-        The list is truncated at `limit`.
+        Tiers, always processed in this order so a charting song never
+        waits behind the backlog:
+          1. Cançons in the current public top (latest TopSetmanal, any
+             territori).
+          2. Cançons in the provisional top (TopProvisional, any territori).
+          3. Pending (verificada=False, activa=True) WITH an ml_confianca,
+             most confident first.
+          4. Pending WITHOUT an ml_confianca, oldest first.
+          5. The rest (verified backlog etc.), by Last.fm playcount desc.
 
-        Candidate base is a LEFT JOIN on `SpotifyMetadata`: a Canço with
-        NO row has never been attempted, so it counts exactly like
-        `not_attempted` (Option A — the row is created lazily by
-        `_enrich_one`). `isrc` must be present AND non-empty — a NULL or
-        "" ISRC can't be searched and would waste a slot / raise.
+        Every tier draws from the same not_attempted + non-empty-ISRC
+        `base` (a Canço with no SpotifyMetadata row counts as
+        `not_attempted`; the row is created lazily by `_enrich_one`). The
+        two pending tiers keep the caducitat guard (the 04:00 purge only
+        sweeps `verificada=False`); the top tiers are current-chart so are
+        never caducades, and tier 5 is verified so the purge never touches
+        it. `pending_floor_frac` is accepted for back-compat but unused
+        (the tiers subsume the old equity floor). Truncated at `limit`.
         """
-        # Latest SenyalDiari.lastfm_playcount per Canço, used as the
-        # ordering signal for public cançons. NULLs last keeps cançons
-        # that never got a signal at the tail.
+        from ranking.models import TopProvisional, TopSetmanal
+
         latest_pc = (
             SenyalDiari.objects.filter(canco=OuterRef("pk"))
             .order_by("-data")
             .values("lastfm_playcount")[:1]
         )
 
-        # LEFT JOIN: no SpotifyMetadata row OR a not_attempted one. Keep
-        # every other condition that was here before (the isrc gate, plus
-        # the verificada/activa split below) — we only widen the join.
         base = (
             Canco.objects.filter(
                 Q(spotify__isnull=True)
@@ -311,53 +314,49 @@ class Command(BaseCommand):
             .exclude(isrc="")
         )
         if target_playlists:
-            # Restrict to the Cançons currently selected by Process A
-            # for any active playlist. We compute the union of:
-            # - the top-N TopProvisional cançons per playlist territori
-            # - the no_verificades window (verificada=False, activa=True,
-            #   ordered by ml_confianca desc, capped at the 7*100 window).
             base = base.filter(pk__in=self._target_playlist_pks())
 
-        public_qs = (
-            base.filter(verificada=True, activa=True)
-            .annotate(_pc=Subquery(latest_pc))
-            .order_by(F("_pc").desc(nulls_last=True))
+        # Tier-membership id sets (current charts, any territori).
+        latest_setmana = TopSetmanal.objects.aggregate(m=Max("setmana"))["m"]
+        top_pks = (
+            set(
+                TopSetmanal.objects.filter(setmana=latest_setmana).values_list(
+                    "canco_id", flat=True
+                )
+            )
+            if latest_setmana is not None
+            else set()
         )
-        # Caducitat guard (2026-06-03): the pending pool must be EXACTLY
-        # the survivors of `netejar_caducades`. The enrich cron runs at
-        # 03:00, the purge at 04:00; without this guard the equity floor
-        # spends its reserved pending slots on high-ml_confianca old-
-        # catalog tracks (data_llancament past DIES_CADUCITAT) that the
-        # 04:00 purge deletes an hour later, cascade-dropping the fresh
-        # SpotifyMetadata. `exclude_caducats` mirrors the purge's `__lt`
-        # filter, so NULL-dated pendents stay enrichable (same as the
-        # purge keeping them). Public pendents are NOT guarded — the
-        # purge only sweeps verificada=False, so verified rows are never
-        # condemned. See ingesta/caducitat.py.
-        pending_qs = exclude_caducats(
-            base.filter(verificada=False, activa=True)
-        ).order_by(F("ml_confianca").desc(nulls_last=True), "-created_at")
+        prov_pks = set(TopProvisional.objects.values_list("canco_id", flat=True))
 
-        # Equity floor: reserve up to `floor` slots for pending (the
-        # bottleneck) so they never starve behind the verified backlog.
-        # Verified fill the remaining slots. If either pool underfills,
-        # the leftover spills to the other (pending leftovers first) so
-        # no API slot is wasted. Same total load (<= limit calls).
-        floor = min(limit, round(limit * pending_floor_frac))
-        pending_all = list(pending_qs[:limit])
-        public_all = list(public_qs[:limit])
-        pend_take = pending_all[:floor]
-        ver_take = public_all[: limit - len(pend_take)]
-        # Pending-first batch order so the reserved floor is processed
-        # even if a mid-run RateLimitedError aborts the rest.
-        result = pend_take + ver_take
-        if len(result) < limit:
-            seen_pks = {c.pk for c in result}
-            for c in pending_all[len(pend_take) :] + public_all[len(ver_take) :]:
-                if c.pk in seen_pks:  # guard mid-run verificada flips
+        pending_base = exclude_caducats(base.filter(verificada=False, activa=True))
+        tiers = [
+            base.filter(pk__in=top_pks),  # 1: public top
+            base.filter(pk__in=prov_pks),  # 2: provisional top
+            pending_base.filter(ml_confianca__isnull=False).order_by(  # 3: ML
+                F("ml_confianca").desc()
+            ),
+            pending_base.filter(ml_confianca__isnull=True).order_by(  # 4: by date
+                "created_at"
+            ),
+            base.filter(verificada=True)  # 5: verified backlog
+            .annotate(_pc=Subquery(latest_pc))
+            .order_by(F("_pc").desc(nulls_last=True)),
+        ]
+        # NOTE tier 5 is verified-only: every non-caducat pending is
+        # already in tiers 3/4, and caducat pending must NEVER be selected
+        # (the 04:00 purge deletes it), so it is excluded from every tier.
+
+        result: list[Canco] = []
+        seen: set[int] = set()
+        for tier in tiers:
+            if len(result) >= limit:
+                break
+            for c in tier[:limit]:
+                if c.pk in seen:
                     continue
                 result.append(c)
-                seen_pks.add(c.pk)
+                seen.add(c.pk)
                 if len(result) >= limit:
                     break
 

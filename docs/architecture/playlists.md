@@ -194,20 +194,26 @@ not retried). The `/search` queue and `enriquir_spotify_rebuigs` both exclude
 `LOCKED_STATUSES`. Fill-when-empty only; `spotify_url=""` clears to
 `not_attempted`.
 
-Source ordering inside Process B (FASE 0 "opció C compost") with a
-**pending equity floor** (2026-06-02):
-  1. Pending Cançons (`verificada=False, activa=True`) ordered by
-     `ml_confianca desc`, NULLs last — given a RESERVED floor of the
-     run's slots (`--pending-floor-frac`, default 0.5).
-  2. Public Cançons (`verificada=True, activa=True`) ordered by the
-     latest `SenyalDiari.lastfm_playcount desc`, NULLs last — fill the
-     rest.
-If either pool underfills, the leftover spills to the other (pending
-first); the batch is processed pending-first so the reserved floor
-survives a mid-run abort. Without the floor, pending starved behind the
-verified backlog (audit 2026-06-02: 1.5 k verified `not_attempted`
-ahead of ~290 pending → pending got 0 slots/run, so the no_verificades
-playlists stayed ~17 % covered).
+Source ordering inside Process B is **priority-tiered** (2026-06,
+replacing the earlier pending equity floor). Tiers are concatenated in
+order, deduped, truncated at `--limit`, so a charting song is never
+stuck behind the backlog:
+  1. Cançons in the current public top (latest `TopSetmanal`, any
+     territori).
+  2. Cançons in the provisional top (`TopProvisional`, any territori).
+  3. Pending (`verificada=False, activa=True`) WITH an `ml_confianca`,
+     most confident first.
+  4. Pending WITHOUT an `ml_confianca`, oldest first.
+  5. The verified backlog (`verificada=True`) by latest
+     `SenyalDiari.lastfm_playcount desc`, NULLs last.
+The two pending tiers keep the **caducitat guard** (the 04:00 purge only
+sweeps `verificada=False`); tiers 1-2 are current-chart (never caducades)
+and tier 5 is verified (never purged), so caducat pending is excluded
+from every tier — it is never selected. `--pending-floor-frac` is kept
+for back-compat but no longer alters selection (the tiers subsume the
+old floor). Why tiers replaced the floor: the equity floor still let a
+top-charting song wait behind hundreds of pending; surfacing the public
++ provisional top first is what actually matters for the listener.
 
 Candidate **visibility is a LEFT JOIN** on `SpotifyMetadata`: a Canço
 with no row has never been attempted, so it counts exactly like
@@ -217,9 +223,11 @@ backfill (migration 0080) had no row and were invisible to the
 inner-join candidate query. `isrc` must be non-NULL and non-empty.
 
 Flags:
-  * `--limit N` caps per-run work (default 200; the cron uses 50).
+  * `--limit N` caps per-run work (default 200; the cron uses **250**
+    since the 2026-06 throughput raise — drains the ~1.5 k
+    `not_attempted` backlog in ~6 days vs ~31 at 50/day).
   * `--throttle FLOAT` overrides the per-call sleep (default 0.5; cron
-    1.0). The 50/day cap is the safe anti-429 rate — unchanged here.
+    **0.5** → ~120 req/min, well under Spotify's ~180 req/30s window).
   * `--pending-floor-frac FLOAT` (default 0.5) reserves that fraction of
     `--limit` for pending cançons.
   * `--retry-not-found` cycles through previously-not-found

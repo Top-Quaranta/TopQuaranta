@@ -108,8 +108,9 @@ and the RSS feeds (`web/feeds.py` → `pot_publicar("rss")`, 503 when off).
 
 The legacy Instagram-only per-slot rollout phase (`fase_distribucio` +
 calendar `min_fase`) was **removed 2026-06**: prod sat at the final phase
-(everything on), so removal was neutral, and the matrix `dia_setmana`
-below now covers per-slot day scheduling uniformly for every channel.
+(everything on), so removal was neutral. Per-slot day scheduling is fixed
+by the calendar/cron (the matrix only gates on/off; the day is a
+read-only indicator — see below).
 
 **Distribution matrix — third gate (`MatriuPublicacio`, 2026-06).** On
 top of the master switch and the per-channel switch sits a per-(canal ×
@@ -134,20 +135,26 @@ off ⇒ the Sunday send does not run). An off cell records the slot as
 vanishing. Staff edit it via
 `/staff/social/matriu/` (GET) + `/staff/social/matriu/toggle/` (POST).
 
-**Per-cell weekday gate (`dia_setmana`, 5a 2026-06).** Each matrix cell
-also carries an optional `dia_setmana` (0=Mon … 6=Sun, NULL = no
-restriction). The publishers call
-`MatriuPublicacio.pot_distribuir_avui(canal, tipus, today=…)` =
-`actiu AND (dia_setmana is None OR today.weekday() == dia_setmana)`
-(`actiu_per` stays the pure switch for the UI/analytics). NULL is the
-default, so this is byte-identical to before until staff pin a day. The
-toggle endpoint accepts `dia_setmana` (int 0-6 or null) alongside
-`actiu`; a day edit never flips the switch. The matrix GET adds `dies`
-(weekday labels) + per-cell `dia_setmana`. The shared
-`MatriuCanalToggles` component renders one table per channel (rows =
-tipus, columns = dia dropdown + actiu checkbox), identical for every
-channel. Audit metadata `anterior`/`nou` now carry both `actiu` and
-`dia_setmana`.
+**Per-cell day INDICATOR (item C, 2026-06).** The matrix shows the
+PUBLISH DAY per (canal, tipus) as a **read-only indicator**, NOT an
+editable field — the calendar/cron fixes the day, so an editable
+per-cell day would have been redundant. The earlier editable
+`MatriuPublicacio.dia_setmana` field + its `pot_distribuir_avui` gate
+(5a) were removed (migration `0025`); they were a no-op anyway (every
+cell was NULL), so publication is unchanged (`actiu_per` is the only
+gate again). The indicator is derived by
+`social.calendari.publish_weekdays_for(canal, tipus)` → a list of
+weekday ints (0=Mon … 6=Sun): IG + push channels from `CALENDARI`
+(top_ppcc→Sat, top_territorial→Mon+Wed, nous_singles→Fri,
+nous_albums→Tue); the **newsletter** is the exception — it only sends
+`top_ppcc`, on **Sunday**, via its own `enviar_newsletter` cron
+(`0 10 * * 0`), captured by the `NEWSLETTER_PUBLISH_WEEKDAY` constant
+(which MUST match that cron). A (canal, tipus) the channel never
+publishes returns `[]` (the UI renders an em-dash; no day is invented).
+The matrix GET exposes `dies` (weekday labels) + per-cell
+`dies_publicacio`; the toggle endpoint is `actiu`-only again. The shared
+`MatriuCanalToggles` renders one table per channel (rows = tipus,
+columns = day indicator + actiu checkbox).
 
 Staff controls (`web/api/staff/social/controls.py::social_toggle`):
 `channel=global` writes `distribucio_activa`; `channel=<name>` writes the

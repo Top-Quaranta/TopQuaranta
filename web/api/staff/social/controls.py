@@ -130,6 +130,7 @@ def social_matriu(request: Request) -> Response:
     on (fail-open to the pre-matrix world), so the grid shows them as a
     non-toggleable blank rather than a real switch."""
     from ranking.models import MatriuPublicacio
+    from social.calendari import publish_weekdays_for
 
     existing = {(m.canal, m.tipus): m for m in MatriuPublicacio.objects.all()}
     cells = []
@@ -142,7 +143,12 @@ def social_matriu(request: Request) -> Response:
                     "canal": canal,
                     "tipus": tipus,
                     "actiu": row.actiu if row else True,
-                    "dia_setmana": row.dia_setmana if row else None,
+                    # Read-only publish day(s) derived from the real
+                    # calendar/cron (`publish_weekdays_for`): IG + push
+                    # channels from calendari.py, newsletter = Sunday.
+                    # Empty list = the channel never publishes that tipus.
+                    # This is an INDICATOR, not a gate (the calendar gates).
+                    "dies_publicacio": publish_weekdays_for(canal, tipus),
                     "seeded": row is not None,
                 }
             )
@@ -159,11 +165,11 @@ def social_matriu(request: Request) -> Response:
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def social_matriu_toggle(request: Request) -> Response:
-    """Set one matrix cell. Body: `canal`, `tipus`, and either/both of
-    `actiu` (bool; defaults to flipping when only `actiu` is sent with no
-    value) and `dia_setmana` (int 0-6, or null to clear the restriction).
-    Only seeded cells can be toggled (a non-seeded combo is not a real
-    distribution slot)."""
+    """Set one matrix cell. Body: `canal`, `tipus`, `actiu` (bool;
+    defaults to flipping the current value). Only seeded cells can be
+    toggled (a non-seeded combo is not a real distribution slot). The
+    publish DAY is not editable here — it is a calendar/cron-derived
+    indicator (see `social_matriu`'s `dies_publicacio`)."""
     from ranking.models import MatriuPublicacio
 
     canal = (request.data.get("canal") or "").strip()
@@ -178,38 +184,14 @@ def social_matriu_toggle(request: Request) -> Response:
             {"error": "aquesta combinació no és un slot de distribució"},
             status=400,
         )
-
-    has_dia = "dia_setmana" in request.data
-    update_fields = []
-    prev_actiu = cell.actiu
-    prev_dia = cell.dia_setmana
-
-    if has_dia:
-        dia_raw = request.data.get("dia_setmana")
-        if dia_raw is None or dia_raw == "":
-            cell.dia_setmana = None
-        else:
-            try:
-                dia = int(dia_raw)
-            except (TypeError, ValueError):
-                return Response({"error": "dia_setmana invàlid"}, status=400)
-            if dia < 0 or dia > 6:
-                return Response({"error": "dia_setmana fora de rang [0,6]"}, status=400)
-            cell.dia_setmana = dia
-        update_fields.append("dia_setmana")
-
-    # `actiu` only flips when `dia_setmana` was NOT the field being edited,
-    # or when an explicit `actiu` value is sent — so changing the day never
-    # silently toggles the switch.
-    if not has_dia or "actiu" in request.data:
-        raw = request.data.get("actiu", None)
-        cell.actiu = (not cell.actiu) if raw is None else bool(raw)
-        update_fields.append("actiu")
-
-    cell.save(update_fields=update_fields)
+    raw = request.data.get("actiu", None)
+    prev = cell.actiu
+    new_val = (not cell.actiu) if raw is None else bool(raw)
+    cell.actiu = new_val
+    cell.save(update_fields=["actiu"])
     # Audit: this toggle changes what actually gets distributed (an off
-    # newsletter cell silences the Sunday send, a pinned day restricts it),
-    # so it is a consequential config change — record who/when/what.
+    # newsletter cell silences the Sunday send), so it is a consequential
+    # config change — record who/when/what.
     from music.audit import log_staff_action
 
     log_staff_action(
@@ -219,14 +201,7 @@ def social_matriu_toggle(request: Request) -> Response:
         camp="matriu_distribucio",
         canal=canal,
         tipus=tipus,
-        anterior={"actiu": prev_actiu, "dia_setmana": prev_dia},
-        nou={"actiu": cell.actiu, "dia_setmana": cell.dia_setmana},
+        anterior=prev,
+        nou=new_val,
     )
-    return Response(
-        {
-            "canal": canal,
-            "tipus": tipus,
-            "actiu": cell.actiu,
-            "dia_setmana": cell.dia_setmana,
-        }
-    )
+    return Response({"canal": canal, "tipus": tipus, "actiu": new_val})

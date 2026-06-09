@@ -1,22 +1,35 @@
 /**
- * MatriuCanalToggles — the editable distribution-matrix cells for ONE
- * channel (the "què publica" section of each channel view + the
- * Instagram section of the cockpit). The SAME component renders every
- * channel (mastodon / bluesky / telegram / instagram / newsletter).
+ * MatriuCanalToggles — the distribution-matrix cells for ONE channel (the
+ * "què publica" section of each channel view + the Instagram section of
+ * the cockpit). The SAME component renders every channel (mastodon /
+ * bluesky / telegram / instagram / newsletter).
  *
- * Each seeded (canal × tipus) cell is one table row with two controls:
- *   - dia: a weekday dropdown ("sense restricció" = no day gate = the
- *     default; otherwise publish only on that weekday).
- *   - actiu: the on/off switch for the cell.
+ * Each seeded (canal × tipus) cell is one table row:
+ *   - dia: a READ-ONLY indicator of the publish day(s), derived from the
+ *     real calendar/cron on the backend (`dies_publicacio`): e.g.
+ *     "Dissabte" for the global top, "Dilluns i dimecres" for the
+ *     territorial, "Diumenge" for the newsletter, "—" where the channel
+ *     never publishes that tipus. NOT editable — the calendar fixes it.
+ *   - actiu: the on/off switch for the cell (the only editable control).
  * Backend: GET `/staff/social/matriu/` (filtered to this `canal` on the
- * client) + POST `/staff/social/matriu/toggle/` (sends `actiu` OR
- * `dia_setmana`; a day edit never flips the switch).
+ * client) + POST `/staff/social/matriu/toggle/` (sends `actiu` only).
  *
  * A non-seeded combo (e.g. newsletter × nous albums) paints a blank dash
  * — not a real slot.
  */
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+
+// Format a list of weekday ints (0=Mon … 6=Sun) into a Catalan label
+// using the backend `dies` map: first capitalised, the rest lower-cased,
+// joined with " i " ("Dilluns i dimecres"). Empty → em-dash.
+function formatDies(dayInts, diesMap) {
+  if (!dayInts || dayInts.length === 0) return "—";
+  const labels = dayInts.map(
+    (v) => diesMap.find((d) => d.value === v)?.label || String(v),
+  );
+  return labels.map((l, i) => (i === 0 ? l : l.toLowerCase())).join(" i ");
+}
 
 export default function MatriuCanalToggles({ canal }) {
   const [tipus, setTipus] = useState([]);
@@ -43,13 +56,13 @@ export default function MatriuCanalToggles({ canal }) {
 
   if (cells === null) return null;
 
-  async function send(t, body) {
+  async function toggleActiu(t, actiu) {
     setBusy(t);
     try {
       await api.post("/staff/social/matriu/toggle/", {
         canal,
         tipus: t,
-        ...body,
+        actiu: !actiu,
       });
       reload();
     } finally {
@@ -89,26 +102,10 @@ export default function MatriuCanalToggles({ canal }) {
                   {t.label}
                 </span>
               </td>
-              <td className="pr-4 py-1">
-                <select
-                  className="border border-tq-ink/20 rounded px-1 py-0.5 bg-white"
-                  value={cell.dia_setmana ?? ""}
-                  disabled={disabled}
-                  aria-label={`${canal} ${t.label} dia`}
-                  onChange={(e) =>
-                    send(t.tipus, {
-                      dia_setmana:
-                        e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                >
-                  <option value="">Sense restricció</option>
-                  {dies.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
+              {/* Read-only indicator: the publish day comes from the
+                  calendar/cron, it is not editable here. */}
+              <td className="pr-4 py-1 text-tq-ink/60">
+                {formatDies(cell.dies_publicacio, dies)}
               </td>
               <td className="py-1">
                 <input
@@ -116,7 +113,7 @@ export default function MatriuCanalToggles({ canal }) {
                   checked={cell.actiu}
                   disabled={disabled}
                   aria-label={`${canal} ${t.label} actiu`}
-                  onChange={() => send(t.tipus, { actiu: !cell.actiu })}
+                  onChange={() => toggleActiu(t.tipus, cell.actiu)}
                 />
               </td>
             </tr>

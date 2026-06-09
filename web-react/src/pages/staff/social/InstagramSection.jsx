@@ -6,22 +6,19 @@
  *
  *   - Section 1: credentials (token form + test/clear, masked display) +
  *     token TTL badge.
- *   - Control: story cap + the "Què publica" matrix (MatriuCanalToggles
+ *   - Control: the "Què publica" matrix (MatriuCanalToggles
  *     canal=instagram, with the per-cell dia_setmana weekday gate).
  *
  * Self-fetches `/staff/social/` for config + credentials (same data the
  * cockpit used to). Endpoints: `credentials/`, `credentials/test/`,
- * `credentials/clear/`, `story-cap/`. The legacy per-slot distribution
- * phase was removed 2026-06 (the matrix's dia_setmana replaces it).
+ * `credentials/clear/`. The legacy per-slot distribution phase was
+ * removed 2026-06 (the matrix's dia_setmana replaces it). The story-cap
+ * knob (`story_max_cancons_ppcc`) is no longer edited here — it stays an
+ * operational knob in /staff/configuracio, read by the stories cron.
  */
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
-import {
-  Btn,
-  Pill,
-  Select,
-  TableCard,
-} from "../../../components/staff/StaffTable";
+import { Btn, Pill, TableCard } from "../../../components/staff/StaffTable";
 import MatriuCanalToggles from "./MatriuCanalToggles";
 
 function tokenTone(daysLeft) {
@@ -105,11 +102,6 @@ export default function InstagramSection() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function setStoryCap(n) {
-    await api.post("/staff/social/story-cap/", { n });
-    await reload();
   }
 
   return (
@@ -214,29 +206,12 @@ export default function InstagramSection() {
         </TableCard>
       </div>
 
-      {/* ── Control: story-cap + matriu ───────────────── */}
+      {/* ── Control: matriu ───────────────── */}
       <div>
         <h2 className="mb-2 text-base font-bold text-white font-display">
           Què publica
         </h2>
         <TableCard className="p-4 space-y-4">
-          <div className="max-w-xs">
-            <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-1">
-              Story cap Global (cançons)
-            </p>
-            <Select
-              aria-label="Story cap Global (cançons)"
-              value={config.story_max_cancons_ppcc}
-              onChange={(e) => setStoryCap(parseInt(e.target.value, 10))}
-            >
-              {[5, 10, 15, 20, 30, 40].map((n) => (
-                <option key={n} value={n}>
-                  {n} stories
-                </option>
-              ))}
-            </Select>
-          </div>
-
           <div>
             <p className="text-[10px] uppercase tracking-widest text-tq-ink/60 mb-2">
               Matriu de distribució

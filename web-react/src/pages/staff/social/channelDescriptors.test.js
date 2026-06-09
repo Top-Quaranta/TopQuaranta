@@ -36,9 +36,10 @@ const EXPECTED = {
 }
 
 describe('CHANNEL_DESCRIPTORS', () => {
-  it('covers the simple channels + newsletter (llesca 3)', () => {
+  it('covers the simple channels + newsletter + instagram (llesca 3 + 3c)', () => {
     expect(Object.keys(CHANNEL_DESCRIPTORS).sort()).toEqual([
       'bluesky',
+      'instagram',
       'mastodon',
       'newsletter',
       'telegram',
@@ -49,10 +50,24 @@ describe('CHANNEL_DESCRIPTORS', () => {
     for (const d of Object.values(CHANNEL_DESCRIPTORS)) {
       expect('section1' in d).toBe(true) // null or { kind }
       expect(d.kpis).toBeTruthy()
-      expect(d.control).toBeTruthy()
+      // `control` is an object for channels whose matrix renders in the
+      // generic ControlSection, but null when a custom section owns it
+      // (instagram). The key must always be declared.
+      expect('control' in d).toBe(true)
       expect(d.analytics).toBeTruthy()
       expect(['exists', 'missing']).toContain(d.analytics.status)
     }
+  })
+
+  describe('instagram (3c — custom section)', () => {
+    const d = CHANNEL_DESCRIPTORS.instagram
+    it('is the section-1 instagram channel with bespoke (null) control/auth', () => {
+      expect(d.section1).toEqual({ kind: 'instagram' })
+      expect(d.control).toBeNull() // fase + story-cap + matrix live in InstagramSection
+      expect(d.auth).toBeNull() // credentials handled in InstagramSection
+      expect(d.switchField).toBe('instagram_actiu')
+      expect(d.platforms).toEqual(['instagram_feed', 'instagram_story'])
+    })
   })
 
   describe('newsletter', () => {

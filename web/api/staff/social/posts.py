@@ -760,3 +760,43 @@ def social_republicar(request: Request) -> Response:
             "post": _serialize(post),
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def social_metrics_summary(request: Request) -> Response:
+    """Per-platform engagement totals for the publications table.
+
+    Sums the LATEST `MetricaSocialPost` snapshot of every post, grouped
+    by `SocialPost.platform`. Read-only and additive: it never touches
+    the row list / `_serialize`, so the table query stays cheap. Returns
+    `{"per_platform": [{platform, n_posts, likes, replies, shares, reach,
+    impressions, clicks}, ...]}` sorted by platform. Posts with no metric
+    snapshot yet (freshly published, the daily cron hasn't run) simply
+    don't contribute."""
+    from collections import defaultdict
+
+    from analytics.models import MetricaSocialPost
+
+    fields = ("likes", "replies", "shares", "reach", "impressions", "clicks")
+
+    # Latest snapshot per post: ordering by (post, data) ascending means
+    # the last row written into the dict per post is its max-data one.
+    latest: dict[int, MetricaSocialPost] = {}
+    for m in MetricaSocialPost.objects.select_related("socialpost").order_by(
+        "socialpost_id", "data"
+    ):
+        latest[m.socialpost_id] = m
+
+    agg: dict[str, dict] = defaultdict(lambda: {"n_posts": 0, **{f: 0 for f in fields}})
+    for m in latest.values():
+        sp = m.socialpost
+        if sp is None:
+            continue
+        row = agg[sp.platform]
+        row["n_posts"] += 1
+        for f in fields:
+            row[f] += getattr(m, f) or 0
+
+    out = [{"platform": plat, **vals} for plat, vals in sorted(agg.items())]
+    return Response({"per_platform": out})

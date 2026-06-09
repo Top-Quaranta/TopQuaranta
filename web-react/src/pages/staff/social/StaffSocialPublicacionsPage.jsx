@@ -14,6 +14,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Field, Input, PageHeader, Select } from '../../../components/staff/StaffTable'
 import FilterPanel from '../../../components/staff/FilterPanel'
 import PublicacionsTable from './PublicacionsTable'
+import MetricsStrip from './MetricsStrip'
 
 const DEFAULTS = {
   canal: '',
@@ -163,6 +164,8 @@ export default function StaffSocialPublicacionsPage() {
           )}
         </FilterPanel>
       </div>
+
+      <MetricsStrip />
 
       <PublicacionsTable params={params} />
     </section>

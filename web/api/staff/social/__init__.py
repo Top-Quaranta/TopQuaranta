@@ -40,6 +40,7 @@ from .posts import (
     social_eliminar_remot,
     social_estat_canals,
     social_list,
+    social_metrics_summary,
     social_preview,
     social_preview_all,
     social_publicar_ara,
@@ -57,6 +58,7 @@ from .spotify import (
 
 __all__ = [
     "social_list",
+    "social_metrics_summary",
     "social_estat_canals",
     "social_credentials_save",
     "social_credentials_test",

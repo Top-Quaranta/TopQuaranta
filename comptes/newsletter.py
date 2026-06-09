@@ -57,7 +57,7 @@ def _unsub_url(user: Usuari) -> str:
 
 def _artistes_render(
     names: list[str],
-    artista_slug: str | None,
+    slugs: list[str | None],
     content: str,
     week: int,
     *,
@@ -65,11 +65,12 @@ def _artistes_render(
 ) -> tuple[list[dict], bool]:
     """Per-artist template rows mirroring `_join_artists_text`'s budget.
 
-    The principal (index 0) carries a `/artista/{slug}` URL when known;
-    collaborators carry `url=None` (bold without link until slice 2 adds
-    their slugs to the payload). Returns `(rows, truncated)` where
-    `truncated` signals an appended ellipsis for an over-long list (e.g.
-    a 39-collaborator track), keeping the card bounded like the legacy
+    `slugs` is parallel to `names` (principal at index 0, then
+    collaborators). Every artist with a known slug — principal AND
+    collaborators (Slice 2) — carries a `/artista/{slug}` URL; the rest
+    stay bold without link. Returns `(rows, truncated)` where `truncated`
+    signals an appended ellipsis for an over-long list (e.g. a
+    39-collaborator track), keeping the card bounded like the legacy
     joined string did."""
     if not names:
         return [{"nom": "—", "url": None}], False
@@ -84,11 +85,12 @@ def _artistes_render(
                 break
     rows = []
     for idx, nom in enumerate(shown):
-        url = None
-        if idx == 0 and artista_slug:
-            url = build_newsletter_url(
-                f"{SITE}/artista/{artista_slug}", f"{content}_art", week
-            )
+        aslug = slugs[idx] if idx < len(slugs) else None
+        url = (
+            build_newsletter_url(f"{SITE}/artista/{aslug}", f"{content}_art", week)
+            if aslug
+            else None
+        )
         rows.append({"nom": nom, "url": url})
     return rows, truncated
 
@@ -100,9 +102,10 @@ def _enrich_entry(e: dict, content: str, week: int, *, hero: bool, torna: bool) 
     slug = e.get("canco_slug")
     link_base = f"{SITE}/canco/{slug}" if slug else f"{SITE}/top"
     ensure_cover_downloaded(e.get("album_deezer_id"), e.get("cover_url"))
-    artistes_render, artistes_truncated = _artistes_render(
-        names, e.get("artista_slug"), content, week
-    )
+    slugs = e.get("artistes_slugs")
+    if slugs is None:  # back-compat with a pre-Slice-2 payload
+        slugs = [e.get("artista_slug")]
+    artistes_render, artistes_truncated = _artistes_render(names, slugs, content, week)
     return {
         **e,
         "artistes_display": _join_artists_text(names, max_chars=80),
@@ -182,11 +185,12 @@ def _name_map_from_entries(
     entries: list[dict], week: int
 ) -> list[tuple[str, str | None, str]]:
     """Canonical name -> (url, kind) map for the prose linkifier, built
-    from the top entries. Songs link to `/canco/{slug}`, principal
-    artists to `/artista/{slug}` (UTM-tagged like the rest); collaborator
-    names get `url=None` (bold without link until slice 2 adds their
-    slugs). Each canonical string appears once; the first entry that
-    introduces it (top position first) decides its url."""
+    from the top entries. Songs link to `/canco/{slug}`, and every artist
+    with a known slug — principal AND collaborators (Slice 2) — links to
+    `/artista/{slug}` (UTM-tagged like the rest); names without a slug get
+    `url=None` (bold without link). Each canonical string appears once;
+    the first entry that introduces it (top position first) decides its
+    url."""
     seen: set[str] = set()
     out: list[tuple[str, str | None, str]] = []
     for e in entries:
@@ -201,15 +205,18 @@ def _name_map_from_entries(
             out.append((cn, url, "canco"))
             seen.add(cn)
         names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
-        aslug = e.get("artista_slug")
+        slugs = e.get("artistes_slugs")
+        if slugs is None:  # back-compat with a pre-Slice-2 payload
+            slugs = [e.get("artista_slug")]
         for idx, nom in enumerate(names):
             if not nom or nom == "—" or nom in seen:
                 continue
-            url = None
-            if idx == 0 and aslug:
-                url = build_newsletter_url(
-                    f"{SITE}/artista/{aslug}", "prosa_artista", week
-                )
+            aslug = slugs[idx] if idx < len(slugs) else None
+            url = (
+                build_newsletter_url(f"{SITE}/artista/{aslug}", "prosa_artista", week)
+                if aslug
+                else None
+            )
             out.append((nom, url, "artista"))
             seen.add(nom)
     return out

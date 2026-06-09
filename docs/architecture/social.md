@@ -256,6 +256,27 @@ brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
 below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
 loud. PPCC byte-identical.
 
+## Feed redesign — editorial "Sèrie 7" (gated, additive)
+
+The three novetats feed slides (carousel cover, single-album slide, singles
+grid) have an alternate editorial layout in `social/feed_redesign.py`, driven
+by the measured token table `social/feed_design/feed-tokens.json` (source of
+truth) + `FEED-PIL-SPEC.md`. It is **off by default**, gated by
+`ConfiguracioGlobal.feed_redisseny_actiu` (additive boolean). `renderer.py`
+reads the flag once in `render_feed_novetats` and threads `redesign=` into
+`_feed_novetats_portada` / `_feed_album_slide` / `_feed_singles_slide`; when
+True each delegates to `feed_redesign.build_{cover,album,singles}`, else the
+legacy layout renders byte-for-byte.
+
+Scope is layout only: album selection, singles bin-packing, per-channel
+gating, idempotency and the Deezer cover sourcing/fallback contract
+(`cover_cache.fetch`) are untouched — only the cover-missing *tile* gets the
+new spec visual (territory `deep` fill + initial in `accent`). Territory
+palettes resolve via `feed_redesign.territori(code)` (DB code → JSON key;
+`CNO`→`nor`; aggregate/unknown → PPCC green). Rendering is deterministic
+(fixed grain seed). Font note: Bricolage Grotesque 500/700 roles currently
+render with the vendored 800 static until the two OFL weights are vendored.
+
 ## Static hosting
 
 Meta's IG media-fetcher rejects rendered images served through

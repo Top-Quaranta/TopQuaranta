@@ -141,14 +141,18 @@ sans, `@media` responsive + dark mode), no longer extends
 `email_base.html`. The `_trend_badge.html` partial renders the
 per-entry movement.
 
-**Name links (Slice 1, 2026-06-08).** Song titles render in italic and
-link to `/canco/{slug}`; artist names render in bold, and the **principal**
-artist links to `/artista/{slug}` (collaborators are bold without a link
-until Slice 2 adds their slugs to the social payload). In the cards/list
-this is data-driven: `_enrich_entry` emits `artistes_render`
-(`[{nom, url}]`, principal-only URL) + `artistes_truncated` (mirrors the
-legacy 80-char ellipsis budget so a 39-collaborator row stays bounded),
-rendered by the `_nl_artistes.html` partial. In the **editorial prose** a
+**Name links (Slice 1 2026-06-08; Slice 2 2026-06-09).** Song titles
+render in italic and link to `/canco/{slug}`; artist names render in bold,
+and **every artist with a known slug — principal AND collaborators —**
+links to `/artista/{slug}`. Slice 1 linked only the principal;
+Slice 2 added a parallel `artistes_slugs` list to the shared payload
+(`social/payload.py::build_top`, ADDITIVE — the social engine ignores it)
+so collaborators link too. In the cards/list this is data-driven:
+`_enrich_entry` reads `artistes_slugs` (back-compat fallback to
+`[artista_slug]`) and emits `artistes_render` (`[{nom, url}]`, one URL per
+artist with a slug) + `artistes_truncated` (mirrors the legacy 80-char
+ellipsis budget so a 39-collaborator row stays bounded), rendered by the
+`_nl_artistes.html` partial. In the **editorial prose** a
 deterministic post-processor `newsletter_linkify.linkify_narrative(html,
 name_map)` (NEVER an LLM) wraps the FIRST occurrence of each canonical
 name: songs `<em><a>`, artists `<strong><a>`/`<strong>`. Rules:

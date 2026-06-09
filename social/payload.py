@@ -108,10 +108,16 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
         # a single string (DEPRECATED — new code should use
         # `artistes_noms` and join via `_join_artists` / `_join_artists_text`).
         if canco and artista:
-            cols = [a.nom for a in canco.artistes_col_ordered()]
-            artistes_noms = [artista.nom, *cols]
+            col_objs = canco.artistes_col_ordered()
+            artistes_noms = [artista.nom, *[a.nom for a in col_objs]]
+            # Parallel to `artistes_noms` (same order: principal first,
+            # then collaborators). ADDITIVE — `artistes_noms` is untouched.
+            # Lets the newsletter link every collaborator to /artista/{slug}
+            # (Slice 2); the social engine ignores this field.
+            artistes_slugs = [artista.slug, *[a.slug for a in col_objs]]
         else:
             artistes_noms = ["—"]
+            artistes_slugs = [None]
         entries.append(
             {
                 "posicio": r.posicio,
@@ -119,6 +125,7 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 "canco_nom": canco.nom if canco else "—",
                 "canco_slug": canco.slug if canco else None,
                 "artistes_noms": artistes_noms,
+                "artistes_slugs": artistes_slugs,
                 "artista_nom": artista.nom if artista else "—",  # DEPRECATED
                 "artista_slug": artista.slug if artista else None,
                 # Principal-only URL kept for backward compatibility

@@ -32,6 +32,7 @@ import {
   TableCard,
 } from '../../../components/staff/StaffTable'
 import { CHANNEL_DESCRIPTORS } from './channelDescriptors'
+import MatriuCanalToggles from './MatriuCanalToggles'
 import PublicacionsTable from './PublicacionsTable'
 import NewsletterSection from './NewsletterSection'
 
@@ -40,13 +41,6 @@ const EFECTIU = {
   pausat_global: { tone: 'gray', label: 'Pausat pel mestre' },
   pausat_canal: { tone: 'red', label: 'Pausat (canal)' },
 }
-
-const TIPUS_ALL = [
-  { key: 'top_ppcc', label: 'Top global' },
-  { key: 'top_territorial', label: 'Top territorial' },
-  { key: 'nous_singles', label: 'Nous singles' },
-  { key: 'nous_albums', label: 'Nous àlbums' },
-]
 
 function fmtDate(iso) {
   if (!iso) return null
@@ -122,19 +116,10 @@ function ControlSection({ desc }) {
         Què publica
       </h2>
       <TableCard className="p-4 space-y-2">
-        <div className="flex flex-wrap gap-1.5">
-          {TIPUS_ALL.map((t) => {
-            const on = desc.control.tipus.includes(t.key)
-            return (
-              <Pill key={t.key} tone={on ? 'green' : 'gray'}>
-                {t.label}
-                {on ? '' : ' ✕'}
-              </Pill>
-            )
-          })}
-        </div>
+        <MatriuCanalToggles canal={desc.key} />
         <p className="text-[11px] text-tq-ink/60">
-          {desc.control.nota}. Derivat del codi; no editable en aquesta llesca.
+          {desc.control.nota}. Desmarcar atura la distribució d'eixe tipus per
+          aquest canal.
         </p>
       </TableCard>
     </div>

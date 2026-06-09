@@ -130,6 +130,34 @@ def slots_for(today: datetime.date) -> list[tuple[CalendarSlot, str]]:
     return out
 
 
+# The newsletter does NOT go through `CALENDARI` / `publicar_canal`: it is
+# sent on SUNDAY by its own `enviar_newsletter` cron
+# (deploy/cron.topquaranta: `0 10 * * 0`). This constant MUST stay in sync
+# with that cron line — it is the source of the matrix day indicator for
+# the newsletter channel.
+NEWSLETTER_PUBLISH_WEEKDAY = 6  # Python weekday(): Mon=0 … Sun=6
+
+
+def publish_weekdays_for(canal: str, tipus: str) -> list[int]:
+    """Weekday(s) (0=Mon … 6=Sun) a `(canal, tipus)` is PUBLISHED on,
+    derived from the real cron schedule. Read-only indicator source for the
+    distribution matrix — it does NOT gate publication (the calendar/cron
+    do that).
+
+    - Instagram + the push channels (mastodon/bluesky/telegram) follow
+      `CALENDARI`: a tipus publishes on the weekday(s) of its slot(s)
+      (top_territorial has two — rotatori A on Wednesday, B on Monday).
+    - The newsletter only sends `top_ppcc`, on Sunday (its own cron).
+    - Any (canal, tipus) the channel never publishes returns `[]` (the UI
+      renders an em-dash). No day is invented: an empty list is honest.
+    """
+    if canal == "newsletter":
+        if tipus == SocialPost.TIPUS_TOP_PPCC:
+            return [NEWSLETTER_PUBLISH_WEEKDAY]
+        return []
+    return sorted({s.weekday for s in CALENDARI if s.tipus == tipus})
+
+
 # Canonical helper lives in `music.dates` so non-social code can use
 # it. Keep this re-export so existing `from social.calendari
 # import tq_week_start` callers don't break.

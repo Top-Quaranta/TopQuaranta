@@ -129,8 +129,9 @@ consolidated-week selector + on-demand "Generate (engine)" + the shared
 email links). **Instagram** is also a first-class view at
 `/staff/social/instagram` (3c): its bespoke controls (credentials with
 test/clear + token TTL, and the "Què publica" matrix — the
-`MatriuCanalToggles` table with the per-cell weekday gate; the legacy
-distribution phase was removed 2026-06, and the story-cap knob
+`MatriuCanalToggles` table with the read-only calendar-derived day
+indicator; the legacy distribution phase was removed 2026-06, and the
+story-cap knob
 `story_max_cancons_ppcc` moved to /staff/configuracio 2026-06) live in a
 custom `InstagramSection` (the
 NewsletterSection pattern — the generic credentials/control slots stay
@@ -141,11 +142,15 @@ enrichment-coverage KPI from `spotify/estat`'s `enrichment_coverage`). The
 **distribution matrix** (third gate, `MatriuPublicacio`) is edited per
 channel, not in one central grid:
 `pages/staff/social/MatriuCanalToggles.jsx` (`canal` prop) renders only
-that channel's tipus toggles over `/staff/social/matriu/` (fetched whole,
-filtered client-side) + `/staff/social/matriu/toggle/`. It lives in each
-`ChannelView`'s "Què publica" section (mastodon/bluesky/telegram +
-newsletter) and in the Instagram section of the cockpit. An off cell
-renders inactive (never hidden); non-seeded combos paint a blank dash.
+that channel's tipus rows over `/staff/social/matriu/` (fetched whole,
+filtered client-side) + `/staff/social/matriu/toggle/`. Each row shows a
+**read-only day indicator** (`dies_publicacio`, derived from the
+calendar/cron — "Dissabte", "Dilluns i dimecres", "Diumenge" for the
+newsletter, "—" where N/A) and the editable `actiu` checkbox (the only
+control). It lives in each `ChannelView`'s "Què publica" section
+(mastodon/bluesky/telegram + newsletter) and in the Instagram section of
+the cockpit. An off cell renders inactive (never hidden); non-seeded
+combos paint a blank dash.
 Not to be confused with `/staff/publicacions` (community posts).
 
 ## Backend seam

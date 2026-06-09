@@ -171,12 +171,11 @@ class Command(BaseCommand):
         # of the master + per-channel switches checked at command entry).
         # The legacy Instagram-only "phase" rollout gate was removed
         # 2026-06 (prod was at fase 5 = everything on, so removal is
-        # neutral); the matrix `dia_setmana` now covers per-slot day
-        # scheduling for every channel uniformly. An off cell is recorded
-        # 'omès' so the slot shows inactive instead of vanishing.
-        if not MatriuPublicacio.pot_distribuir_avui(
-            "instagram", slot.tipus, today=timezone.localdate()
-        ):
+        # neutral). The per-slot day is fixed by the calendar (calendari.py),
+        # not the matrix — the matrix only gates on/off per (canal × tipus).
+        # An off cell is recorded 'omès' so the slot shows inactive instead
+        # of vanishing.
+        if not MatriuPublicacio.actiu_per("instagram", slot.tipus):
             self.stdout.write("  · matriu de distribució desactivada → omès")
             self._record_omes(slot, territori, setmana, motiu="matriu desactivada")
             return

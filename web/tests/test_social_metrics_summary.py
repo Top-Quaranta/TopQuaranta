@@ -79,6 +79,25 @@ def test_sums_across_posts_of_same_platform(staff_client):
 
 
 @pytest.mark.django_db
+def test_query_count_is_constant_no_n_plus_1(staff_client, django_assert_max_num_queries):
+    """The latest-per-post + group-by-platform aggregate is a single
+    metrics query (select_related on the post) + Python grouping. It must
+    NOT scale with the number of posts: a per-post N+1 over 10 posts would
+    blow past this ceiling."""
+    base = MONDAY
+    for i in range(10):
+        p = _post("mastodon", setmana=base + datetime.timedelta(days=7 * i))
+        _metric(p, base, likes=i, reach=i * 10)
+    # Measured constant at 7 (1 metrics aggregate + auth/permission); a
+    # per-post N+1 over 10 posts would be ~17, so 9 is the tripwire.
+    with django_assert_max_num_queries(9):
+        r = staff_client.get(URL)
+    assert r.status_code == 200
+    row = next(x for x in r.data["per_platform"] if x["platform"] == "mastodon")
+    assert row["n_posts"] == 10
+
+
+@pytest.mark.django_db
 def test_post_without_metrics_absent(staff_client):
     _post("newsletter")  # published but no snapshot yet
     r = staff_client.get(URL)

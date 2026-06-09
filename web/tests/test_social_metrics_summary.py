@@ -79,7 +79,9 @@ def test_sums_across_posts_of_same_platform(staff_client):
 
 
 @pytest.mark.django_db
-def test_query_count_is_constant_no_n_plus_1(staff_client, django_assert_max_num_queries):
+def test_query_count_is_constant_no_n_plus_1(
+    staff_client, django_assert_max_num_queries
+):
     """The latest-per-post + group-by-platform aggregate is a single
     metrics query (select_related on the post) + Python grouping. It must
     NOT scale with the number of posts: a per-post N+1 over 10 posts would

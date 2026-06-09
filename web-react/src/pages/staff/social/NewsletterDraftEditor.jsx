@@ -133,6 +133,25 @@ export default function NewsletterDraftEditor({ setmana = '', reloadToken = 0, o
     }
   }
 
+  // Additive Newsletter→Comunitat bridge: mirror the draft into a public
+  // Publicació. Gated server-side (409 if the flag is off); idempotent.
+  async function publicarComunitat() {
+    if (!confirm('Publicar aquesta newsletter com a publicació pública a la comunitat?'))
+      return
+    setBusy(true)
+    try {
+      const d = await api.post(`/staff/newsletter/esborrany/publicar-comunitat/${qs}`, {})
+      setErr('')
+      reload()
+      onChanged && onChanged()
+      alert(`Publicada a la comunitat (publicació #${d.publicacio_id}).`)
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -234,6 +253,22 @@ export default function NewsletterDraftEditor({ setmana = '', reloadToken = 0, o
           </button>
         </div>
       )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={publicarComunitat}
+          disabled={busy || !!draft.publicacio_id}
+          className="px-3 py-1.5 rounded-md text-sm font-semibold border border-tq-ink/20 hover:bg-gray-100 disabled:opacity-50"
+        >
+          {draft.publicacio_id
+            ? `Ja a la comunitat (#${draft.publicacio_id})`
+            : 'Publica a la comunitat'}
+        </button>
+        <span className="text-xs text-tq-ink/60">
+          Mirall additiu · gated per ConfiguracioGlobal (pont desactivat → 409)
+        </span>
+      </div>
 
       <section>
         <h3 className="text-sm font-bold font-display mb-1">Top amb què sortirà</h3>

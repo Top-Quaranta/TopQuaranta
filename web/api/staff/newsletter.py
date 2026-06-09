@@ -74,6 +74,10 @@ def _draft_payload(draft: NewsletterDraft) -> dict:
         "entries": entries,
         # So the UI can warn if the channel won't actually send.
         "newsletter_actiu": cfg.pot_publicar("newsletter"),
+        # Newsletter→Comunitat bridge: id of the mirrored public Publicació
+        # (null until staff publishes it). Drives the editor's button state.
+        "publicacio_id": draft.publicacio_id,
+        "pont_comunitat_actiu": cfg.newsletter_publicacio_pont_actiu,
     }
 
 
@@ -129,6 +133,48 @@ def esborrany_cancellar(request: Request) -> Response:
     draft.estat = NewsletterDraft.ESTAT_CANCELLAT
     draft.save(update_fields=["estat", "updated_at"])
     return Response(_draft_payload(draft))
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def esborrany_publicar_comunitat(request: Request) -> Response:
+    """Mirror the draft into a PUBLIC community Publicació (additive bridge).
+
+    Gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`: 409 while
+    off. Idempotent (returns the existing post on re-call). Creates ONLY a
+    Publicació row — no email, no distribution, no newsletter send.
+    """
+    from comptes import community_bridge
+
+    setmana = _resolve_setmana(request)
+    if setmana is None:
+        return Response({"error": "setmana invàlida o cap top consolidat"}, status=400)
+    draft = NewsletterDraft.objects.filter(
+        tipus=TIPUS, territori=TERRITORI, setmana=setmana
+    ).first()
+    if draft is None:
+        return Response({"error": f"cap esborrany per a {setmana}"}, status=404)
+    try:
+        pub = community_bridge.publicar_draft_a_comunitat(draft)
+    except community_bridge.PontDesactivat:
+        return Response(
+            {
+                "error": "pont Newsletter→Comunitat desactivat "
+                "(newsletter_publicacio_pont_actiu=False)"
+            },
+            status=409,
+        )
+    except community_bridge.AdminInaccessible:
+        return Response({"error": "usuari admin no disponible"}, status=500)
+    return Response(
+        {
+            "publicacio_id": pub.id,
+            "estat": pub.estat,
+            "visibilitat": pub.visibilitat,
+            "titol": pub.titol,
+        },
+        status=200,
+    )
 
 
 @api_view(["POST"])

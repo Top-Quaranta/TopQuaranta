@@ -371,6 +371,11 @@ urlpatterns = [
         name="staff_newsletter_esborrany_generar",
     ),
     path(
+        "staff/newsletter/esborrany/publicar-comunitat/",
+        staff_views.newsletter_esborrany_publicar_comunitat,
+        name="staff_newsletter_esborrany_publicar_comunitat",
+    ),
+    path(
         "staff/newsletter/setmanes/",
         staff_views.newsletter_setmanes,
         name="staff_newsletter_setmanes",

@@ -658,6 +658,23 @@ class NewsletterDraft(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     enviat_at = models.DateTimeField(null=True, blank=True)
 
+    # ── Newsletter → Publicació bridge (additive, gated) ────────────
+    # When staff publishes a draft as a public community post, this links
+    # the draft to the created `Publicacio` so the action is idempotent
+    # (a draft maps to at most one community post). Nullable: the vast
+    # majority of drafts are never mirrored to the feed. Gated by
+    # `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`. SET_NULL so
+    # deleting a Publicació never cascades to (or deletes) the draft.
+    publicacio = models.OneToOneField(
+        "comptes.Publicacio",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="newsletter_origen",
+        help_text="Publicació pública creada a partir d'aquest esborrany "
+        "(pont Newsletter→Comunitat). Null si mai s'ha publicat al feed.",
+    )
+
     class Meta:
         ordering = ["-setmana"]
         verbose_name = "Esborrany de newsletter"

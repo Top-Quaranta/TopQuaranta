@@ -181,7 +181,9 @@ class Command(BaseCommand):
         # checked at command entry). An off (instagram × tipus) cell is
         # recorded 'omès' so the slot shows inactive in the publications
         # table instead of vanishing. The phase gate above is untouched.
-        if not MatriuPublicacio.actiu_per("instagram", slot.tipus):
+        if not MatriuPublicacio.pot_distribuir_avui(
+            "instagram", slot.tipus, today=timezone.localdate()
+        ):
             self.stdout.write("  · matriu de distribució desactivada → omès")
             self._record_omes(slot, territori, setmana, motiu="matriu desactivada")
             return

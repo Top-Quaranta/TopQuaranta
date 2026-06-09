@@ -255,7 +255,8 @@ def test_toggle_writes_staff_audit(db, django_user_model):
     assert row.metadata.get("camp") == "matriu_distribucio"
     assert row.metadata.get("canal") == "newsletter"
     assert row.metadata.get("tipus") == "top_ppcc"
-    assert row.metadata.get("nou") is False
+    # `nou`/`anterior` now carry both the switch and the weekday (5a).
+    assert row.metadata.get("nou") == {"actiu": False, "dia_setmana": None}
 
 
 def test_matrix_excludes_web_and_rss(cfg_all_on):

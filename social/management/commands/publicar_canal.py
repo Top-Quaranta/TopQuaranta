@@ -134,7 +134,9 @@ class Command(BaseCommand):
         # Distribution-matrix gate (third gate; master + per-channel were
         # checked at command entry). Off (channel × tipus) → omès, shown
         # inactive in the publications table.
-        if not MatriuPublicacio.actiu_per(channel, slot.tipus):
+        if not MatriuPublicacio.pot_distribuir_avui(
+            channel, slot.tipus, today=timezone.localdate()
+        ):
             self._mark(post, SocialPost.STATUS_OMES, error_msg="matriu desactivada")
             self.stdout.write("  · matriu de distribució desactivada → omès")
             return

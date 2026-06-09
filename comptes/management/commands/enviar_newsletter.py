@@ -29,7 +29,7 @@ from django.utils import timezone
 from comptes.models import NewsletterDraft
 from comptes.newsletter import send_top_newsletter
 from music.audit import log_staff_action
-from ranking.models import ConfiguracioGlobal, TopSetmanal
+from ranking.models import ConfiguracioGlobal, MatriuPublicacio, TopSetmanal
 from social.models import SocialPost
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,17 @@ class Command(BaseCommand):
                 self.stdout.write("Kill switch tancat (newsletter_actiu=False). Surt.")
             else:
                 self.stdout.write("Matriu desactivada (newsletter × top_ppcc). Surt.")
+            return
+
+        # Optional per-cell weekday gate (matrix `dia_setmana`). NULL =
+        # no restriction (default), so this is neutral until staff pins a
+        # day. Separate from the block above so the messaging stays clear.
+        if not dry_run and not MatriuPublicacio.pot_distribuir_avui(
+            "newsletter", TIPUS, today=timezone.localdate()
+        ):
+            self.stdout.write(
+                "Matriu: avui no és el dia configurat (newsletter × top_ppcc). Surt."
+            )
             return
 
         setmana = TopSetmanal.objects.filter(territori=TERRITORI).aggregate(

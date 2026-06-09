@@ -462,6 +462,12 @@ class MatriuPublicacio(models.Model):
     # avoid a cross-app constraint; the seed only inserts real combos.
     tipus = models.CharField(max_length=20)
     actiu = models.BooleanField(default=True)
+    # Optional weekday restriction (0=Monday … 6=Sunday, Python weekday()).
+    # NULL = no restriction = the pre-2026-06 behaviour (publish whenever
+    # the cron fires and the cell is active). When set, the publisher
+    # additionally requires today to be this weekday. Default NULL keeps
+    # distribution byte-identical to before the column existed.
+    dia_setmana = models.IntegerField(null=True, blank=True, validators=_DAY_RANGE)
 
     class Meta:
         verbose_name = "Matriu de publicació"
@@ -486,3 +492,26 @@ class MatriuPublicacio(models.Model):
         BLOCKS via an explicit `actiu=False` row."""
         row = cls.objects.filter(canal=canal, tipus=tipus).only("actiu").first()
         return True if row is None else row.actiu
+
+    @classmethod
+    def pot_distribuir_avui(cls, canal: str, tipus: str, *, today) -> bool:
+        """`actiu_per` AND the optional weekday gate.
+
+        True iff the cell is active AND (no `dia_setmana` restriction OR
+        `today` is the configured weekday). A MISSING row is fail-open
+        (True), identical to `actiu_per`. `today` is a `date`; its
+        `weekday()` (0=Mon … 6=Sun) is compared to `dia_setmana`. This is
+        the gate the publishers call — `actiu_per` stays the pure actiu
+        bit for the matrix UI/analytics."""
+        row = (
+            cls.objects.filter(canal=canal, tipus=tipus)
+            .only("actiu", "dia_setmana")
+            .first()
+        )
+        if row is None:
+            return True
+        if not row.actiu:
+            return False
+        if row.dia_setmana is None:
+            return True
+        return today.weekday() == row.dia_setmana

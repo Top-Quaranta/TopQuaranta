@@ -132,6 +132,21 @@ off ⇒ the Sunday send does not run). An off cell records the slot as
 vanishing. Staff edit it via
 `/staff/social/matriu/` (GET) + `/staff/social/matriu/toggle/` (POST).
 
+**Per-cell weekday gate (`dia_setmana`, 5a 2026-06).** Each matrix cell
+also carries an optional `dia_setmana` (0=Mon … 6=Sun, NULL = no
+restriction). The publishers call
+`MatriuPublicacio.pot_distribuir_avui(canal, tipus, today=…)` =
+`actiu AND (dia_setmana is None OR today.weekday() == dia_setmana)`
+(`actiu_per` stays the pure switch for the UI/analytics). NULL is the
+default, so this is byte-identical to before until staff pin a day. The
+toggle endpoint accepts `dia_setmana` (int 0-6 or null) alongside
+`actiu`; a day edit never flips the switch. The matrix GET adds `dies`
+(weekday labels) + per-cell `dia_setmana`. The shared
+`MatriuCanalToggles` component renders one table per channel (rows =
+tipus, columns = dia dropdown + actiu checkbox), identical for every
+channel. Audit metadata `anterior`/`nou` now carry both `actiu` and
+`dia_setmana`.
+
 Staff controls (`web/api/staff/social/controls.py::social_toggle`):
 `channel=global` writes `distribucio_activa`; `channel=<name>` writes the
 per-channel switch. `channel` is required (no default — the old

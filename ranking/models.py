@@ -196,7 +196,7 @@ class ConfiguracioGlobal(models.Model):
         help_text=(
             "Prompt de veu editorial per a la rutina de newsletter. "
             "Servit dins el brief; editable des de Configuració. "
-            "Buit = la rutina usa el seu propi default."
+            "Buit = la rutina no genera res."
         ),
     )
 

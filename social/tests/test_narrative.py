@@ -68,6 +68,20 @@ def _monday(y, m, d):
     return datetime.date(y, m, d)
 
 
+def _recent_monday():
+    """A Monday inside the registry recency window.
+
+    `registry.filter_unused` keeps usages with `setmana >= today - 4
+    weeks`. Registry tests that `mark_used` then assert the phrase is
+    filtered MUST use a date inside that window — a fixed past date
+    silently falls out of the window as real time advances (the
+    2026-06-09 time-bomb where `_monday(2026, 5, 11)` crossed the
+    4-week cutoff and the assertion flipped). Relative-to-today keeps
+    them robust."""
+    today = datetime.date.today()
+    return today - datetime.timedelta(days=today.weekday())
+
+
 def _make_canco(nom, artista, album, slug, data_llancament=None):
     return Canco.objects.create(
         nom=nom,
@@ -947,7 +961,7 @@ def test_composer_top5_excludes_hero_canco():
 
 @pytest.mark.django_db
 def test_registry_marks_and_filters():
-    setmana = _monday(2026, 5, 11)
+    setmana = _recent_monday()  # inside the 4-week recency window
     bank_size = len(HERO["a2_streak"]["long"])
     fresh_before = filter_unused("a2_streak", "long", "PPCC", "mastodon")
     assert len(fresh_before) == bank_size
@@ -963,7 +977,7 @@ def test_registry_marks_and_filters():
 
 @pytest.mark.django_db
 def test_registry_isolation_across_channels_and_territoris():
-    setmana = _monday(2026, 5, 11)
+    setmana = _recent_monday()  # inside the 4-week recency window
     pid = phrase_id("hero", "a2_streak", 0, "long")
     mark_used(pid, "PPCC", setmana, "mastodon")
     # Same channel, different territori → unused.

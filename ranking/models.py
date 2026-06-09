@@ -141,6 +141,18 @@ class ConfiguracioGlobal(models.Model):
         "si multiplicador × mediana queda per sota, s'usa aquest terra. "
         "També és el genoll de seguretat quan encara no hi ha historial.",
     )
+    # The population the median is taken over: the top-N head of the
+    # territori's rolling chart (NOT the whole top — the near-floor tail
+    # would drag the median down and compress ordinary hits). Configurable
+    # so the base isn't hardcoded; default 10 reproduces the recommended
+    # "median of the top ~10" behaviour. Range 1-40 (the top caps at 40).
+    soft_cap_base_top_n = models.IntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(40)],
+        help_text="Població per a la mediana del genoll: el cap top-N del "
+        "top rodant del territori (NO tot el top — la cua arrossegaria la "
+        "mediana avall). 10 → mediana del top ~10. Rang 1-40.",
+    )
 
     # ── Master distribution switch (2026-06-07) ─────────────────────
     # The REAL global pause: gates every channel via `pot_publicar`.
@@ -256,10 +268,9 @@ class ConfiguracioGlobal(models.Model):
         (`distribucio_activa`) AND the channel's own `*_actiu`.
 
         Does NOT consider the per-(canal × tipus) matrix — that's the
-        third gate (`MatriuPublicacio`, incl. its `dia_setmana` weekday
-        restriction), applied separately in the publishers. Single gate
-        shared by every publisher so the master truly stops all six
-        channels."""
+        third gate (`MatriuPublicacio.actiu_per`), applied separately in
+        the publishers. Single gate shared by every publisher so the
+        master truly stops all six channels."""
         field = self.CHANNEL_SWITCH_FIELDS.get(canal)
         if field is None:
             raise ValueError(f"unknown canal {canal!r}")

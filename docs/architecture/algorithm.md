@@ -32,8 +32,9 @@ For each territori the algorithm looks at:
    - `min_cancons_ranking_propi` (default 20) — optional-territori
      threshold.
    - `soft_cap_actiu` (default **False**), `soft_cap_multiplicador`
-     (default **3**), `soft_cap_floor_escoltes` (default **500**) — the
-     adaptive outlier soft-cap (§2.1bis).
+     (default **3**), `soft_cap_floor_escoltes` (default **500**),
+     `soft_cap_base_top_n` (default **10**) — the adaptive outlier
+     soft-cap (§2.1bis). All four are editable from /staff/configuracio.
 
 ---
 
@@ -120,10 +121,12 @@ K_territori = max(soft_cap_floor_escoltes,
 ```
 
 - **Població de la mediana**: les escoltes (`TopSetmanal.weekly_plays`) de
-  les posicions ≤ `_SOFT_CAP_TOP_N` (10) sobre les últimes
-  `_SOFT_CAP_WINDOW_WEEKS` (10) setmanes. S'usa el cap de la llista, no el
-  top sencer: la cua arran de `min_escoltes_top` abaixaria la mediana i
-  comprimiria hits ordinaris.
+  les posicions ≤ `soft_cap_base_top_n` (camp config, default 10) sobre
+  les últimes `_SOFT_CAP_WINDOW_WEEKS` (10) setmanes. S'usa el cap de la
+  llista, no el top sencer: la cua arran de `min_escoltes_top` abaixaria
+  la mediana i comprimiria hits ordinaris. La base és editable (no
+  hardcodejada) perquè staff pugui afinar quanta llista defineix el
+  "charting típic".
 - **Multiplicador** (`soft_cap_multiplicador`, default 3): a partir de
   quantes vegades el charting típic del territori es considera outlier.
 - **Terra** (`soft_cap_floor_escoltes`, default 500): genoll mínim. Protegeix

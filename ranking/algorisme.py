@@ -579,12 +579,13 @@ def _soft_cap_knee(
         return None
     floor = float(cfg.soft_cap_floor_escoltes or 0)
     multiplicador = float(cfg.soft_cap_multiplicador or 0)
+    top_n = int(cfg.soft_cap_base_top_n or _SOFT_CAP_TOP_N)
     window_start = today - timedelta(weeks=_SOFT_CAP_WINDOW_WEEKS)
     plays = list(
         TopSetmanal.objects.filter(
             territori=territori,
             setmana__gte=window_start,
-            posicio__lte=_SOFT_CAP_TOP_N,
+            posicio__lte=top_n,
             weekly_plays__isnull=False,
         ).values_list("weekly_plays", flat=True)
     )

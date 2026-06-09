@@ -4,8 +4,10 @@
  * Distribution cockpit (house kit). Shows:
  *  - The master distribution switch + the six-channel grid (effective
  *    state + last send; links to the per-channel views).
- *  - Instagram config (credentials, phase, story cap, token TTL).
  *  - The week calendar + "Generar totes les slides" dry-run button.
+ *
+ * Instagram config (credentials, phase, story cap, token TTL, matrix)
+ * moved to its own ChannelView at /staff/social/instagram (3c).
  *
  * The publications list (search, filters, links, lifecycle actions) and
  * the slide gallery moved to /staff/social/publicacions
@@ -14,15 +16,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
-import MatriuCanalToggles from './social/MatriuCanalToggles'
-import {
-  Btn,
-  Input,
-  PageHeader,
-  Pill,
-  Select,
-  TableCard,
-} from '../../components/staff/StaffTable'
+import { Btn, PageHeader, Pill, TableCard } from '../../components/staff/StaffTable'
 
 // Effective per-channel state from /staff/social/estat-canals/, mapped
 // to house Pill tones (semantic, token-driven — no raw palette).
@@ -37,7 +31,7 @@ const EFECTIU_PILL = {
 // house-style page when it has one (slice 1: the three simple
 // channels) — the rest keep an inline toggle until later slices.
 const CHANNELS = [
-  { key: 'instagram',  label: 'Instagram',  field: 'instagram_actiu',  view: null },
+  { key: 'instagram',  label: 'Instagram',  field: 'instagram_actiu',  view: '/staff/social/instagram' },
   { key: 'mastodon',   label: 'Mastodon',   field: 'mastodon_actiu',   view: '/staff/social/mastodon' },
   { key: 'bluesky',    label: 'Bluesky',    field: 'bluesky_actiu',    view: '/staff/social/bluesky' },
   { key: 'telegram',   label: 'Telegram',   field: 'telegram_actiu',   view: '/staff/social/telegram' },
@@ -59,10 +53,6 @@ export default function StaffSocialPage() {
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
   const [output, setOutput] = useState('')
-  // Credentials form local state — never pre-filled with the existing
-  // token (we only ever show first/last 4 chars of what's already saved).
-  const [tokenDraft, setTokenDraft] = useState('')
-  const [userIdDraft, setUserIdDraft] = useState('')
 
   // Per-channel honest state (effective state + last send) from the
   // dedicated endpoint, alongside the main social_list payload.
@@ -77,13 +67,7 @@ export default function StaffSocialPage() {
   useEffect(() => { reload() }, [])
 
   if (!data) return <p className="p-6">Carregant…</p>
-  const { config, credentials, calendari } = data
-
-  const tokenTone =
-    config.token_days_left == null  ? 'bg-gray-200 text-gray-700' :
-    config.token_days_left <  7      ? 'bg-red-100 text-red-900' :
-    config.token_days_left <  21     ? 'bg-yellow-100 text-yellow-900' :
-                                       'bg-emerald-100 text-emerald-900'
+  const { config, calendari } = data
 
   // Master distribution switch (distribucio_activa). Gates ALL six
   // channels — the real global pause (replaces the old "Kill switch"
@@ -100,17 +84,6 @@ export default function StaffSocialPage() {
       await api.post('/staff/social/toggle/', { channel: 'global', actiu: next })
       await reload()
     } finally { setBusy(false) }
-  }
-
-  async function setFase(n) {
-    if (!confirm(`Passar a fase ${n}?`)) return
-    await api.post('/staff/social/fase/', { fase: n })
-    await reload()
-  }
-
-  async function setStoryCap(n) {
-    await api.post('/staff/social/story-cap/', { n })
-    await reload()
   }
 
   async function previewAll() {
@@ -132,48 +105,6 @@ export default function StaffSocialPage() {
       })
     } catch (e) {
       setOutput(`✖ Error: ${e.payload?.error || e.message || e}\n\n${e.payload?.output || ''}`)
-    } finally { setBusy(false) }
-  }
-
-  async function saveCredentials() {
-    if (!tokenDraft.trim()) {
-      alert('Enganxa el token.')
-      return
-    }
-    setBusy(true)
-    try {
-      const res = await api.post('/staff/social/credentials/', {
-        access_token: tokenDraft.trim(),
-        // Optional override; backend resolves this from the token if empty.
-        instagram_user_id: userIdDraft.trim(),
-      })
-      setTokenDraft(''); setUserIdDraft('')
-      await reload()
-      alert(
-        `Credencials desades. Compte detectat: @${res.resolved_username || '?'} ` +
-        `(ID ${res.resolved_user_id}). Comprova-les amb "Provar token".`
-      )
-    } catch (e) {
-      alert(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-
-  async function testCredentials() {
-    setBusy(true); setOutput('')
-    try {
-      const res = await api.post('/staff/social/credentials/test/')
-      setOutput(JSON.stringify(res, null, 2))
-    } catch (e) {
-      setOutput(`Error: ${e.payload?.error || e.message}`)
-    } finally { setBusy(false) }
-  }
-
-  async function clearCredentials() {
-    if (!confirm('Esborrar les credencials d\'Instagram desades? Es tornarà a mode DRY-RUN.')) return
-    setBusy(true)
-    try {
-      await api.post('/staff/social/credentials/clear/')
-      await reload()
     } finally { setBusy(false) }
   }
 
@@ -320,172 +251,6 @@ export default function StaffSocialPage() {
           slices 2-4 move these out into their own house-style views. */}
       <div className="bg-white text-tq-ink rounded-lg shadow-md p-4 md:p-6 space-y-6">
 
-      {/* ── Credentials card ──────────────────────────────────── */}
-      <div className={
-        'rounded-md p-4 border ' +
-        (credentials.configured
-          ? 'border-emerald-300 bg-emerald-50'
-          : 'border-yellow-300 bg-yellow-50')
-      }>
-        <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1">
-          Credencials Instagram
-        </p>
-        {credentials.configured ? (
-          <>
-            <p className="text-sm">
-              <strong>Configurades</strong> · Token{' '}
-              <code className="bg-white px-1.5 py-0.5 rounded">
-                {credentials.token_masked}
-              </code>{' '}
-              · IG user ID <code className="bg-white px-1.5 py-0.5 rounded">
-                {credentials.instagram_user_id}
-              </code>
-              {' '}· Origen <code>{credentials.source}</code>
-              {credentials.expires_at && <> · Caduca {credentials.expires_at.slice(0, 10)}</>}
-              {credentials.updated_by && <> · Desat per <strong>{credentials.updated_by}</strong></>}
-            </p>
-            <div className="flex gap-2 mt-3">
-              <button
-                type="button"
-                onClick={testCredentials}
-                disabled={busy}
-                className="px-3 py-1.5 bg-tq-ink text-tq-yellow rounded text-xs font-semibold hover:bg-tq-ink/90"
-              >
-                Provar token (read-only)
-              </button>
-              <button
-                type="button"
-                onClick={clearCredentials}
-                disabled={busy}
-                className="px-3 py-1.5 bg-red-700 text-white rounded text-xs font-semibold hover:bg-red-800"
-              >
-                Esborrar credencials
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm">
-            <strong>Sense credencials.</strong> Genera un token al
-            developers.facebook.com (Instagram → API setup → Generate token)
-            i enganxa'l aquí sota.
-          </p>
-        )}
-
-        {/* Form to set / replace credentials */}
-        <details className="mt-3">
-          <summary className="text-xs cursor-pointer font-semibold text-tq-ink/70">
-            {credentials.configured ? 'Substituir credencials…' : 'Afegir credencials…'}
-          </summary>
-          <div className="mt-2 space-y-2">
-            <label className="block text-xs">
-              <span className="block mb-1 font-semibold">Long-lived access token</span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={tokenDraft}
-                onChange={e => setTokenDraft(e.target.value)}
-                placeholder="IGAA..."
-                className="w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
-              />
-              <span className="block text-[10px] text-tq-ink/75 mt-1">
-                El token es genera a developers.facebook.com →
-                Instagram → API setup → Generate token.
-              </span>
-            </label>
-            <details className="text-xs">
-              <summary className="cursor-pointer text-tq-ink/70">
-                Override manual del Instagram user ID (rar; només si la
-                detecció automàtica no funciona)
-              </summary>
-              <input
-                type="text"
-                value={userIdDraft}
-                onChange={e => setUserIdDraft(e.target.value)}
-                placeholder="178…"
-                className="mt-1 w-full px-2 py-1 border border-gray-300 rounded text-xs font-mono"
-              />
-            </details>
-          </div>
-          <button
-            type="button"
-            onClick={saveCredentials}
-            disabled={busy || !tokenDraft}
-            className="mt-2 px-3 py-1.5 bg-tq-yellow text-tq-ink rounded text-xs font-semibold hover:bg-tq-yellow-deep hover:text-white disabled:opacity-50"
-          >
-            Desar
-          </button>
-          <p className="text-[10px] text-tq-ink/75 mt-1">
-            En desar, el backend confirma el token amb una crida a la
-            Graph API i extreu el teu Instagram user ID
-            automàticament. El token només es desa al servidor (fila
-            singleton <code>InstagramAuth</code>); mai no es mostra
-            sencer després.
-          </p>
-        </details>
-      </div>
-
-      {/* ── Config controls ───────────────────────────────────── */}
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Fase distribució (només Instagram)</p>
-          <div className="flex gap-1 mt-2">
-            {[1, 2, 3, 4, 5].map(n => (
-              <button
-                key={n}
-                type="button"
-                disabled={busy}
-                onClick={() => setFase(n)}
-                className={
-                  'px-3 py-1 rounded text-sm font-semibold ' +
-                  (config.fase_distribucio === n
-                    ? 'bg-tq-yellow text-tq-ink'
-                    : 'bg-gray-100 text-tq-ink hover:bg-gray-200')
-                }
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          <p className="text-[10px] text-tq-ink/75 mt-1">
-            1=dissabte · 2=+dimecres · 3=+dilluns · 4=+divendres · 5=+dimarts
-          </p>
-        </div>
-
-        <div className="p-3 border rounded-md">
-          <p className="text-[10px] uppercase tracking-widest text-tq-ink/75">Token Instagram</p>
-          <span className={'inline-block mt-2 px-2 py-0.5 rounded text-xs font-semibold ' + tokenTone}>
-            {config.token_days_left == null ? 'No configurat' :
-             `${config.token_days_left} dies fins caducar`}
-          </span>
-        </div>
-      </div>
-
-      <div className="p-3 border rounded-md max-w-md">
-        <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-1">
-          Story cap Global (cançons)
-        </p>
-        <Select aria-label="Story cap Global (cançons)" value={config.story_max_cancons_ppcc}
-          onChange={e => setStoryCap(parseInt(e.target.value, 10))}
-        >
-          {[5, 10, 15, 20, 30, 40].map(n => <option key={n} value={n}>{n} stories</option>)}
-        </Select>
-        <p className="text-[10px] text-tq-ink/75 mt-1">
-          Si la story completion rate cau per sota del 25 % al story #N,
-          baixa aquí a N.
-        </p>
-      </div>
-
-      {/* ── Què publica (matriu de distribució, Instagram) ─────── */}
-      <div className="bg-white text-tq-ink rounded-lg p-4 mb-4">
-        <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-2">
-          Què publica (Instagram)
-        </p>
-        <MatriuCanalToggles canal="instagram" />
-        <p className="text-[11px] text-tq-ink/60 mt-2">
-          Desmarcar atura la distribució d'eixe tipus a Instagram (porta
-          addicional sobre la fase).
-        </p>
-      </div>
 
       {/* Channels not yet migrated to their own view (Mastodon,
           Bluesky and Telegram now live under /staff/social/<canal> via

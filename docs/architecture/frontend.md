@@ -91,9 +91,10 @@ auth seam; see the file's docstring for the rationale.
 
 The **distribution area** under `/staff/social` is being split from a
 single monolithic page into homogeneous house-style views. `/staff/social`
-is the cockpit (master switch + the six-channel grid); the simple
-channels have their own page at `/staff/social/<canal>` (`mastodon`,
-`bluesky`, `telegram`), all sharing one `pages/staff/social/ChannelView.jsx`
+is the cockpit (master switch + the six-channel grid); most
+channels have their own page at `/staff/social/<canal>` (`instagram`,
+`mastodon`, `bluesky`, `telegram`, `newsletter`), all sharing one
+`pages/staff/social/ChannelView.jsx`
 template that paints from `channelDescriptors.jsx` — adding a channel or
 a credential field means extending the descriptor, not writing a new
 page. The **unified publications table** lives at
@@ -114,9 +115,14 @@ instance: a first-class view at `/staff/social/newsletter` whose Section
 consolidated-week selector + on-demand "Generate (engine)" + the shared
 `NewsletterDraftEditor` (extracted from the legacy
 `/staff/social/esborrany` page, now a thin wrapper kept for the cron
-email links). Instagram and RSS are still managed in-page on the cockpit
-(which keeps the week calendar + slide-render button); Spotify stays on
-its own page for now (whose header carries a catalog-wide
+email links). **Instagram** is also a first-class view at
+`/staff/social/instagram` (3c): its bespoke controls (credentials with
+test/clear + token TTL, the distribution phase, the story cap, and the
+"Què publica" matrix) live in a custom `InstagramSection` (the
+NewsletterSection pattern — the generic credentials/control slots stay
+null so they don't double-render). RSS is still managed in-page on the
+cockpit, which keeps the transversal week calendar + slide-render button;
+Spotify stays on its own page (whose header carries a catalog-wide
 enrichment-coverage KPI from `spotify/estat`'s `enrichment_coverage`). The
 **distribution matrix** (third gate, `MatriuPublicacio`) is edited per
 channel, not in one central grid:

@@ -194,20 +194,19 @@ not retried). The `/search` queue and `enriquir_spotify_rebuigs` both exclude
 `LOCKED_STATUSES`. Fill-when-empty only; `spotify_url=""` clears to
 `not_attempted`.
 
-Source ordering inside Process B (FASE 0 "opció C compost") with a
-**pending equity floor** (2026-06-02):
-  1. Pending Cançons (`verificada=False, activa=True`) ordered by
-     `ml_confianca desc`, NULLs last — given a RESERVED floor of the
-     run's slots (`--pending-floor-frac`, default 0.5).
-  2. Public Cançons (`verificada=True, activa=True`) ordered by the
-     latest `SenyalDiari.lastfm_playcount desc`, NULLs last — fill the
-     rest.
-If either pool underfills, the leftover spills to the other (pending
-first); the batch is processed pending-first so the reserved floor
-survives a mid-run abort. Without the floor, pending starved behind the
-verified backlog (audit 2026-06-02: 1.5 k verified `not_attempted`
-ahead of ~290 pending → pending got 0 slots/run, so the no_verificades
-playlists stayed ~17 % covered).
+Source ordering inside Process B is **priority-tiered** (2026-06,
+replacing the earlier pending equity floor). Tiers are concatenated,
+deduped, truncated at `--limit`, so a charting song never waits behind
+the backlog: (1) current public top (latest `TopSetmanal`, any
+territori); (2) provisional top (`TopProvisional`); (3) pending
+(`verificada=False, activa=True`) WITH `ml_confianca`, desc; (4) pending
+WITHOUT `ml_confianca`, oldest first; (5) verified backlog
+(`verificada=True`) by latest `SenyalDiari.lastfm_playcount desc`. The
+pending tiers keep the **caducitat guard** (the 04:00 purge only sweeps
+`verificada=False`); tiers 1-2 are current-chart and tier 5 verified, so
+caducat pending is excluded from every tier and never selected.
+`--pending-floor-frac` is kept for back-compat but no longer alters
+selection (the floor still let a top song wait behind the backlog).
 
 Candidate **visibility is a LEFT JOIN** on `SpotifyMetadata`: a Canço
 with no row has never been attempted, so it counts exactly like
@@ -217,9 +216,10 @@ backfill (migration 0080) had no row and were invisible to the
 inner-join candidate query. `isrc` must be non-NULL and non-empty.
 
 Flags:
-  * `--limit N` caps per-run work (default 200; the cron uses 50).
-  * `--throttle FLOAT` overrides the per-call sleep (default 0.5; cron
-    1.0). The 50/day cap is the safe anti-429 rate — unchanged here.
+  * `--limit N` caps per-run work (default 200; cron uses **250** since
+    the 2026-06 raise — drains the ~1.5 k backlog in ~6 days vs ~31).
+  * `--throttle FLOAT` per-call sleep (default 0.5; cron **0.5** → ~120
+    req/min, under Spotify's ~180 req/30s window).
   * `--pending-floor-frac FLOAT` (default 0.5) reserves that fraction of
     `--limit` for pending cançons.
   * `--retry-not-found` cycles through previously-not-found

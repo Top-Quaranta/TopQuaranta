@@ -94,9 +94,10 @@ def test_spotify_enrichment_stats_shape_and_counts():
     assert stats["coverage_total"] == round(2 / 6, 3)
     assert stats["coverage_public"] == round(1 / 2, 3)
     assert stats["coverage_pending"] == round(1 / 4, 3)
-    # ETA on the unattempted backlog at the nightly cron rate (50/day).
-    assert stats["enrich_per_day"] == 50
-    assert stats["eta_days_to_clear_backlog"] == round(3 / 50, 1)
+    # ETA on the unattempted backlog at the nightly cron rate (250/day,
+    # raised from 50 in the 2026-06 throughput change).
+    assert stats["enrich_per_day"] == 250
+    assert stats["eta_days_to_clear_backlog"] == round(3 / 250, 1)
 
 
 @pytest.mark.django_db

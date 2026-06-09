@@ -148,16 +148,18 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # tick at 04:15, so the day's playlists see the freshly-enriched
 # spotify_ids on the first sync of the day.
 #
-# Budget under the new cadence:
-#   --limit 50    cap of 50 candidates/tick -> 150 API calls/day
+# Budget under the new cadence (2026-06: throughput raise):
+#   --limit 250   cap of 250 candidates/tick -> ~750 API calls/day
 #                 worst case (search + track + artist per canco).
-#   --throttle 1.0 1 req/s ceiling -> 60 req/min during the ~3 min
-#                 it takes a 50-candidate batch.
-# Backlog drain at 50/day is slow (~67 days for 3.3k). We raise
-# --limit only after observing several consecutive days without a
-# 429, not preemptively. See docs/architecture/playlists.md
-# (Process B) and ADR-0013 for the A/B split.
-0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 50 --throttle 1.0 >> /var/log/topquaranta/playlists.log 2>&1
+#   --throttle 0.5 2 req/s ceiling -> ~120 req/min, well under Spotify's
+#                 ~180 req/30s rolling window over a ~7-10 min batch.
+# Backlog at 50/day was ~31 days for the 1.5k not_attempted; 250/day
+# drains it in ~6 days. Conservative vs `enriquir_spotify_rebuigs`'s
+# AIMD controller (which ramps to 800). Candidate ordering is now
+# priority-tiered (top -> provisional -> pending -> rest), so charting
+# songs are enriched first regardless of the cap. See
+# docs/architecture/playlists.md (Process B) and ADR-0013.
+0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run enriquir_spotify --limit 250 --throttle 0.5 >> /var/log/topquaranta/playlists.log 2>&1
 
 # 05:00 nightly -> Process B backfill of historical rebuigs.
 # Enriches Cançons that carry a rebuig HR row but no Spotify

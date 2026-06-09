@@ -113,12 +113,15 @@ consolidated-week selector + on-demand "Generate (engine)" + the shared
 `/staff/social/esborrany` page, now a thin wrapper kept for the cron
 email links). Instagram and RSS are still managed in-page on the cockpit
 (which keeps the week calendar + slide-render button); Spotify stays on
-its own page for now. The cockpit also hosts the **distribution matrix**
-(`pages/staff/social/MatriuGrid.jsx`): a self-fetching canal × tipus grid
-of Actiu checkboxes (the third gate, `MatriuPublicacio`) over
-`/staff/social/matriu/` + `/staff/social/matriu/toggle/`. An off cell
-renders inactive (never hidden); non-seeded combos paint a blank dash. Not to be confused with `/staff/publicacions`
-(community posts).
+its own page for now. The **distribution matrix** (third gate,
+`MatriuPublicacio`) is edited per channel, not in one central grid:
+`pages/staff/social/MatriuCanalToggles.jsx` (`canal` prop) renders only
+that channel's tipus toggles over `/staff/social/matriu/` (fetched whole,
+filtered client-side) + `/staff/social/matriu/toggle/`. It lives in each
+`ChannelView`'s "Què publica" section (mastodon/bluesky/telegram +
+newsletter) and in the Instagram section of the cockpit. An off cell
+renders inactive (never hidden); non-seeded combos paint a blank dash.
+Not to be confused with `/staff/publicacions` (community posts).
 
 ## Backend seam
 

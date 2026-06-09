@@ -713,9 +713,10 @@ is safe; only `--force` re-publishes a `publicat` row.
   `.env`.
 - `publicar_social [--data D] [--tipus T] [--platform P] [--dry-run]
   [--force]` — the cron entrypoint. Walks `ingesta.social.calendari`
-  for the target weekday, gates each slot on
-  `ConfiguracioGlobal.fase_distribucio`, builds payload, renders
-  PNGs to `<SOCIAL_CACHE_DIR>/renders/`, uploads them via
+  for the target weekday, gates each slot on the distribution matrix
+  (`MatriuPublicacio.pot_distribuir_avui` — actiu + optional
+  `dia_setmana`), builds payload, renders PNGs to
+  `<SOCIAL_CACHE_DIR>/renders/`, uploads them via
   `ingesta.social.instagram_client` and publishes.
 - `renovar_token_instagram` — monthly cron. Refreshes the long-lived
   token via the Graph API; prints the new value (you write it to
@@ -728,24 +729,27 @@ rendered. This is the default during local development.
 
 **Cron schedule** (`deploy/cron.topquaranta`):
 
-| Day | Slot | Phase needed |
-|---|---|---|
-| Saturday 09:30 UTC | feed + stories PPCC | 1 (default) |
-| Wednesday 09:30 | feed + stories territorial rotatori | 2 |
-| Monday 09:30 | feed + stories second territorial | 3 |
-| Friday 10:00 | feed nous singles | 4 |
-| Tuesday 10:00 | feed nous àlbums | 5 |
-| 1st of month 03:00 | `renovar_token_instagram` | always |
+| Day | Slot |
+|---|---|
+| Saturday 09:30 UTC | feed + stories PPCC |
+| Wednesday 09:30 | feed + stories territorial rotatori |
+| Monday 09:30 | feed + stories second territorial |
+| Friday 10:00 | feed nous singles |
+| Tuesday 10:00 | feed nous àlbums |
+| 1st of month 03:00 | `renovar_token_instagram` |
 
-The cron rows are present unconditionally; phase gating happens
-inside `publicar_social`, marking the SocialPost as `omes` when the
-slot's `min_fase` exceeds the active phase.
+The cron rows are present unconditionally; per-slot gating happens
+inside `publicar_social` via the distribution matrix, marking the
+SocialPost as `omes` when the `(canal × tipus)` cell is off or its
+`dia_setmana` doesn't match today. (The legacy `min_fase` rollout
+phase was removed 2026-06.)
 
-**Staff cockpit**: `/staff/social` exposes the SocialPost list
-along with kill switch, phase selector and `story_max_cancons_ppcc`
-slider; preview button renders dry-run PNGs and prints the captured
-stdout; "Publicar ara" forces a re-publication. Token expiry days
-shown via `instagram_client.days_until_expiry()`.
+**Staff cockpit**: `/staff/social` exposes the SocialPost list along
+with the kill switch, the distribution matrix (canal × tipus ×
+dia_setmana) and the `story_max_cancons_ppcc` slider; preview button
+renders dry-run PNGs and prints the captured stdout; "Publicar ara"
+forces a re-publication. Token expiry days shown via
+`instagram_client.days_until_expiry()`.
 
 **Caddy serving**: Caddy needs a `handle_path /static/social/*` rule
 pointing at `/var/cache/topquaranta/social/renders/` so Meta can

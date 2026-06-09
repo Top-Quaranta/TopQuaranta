@@ -1,7 +1,7 @@
 """Sprint I — `publicar_social` command + companion modules.
 
 Covers:
-  - Phase gating (kill switch + min_fase per slot)
+  - Kill switch (master + per-channel) short-circuit
   - Idempotency: a publicat row isn't re-published unless --force
   - DRY_RUN: full pipeline (renderer + client) but no real API
   - Calendari resolution (territorial rotation)
@@ -145,9 +145,8 @@ def test_caption_drops_malformed_handle():
 
 
 @pytest.fixture
-def cfg_phase_1(db):
+def cfg_ig_on(db):
     cfg = ConfiguracioGlobal.load()
-    cfg.fase_distribucio = 1
     cfg.instagram_actiu = True
     cfg.story_max_cancons_ppcc = 5  # keep tests fast
     cfg.save()
@@ -180,20 +179,19 @@ def setmana_with_top(db):
     return setmana
 
 
-def test_phase_gate_blocks_above_min_fase(db, cfg_phase_1, setmana_with_top):
-    cfg_phase_1.fase_distribucio = 1
-    cfg_phase_1.save()
-    # Wednesday entries need fase ≥ 2 → must be omès.
+def test_no_phase_gate_message(db, cfg_ig_on, setmana_with_top):
+    """The legacy per-slot phase gate is gone (removed 2026-06, neutral at
+    prod fase 5): a Wednesday run never reports a 'fase < min_fase' omès
+    reason — slots are gated only by the distribution matrix now."""
     out = io.StringIO()
     with redirect_stdout(out):
         call_command(
             "publicar_social", "--data", "2026-04-22", "--dry-run"  # Wednesday
         )
-    text = out.getvalue()
-    assert "omès" in text or "omes" in text or "min_fase" in text
+    assert "fase" not in out.getvalue().lower()
 
 
-def test_phase_1_publishes_saturday_dryrun(db, cfg_phase_1, setmana_with_top):
+def test_phase_1_publishes_saturday_dryrun(db, cfg_ig_on, setmana_with_top):
     out = io.StringIO()
     with redirect_stdout(out):
         call_command("publicar_social", "--data", "2026-04-25", "--dry-run")  # Saturday
@@ -208,10 +206,10 @@ def test_phase_1_publishes_saturday_dryrun(db, cfg_phase_1, setmana_with_top):
     ).exists()
 
 
-def test_kill_switch_short_circuits(db, cfg_phase_1, setmana_with_top):
+def test_kill_switch_short_circuits(db, cfg_ig_on, setmana_with_top):
     # Disable globally; even live mode wouldn't publish.
-    cfg_phase_1.instagram_actiu = False
-    cfg_phase_1.save()
+    cfg_ig_on.instagram_actiu = False
+    cfg_ig_on.save()
     out = io.StringIO()
     with redirect_stdout(out):
         # NO --dry-run on purpose: kill switch should stop before any side effect.
@@ -220,7 +218,7 @@ def test_kill_switch_short_circuits(db, cfg_phase_1, setmana_with_top):
 
 
 def test_idempotent_does_not_repost_when_already_publicat(
-    db, cfg_phase_1, setmana_with_top
+    db, cfg_ig_on, setmana_with_top
 ):
     setmana = setmana_with_top
     # Pretend a post is already published.
@@ -247,7 +245,7 @@ def test_idempotent_does_not_repost_when_already_publicat(
     assert p.instagram_media_id == "manual-test"
 
 
-def test_force_republishes_even_if_publicat(db, cfg_phase_1, setmana_with_top):
+def test_force_republishes_even_if_publicat(db, cfg_ig_on, setmana_with_top):
     setmana = setmana_with_top
     p = SocialPost.objects.create(
         platform=SocialPost.PLATFORM_INSTAGRAM_FEED,
@@ -272,7 +270,7 @@ def test_force_republishes_even_if_publicat(db, cfg_phase_1, setmana_with_top):
     assert "renderitzades" in text
 
 
-def test_no_data_marks_omes(db, cfg_phase_1):
+def test_no_data_marks_omes(db, cfg_ig_on):
     """Saturday with no TopSetmanal rows → marks omes."""
     out = io.StringIO()
     with redirect_stdout(out):
@@ -395,7 +393,7 @@ def test_slide_tags_cover_slide_has_no_tags():
     assert out[0] == []
 
 
-def test_story_set_counts_as_one_publication(db, cfg_phase_1, setmana_with_top):
+def test_story_set_counts_as_one_publication(db, cfg_ig_on, setmana_with_top):
     """Bug 2 of Fase 3 audit (2026-05-18): a story-set is ONE
     publication conceptually, regardless of how many slides it
     carries. Same treatment as an IG feed carousel (1 publication

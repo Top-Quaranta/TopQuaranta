@@ -5,8 +5,8 @@ Three discrete improvements to the SocialTab payload:
     is_active=True)` so the followers strip can render Newsletter
     alongside the social platforms.
   - Problem 6: `social_omes` mirrors `social` but filters
-    `status=omès`, exposing the volume of slots the `fase_distribucio`
-    gate is filtering.
+    `status=omès`, exposing the volume of slots the distribution
+    matrix is filtering.
   - Problem 3 is purely frontend (computed from existing
     `followers_series`), so no backend assertion here.
 """

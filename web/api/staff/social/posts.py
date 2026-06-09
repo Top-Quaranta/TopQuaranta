@@ -109,7 +109,6 @@ def social_list(request: Request) -> Response:
                 "telegram_actiu": cfg.telegram_actiu,
                 "newsletter_actiu": cfg.newsletter_actiu,
                 "rss_actiu": cfg.rss_actiu,
-                "fase_distribucio": cfg.fase_distribucio,
                 "story_max_cancons_ppcc": cfg.story_max_cancons_ppcc,
                 "delay_instagram_min": cfg.delay_instagram_min,
                 "delay_mastodon_min": cfg.delay_mastodon_min,
@@ -162,9 +161,7 @@ def social_estat_canals(request: Request) -> Response:
       - `ultim_enviament`: max(SocialPost.published_at) where
         status=publicat, with StaffAuditLog `*_publicat` (max
         created_at) as a reset-proof fallback (republicar/reset NULLs
-        published_at). `font` = socialpost | audit | none.
-    Instagram also carries `fase_distribucio` (its per-slot rollout
-    phase — an off-phase slot is 'omès', not a pause)."""
+        published_at). `font` = socialpost | audit | none."""
     from django.db.models import Max
 
     from music.models import StaffAuditLog
@@ -206,8 +203,6 @@ def social_estat_canals(request: Request) -> Response:
             "ultim_enviament": last_iso,
             "font": font,
         }
-        if canal == "instagram":
-            entry["fase_distribucio"] = cfg.fase_distribucio
         out[canal] = entry
 
     return Response({"mestre_actiu": master, "canals": out})

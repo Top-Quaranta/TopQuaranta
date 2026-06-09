@@ -106,8 +106,10 @@ Consumers: `publicar_social` (`pot_publicar("instagram")`),
 `publicar_canal` (`pot_publicar(channel)` for the four non-IG channels),
 and the RSS feeds (`web/feeds.py` → `pot_publicar("rss")`, 503 when off).
 
-`fase_distribucio` is NOT part of this gate: it is the Instagram-only
-per-slot rollout phase (an off-phase slot is marked `omès`, not paused).
+The legacy Instagram-only per-slot rollout phase (`fase_distribucio` +
+calendar `min_fase`) was **removed 2026-06**: prod sat at the final phase
+(everything on), so removal was neutral, and the matrix `dia_setmana`
+below now covers per-slot day scheduling uniformly for every channel.
 
 **Distribution matrix — third gate (`MatriuPublicacio`, 2026-06).** On
 top of the master switch and the per-channel switch sits a per-(canal ×
@@ -124,8 +126,8 @@ Conceptual model: only the five PUSH channels are governed
 (instagram, mastodon, bluesky, telegram, newsletter); the website
 generates and shows the top regardless and is never gated, and RSS
 stays on its own `rss_actiu` switch. Consumers: `publicar_social` (per
-slot, `instagram × tipus`, ADDITIONAL to the phase gate which stays
-intact), `publicar_canal` (per slot, `channel × tipus`), and
+slot, `instagram × tipus`), `publicar_canal` (per slot,
+`channel × tipus`), and
 `enviar_newsletter` (`pot_publicar_tipus("newsletter", "top_ppcc")` —
 off ⇒ the Sunday send does not run). An off cell records the slot as
 `omès` so it shows inactive in the publications table rather than
@@ -157,9 +159,9 @@ per-channel state (effective state + last send) at
 
 ## Calendar
 
-Driven by `social/calendari.py`. Slots per weekday with
-`min_fase` gates (Instagram rollout phases). Sat 09:30 UTC is
-the canonical `top_ppcc` cycle; territorials Sun 09:50 UTC;
+Driven by `social/calendari.py`. Slots per weekday (the `min_fase`
+rollout gate was removed 2026-06 — see the matrix section). Sat 09:30
+UTC is the canonical `top_ppcc` cycle; territorials Sun 09:50 UTC;
 novetats slots Mon/Wed mornings.
 
 ## Renderer image format + PPCC feed cover (Step 3a, 2026-06-01)

@@ -1,5 +1,6 @@
 """ConfiguracioGlobal toggles for the social pipeline:
-per-channel kill switches, distribution phase, story cap."""
+per-channel kill switches, story cap, per-channel delay, the
+distribution matrix (canal × tipus × dia_setmana)."""
 
 from __future__ import annotations
 
@@ -46,21 +47,6 @@ def social_toggle(request: Request) -> Response:
     setattr(cfg, field, new_val)
     cfg.save(update_fields=[field])
     return Response({field: new_val})
-
-
-@api_view(["POST"])
-@permission_classes([IsStaff])
-def social_fase(request: Request) -> Response:
-    try:
-        fase = int(request.data.get("fase"))
-    except (TypeError, ValueError):
-        return Response({"error": "fase must be int 1-5"}, status=400)
-    if fase < 1 or fase > 5:
-        return Response({"error": "fase must be in [1, 5]"}, status=400)
-    cfg = ConfiguracioGlobal.load()
-    cfg.fase_distribucio = fase
-    cfg.save(update_fields=["fase_distribucio"])
-    return Response({"fase_distribucio": cfg.fase_distribucio})
 
 
 @api_view(["POST"])

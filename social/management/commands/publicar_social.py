@@ -11,10 +11,9 @@ setmana) via the SocialPost row. Modes:
   --force             ignore existing publicat row + re-publish
 
 The command:
-  1. Reads ConfiguracioGlobal.{instagram_actiu, fase_distribucio,
-     story_max_cancons_ppcc}.
+  1. Reads ConfiguracioGlobal.{instagram_actiu, story_max_cancons_ppcc}.
   2. Walks the calendari for the target weekday.
-  3. For each slot whose `min_fase` ≤ current fase, builds payload,
+  3. For each slot (gated by the distribution matrix), builds payload,
      renders PNGs, uploads + publishes via the IG client.
   4. Updates the SocialPost row + writes a StaffAuditLog entry.
 """
@@ -94,8 +93,8 @@ class Command(BaseCommand):
         target = datetime.date.fromisoformat(data) if data else datetime.date.today()
         cfg = ConfiguracioGlobal.load()
         # Master + per-channel gate (2026-06-07): `distribucio_activa`
-        # AND `instagram_actiu`. fase_distribucio is applied per-slot
-        # below (an off-phase slot is 'omès', not a pause).
+        # AND `instagram_actiu`. The per-slot matrix gate (canal × tipus
+        # × dia_setmana) is applied below (an off slot is 'omès').
         if not cfg.pot_publicar("instagram") and not opts["dry_run"]:
             if not cfg.distribucio_activa:
                 self.stdout.write("Distribució pausada (mestre). Surt.")
@@ -168,19 +167,13 @@ class Command(BaseCommand):
         setmana_dissabte = setmana + datetime.timedelta(days=5)
         self.stdout.write(f"\n[setmana del {setmana_dissabte}] {label}")
 
-        # Phase gate.
-        if cfg.fase_distribucio < slot.min_fase:
-            self.stdout.write(
-                f"  · fase actual {cfg.fase_distribucio} < "
-                f"min_fase {slot.min_fase} → omès"
-            )
-            self._record_omes(slot, territori, setmana, motiu=f"fase < {slot.min_fase}")
-            return
-
-        # Distribution-matrix gate (third gate; master + per-channel were
-        # checked at command entry). An off (instagram × tipus) cell is
-        # recorded 'omès' so the slot shows inactive in the publications
-        # table instead of vanishing. The phase gate above is untouched.
+        # Distribution-matrix gate (the per-(canal × tipus) toggle, on top
+        # of the master + per-channel switches checked at command entry).
+        # The legacy Instagram-only "phase" rollout gate was removed
+        # 2026-06 (prod was at fase 5 = everything on, so removal is
+        # neutral); the matrix `dia_setmana` now covers per-slot day
+        # scheduling for every channel uniformly. An off cell is recorded
+        # 'omès' so the slot shows inactive instead of vanishing.
         if not MatriuPublicacio.pot_distribuir_avui(
             "instagram", slot.tipus, today=timezone.localdate()
         ):

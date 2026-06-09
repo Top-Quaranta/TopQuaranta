@@ -131,7 +131,6 @@ def _calendari_payload() -> list[dict]:
                 "tipus": slot.tipus,
                 "territori": ter,
                 "territori_label": TERRITORI_LABEL.get(ter, ter or "—"),
-                "min_fase": slot.min_fase,
                 "weekday": slot.weekday,
                 "weekday_name": _DAY_CA[slot.weekday],
                 "publication_date": pub_date.isoformat(),

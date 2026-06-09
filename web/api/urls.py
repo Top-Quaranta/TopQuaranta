@@ -431,7 +431,6 @@ urlpatterns = [
         staff_views.social_matriu_toggle,
         name="staff_social_matriu_toggle",
     ),
-    path("staff/social/fase/", staff_views.social_fase, name="staff_social_fase"),
     path(
         "staff/social/story-cap/",
         staff_views.social_story_cap,

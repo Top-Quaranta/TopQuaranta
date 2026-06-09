@@ -106,13 +106,12 @@ class ConfiguracioGlobal(models.Model):
     # The REAL global pause: gates every channel via `pot_publicar`.
     # Default True so deploying changes nothing (the existing
     # per-channel state, e.g. instagram_actiu=False, is preserved).
-    # Distinct from the per-channel `*_actiu` switches and from
-    # `fase_distribucio` (the Instagram-only per-slot rollout phase).
+    # Distinct from the per-channel `*_actiu` switches.
     distribucio_activa = models.BooleanField(
         default=True,
         help_text="Interruptor mestre de distribució. Si False, cap dels "
         "sis canals publica (IG, Mastodon, Bluesky, Telegram, newsletter, "
-        "RSS). Independent dels switches per canal i de fase_distribucio.",
+        "RSS). Independent dels switches per canal.",
     )
 
     # ── Sprint I: Instagram distribution controls ───────────────────────
@@ -121,18 +120,6 @@ class ConfiguracioGlobal(models.Model):
         help_text="Switch per canal d'Instagram. Si False (o el mestre "
         "`distribucio_activa` False), `publicar_social` surt sense fer res. "
         "NO és el switch global; per a això hi ha `distribucio_activa`.",
-    )
-    fase_distribucio = models.PositiveSmallIntegerField(
-        default=1,
-        help_text=(
-            "Phase 1: només dissabte feed+stories PPCC. "
-            "Phase 2: + dimecres territorial rotatori. "
-            "Phase 3: + dilluns segon territorial. "
-            "Phase 4: + divendres novetats singles. "
-            "Phase 5: + dimarts novetats àlbums. "
-            "Pujar de fase requereix avaluar Instagram Insights "
-            "(criteris a docs/architecture/pipeline.md)."
-        ),
     )
     story_max_cancons_ppcc = models.PositiveSmallIntegerField(
         default=40,
@@ -228,10 +215,11 @@ class ConfiguracioGlobal(models.Model):
         """True iff `canal` may publish: the master switch
         (`distribucio_activa`) AND the channel's own `*_actiu`.
 
-        Does NOT consider `fase_distribucio` — that's the Instagram-only
-        per-slot rollout phase, handled separately in `publicar_social`
-        (an off-phase slot is 'omès', not paused). Single gate shared by
-        every publisher so the master truly stops all six channels."""
+        Does NOT consider the per-(canal × tipus) matrix — that's the
+        third gate (`MatriuPublicacio`, incl. its `dia_setmana` weekday
+        restriction), applied separately in the publishers. Single gate
+        shared by every publisher so the master truly stops all six
+        channels."""
         field = self.CHANNEL_SWITCH_FIELDS.get(canal)
         if field is None:
             raise ValueError(f"unknown canal {canal!r}")

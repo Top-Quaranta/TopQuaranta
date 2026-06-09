@@ -113,8 +113,8 @@ def test_estat_canals_shapes_and_states(staff_client):
     assert canals["mastodon"]["ultim_enviament"].startswith("2026-06-06")
     assert canals["mastodon"]["font"] == "socialpost"
     assert canals["newsletter"]["efectiu"] == "pausat_canal"
-    # Instagram carries its rollout phase.
-    assert "fase_distribucio" in canals["instagram"]
+    # The legacy Instagram rollout phase was removed (2026-06).
+    assert "fase_distribucio" not in canals["instagram"]
 
 
 def test_estat_canals_master_off_marks_all_global(staff_client):

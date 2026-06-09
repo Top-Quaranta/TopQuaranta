@@ -35,6 +35,7 @@ FRA / ALG / CAR) plus literal ALT (artists from outside the PPCC).
 from __future__ import annotations
 
 import logging
+import math
 import unicodedata
 from collections import defaultdict
 from datetime import date, timedelta
@@ -86,6 +87,17 @@ _WEEK_WINDOW_DAYS = 3
 _MERGE_ABS_FLOOR = 300
 _MERGE_RATE_OVER_MEDIAN = 8.0
 _MERGE_DOUBLING_FRAC = 0.4
+
+# Adaptive soft-cap (2026-06-09). The knee K is derived per territori from
+# the median weekly_plays of recently-charting songs, so each territori
+# measures its own outliers (CAT charts in the hundreds, VAL/BAL in the
+# tens). We read the median over the published-chart head (top N) of the
+# last W weeks: the FULL top is dragged down by the near-floor tail, which
+# would put the knee too low and compress ordinary hits. Stored on
+# TopSetmanal.weekly_plays since this date; before any history exists the
+# median query is empty and the configurable floor takes over.
+_SOFT_CAP_WINDOW_WEEKS = 10
+_SOFT_CAP_TOP_N = 10
 
 
 def _robust_weekly_from_series(series: list[tuple[date, int]]) -> float | None:
@@ -269,21 +281,27 @@ def _top_for_territoris(
     # entries. If this leaves a territori with <40 candidates the
     # top is shorter — no padding with noise.
     min_plays = int(cfg.min_escoltes_top or 0)
+    # Adaptive outlier knee for this territori (None when the cap is off).
+    # Computed once: it depends on the territori's history, not the song.
+    soft_cap_knee = _soft_cap_knee(territori, cfg, today)
 
     rows: list[dict] = []
     for canco in cancons.values():
         plays = _compute_weekly_plays(
             canco=canco, signals=senyals_by_canco.get(canco.pk, []), today=today
         )
+        # Eligibility (min_escoltes_top) is judged on RAW plays; the soft
+        # cap only reshapes how a song's plays translate into score.
         if plays < min_plays:
             continue
 
+        plays_eff = _apply_soft_cap(plays, soft_cap_knee)
         age_factor = _age_factor(canco.data_llancament, today=today, exponent=exp)
         past_top_factor = _past_top_factor(
             prior_positions_by_canco.get(canco.pk, []), coef_top
         )
 
-        base_score = plays * age_factor * past_top_factor
+        base_score = plays_eff * age_factor * past_top_factor
         if base_score <= 0:
             continue
 
@@ -292,7 +310,10 @@ def _top_for_territoris(
                 "canco_id": canco.pk,
                 "album_id": canco.album_id,
                 "artista_id": canco.artista_id,
+                # Raw plays: persisted + displayed + feeds the historical
+                # median. `weekly_plays_eff` is the capped value scoring used.
                 "weekly_plays": plays,
+                "weekly_plays_eff": plays_eff,
                 "age_factor": age_factor,
                 "past_top_factor": past_top_factor,
                 "base_score": base_score,
@@ -339,6 +360,7 @@ def _top_for_territoris(
                 "posicio_anterior": prev_pos,
                 "canvi_posicio": canvi,
                 "weekly_plays": r["weekly_plays"],
+                "weekly_plays_eff": r.get("weekly_plays_eff", r["weekly_plays"]),
                 "age_factor": r["age_factor"],
                 "past_top_factor": r["past_top_factor"],
                 "monopoli_factor": r["monopoli_factor"],
@@ -542,6 +564,48 @@ def _past_top_factor(prior_positions: list[int], coef_base: float) -> float:
     return max(0.0, 1.0 - total)
 
 
+def _soft_cap_knee(
+    territori: str, cfg: ConfiguracioGlobal, today: date
+) -> float | None:
+    """Adaptive plays knee for `territori`, or None when the cap is off.
+
+    K = max(floor, multiplicador × median(top-N weekly_plays, last W weeks)).
+    The median is read from stored TopSetmanal rows (positions ≤ N over the
+    trailing window) so it costs one cheap query and never re-derives the
+    signal. With no usable history the median is empty and we fall back to
+    the floor (and to None when the floor is 0, i.e. no compression).
+    """
+    if not cfg.soft_cap_actiu:
+        return None
+    floor = float(cfg.soft_cap_floor_escoltes or 0)
+    multiplicador = float(cfg.soft_cap_multiplicador or 0)
+    window_start = today - timedelta(weeks=_SOFT_CAP_WINDOW_WEEKS)
+    plays = list(
+        TopSetmanal.objects.filter(
+            territori=territori,
+            setmana__gte=window_start,
+            posicio__lte=_SOFT_CAP_TOP_N,
+            weekly_plays__isnull=False,
+        ).values_list("weekly_plays", flat=True)
+    )
+    if not plays:
+        return floor if floor > 0 else None
+    knee = max(floor, multiplicador * float(median(plays)))
+    return knee if knee > 0 else None
+
+
+def _apply_soft_cap(plays: float, knee: float | None) -> float:
+    """Compress `plays` above `knee` logarithmically; leave it intact below.
+
+    plays_eff = knee · (1 + ln(plays / knee))   for plays > knee > 0
+    Monotone, so ordering among the compressed outliers is preserved; the
+    whole normal range (plays ≤ knee) is returned unchanged.
+    """
+    if knee is None or knee <= 0 or plays <= knee:
+        return plays
+    return knee * (1.0 + math.log(plays / knee))
+
+
 # ── PPCC aggregation ──────────────────────────────────────────────────
 
 
@@ -590,6 +654,7 @@ def _calcular_top_ppcc() -> list[dict]:
                 "posicio_anterior": r.get("posicio_anterior"),
                 "canvi_posicio": r.get("canvi_posicio"),
                 "weekly_plays": r.get("weekly_plays"),
+                "weekly_plays_eff": r.get("weekly_plays_eff", r.get("weekly_plays")),
                 "age_factor": r.get("age_factor"),
                 "past_top_factor": r.get("past_top_factor"),
                 "monopoli_factor": r.get("monopoli_factor"),

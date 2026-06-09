@@ -22,6 +22,10 @@ _PENALTY_RANGE = [MinValueValidator(0), MaxValueValidator(1)]
 _EXPONENT_RANGE = [MinValueValidator(0), MaxValueValidator(10)]
 _COUNT_RANGE = [MinValueValidator(0), MaxValueValidator(10000)]
 _DAY_RANGE = [MinValueValidator(0), MaxValueValidator(6)]
+# Soft-cap multiplier: the knee is M × the territori's median top plays,
+# so M must be ≥ 1 (otherwise it would compress ordinary charting songs,
+# not just outliers). Upper bound is a sanity guard against a typo.
+_MULTIPLIER_RANGE = [MinValueValidator(1), MaxValueValidator(100)]
 
 
 class ConfiguracioGlobal(models.Model):
@@ -100,6 +104,42 @@ class ConfiguracioGlobal(models.Model):
         "Cada cançó d'un top territorial entra a PPCC amb un score "
         "multiplicat per (1 - (posició - 1) × valor). Ex amb 0.04: la "
         "#1 entra al 100 %, la #2 al 96 %, la #25 al 4 %.",
+    )
+
+    # ── Outlier soft-cap on weekly plays (2026-06-09) ───────────────
+    # Targets the magnitude outlier (e.g. a mainstream artist with ~20×
+    # the scrobbles of any PPCC act) WITHOUT touching ordinary charting
+    # songs. The knee is adaptive PER TERRITORI:
+    #     K_t = max(floor, multiplicador × median(top plays, last weeks))
+    # and plays above the knee are compressed logarithmically:
+    #     plays_eff = K_t · (1 + ln(plays / K_t))   for plays > K_t
+    # Songs at or below K_t keep their raw plays — the normal top is
+    # untouched. Default OFF so deploying changes nothing; staff opts in.
+    # See docs/architecture/algorithm.md §2.1bis.
+    soft_cap_actiu = models.BooleanField(
+        default=False,
+        help_text="Activa el sostre suau d'escoltes per a outliers. Si "
+        "False, l'algorisme usa les escoltes brutes (comportament "
+        "previ). El sostre és per territori i no afecta les cançons "
+        "per sota del genoll.",
+    )
+    soft_cap_multiplicador = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("3"),
+        validators=_MULTIPLIER_RANGE,
+        help_text="Genoll del sostre = valor × mediana d'escoltes del "
+        "top del territori (últimes setmanes). Per damunt del genoll les "
+        "escoltes es comprimeixen. 3 → es considera outlier qui supera 3× "
+        "el charting típic del seu territori.",
+    )
+    soft_cap_floor_escoltes = models.IntegerField(
+        default=500,
+        validators=_COUNT_RANGE,
+        help_text="Genoll mínim del sostre, en escoltes. Protegeix els "
+        "territoris menuts o sense prou historial (mediana inestable): "
+        "si multiplicador × mediana queda per sota, s'usa aquest terra. "
+        "També és el genoll de seguretat quan encara no hi ha historial.",
     )
 
     # ── Master distribution switch (2026-06-07) ─────────────────────
@@ -332,6 +372,13 @@ class TopSetmanal(models.Model):
     posicio = models.PositiveSmallIntegerField()
     score_setmanal = models.FloatField()
 
+    # Raw weekly_plays (rolling 7-day delta) that produced this row.
+    # Persisted since 2026-06-09 so the adaptive soft-cap can read the
+    # territori's historical median plays cheaply (no signal recompute).
+    # Nullable: rows written before this field existed stay NULL and are
+    # simply skipped by the median query (the floor fallback covers it).
+    weekly_plays = models.FloatField(null=True, blank=True)
+
     # R2: snapshots so the row remains self-describing if canco is NULL.
     canco_nom_snapshot = models.CharField(max_length=500, blank=True)
     artista_nom_snapshot = models.CharField(max_length=255, blank=True)
@@ -450,12 +497,6 @@ class MatriuPublicacio(models.Model):
     # avoid a cross-app constraint; the seed only inserts real combos.
     tipus = models.CharField(max_length=20)
     actiu = models.BooleanField(default=True)
-    # Optional weekday restriction (0=Monday … 6=Sunday, Python weekday()).
-    # NULL = no restriction = the pre-2026-06 behaviour (publish whenever
-    # the cron fires and the cell is active). When set, the publisher
-    # additionally requires today to be this weekday. Default NULL keeps
-    # distribution byte-identical to before the column existed.
-    dia_setmana = models.IntegerField(null=True, blank=True, validators=_DAY_RANGE)
 
     class Meta:
         verbose_name = "Matriu de publicació"
@@ -480,26 +521,3 @@ class MatriuPublicacio(models.Model):
         BLOCKS via an explicit `actiu=False` row."""
         row = cls.objects.filter(canal=canal, tipus=tipus).only("actiu").first()
         return True if row is None else row.actiu
-
-    @classmethod
-    def pot_distribuir_avui(cls, canal: str, tipus: str, *, today) -> bool:
-        """`actiu_per` AND the optional weekday gate.
-
-        True iff the cell is active AND (no `dia_setmana` restriction OR
-        `today` is the configured weekday). A MISSING row is fail-open
-        (True), identical to `actiu_per`. `today` is a `date`; its
-        `weekday()` (0=Mon … 6=Sun) is compared to `dia_setmana`. This is
-        the gate the publishers call — `actiu_per` stays the pure actiu
-        bit for the matrix UI/analytics."""
-        row = (
-            cls.objects.filter(canal=canal, tipus=tipus)
-            .only("actiu", "dia_setmana")
-            .first()
-        )
-        if row is None:
-            return True
-        if not row.actiu:
-            return False
-        if row.dia_setmana is None:
-            return True
-        return today.weekday() == row.dia_setmana

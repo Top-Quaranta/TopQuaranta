@@ -31,6 +31,9 @@ For each territori the algorithm looks at:
    - `penalitzacio_artista_per_canco` (default **0.2**).
    - `min_cancons_ranking_propi` (default 20) — optional-territori
      threshold.
+   - `soft_cap_actiu` (default **False**), `soft_cap_multiplicador`
+     (default **3**), `soft_cap_floor_escoltes` (default **500**) — the
+     adaptive outlier soft-cap (§2.1bis).
 
 ---
 
@@ -85,6 +88,52 @@ Casuístiques:
   a 0.
 - Si no tenim prou dades per estimar (cap SenyalDiari recent):
   `weekly_plays = 0` i la cançó queda fora del ranking.
+
+El `weekly_plays` cru es persisteix a `TopSetmanal.weekly_plays` (des de
+2026-06-09) i és el que alimenta el sostre suau de §2.1bis i la mediana
+històrica per territori.
+
+### 2.1bis Sostre suau d'outliers (adaptatiu, per territori)
+
+Problema: el score és lineal en `weekly_plays` i sense normalització, així
+que un outlier de magnitud (p.ex. un artista mainstream amb ~20× els
+scrobbles de qualsevol acte dels PPCC) domina el #1 durant mesos. Pujar
+`coeficient_penalitzacio_top` actua sobre el TEMPS al top i castiga també
+les cançons normals; el que cal és actuar sobre la MAGNITUD i només a la
+cua alta.
+
+Solució (off per defecte; `soft_cap_actiu`): comprimir les escoltes per
+damunt d'un genoll `K`, deixant intacte tot el que hi queda per sota.
+
+```
+plays_eff = K · (1 + ln(plays / K))      si plays > K
+          = plays                         si plays ≤ K
+base_score = plays_eff × age_factor × past_top_factor
+```
+
+El genoll és **adaptatiu i per territori**, perquè cada territori juga en
+una escala distinta (CAT charteja a centenars, VAL/BAL a desenes):
+
+```
+K_territori = max(soft_cap_floor_escoltes,
+                  soft_cap_multiplicador × mediana(plays del top, W setmanes))
+```
+
+- **Població de la mediana**: les escoltes (`TopSetmanal.weekly_plays`) de
+  les posicions ≤ `_SOFT_CAP_TOP_N` (10) sobre les últimes
+  `_SOFT_CAP_WINDOW_WEEKS` (10) setmanes. S'usa el cap de la llista, no el
+  top sencer: la cua arran de `min_escoltes_top` abaixaria la mediana i
+  comprimiria hits ordinaris.
+- **Multiplicador** (`soft_cap_multiplicador`, default 3): a partir de
+  quantes vegades el charting típic del territori es considera outlier.
+- **Terra** (`soft_cap_floor_escoltes`, default 500): genoll mínim. Protegeix
+  els territoris menuts o sense prou historial (mediana inestable) i és el
+  fallback quan encara no hi ha cap fila amb `weekly_plays`.
+
+Propietats: la compressió és monòtona (preserva l'ordre entre outliers),
+les cançons ≤ K no es toquen, i s'aplica per territori font ABANS de
+l'agregació PPCC. L'eligibilitat (`min_escoltes_top`) es jutja sobre les
+escoltes crues, no sobre les comprimides.
 
 ### 2.2 `age_factor`
 

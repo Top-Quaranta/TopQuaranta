@@ -22,6 +22,10 @@ _PENALTY_RANGE = [MinValueValidator(0), MaxValueValidator(1)]
 _EXPONENT_RANGE = [MinValueValidator(0), MaxValueValidator(10)]
 _COUNT_RANGE = [MinValueValidator(0), MaxValueValidator(10000)]
 _DAY_RANGE = [MinValueValidator(0), MaxValueValidator(6)]
+# Soft-cap multiplier: the knee is M × the territori's median top plays,
+# so M must be ≥ 1 (otherwise it would compress ordinary charting songs,
+# not just outliers). Upper bound is a sanity guard against a typo.
+_MULTIPLIER_RANGE = [MinValueValidator(1), MaxValueValidator(100)]
 
 
 class ConfiguracioGlobal(models.Model):
@@ -100,6 +104,54 @@ class ConfiguracioGlobal(models.Model):
         "Cada cançó d'un top territorial entra a PPCC amb un score "
         "multiplicat per (1 - (posició - 1) × valor). Ex amb 0.04: la "
         "#1 entra al 100 %, la #2 al 96 %, la #25 al 4 %.",
+    )
+
+    # ── Outlier soft-cap on weekly plays (2026-06-09) ───────────────
+    # Targets the magnitude outlier (e.g. a mainstream artist with ~20×
+    # the scrobbles of any PPCC act) WITHOUT touching ordinary charting
+    # songs. The knee is adaptive PER TERRITORI:
+    #     K_t = max(floor, multiplicador × median(top plays, last weeks))
+    # and plays above the knee are compressed logarithmically:
+    #     plays_eff = K_t · (1 + ln(plays / K_t))   for plays > K_t
+    # Songs at or below K_t keep their raw plays — the normal top is
+    # untouched. Default OFF so deploying changes nothing; staff opts in.
+    # See docs/architecture/algorithm.md §2.1bis.
+    soft_cap_actiu = models.BooleanField(
+        default=False,
+        help_text="Activa el sostre suau d'escoltes per a outliers. Si "
+        "False, l'algorisme usa les escoltes brutes (comportament "
+        "previ). El sostre és per territori i no afecta les cançons "
+        "per sota del genoll.",
+    )
+    soft_cap_multiplicador = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("3"),
+        validators=_MULTIPLIER_RANGE,
+        help_text="Genoll del sostre = valor × mediana d'escoltes del "
+        "top del territori (últimes setmanes). Per damunt del genoll les "
+        "escoltes es comprimeixen. 3 → es considera outlier qui supera 3× "
+        "el charting típic del seu territori.",
+    )
+    soft_cap_floor_escoltes = models.IntegerField(
+        default=500,
+        validators=_COUNT_RANGE,
+        help_text="Genoll mínim del sostre, en escoltes. Protegeix els "
+        "territoris menuts o sense prou historial (mediana inestable): "
+        "si multiplicador × mediana queda per sota, s'usa aquest terra. "
+        "També és el genoll de seguretat quan encara no hi ha historial.",
+    )
+    # The population the median is taken over: the top-N head of the
+    # territori's rolling chart (NOT the whole top — the near-floor tail
+    # would drag the median down and compress ordinary hits). Configurable
+    # so the base isn't hardcoded; default 10 reproduces the recommended
+    # "median of the top ~10" behaviour. Range 1-40 (the top caps at 40).
+    soft_cap_base_top_n = models.IntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(40)],
+        help_text="Població per a la mediana del genoll: el cap top-N del "
+        "top rodant del territori (NO tot el top — la cua arrossegaria la "
+        "mediana avall). 10 → mediana del top ~10. Rang 1-40.",
     )
 
     # ── Master distribution switch (2026-06-07) ─────────────────────
@@ -216,10 +268,9 @@ class ConfiguracioGlobal(models.Model):
         (`distribucio_activa`) AND the channel's own `*_actiu`.
 
         Does NOT consider the per-(canal × tipus) matrix — that's the
-        third gate (`MatriuPublicacio`, incl. its `dia_setmana` weekday
-        restriction), applied separately in the publishers. Single gate
-        shared by every publisher so the master truly stops all six
-        channels."""
+        third gate (`MatriuPublicacio.actiu_per`), applied separately in
+        the publishers. Single gate shared by every publisher so the
+        master truly stops all six channels."""
         field = self.CHANNEL_SWITCH_FIELDS.get(canal)
         if field is None:
             raise ValueError(f"unknown canal {canal!r}")
@@ -331,6 +382,13 @@ class TopSetmanal(models.Model):
     setmana = models.DateField()
     posicio = models.PositiveSmallIntegerField()
     score_setmanal = models.FloatField()
+
+    # Raw weekly_plays (rolling 7-day delta) that produced this row.
+    # Persisted since 2026-06-09 so the adaptive soft-cap can read the
+    # territori's historical median plays cheaply (no signal recompute).
+    # Nullable: rows written before this field existed stay NULL and are
+    # simply skipped by the median query (the floor fallback covers it).
+    weekly_plays = models.FloatField(null=True, blank=True)
 
     # R2: snapshots so the row remains self-describing if canco is NULL.
     canco_nom_snapshot = models.CharField(max_length=500, blank=True)

@@ -40,6 +40,9 @@ _CONFIG_SNAPSHOT_FIELDS = [
     "penalitzacio_artista_per_canco",
     "coeficient_penalitzacio_top",
     "min_cancons_ranking_propi",
+    "soft_cap_actiu",
+    "soft_cap_multiplicador",
+    "soft_cap_floor_escoltes",
 ]
 
 
@@ -269,6 +272,7 @@ class Command(BaseCommand):
                         setmana=setmana,
                         posicio=r["posicio"],
                         score_setmanal=r["score_setmanal"] or 0.0,
+                        weekly_plays=r.get("weekly_plays"),
                         canco_nom_snapshot=(canco_nom or "")[:500],
                         artista_nom_snapshot=(artista_nom or "")[:255],
                         algorithm_version=ALGORITHM_VERSION,

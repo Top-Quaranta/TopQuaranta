@@ -203,6 +203,15 @@ class ConfiguracioGlobal(models.Model):
         default=0,
         help_text="Minuts de retard addicional per a newsletter. Tope 180.",
     )
+    editorial_veu = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Prompt de veu editorial per a la rutina de newsletter. "
+            "Servit dins el brief; editable des de Configuració. "
+            "Buit = la rutina usa el seu propi default."
+        ),
+    )
 
     # Channel arg → its per-channel `*_actiu` field. Single source of
     # truth for the set of distribution channels the master gates.

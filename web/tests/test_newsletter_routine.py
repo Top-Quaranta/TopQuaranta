@@ -263,10 +263,11 @@ def test_brief_query_budget_bounded_no_n_plus_1(django_assert_max_num_queries):
         patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]),
         patch("social.narrative.detect_all", return_value=[]),
     ):
-        # Assembly is ~11 queries and constant in N (prefetch + batch). An
+        # Assembly is constant in N (prefetch + batch); the +1/+2 from
+        # ConfiguracioGlobal.load() (editorial_veu) is also constant. An
         # origen/collaborator N+1 across 12 rows would push it past 20, so
-        # this 14 ceiling is the regression tripwire.
-        with django_assert_max_num_queries(14):
+        # this 16 ceiling is the regression tripwire.
+        with django_assert_max_num_queries(16):
             build_brief(_monday())
 
 
@@ -504,3 +505,26 @@ def test_brief_llengua_flag_true_with_desvincular_canco(client_with_token):
     fet = next(f for f in r.data["fets_grup_top5"] if f["artista"] == nom)
     assert fet["compromis_llengua"]["te_obra_no_catala"] is True
     assert fet["compromis_llengua"]["n_cancons_desvinculades"] == 2
+
+
+@pytest.mark.django_db
+def test_brief_exposes_editorial_veu_from_singleton():
+    """The brief carries `editorial_veu`, reflecting ConfiguracioGlobal."""
+    from comptes.newsletter_brief import build_brief
+    from ranking.models import ConfiguracioGlobal
+
+    _seed_top()
+
+    # Default singleton → blank string (the routine falls back to its own).
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        brief = build_brief(_monday())
+    assert brief["status"] == "ready"
+    assert brief["editorial_veu"] == ""
+
+    # A staff-set voice is surfaced verbatim.
+    cfg = ConfiguracioGlobal.load()
+    cfg.editorial_veu = "Veu càlida, propera, mai cursi."
+    cfg.save()
+    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
+        brief2 = build_brief(_monday())
+    assert brief2["editorial_veu"] == "Veu càlida, propera, mai cursi."

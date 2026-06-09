@@ -231,7 +231,12 @@ will send), `font`, `editat`.
      across the 40 rows). Returns `{"status": "not_ready"}` when the
      week's top isn't consolidated (same anti-stale guard). Accepts an
      optional `?setmana=<iso Monday>` (2026-06-08) for a specific week;
-     absent → this week (production path unchanged).
+     absent → this week (production path unchanged). Also carries
+     **`editorial_veu`** (2026-06): the staff-editable editorial-voice
+     prompt, read from `ConfiguracioGlobal.editorial_veu` (a `TextField`,
+     editable from the Configuració panel via reflection — no bespoke UI).
+     Blank by default, so the routine falls back to its own default voice;
+     the repo never imposes a voice. Top-level key, after `context`.
    - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
      draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`

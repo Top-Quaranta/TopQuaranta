@@ -128,9 +128,11 @@ consolidated-week selector + on-demand "Generate (engine)" + the shared
 `/staff/social/esborrany` page, now a thin wrapper kept for the cron
 email links). **Instagram** is also a first-class view at
 `/staff/social/instagram` (3c): its bespoke controls (credentials with
-test/clear + token TTL, the story cap, and the "Què publica" matrix —
-the `MatriuCanalToggles` table with the per-cell weekday gate; the legacy
-distribution phase was removed 2026-06) live in a custom `InstagramSection` (the
+test/clear + token TTL, and the "Què publica" matrix — the
+`MatriuCanalToggles` table with the per-cell weekday gate; the legacy
+distribution phase was removed 2026-06, and the story-cap knob
+`story_max_cancons_ppcc` moved to /staff/configuracio 2026-06) live in a
+custom `InstagramSection` (the
 NewsletterSection pattern — the generic credentials/control slots stay
 null so they don't double-render). RSS is still managed in-page on the
 cockpit, which keeps the transversal week calendar + slide-render button;

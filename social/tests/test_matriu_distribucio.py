@@ -15,8 +15,9 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
+from rest_framework.test import APIClient
 
-from music.models import Album, Artista, Canco
+from music.models import Album, Artista, Canco, StaffAuditLog
 from ranking.models import ConfiguracioGlobal, MatriuPublicacio, TopSetmanal
 from social.models import SocialPost
 
@@ -205,6 +206,56 @@ def test_newsletter_matrix_on_reaches_send(cfg_all_on, top_ppcc):
 
 
 # ── guard (d): web + RSS never gated by the matrix ───────────────────
+
+
+def test_matrix_does_not_bypass_channel_gate(cfg_all_on, top_ppcc):
+    """The matrix is an ADDITIONAL gate, never a bypass. Full matrix
+    active + per-channel OFF → publicar_social still short-circuits at the
+    channel gate, no real publish. (No --dry-run; the gate blocks before
+    any side effect.)"""
+    cfg_all_on.instagram_actiu = False
+    cfg_all_on.save()
+    out = io.StringIO()
+    with redirect_stdout(out):
+        call_command("publicar_social", "--data", SATURDAY)
+    assert not SocialPost.objects.filter(setmana=top_ppcc).exists()
+    assert "kill switch" in out.getvalue().lower()
+
+
+def test_matrix_does_not_bypass_master_gate(cfg_all_on, top_ppcc):
+    """Full matrix active + master OFF → still globally paused."""
+    cfg_all_on.distribucio_activa = False
+    cfg_all_on.save()
+    out = io.StringIO()
+    with redirect_stdout(out):
+        call_command("publicar_social", "--data", SATURDAY)
+    assert not SocialPost.objects.filter(setmana=top_ppcc).exists()
+    assert "pausada" in out.getvalue().lower()
+
+
+@pytest.mark.django_db
+def test_toggle_writes_staff_audit(db, django_user_model):
+    """The toggle changes what gets distributed, so it must be audited
+    (who/when/what)."""
+    user = django_user_model.objects.create_user(
+        username="matriu_auditor", email="ma@example.com", password="x", is_staff=True
+    )
+    client = APIClient()
+    client.force_authenticate(user=user)
+    r = client.post(
+        "/api/v1/staff/social/matriu/toggle/",
+        {"canal": "newsletter", "tipus": "top_ppcc", "actiu": False},
+        format="json",
+    )
+    assert r.status_code == 200
+    row = StaffAuditLog.objects.filter(action="config_update").order_by("-id").first()
+    assert row is not None
+    assert row.actor == user  # who
+    assert row.created_at is not None  # when
+    assert row.metadata.get("camp") == "matriu_distribucio"
+    assert row.metadata.get("canal") == "newsletter"
+    assert row.metadata.get("tipus") == "top_ppcc"
+    assert row.metadata.get("nou") is False
 
 
 def test_matrix_excludes_web_and_rss(cfg_all_on):

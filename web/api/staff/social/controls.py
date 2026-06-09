@@ -176,7 +176,23 @@ def social_matriu_toggle(request: Request) -> Response:
             status=400,
         )
     raw = request.data.get("actiu", None)
+    prev = cell.actiu
     new_val = (not cell.actiu) if raw is None else bool(raw)
     cell.actiu = new_val
     cell.save(update_fields=["actiu"])
+    # Audit: this toggle changes what actually gets distributed (an off
+    # newsletter cell silences the Sunday send), so it is a consequential
+    # config change — record who/when/what.
+    from music.audit import log_staff_action
+
+    log_staff_action(
+        request,
+        "config_update",
+        target=cell,
+        camp="matriu_distribucio",
+        canal=canal,
+        tipus=tipus,
+        anterior=prev,
+        nou=new_val,
+    )
     return Response({"canal": canal, "tipus": tipus, "actiu": new_val})

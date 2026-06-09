@@ -362,6 +362,7 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
             tags_top5.append({"artista": artista.nom, "tags": noms[:6]})
 
     from music.dates import project_week_number
+    from ranking.models import ConfiguracioGlobal
 
     return {
         "status": "ready",
@@ -371,6 +372,9 @@ def build_brief(setmana: datetime.date | None = None) -> dict:
             "antiguitat_top_setmanes": _top_age_weeks(),
             "setmana_projecte": project_week_number(saturday),
         },
+        # Staff-editable editorial-voice prompt (Configuració). Blank by
+        # default — the cloud routine falls back to its own default voice.
+        "editorial_veu": ConfiguracioGlobal.load().editorial_veu or "",
         "top10": top10,
         "top40": top40,
         "fets_grup_top5": fets_grup_top5,

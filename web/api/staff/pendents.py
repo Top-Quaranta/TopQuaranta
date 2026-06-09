@@ -290,6 +290,18 @@ def pendent_aprovar(request: Request, pk: int) -> Response:
     if not cascade_selected and not has_existing_loc:
         return Response({"error": "Cal seleccionar un municipi"}, status=400)
 
+    # Deezer gate (2026-06): an artist may only be approved with at least
+    # one Deezer anchor — either an existing ArtistaDeezer row or a
+    # deezer_id supplied here. Checked BEFORE the transaction so a reject
+    # never leaves a half-written localitat. NOT "Deezer or MBID": Deezer,
+    # full stop (the catalogue + previews + scale all key off it).
+    will_have_deezer = artista.deezer_ids.exists() or bool(deezer_id_raw)
+    if not will_have_deezer:
+        return Response(
+            {"error": "Cal almenys un Deezer ID per aprovar l'artista."},
+            status=400,
+        )
+
     deezer_id: int | None = None
     if deezer_id_raw:
         try:

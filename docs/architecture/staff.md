@@ -64,7 +64,7 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/staff/pendents/?q=&page=` | Pending artists with `nb_verif` annotation. |
-| POST | `/staff/pendents/<pk>/aprovar/` | Body: `{deezer_id?, municipi_id? \| manual?}`. Approves, clears `pendent_review`. |
+| POST | `/staff/pendents/<pk>/aprovar/` | Body: `{deezer_id?, municipi_id? \| manual?}`. Approves, clears `pendent_review`. **Deezer gate (2026-06):** rejects with 400 unless the artist ends with ≥1 `ArtistaDeezer` (existing or supplied) — Deezer, not "Deezer or MBID" — mirroring the localitat check. A `deezer_id` already owned by another artist → 409 with `owner_pk`. |
 | POST | `/staff/pendents/<pk>/descartar/` | **Tombstones** (never deletes): sets `aprovat=False, pendent_review=False`. The row leaves the queue but survives, so the Last.fm similar resolver matches it instead of re-creating the pendent (the resurrection loop, audit 2026-06-02 — see `docs/architecture/pipeline.md` §3.8). Applies to every source, not just `lastfm_similar`. |
 
 ### Artistes
@@ -73,7 +73,7 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 | GET | `/staff/artistes/` | Filters: `q`, `aprovat`, `deezer`, `territori`. |
 | GET | `/staff/artistes/search/?q=` | Typeahead for pickers. Returns up to 10 results. |
 | POST | `/staff/artistes/crear/` | Body: `nom`, `lastfm_nom?`, `deezer_id?`. |
-| GET/PATCH | `/staff/artistes/<pk>/` | Detail + replace-semantics PATCH over `nom`, `lastfm_nom`, `genere`, `percentatge_femeni`, `aprovat`, social URLs, `localitats[]`, `deezer_ids[]`. |
+| GET/PATCH | `/staff/artistes/<pk>/` | Detail + replace-semantics PATCH over `nom`, `lastfm_nom`, `genere`, `percentatge_femeni`, `aprovat`, social URLs, `localitats[]`, `deezer_ids[]`. **One transaction (2026-06):** the `aprovat=True` flip is deferred until after the localitat + Deezer writes, then gated (rejects 400 without ≥1 Deezer or localitat). A `deezer_ids[]` entry already owned by another artist now returns **409** with `owner_pk` (was a silent no-op); the rollback leaves nothing half-written. |
 
 ### Cançons
 | Method | Path | Purpose |

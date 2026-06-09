@@ -18,14 +18,13 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { api } from '../../lib/api'
-import Alert from '../../components/ui/Alert'
-import Button from '../../components/ui/Button'
+import { Btn, Callout, Pill } from '../../components/staff/StaffTable'
 
 // Coverage bar colour bands match the FASE F monitoring thresholds:
 // >=0.95 green, 0.85-0.95 yellow, <0.85 red. NULL coverage (never
 // synced or no source data yet) is grey.
 function coverageBar(ratio) {
-  let bar = 'bg-white/20'
+  let bar = 'bg-tq-ink/15'
   if (ratio !== null && ratio !== undefined) {
     if (ratio >= 0.95) bar = 'bg-green-500'
     else if (ratio >= 0.85) bar = 'bg-yellow-500'
@@ -37,10 +36,10 @@ function coverageBar(ratio) {
     ratio === null || ratio === undefined ? '0%' : `${Math.round(ratio * 100)}%`
   return (
     <div className="flex items-center gap-1">
-      <div className="w-20 h-2 bg-white/10 rounded">
+      <div className="w-20 h-2 bg-tq-ink/10 rounded">
         <div className={`${bar} h-2 rounded`} style={{ width }} />
       </div>
-      <span className="text-[11px] text-white/60 w-9 text-right">{pct}</span>
+      <span className="text-[11px] text-tq-ink/60 w-9 text-right">{pct}</span>
     </div>
   )
 }
@@ -55,10 +54,10 @@ function PlaylistRow({ pl }) {
   // decide if a manual sync is worth running.
   const target = pl.target_coverage || { total: 0, found: 0, ratio: null }
   return (
-    <tr className="border-b border-white/10">
+    <tr className="border-b border-tq-ink/10">
       <td className="px-3 py-2 text-sm font-mono">{pl.codi}</td>
       <td className="px-3 py-2 text-sm">{pl.territori || '—'}</td>
-      <td className="px-3 py-2 text-xs text-white/60">{last}</td>
+      <td className="px-3 py-2 text-xs text-tq-ink/60">{last}</td>
       <td className="px-3 py-2 text-sm">{pl.last_sync_ok ? '✓' : '✗'}</td>
       <td className="px-3 py-2 text-sm">
         {pl.last_n_matched}/{pl.last_n_tracks}
@@ -74,7 +73,7 @@ function PlaylistRow({ pl }) {
             href={pl.spotify_url}
             target="_blank"
             rel="noopener"
-            className="text-[11px] text-tq-yellow underline"
+            className="text-[11px] text-tq-yellow-deep underline"
           >
             obrir
           </a>
@@ -90,7 +89,7 @@ function PlaylistTable({ playlists }) {
   return (
     <table className="w-full text-left">
       <thead>
-        <tr className="border-b border-white/20 text-xs text-white/60 uppercase">
+        <tr className="border-b border-tq-ink/15 text-xs text-tq-ink/60 uppercase">
           <th className="px-3 py-2">Codi</th>
           <th className="px-3 py-2">Territori</th>
           <th className="px-3 py-2">Últim sync</th>
@@ -171,45 +170,39 @@ export default function StaffSocialSpotifyPage() {
   if (error) {
     return (
       <section className="max-w-5xl mx-auto py-8">
-        <Alert tone="danger">{error}</Alert>
+        <Callout tone="red">{error}</Callout>
       </section>
     )
   }
   if (!estat) {
-    return <p className="text-white/60 px-6 py-8">Carregant…</p>
+    return <p className="text-tq-ink/60 px-6 py-8">Carregant…</p>
   }
 
   const productBadge =
     estat.product === 'premium' ? (
-      <span className="inline-block px-2 py-0.5 text-xs bg-green-600 text-white rounded">
-        Premium
-      </span>
+      <Pill tone="green">Premium</Pill>
     ) : estat.product ? (
-      <span className="inline-block px-2 py-0.5 text-xs bg-red-600 text-white rounded">
-        {estat.product}
-      </span>
+      <Pill tone="red">{estat.product}</Pill>
     ) : (
-      <span className="inline-block px-2 py-0.5 text-xs bg-white/20 text-white rounded">
-        no autoritzat
-      </span>
+      <Pill tone="gray">no autoritzat</Pill>
     )
 
   return (
-    <section className="max-w-5xl mx-auto py-6 text-white">
+    <section className="max-w-5xl mx-auto py-6 text-tq-ink">
       <header className="mb-6">
-        <p className="text-[10px] uppercase tracking-widest text-white/60">
+        <p className="text-[10px] uppercase tracking-widest text-tq-ink/60">
           Distribució · Spotify
         </p>
         <h1 className="text-2xl font-bold">Sincronització de playlists</h1>
         {estat.enrichment_coverage && (
           <div className="mt-2 text-sm">
-            <span className="text-white/60">Cobertura d'enriquiment del catàleg: </span>
+            <span className="text-tq-ink/60">Cobertura d'enriquiment del catàleg: </span>
             <span className="font-bold">
               {estat.enrichment_coverage.ratio == null
                 ? '—'
                 : `${Math.round(estat.enrichment_coverage.ratio * 100)} %`}
             </span>
-            <span className="text-white/50">
+            <span className="text-tq-ink/50">
               {' '}
               ({estat.enrichment_coverage.enriched.toLocaleString('ca-ES')}/
               {estat.enrichment_coverage.total.toLocaleString('ca-ES')} cançons amb
@@ -220,28 +213,28 @@ export default function StaffSocialSpotifyPage() {
       </header>
 
       {oauthBanner === 'ok' && (
-        <Alert tone="success" className="mb-4">
+        <Callout tone="green" className="mb-4">
           OAuth completat. La sincronització ja pot rodar.
-        </Alert>
+        </Callout>
       )}
 
       {/* Section 1 — Identity & OAuth */}
-      <section className="bg-tq-ink-soft border border-white/10 rounded p-4 mb-6">
-        <h2 className="text-sm font-semibold mb-3 text-white/80">
+      <section className="bg-white border border-tq-ink/10 rounded p-4 mb-6">
+        <h2 className="text-sm font-semibold mb-3 text-tq-ink/80">
           Identitat & OAuth
         </h2>
         <dl className="grid grid-cols-2 gap-y-2 text-sm">
-          <dt className="text-white/60">Producte Spotify</dt>
+          <dt className="text-tq-ink/60">Producte Spotify</dt>
           <dd>{productBadge}</dd>
-          <dt className="text-white/60">User ID</dt>
+          <dt className="text-tq-ink/60">User ID</dt>
           <dd className="font-mono">{estat.spotify_user_id || '—'}</dd>
-          <dt className="text-white/60">Display name</dt>
+          <dt className="text-tq-ink/60">Display name</dt>
           <dd>{estat.display_name || '—'}</dd>
-          <dt className="text-white/60">Country</dt>
+          <dt className="text-tq-ink/60">Country</dt>
           <dd>{estat.country || '—'}</dd>
-          <dt className="text-white/60">Scope</dt>
+          <dt className="text-tq-ink/60">Scope</dt>
           <dd className="font-mono text-xs">{estat.scope || '—'}</dd>
-          <dt className="text-white/60">Última actualització</dt>
+          <dt className="text-tq-ink/60">Última actualització</dt>
           <dd>
             {estat.updated_at
               ? new Date(estat.updated_at).toLocaleString('ca-ES')
@@ -250,27 +243,28 @@ export default function StaffSocialSpotifyPage() {
         </dl>
 
         {estat.live_error && (
-          <Alert tone="danger" className="mt-3">
+          <Callout tone="red" className="mt-3">
             Spotify ha rebutjat el refresh_token: {estat.live_error}.
             Reautoritza per a continuar.
-          </Alert>
+          </Callout>
         )}
         {estat.oauth_present && estat.product && estat.product !== 'premium' && (
-          <Alert tone="danger" className="mt-3">
+          <Callout tone="red" className="mt-3">
             L'usuari de Spotify no és Premium (product=
             <strong>{estat.product}</strong>). La sincronització
             retornarà 403. Activa Premium al compte i reautoritza.
-          </Alert>
+          </Callout>
         )}
 
         <div className="mt-4">
-          <Button
-            variant="primary"
+          <Btn
+            tone="primary"
+            size="md"
             onClick={startOAuth}
             disabled={pending}
           >
             {estat.oauth_present ? 'Reautoritzar Spotify' : 'Autoritzar Spotify'}
-          </Button>
+          </Btn>
         </div>
       </section>
 
@@ -278,13 +272,13 @@ export default function StaffSocialSpotifyPage() {
           These are the 5 charts users follow. Visually distinguished
           because they are the externally visible face of the data. */}
       {estat.playlists.some(p => p.freq === 'weekly') && (
-        <section className="bg-tq-ink-soft border-2 border-tq-yellow/40 rounded p-4 mb-6">
+        <section className="bg-white border-2 border-tq-yellow/40 rounded p-4 mb-6">
           <div className="flex justify-between items-center mb-2">
             <div>
-              <h2 className="text-sm font-semibold text-tq-yellow">
+              <h2 className="text-sm font-semibold text-tq-yellow-deep">
                 Playlists públiques setmanals
               </h2>
-              <p className="text-xs text-white/60 mt-1">
+              <p className="text-xs text-tq-ink/60 mt-1">
                 Cara externa: 5 playlists que els usuaris segueixen.
                 Font: TopSetmanal (setmana més recent per territori).
                 Cobertura futura mostra quantes cançons del top
@@ -293,22 +287,22 @@ export default function StaffSocialSpotifyPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="secondary"
+              <Btn
+                tone="secondary"
                 size="sm"
                 onClick={() => runSync('weekly', true)}
                 disabled={pending || !estat.oauth_present}
               >
                 Dry-run weekly
-              </Button>
-              <Button
-                variant="primary"
+              </Btn>
+              <Btn
+                tone="primary"
                 size="sm"
                 onClick={() => runSync('weekly', false)}
                 disabled={pending || !estat.oauth_present}
               >
                 Sync weekly
-              </Button>
+              </Btn>
             </div>
           </div>
           <PlaylistTable
@@ -319,33 +313,33 @@ export default function StaffSocialSpotifyPage() {
 
       {/* Section 2b — Daily provisional tops. Internal-facing
           (operators inspect them; users don't usually follow). */}
-      <section className="bg-tq-ink-soft border border-white/10 rounded p-4 mb-6">
+      <section className="bg-white border border-tq-ink/10 rounded p-4 mb-6">
         <div className="flex justify-between items-center mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-white/80">
+            <h2 className="text-sm font-semibold text-tq-ink/80">
               Playlists provisionals diàries
             </h2>
-            <p className="text-xs text-white/60 mt-1">
+            <p className="text-xs text-tq-ink/60 mt-1">
               Font: TopProvisional. Cron diari 07:15 UTC.
             </p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
+            <Btn
+              tone="secondary"
               size="sm"
               onClick={() => runSync('daily', true)}
               disabled={pending || !estat.oauth_present}
             >
               Dry-run daily
-            </Button>
-            <Button
-              variant="primary"
+            </Btn>
+            <Btn
+              tone="primary"
               size="sm"
               onClick={() => runSync('daily', false)}
               disabled={pending || !estat.oauth_present}
             >
               Sync daily
-            </Button>
+            </Btn>
           </div>
         </div>
         <PlaylistTable
@@ -356,13 +350,13 @@ export default function StaffSocialSpotifyPage() {
       </section>
 
       {/* Section 2c — No_verificades triage chunks. */}
-      <section className="bg-tq-ink-soft border border-white/10 rounded p-4 mb-6">
+      <section className="bg-white border border-tq-ink/10 rounded p-4 mb-6">
         <div className="flex justify-between items-center mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-white/80">
+            <h2 className="text-sm font-semibold text-tq-ink/80">
               Triage no verificades
             </h2>
-            <p className="text-xs text-white/60 mt-1">
+            <p className="text-xs text-tq-ink/60 mt-1">
               7 chunks de 100 cançons pendents de verificar ordenades
               per ml_confianca desc. Sincronitzades amb el mateix
               cron daily.
@@ -375,10 +369,10 @@ export default function StaffSocialSpotifyPage() {
       </section>
 
       {estat.playlists.length === 0 && (
-        <section className="bg-tq-ink-soft border border-white/10 rounded p-4 mb-6">
-          <p className="text-sm text-white/60">
+        <section className="bg-white border border-tq-ink/10 rounded p-4 mb-6">
+          <p className="text-sm text-tq-ink/60">
             Cap fila a SpotifyPlaylist. Executa{' '}
-            <code className="text-xs bg-white/10 px-1">
+            <code className="text-xs bg-tq-ink/10 px-1">
               configurar_spotify_playlists
             </code>{' '}
             per a registrar els IDs.
@@ -388,22 +382,22 @@ export default function StaffSocialSpotifyPage() {
 
       {/* Sync output */}
       {syncRun && (
-        <section className="bg-tq-ink-soft border border-white/10 rounded p-4 mb-6">
-          <h2 className="text-sm font-semibold mb-3 text-white/80">
+        <section className="bg-white border border-tq-ink/10 rounded p-4 mb-6">
+          <h2 className="text-sm font-semibold mb-3 text-tq-ink/80">
             Resultat sync més recent
           </h2>
           {syncRun.error && (
-            <Alert tone="danger" className="mb-3">
+            <Callout tone="red" className="mb-3">
               {syncRun.error}
-            </Alert>
+            </Callout>
           )}
           {syncRun.stdout && (
-            <pre className="bg-black/40 p-3 text-xs overflow-x-auto whitespace-pre-wrap rounded">
+            <pre className="bg-tq-ink text-white/90 p-3 text-xs overflow-x-auto whitespace-pre-wrap rounded">
               {syncRun.stdout}
             </pre>
           )}
           {syncRun.stderr && (
-            <pre className="bg-red-950/40 p-3 text-xs overflow-x-auto whitespace-pre-wrap rounded mt-2">
+            <pre className="bg-red-950 text-red-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap rounded mt-2">
               {syncRun.stderr}
             </pre>
           )}
@@ -411,19 +405,19 @@ export default function StaffSocialSpotifyPage() {
       )}
 
       {/* Section 3 — Cron */}
-      <section className="bg-tq-ink-soft border border-white/10 rounded p-4">
-        <h2 className="text-sm font-semibold mb-3 text-white/80">Cron</h2>
+      <section className="bg-white border border-tq-ink/10 rounded p-4">
+        <h2 className="text-sm font-semibold mb-3 text-tq-ink/80">Cron</h2>
         <p className="text-sm">
           Estat:{' '}
           {estat.cron_silenced ? (
-            <span className="text-yellow-400">silenciat</span>
+            <Pill tone="yellow">silenciat</Pill>
           ) : (
-            <span className="text-green-400">actiu</span>
+            <Pill tone="green">actiu</Pill>
           )}
         </p>
-        <p className="text-xs text-white/60 mt-2 leading-relaxed">
+        <p className="text-xs text-tq-ink/60 mt-2 leading-relaxed">
           La gestió del flag <code>silenced</code> es fa via commit a{' '}
-          <code className="text-xs bg-white/10 px-1">
+          <code className="text-xs bg-tq-ink/10 px-1">
             deploy/cron-meta.json
           </code>
           . No es pot canviar en runtime perquè qualsevol mutació es

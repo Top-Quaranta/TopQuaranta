@@ -96,6 +96,30 @@ export function EmptyState({ children }) {
   return <p className="px-3 py-6 text-sm opacity-60 text-center">{children}</p>
 }
 
+// Callout — a full-width banner for inline feedback (errors, success
+// notices, warnings) on the staff panel's white card surfaces. The wide
+// counterpart of Pill (which is for short inline states). Tones go
+// through the mm-design semantic tokens so a palette change reaches every
+// callout in one edit; a soft tint background keeps it readable on white.
+export function Callout({ tone = 'info', children, className = '' }) {
+  const sem = {
+    red: { bg: 'rgba(239, 68, 68, 0.12)', fg: 'var(--color-tq-danger-deep)' },
+    green: { bg: 'rgba(16, 185, 129, 0.12)', fg: 'var(--color-tq-success-deep)' },
+    yellow: { bg: 'rgba(250, 204, 21, 0.18)', fg: 'var(--color-tq-yellow-deep, #ca8a04)' },
+    info: { bg: 'rgba(156, 163, 175, 0.18)', fg: 'var(--color-tq-neutral-deep, #4b5563)' },
+  }
+  const s = sem[tone] || sem.info
+  return (
+    <div
+      role={tone === 'red' ? 'alert' : 'status'}
+      className={`p-3 rounded-md text-sm ${className}`}
+      style={{ background: s.bg, color: s.fg }}
+    >
+      {children}
+    </div>
+  )
+}
+
 export function Pill({ children, tone = 'ink' }) {
   // Brand tones use Tailwind utilities; semantic ones go through the
   // design tokens (`--color-tq-success/danger/neutral`) so a palette

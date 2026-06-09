@@ -320,94 +320,148 @@ def artista_detail(request: Request, pk: int) -> Response:
             "percentatge_femeni",
             "musicbrainz_id",
         ] + [f for f, _ in Artista.SOCIAL_LINK_FIELDS]
-        # Sprint S Bloc D pt 3: when staff sets `genere_canonical`
-        # manually, lock the field so the nightly inferer doesn't
-        # overwrite it. Same for `percentatge_femeni`. Idempotent —
-        # sending the same value re-locks (no-op).
-        if "genere_canonical" in data:
-            artista.genere_locked = bool((data.get("genere_canonical") or "").strip())
-        if "genere_locked" in data:
-            artista.genere_locked = bool(data["genere_locked"])
-        old_mbid = artista.musicbrainz_id
-        for f in simple_fields:
-            if f in data:
-                setattr(artista, f, (data.get(f) or "").strip())
-        # Staff assigning a non-blank MBID manually overrides the
-        # auto-match lockout: the decision is that this specific ID is
-        # correct, so re-enable automatic sync for future cron runs.
-        new_mbid = (
-            (data.get("musicbrainz_id") or "").strip()
-            if "musicbrainz_id" in data
-            else None
-        )
-        if new_mbid and new_mbid != old_mbid and artista.mb_auto_match_disabled:
-            artista.mb_auto_match_disabled = False
-        if "aprovat" in data:
-            artista.aprovat = bool(data["aprovat"])
-            # Invariant enforced by `artista_no_aprovat_pendent_review`:
-            # aprovat=True + pendent_review=True is not allowed. Clear
-            # the queue flag so a PATCH that approves straight from the
-            # edit page doesn't 500 on the CheckConstraint.
-            if artista.aprovat and artista.pendent_review:
-                artista.pendent_review = False
-        artista.save()
-
-        # If staff just changed the MBID (or set one for the first
-        # time), re-sync MB metadata. Without this, stale fields
-        # (`mb_recording_id`, `mb_work_id`, `mbrainz_confirmed`) on
-        # the artist's Cançons survive the change and corrupt
-        # downstream MB-derived ML features. Caught 2026-04-29 on
-        # the "Casual" case — the auto-resolver had matched the wrong
-        # (US) MBID, staff PATCH'd to the correct (CAT) one, but the
-        # cançons stayed tagged with the US recording IDs.
-        new_mbid_value = (artista.musicbrainz_id or "").strip()
-        if new_mbid_value and new_mbid_value != (old_mbid or ""):
-            from music.mb_sync import sync_from_mbid
-
-            try:
-                sync_from_mbid(artista)
-            except Exception:
-                logger.exception(
-                    "Auto-sync after MBID change failed for artista %s", artista.pk
+        # Whole PATCH is one transaction: a rejected approval (no Deezer)
+        # or a Deezer collision must NOT leave half-written localitats /
+        # deezer rows. `transaction.set_rollback(True)` before an early
+        # return undoes the in-flight writes (a bare `return` inside an
+        # atomic block would otherwise commit them).
+        with transaction.atomic():
+            # Sprint S Bloc D pt 3: when staff sets `genere_canonical`
+            # manually, lock the field so the nightly inferer doesn't
+            # overwrite it. Same for `percentatge_femeni`. Idempotent —
+            # sending the same value re-locks (no-op).
+            if "genere_canonical" in data:
+                artista.genere_locked = bool(
+                    (data.get("genere_canonical") or "").strip()
                 )
+            if "genere_locked" in data:
+                artista.genere_locked = bool(data["genere_locked"])
+            old_mbid = artista.musicbrainz_id
+            for f in simple_fields:
+                if f in data:
+                    setattr(artista, f, (data.get(f) or "").strip())
+            # Staff assigning a non-blank MBID manually overrides the
+            # auto-match lockout: the decision is that this specific ID is
+            # correct, so re-enable automatic sync for future cron runs.
+            new_mbid = (
+                (data.get("musicbrainz_id") or "").strip()
+                if "musicbrainz_id" in data
+                else None
+            )
+            if new_mbid and new_mbid != old_mbid and artista.mb_auto_match_disabled:
+                artista.mb_auto_match_disabled = False
+            # The `aprovat=True` flip is DEFERRED until after the
+            # localitat + Deezer writes below, so approving + adding the
+            # Deezer in one PATCH passes the gate. An unapprove applies now.
+            approving = "aprovat" in data and bool(data["aprovat"])
+            if "aprovat" in data and not bool(data["aprovat"]):
+                artista.aprovat = False
+            artista.save()
 
-        # Replace locations if sent (array of {municipi_id} or {manual}).
-        if "localitats" in data:
-            artista.localitats.all().delete()
-            for loc in data["localitats"] or []:
-                mid = loc.get("municipi_id")
-                manual = (loc.get("manual") or "").strip()
-                if mid:
-                    try:
-                        m = Municipi.objects.get(pk=int(mid))
-                        ArtistaLocalitat.objects.create(artista=artista, municipi=m)
-                    except (ValueError, Municipi.DoesNotExist):
-                        pass
-                elif manual:
-                    ArtistaLocalitat.objects.create(
-                        artista=artista, municipi=None, localitat_manual=manual
+            # If staff just changed the MBID (or set one for the first
+            # time), re-sync MB metadata. Without this, stale fields
+            # (`mb_recording_id`, `mb_work_id`, `mbrainz_confirmed`) on
+            # the artist's Cançons survive the change and corrupt
+            # downstream MB-derived ML features. Caught 2026-04-29 on
+            # the "Casual" case — the auto-resolver had matched the wrong
+            # (US) MBID, staff PATCH'd to the correct (CAT) one, but the
+            # cançons stayed tagged with the US recording IDs.
+            new_mbid_value = (artista.musicbrainz_id or "").strip()
+            if new_mbid_value and new_mbid_value != (old_mbid or ""):
+                from music.mb_sync import sync_from_mbid
+
+                try:
+                    sync_from_mbid(artista)
+                except Exception:
+                    logger.exception(
+                        "Auto-sync after MBID change failed for artista %s", artista.pk
                     )
 
-        # Replace Deezer IDs if sent (list of ints; first is principal).
-        if "deezer_ids" in data:
-            want = []
-            for raw in data["deezer_ids"] or []:
-                try:
-                    want.append(int(raw))
-                except (TypeError, ValueError):
-                    pass
-            existing = set(artista.deezer_ids.values_list("deezer_id", flat=True))
-            want_set = set(want)
-            if existing - want_set:
-                artista.deezer_ids.filter(deezer_id__in=existing - want_set).delete()
-            for i, dz_id in enumerate(want):
-                if dz_id not in existing:
-                    try:
-                        ArtistaDeezer.objects.create(
-                            artista=artista, deezer_id=dz_id, principal=(i == 0)
+            # Replace locations if sent (array of {municipi_id} or {manual}).
+            if "localitats" in data:
+                artista.localitats.all().delete()
+                for loc in data["localitats"] or []:
+                    mid = loc.get("municipi_id")
+                    manual = (loc.get("manual") or "").strip()
+                    if mid:
+                        try:
+                            m = Municipi.objects.get(pk=int(mid))
+                            ArtistaLocalitat.objects.create(artista=artista, municipi=m)
+                        except (ValueError, Municipi.DoesNotExist):
+                            pass
+                    elif manual:
+                        ArtistaLocalitat.objects.create(
+                            artista=artista, municipi=None, localitat_manual=manual
                         )
-                    except IntegrityError:
+
+            # Replace Deezer IDs if sent (list of ints; first is principal).
+            # A collision (the id already belongs to another artist) is no
+            # longer swallowed: surface a 409 so staff know to merge,
+            # instead of a silent 200 that didn't persist anything.
+            if "deezer_ids" in data:
+                want = []
+                for raw in data["deezer_ids"] or []:
+                    try:
+                        want.append(int(raw))
+                    except (TypeError, ValueError):
                         pass
+                existing = set(artista.deezer_ids.values_list("deezer_id", flat=True))
+                want_set = set(want)
+                if existing - want_set:
+                    artista.deezer_ids.filter(
+                        deezer_id__in=existing - want_set
+                    ).delete()
+                for i, dz_id in enumerate(want):
+                    if dz_id not in existing:
+                        try:
+                            with transaction.atomic():
+                                ArtistaDeezer.objects.create(
+                                    artista=artista,
+                                    deezer_id=dz_id,
+                                    principal=(i == 0),
+                                )
+                        except IntegrityError:
+                            owner = (
+                                ArtistaDeezer.objects.filter(deezer_id=dz_id)
+                                .select_related("artista")
+                                .first()
+                            )
+                            transaction.set_rollback(True)
+                            return Response(
+                                {
+                                    "error": (
+                                        f"El Deezer {dz_id} ja és de "
+                                        f"«{owner.artista.nom if owner else '?'}» "
+                                        f"(pk={owner.artista.pk if owner else '?'}); "
+                                        "fusioneu-los o canvieu l'ID."
+                                    ),
+                                    "owner_pk": owner.artista.pk if owner else None,
+                                },
+                                status=409,
+                            )
+
+            # Approval gate (after the anchors are written): an artist may
+            # only be approved with at least one Deezer and one localitat.
+            if approving:
+                if not artista.deezer_ids.exists():
+                    transaction.set_rollback(True)
+                    return Response(
+                        {"error": "Cal almenys un Deezer ID per aprovar l'artista."},
+                        status=400,
+                    )
+                if not artista.localitats.exists():
+                    transaction.set_rollback(True)
+                    return Response(
+                        {"error": "Cal almenys una localitat per aprovar l'artista."},
+                        status=400,
+                    )
+                artista.aprovat = True
+                # Invariant `artista_no_aprovat_pendent_review`: clear the
+                # queue flag so approving from the edit page doesn't 500.
+                if artista.pendent_review:
+                    artista.pendent_review = False
+                artista.save(update_fields=["aprovat", "pendent_review"])
+
         log_staff_action(request, "artista_edit", target=artista)
 
     # Return full detail

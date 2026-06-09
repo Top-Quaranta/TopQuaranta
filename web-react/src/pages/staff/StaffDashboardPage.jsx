@@ -11,17 +11,18 @@
  * Adding a new staff tool: drop it in the right `GROUPS` entry and
  * (if it has a queue) wire its counter through `count`.
  */
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api } from '../../lib/api'
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../../lib/api";
+import { STAFF_GROUPS } from "./staffViews";
 
 function CountBadge({ n }) {
-  if (!n) return null
+  if (!n) return null;
   return (
     <span className="ml-auto inline-flex items-center justify-center text-[11px] font-semibold bg-tq-yellow text-tq-ink rounded-full px-2 py-0.5 min-w-[1.5rem]">
       {n}
     </span>
-  )
+  );
 }
 
 function Tile({ to, title, desc, count }) {
@@ -36,91 +37,39 @@ function Tile({ to, title, desc, count }) {
       </div>
       <p className="text-xs opacity-70 mt-1 leading-snug">{desc}</p>
     </Link>
-  )
+  );
 }
 
-// Each group renders as a banner + grid of tiles. `countKey` indexes
-// into the dashboard counters payload — leave it `null` for evergreen
-// tools that have no queue. Mirrors `StaffLayout::GROUPS` 1-to-1.
-const GROUPS = [
-  {
-    label: 'Visió general',
-    items: [
-      { to: '/staff/estat',     title: 'Estat del sistema', desc: 'Inventari, pipelines, ML i cues — dashboard visual.' },
-      { to: '/staff/analytics', title: 'Analytics',         desc: 'Mètriques agregades del web, comunitat i xarxes socials.' },
-    ],
-  },
-  {
-    label: 'Cua del dia',
-    items: [
-      { to: '/staff/pendents',     title: 'Artistes pendents',     desc: 'Aprovar o descartar artistes auto-descoberts per la ingesta.', countKey: 'artistes_pendents'        },
-      { to: '/staff/propostes',    title: "Propostes d'artistes",  desc: "Propostes d'usuaris per afegir artistes nous al sistema.",     countKey: 'propostes_obertes'        },
-      { to: '/staff/solicituds',   title: 'Sol·licituds de gestió', desc: 'Usuaris demanant poder gestionar un artista existent.',        countKey: 'solicituds_gestio_obertes' },
-      { to: '/staff/feedback',     title: "Feedback d'usuaris",    desc: 'Correccions i errors reportats des de les pàgines públiques.', countKey: 'feedback_obert'           },
-    ],
-  },
-  {
-    label: 'Catàleg',
-    items: [
-      { to: '/staff/artistes', title: 'Artistes', desc: "Llista, edició i creació manual d'artistes aprovats." },
-      { to: '/staff/cancons',  title: 'Cançons',  desc: 'Cançons no verificades a revisar.', countKey: 'cancons_no_verificades' },
-      { to: '/staff/albums',   title: 'Àlbums',   desc: "Edició d'àlbums i correcció de portades." },
-    ],
-  },
-  {
-    label: 'Top',
-    items: [
-      { to: '/staff/top', title: 'Top provisional', desc: 'Revisar el ranking diari i rebutjar entrades.' },
-    ],
-  },
-  {
-    label: 'Comunitat',
-    items: [
-      { to: '/staff/publicacions', title: 'Publicacions pendents', desc: 'Publicacions públiques esperant aprovació.', countKey: 'publicacions_pendents' },
-      { to: '/staff/usuaris',      title: 'Usuaris',               desc: "Llista d'usuaris, moderació d'spam, reset 2FA." },
-    ],
-  },
-  {
-    label: 'Distribució',
-    items: [
-      { to: '/staff/social', title: 'Distribució multi-canal', desc: 'Calendari setmanal a Instagram, Mastodon, Bluesky, Telegram, newsletter i RSS.' },
-    ],
-  },
-  {
-    label: 'Diagnòstic',
-    items: [
-      { to: '/staff/senyal',    title: 'Senyal diari',          desc: 'Dades brutes Last.fm (playcount + listeners) per dia.' },
-      { to: '/staff/historial', title: 'Historial de decisions', desc: "Log d'aprovacions i rebuigs previs." },
-      { to: '/staff/auditlog',  title: 'Auditoria staff',       desc: "Registre immutable d'accions destructives." },
-    ],
-  },
-  {
-    label: 'Sistema',
-    items: [
-      { to: '/staff/configuracio', title: 'Configuració global', desc: "Coeficients de l'algorisme de ranking i kill-switches." },
-    ],
-  },
-]
+// Panell tiles = the shared registry, keeping only the items flagged for
+// the panell (drops the sidebar-only self-link). `countKey` indexes into
+// the dashboard counters payload; `title` falls back to `label`.
+const GROUPS = STAFF_GROUPS.map((g) => ({
+  label: g.label,
+  items: g.items
+    .filter((it) => it.inPanell !== false)
+    .map((it) => ({ ...it, title: it.title || it.label })),
+})).filter((g) => g.items.length > 0);
 
 export default function StaffDashboardPage() {
-  const [counts, setCounts] = useState(null)
-  const [error, setError] = useState(null)
+  const [counts, setCounts] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    let active = true
-    api.get('/staff/dashboard/')
-      .then(data => {
-        if (active) setCounts(data)
+    let active = true;
+    api
+      .get("/staff/dashboard/")
+      .then((data) => {
+        if (active) setCounts(data);
       })
-      .catch(e => {
-        if (active) setError(e.message || 'Error')
-      })
+      .catch((e) => {
+        if (active) setError(e.message || "Error");
+      });
     return () => {
-      active = false
-    }
-  }, [])
+      active = false;
+    };
+  }, []);
 
-  const c = counts || {}
+  const c = counts || {};
 
   return (
     <section>
@@ -143,13 +92,13 @@ export default function StaffDashboardPage() {
       )}
 
       <div className="space-y-7">
-        {GROUPS.map(group => (
+        {GROUPS.map((group) => (
           <div key={group.label}>
             <h2 className="text-[11px] uppercase tracking-widest text-white/60 mb-2">
               {group.label}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {group.items.map(item => (
+              {group.items.map((item) => (
                 <Tile
                   key={item.to}
                   to={item.to}
@@ -163,5 +112,5 @@ export default function StaffDashboardPage() {
         ))}
       </div>
     </section>
-  )
+  );
 }

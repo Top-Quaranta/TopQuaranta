@@ -89,6 +89,17 @@ nested layouts beyond the per-section `<Layout>`, `<StaffLayout>`,
 The `AdminRoute` 2FA handoff is the only architecturally interesting
 auth seam; see the file's docstring for the rationale.
 
+**Staff navigation is one registry** (`pages/staff/staffViews.jsx::STAFF_GROUPS`,
+2026-06). Both the left sidebar (`StaffLayout`) and the panell tiles
+(`StaffDashboardPage`) map this single list, so adding a view is one entry
+and it shows up in both. Each item carries `to` / `label` (sidebar) /
+`title` + `desc` (panell tile) / optional `badge` (sidebar live count),
+`countKey` (panell queue count), `end`, and `inSidebar` / `inPanell`
+opt-out flags (the `/staff` self-link is sidebar-only). Before this the
+two lists were hand-mirrored and had drifted — the sidebar carried the
+social sub-channels + Spotify while the panell didn't, and Instagram had
+a route in neither.
+
 The **distribution area** under `/staff/social` is being split from a
 single monolithic page into homogeneous house-style views. `/staff/social`
 is the cockpit (master switch + the six-channel grid); most

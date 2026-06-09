@@ -20,127 +20,55 @@
  * labels are hidden there and a subtle vertical divider keeps the
  * groups distinguishable in a single line.
  */
-import { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useEffect, useState } from "react";
+import { NavLink } from "react-router-dom";
 
-import { api } from '../lib/api'
+import { api } from "../lib/api";
+import { STAFF_GROUPS } from "../pages/staff/staffViews";
 
 // One light fetch on mount returns the count of pending
 // SolicitudRevisio rows; cached in module-level state so navigating
 // between staff pages reuses the value (until full page refresh).
-let _cachedBadges = null
+let _cachedBadges = null;
 function useStaffBadges() {
-  const [badges, setBadges] = useState(_cachedBadges)
+  const [badges, setBadges] = useState(_cachedBadges);
   useEffect(() => {
-    if (_cachedBadges) return
+    if (_cachedBadges) return;
     api
-      .get('/staff/sollicituds-revisio/?estat=pendent&page=1')
-      .then(d => {
-        _cachedBadges = { sollicituds_revisio_pendents: d.n_pendents_total }
-        setBadges(_cachedBadges)
+      .get("/staff/sollicituds-revisio/?estat=pendent&page=1")
+      .then((d) => {
+        _cachedBadges = { sollicituds_revisio_pendents: d.n_pendents_total };
+        setBadges(_cachedBadges);
       })
       .catch(() => {
-        _cachedBadges = { sollicituds_revisio_pendents: 0 }
-        setBadges(_cachedBadges)
-      })
-  }, [])
-  return badges || {}
+        _cachedBadges = { sollicituds_revisio_pendents: 0 };
+        setBadges(_cachedBadges);
+      });
+  }, []);
+  return badges || {};
 }
 
-const GROUPS = [
-  {
-    label: 'Visió general',
-    items: [
-      { to: '/staff',           label: 'Panell', end: true },
-      { to: '/staff/estat',     label: 'Estat' },
-      { to: '/staff/analytics', label: 'Analytics' },
-    ],
-  },
-  {
-    label: 'Cua del dia',
-    items: [
-      { to: '/staff/pendents',   label: 'Pendents'    },
-      { to: '/staff/propostes',  label: 'Propostes'   },
-      { to: '/staff/solicituds', label: 'Sol·licituds' },
-      {
-        to: '/staff/sollicituds-revisio',
-        label: 'Sol·licituds revisió',
-        badge: 'sollicituds_revisio_pendents',
-      },
-      { to: '/staff/feedback',   label: 'Feedback'    },
-    ],
-  },
-  {
-    label: 'Catàleg',
-    items: [
-      { to: '/staff/artistes', label: 'Artistes' },
-      { to: '/staff/artistes/sense-instagram', label: 'Artistes sense Instagram' },
-      { to: '/staff/cancons',  label: 'Cançons'  },
-      { to: '/staff/albums',   label: 'Àlbums'   },
-    ],
-  },
-  {
-    label: 'Top',
-    items: [
-      { to: '/staff/top', label: 'Top provisional' },
-    ],
-  },
-  {
-    label: 'Comunitat',
-    items: [
-      { to: '/staff/publicacions', label: 'Publicacions' },
-      { to: '/staff/usuaris',      label: 'Usuaris'      },
-    ],
-  },
-  {
-    label: 'Distribució',
-    items: [
-      // Cockpit: master switch + the six-channel grid. Instagram,
-      // newsletter and RSS are still managed in-page here; the three
-      // simple channels below have their own house-style views (slice 1
-      // of the distribution-views redistribution).
-      { to: '/staff/social', label: 'Social', end: true },
-      { to: '/staff/social/publicacions', label: 'Publicacions' },
-      { to: '/staff/social/mastodon', label: 'Mastodon' },
-      { to: '/staff/social/bluesky', label: 'Bluesky' },
-      { to: '/staff/social/telegram', label: 'Telegram' },
-      { to: '/staff/social/newsletter', label: 'Newsletter' },
-      // Spotify is a separate landing because the OAuth + Premium
-      // monitoring shape doesn't fit the publications table. Surfaced as
-      // a sibling under the same "Distribució" group so it's discoverable
-      // next to the rest.
-      { to: '/staff/social/spotify', label: 'Spotify' },
-    ],
-  },
-  {
-    label: 'Diagnòstic',
-    items: [
-      { to: '/staff/senyal',    label: 'Senyal'    },
-      { to: '/staff/historial', label: 'Historial' },
-      { to: '/staff/auditlog',  label: 'Auditoria' },
-    ],
-  },
-  {
-    label: 'Sistema',
-    items: [
-      { to: '/staff/configuracio', label: 'Configuració' },
-    ],
-  },
-]
+// Sidebar groups = the shared registry, keeping only the items flagged
+// for the sidebar (every item by default; the panell-only opt-outs drop
+// here).
+const GROUPS = STAFF_GROUPS.map((g) => ({
+  label: g.label,
+  items: g.items.filter((it) => it.inSidebar !== false),
+})).filter((g) => g.items.length > 0);
 
 const linkBase =
-  'text-sm px-3 py-2 rounded transition-colors whitespace-nowrap ' +
-  'md:w-full md:text-left'
+  "text-sm px-3 py-2 rounded transition-colors whitespace-nowrap " +
+  "md:w-full md:text-left";
 
 const linkClass = ({ isActive }) =>
   linkBase +
-  ' ' +
+  " " +
   (isActive
-    ? 'bg-tq-yellow text-tq-ink font-semibold'
-    : 'text-white/70 hover:text-white hover:bg-white/10')
+    ? "bg-tq-yellow text-tq-ink font-semibold"
+    : "text-white/70 hover:text-white hover:bg-white/10");
 
 export default function StaffLayout({ children }) {
-  const badges = useStaffBadges()
+  const badges = useStaffBadges();
   return (
     <div className="-mx-6 lg:-mx-12 flex flex-col md:flex-row min-h-[70vh]">
       {/* ── Dark sidebar ── */}
@@ -163,10 +91,12 @@ export default function StaffLayout({ children }) {
             <div
               key={group.label}
               className={
-                'flex md:flex-col gap-0.5 ' +
+                "flex md:flex-col gap-0.5 " +
                 // On mobile keep groups inline with a subtle divider so
                 // the eye can still parse the clusters.
-                (gi > 0 ? 'md:mt-3 border-l md:border-l-0 border-white/10 md:border-0 pl-2 md:pl-0' : '')
+                (gi > 0
+                  ? "md:mt-3 border-l md:border-l-0 border-white/10 md:border-0 pl-2 md:pl-0"
+                  : "")
               }
             >
               <p
@@ -176,19 +106,19 @@ export default function StaffLayout({ children }) {
                 {group.label}
               </p>
               {group.items.map(({ to, label, end, badge }) => {
-                const n = badge ? badges[badge] : null
+                const n = badge ? badges[badge] : null;
                 return (
                   <NavLink key={to} to={to} end={end} className={linkClass}>
                     <span className="inline-flex items-center gap-2">
                       {label}
-                      {typeof n === 'number' && n > 0 && (
+                      {typeof n === "number" && n > 0 && (
                         <span className="inline-flex items-center justify-center min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-tq-yellow text-tq-ink">
                           {n}
                         </span>
                       )}
                     </span>
                   </NavLink>
-                )
+                );
               })}
             </div>
           ))}
@@ -198,5 +128,5 @@ export default function StaffLayout({ children }) {
       {/* ── Main staff content ── */}
       <div className="flex-1 min-w-0 px-6 lg:px-12 py-6">{children}</div>
     </div>
-  )
+  );
 }

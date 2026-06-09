@@ -47,13 +47,17 @@ describe('CHANNEL_DESCRIPTORS', () => {
   })
 
   it('every descriptor declares the 4-section schema keys', () => {
-    for (const d of Object.values(CHANNEL_DESCRIPTORS)) {
+    for (const [key, d] of Object.entries(CHANNEL_DESCRIPTORS)) {
       expect('section1' in d).toBe(true) // null or { kind }
       expect(d.kpis).toBeTruthy()
-      // `control` is an object for channels whose matrix renders in the
-      // generic ControlSection, but null when a custom section owns it
-      // (instagram). The key must always be declared.
-      expect('control' in d).toBe(true)
+      // `control` renders in the generic ControlSection, so it must be a
+      // truthy object — EXCEPT instagram, whose fase + story-cap + matrix
+      // live in the bespoke InstagramSection, leaving `control` null.
+      if (key === 'instagram') {
+        expect(d.control).toBeNull()
+      } else {
+        expect(d.control).toBeTruthy()
+      }
       expect(d.analytics).toBeTruthy()
       expect(['exists', 'missing']).toContain(d.analytics.status)
     }

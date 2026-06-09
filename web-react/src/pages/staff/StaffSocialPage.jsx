@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
-import MatriuGrid from './social/MatriuGrid'
+import MatriuCanalToggles from './social/MatriuCanalToggles'
 import {
   Btn,
   Input,
@@ -475,6 +475,18 @@ export default function StaffSocialPage() {
         </p>
       </div>
 
+      {/* ── Què publica (matriu de distribució, Instagram) ─────── */}
+      <div className="bg-white text-tq-ink rounded-lg p-4 mb-4">
+        <p className="text-[10px] uppercase tracking-widest text-tq-ink/75 mb-2">
+          Què publica (Instagram)
+        </p>
+        <MatriuCanalToggles canal="instagram" />
+        <p className="text-[11px] text-tq-ink/60 mt-2">
+          Desmarcar atura la distribució d'eixe tipus a Instagram (porta
+          addicional sobre la fase).
+        </p>
+      </div>
+
       {/* Channels not yet migrated to their own view (Mastodon,
           Bluesky and Telegram now live under /staff/social/<canal> via
           the channel grid above). */}
@@ -486,9 +498,6 @@ export default function StaffSocialPage() {
         <code>/rss/novetats.xml</code> sense altres credencials. Mastodon, Bluesky i
         Telegram tenen ara la seva pròpia vista (graella de dalt).
       </p>
-
-      {/* ── Matriu de distribució (canal × tipus) ─────────────── */}
-      <MatriuGrid />
 
       {/* ── Calendari de la setmana ───────────────────────────── */}
       <section>

@@ -290,6 +290,30 @@ The other channels stay on Saturday (`publicar_canal`); only the
 newsletter moved to the Sunday draft path. `publicar_canal --channel
 newsletter` remains as the manual immediate-send fallback (no draft).
 
+### Newsletter → Comunitat bridge (additive, gated)
+
+A staff action can mirror a `NewsletterDraft` into a PUBLIC community
+`Publicacio`, authored by the `admin` pseudo-user. It is **additive and
+off by default**, gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`.
+
+- Model link: `NewsletterDraft.publicacio` (nullable `OneToOneField` →
+  `Publicacio`, `SET_NULL`, `related_name="newsletter_origen"`). Records
+  the mirror so the action is **idempotent** (a draft maps to ≤1 post).
+- Service: `comptes/community_bridge.py::publicar_draft_a_comunitat(draft)`.
+  Raises `PontDesactivat` while the gate is off. Creates ONLY a `Publicacio`
+  row (`visibilitat=publica`, `estat=publicat`) — **no email, no social
+  distribution, no newsletter send**.
+- Endpoint: `POST /api/v1/staff/newsletter/esborrany/publicar-comunitat/`
+  (`web/api/staff/newsletter.py::esborrany_publicar_comunitat`) — 409 while
+  the gate is off; staff button in `NewsletterDraftEditor.jsx`.
+- Body: the draft's `narrative_html` is converted to **markdown**
+  (`community_bridge._html_to_markdown`, via the `markdownify` dependency) and
+  stored in `Publicacio.cos`. The feed renders `cos` with `react-markdown` +
+  `remark-gfm` (never raw HTML) and previews via `stripMarkdown`, so markdown
+  is the right shape. The service cleans the ugly cases first: images dropped,
+  relative links absolutised to `PUBLIC_SITE_BASE`, blank-line runs collapsed;
+  the result contains no raw HTML.
+
 ## Related
 
 - ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`

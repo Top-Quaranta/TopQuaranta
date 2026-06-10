@@ -154,6 +154,19 @@ class ConfiguracioGlobal(models.Model):
         "mediana avall). 10 → mediana del top ~10. Rang 1-40.",
     )
 
+    # ── Newsletter → Publicació bridge gate (additive, 2026-06-10) ──
+    # When True, staff may mirror a NewsletterDraft into a public
+    # community Publicació (admin pseudo-user as author). Default False:
+    # the bridge endpoint refuses while off, nothing fires automatically,
+    # and no real publication is ever triggered by deploying this.
+    newsletter_publicacio_pont_actiu = models.BooleanField(
+        default=False,
+        help_text="Si True, l'staff pot publicar un esborrany de "
+        "newsletter com a Publicació pública a la comunitat. Si False "
+        "(per defecte), el pont està desactivat i l'endpoint el rebutja. "
+        "Cap automatisme; res no es dispara sol.",
+    )
+
     # ── Master distribution switch (2026-06-07) ─────────────────────
     # The REAL global pause: gates every channel via `pot_publicar`.
     # Default True so deploying changes nothing (the existing

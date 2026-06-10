@@ -126,12 +126,22 @@ def _layer():
     return Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
 
 
-def _text(img, x, y, text, font, fill, *, align="left", tracking=0.0):
-    """Draw one line; `y` is the line-box top (CSS box top, anchor 'la').
+def _cap_offset(font) -> float:
+    """Vertical offset from a 'la'-anchored draw point to the cap-top ink,
+    using a plain capital. Lets us anchor by INK position (robust to the
+    font's line-height) instead of the CSS box, which PIL places lower."""
+    return font.getbbox("H", anchor="la")[1]
+
+
+def _text(img, x, y, text, font, fill, *, align="left", tracking=0.0, cap_top=None):
+    """Draw one line. `y` is the line-box top (anchor 'la'); if `cap_top` is
+    given instead, the glyph CAP-TOP ink lands at `cap_top` (ink-anchored).
     `align`: x is left / centre / right edge. `tracking` = letter-spacing px.
     Alpha-correct: drawn on a transparent layer then composited."""
     if not text:
         return
+    if cap_top is not None:
+        y = cap_top - _cap_offset(font)
     lay = _layer()
     d = ImageDraw.Draw(lay)
     advances = [d.textlength(ch, font=font) for ch in text]
@@ -257,6 +267,22 @@ def _wrap(d, text, font, budget):
     return lines
 
 
+def _star(img, s):
+    """Draw a 5-point star as a polygon (not a text glyph)."""
+    import math
+
+    cx, cy = s["cx"], s["cy"]
+    R, r = s["outer"], s["inner"]
+    pts = []
+    for i in range(s["points"] * 2):
+        rad = R if i % 2 == 0 else r
+        ang = -math.pi / 2 + i * math.pi / s["points"]
+        pts.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
+    lay = _layer()
+    ImageDraw.Draw(lay).polygon(pts, fill=_col(s["color"]))
+    img.alpha_composite(lay)
+
+
 # ── slide 1 · cover ──────────────────────────────────────────────────
 
 
@@ -283,15 +309,18 @@ def build_cover(tipus: str, setmana) -> Image.Image:
         align="center",
     )
 
+    # NOVETATS (white) and ÀLBUMS/SINGLES (yellow) are ink-anchored by
+    # cap-top so the white overlaps the yellow exactly like the reference.
     n = C["novetats"]
     _text(
         img,
         540,
-        n["y"],
+        0,
         n["text"],
         _font("anton", n["size"]),
         _col(n["color"]),
         align="center",
+        cap_top=n["cap_top"],
     )
 
     e = C["etiqueta"]
@@ -301,14 +330,25 @@ def build_cover(tipus: str, setmana) -> Image.Image:
     _text(
         img,
         540 + sh["dx"],
-        e["y"] + sh["dy"],
+        0,
         et,
         f_e,
         _col(sh["color"]),
         align="center",
         tracking=e["ls"],
+        cap_top=e["cap_top"] + sh["dy"],
     )
-    _text(img, 540, e["y"], et, f_e, _col(e["color"]), align="center", tracking=e["ls"])
+    _text(
+        img,
+        540,
+        0,
+        et,
+        f_e,
+        _col(e["color"]),
+        align="center",
+        tracking=e["ls"],
+        cap_top=e["cap_top"],
+    )
 
     r = C["rule"]
     _rect(
@@ -321,16 +361,7 @@ def build_cover(tipus: str, setmana) -> Image.Image:
         (r["right"][0], r["y"], r["right"][1], r["y"] + r["h"]),
         fill=_col(r["color"]),
     )
-    s = C["star"]
-    _text(
-        img,
-        s["cx"],
-        s["y"],
-        s["text"],
-        _font("anton", s["size"]),
-        _col(s["color"]),
-        align="center",
-    )
+    _star(img, C["star"])
 
     # Bottom row: SETMANA pill (left) + cadència italic (right), group centred.
     pill, cad, grp = C["pill"], C["cadencia"], C["bottom_group"]

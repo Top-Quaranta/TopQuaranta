@@ -57,6 +57,7 @@ ALBUM_NOCOVER = {
     "cover_url": None,
 }
 
+# With a PPCC row (position 8) — proves the blinding (renders only 9 rows).
 SINGLES = [
     {
         "nom": f"Cançó número {i}",
@@ -67,6 +68,28 @@ SINGLES = [
     for i, code in enumerate(
         ["CAT", "VAL", "BAL", "CNO", "FRA", "AND", "ALG", "PPCC", "CAT", "VAL"], 1
     )
+]
+# 10 real territories, NO PPCC — full grid for 1:1 comparison with the
+# reference singles.png (mirrors its CAT/VAL/BAL/NOR/BAL/FRA/AND/ALG/BAL/VAL).
+SINGLES_10 = [
+    {
+        "nom": nom,
+        "artista_nom": art,
+        "artista_territori": code,
+        "cover_url": "x",
+    }
+    for nom, art, code in [
+        ("Foc d'estiu", "Marès", "CAT"),
+        ("La rambla buida", "Quetzal", "CAT"),
+        ("L'Albufera", "Nèstor Vidal", "VAL"),
+        ("Tramuntana", "Cabanes", "CNO"),
+        ("Sal i vent", "Aurora Blau", "BAL"),
+        ("Camí de sirga", "Els Pèlags", "FRA"),
+        ("Nit andorrana", "Mistral", "AND"),
+        ("Carrer de l'Alguer", "Bruna", "ALG"),
+        ("Onada curta", "Falç", "BAL"),
+        ("Plana endins", "Verdic", "VAL"),
+    ]
 ]
 SINGLES_NOCOVER = [{**s, "cover_url": None} for s in SINGLES[:6]]
 
@@ -93,6 +116,11 @@ def main():
         feed_redesign.build_album(ALBUM_NOCOVER).save(OUT / "06_album_nocover.png")
         feed_redesign.build_singles(SINGLES_NOCOVER, 1, 1, setmana=SET).save(
             OUT / "07_singles_nocover.png"
+        )
+        # 10 rows, no PPCC — direct 1:1 with reference singles.png.
+        cover_cache.fetch = with_cover(2)
+        feed_redesign.build_singles(SINGLES_10, 1, 2, setmana=SET).save(
+            OUT / "08_singles_10_noppcc.png"
         )
     finally:
         cover_cache.fetch = orig

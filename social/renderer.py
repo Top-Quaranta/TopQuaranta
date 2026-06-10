@@ -869,7 +869,9 @@ def render_feed_top(
 # ── FEED · novetats (album/single carousel) ──────────────────────────
 
 
-def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
+def _feed_novetats_portada(
+    tipus: str, setmana, *, redesign: bool = False
+) -> Image.Image:
     """Cover slide for nous_albums / nous_singles.
 
     Mirrors the territorial cover layout exactly — same pill sizes,
@@ -883,6 +885,11 @@ def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
         monochrome logo.
     Setmana pill is identical to the territorial variant.
     """
+    if redesign:
+        from . import feed_redesign
+
+        return feed_redesign.build_cover(tipus, setmana)
+
     from .captions import _setmana_label
 
     accent = (
@@ -959,7 +966,7 @@ def _feed_novetats_portada(tipus: str, setmana) -> Image.Image:
     return img
 
 
-def _feed_album_slide(item: dict) -> Image.Image:
+def _feed_album_slide(item: dict, *, redesign: bool = False) -> Image.Image:
     """One album per slide.
 
     Top-left: brand logo.
@@ -968,6 +975,11 @@ def _feed_album_slide(item: dict) -> Image.Image:
     Centre: big cover.
     Bottom: title + artist.
     """
+    if redesign:
+        from . import feed_redesign
+
+        return feed_redesign.build_album(item)
+
     img = _feed_canvas()
     d = ImageDraw.Draw(img)
     _logo_block(img, 60, 50, width=270)
@@ -1030,10 +1042,22 @@ def _feed_album_slide(item: dict) -> Image.Image:
     return img
 
 
-def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image.Image:
+def _feed_singles_slide(
+    items: list[dict],
+    page: int,
+    total_pages: int,
+    *,
+    redesign: bool = False,
+    setmana=None,
+) -> Image.Image:
     """Up to 10 singles in a list. Each row carries the artist's
     territory icon at the right edge so the slide stays colourful
     even when titles are short."""
+    if redesign:
+        from . import feed_redesign
+
+        return feed_redesign.build_singles(items, page, total_pages, setmana=setmana)
+
     img = _feed_canvas()
     d = ImageDraw.Draw(img)
     _logo_block(img, 60, 50, width=270)
@@ -1122,18 +1146,32 @@ def _feed_singles_slide(items: list[dict], page: int, total_pages: int) -> Image
     return img
 
 
+def _feed_redisseny_actiu() -> bool:
+    """Read the additive feed-redesign gate. Defaults to False and never
+    raises (a missing config row / DB hiccup → legacy layout)."""
+    try:
+        from ranking.models import ConfiguracioGlobal
+
+        return bool(ConfiguracioGlobal.load().feed_redisseny_actiu)
+    except Exception:  # noqa: BLE001 — gate must never break a render
+        return False
+
+
 def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
     """`tipus` is `nous_albums` (1 per slide) or `nous_singles`
     (10 per slide, list-style)."""
+    redesign = _feed_redisseny_actiu()
     out: list[Path] = []
     p = _path(tipus, "", setmana, 0)
-    _feed_novetats_portada(tipus, setmana).save(p, "JPEG", quality=90)
+    _feed_novetats_portada(tipus, setmana, redesign=redesign).save(
+        p, "JPEG", quality=90
+    )
     out.append(p)
 
     if tipus == "nous_albums":
         for i, item in enumerate(items[:9], start=1):
             p = _path(tipus, "", setmana, i)
-            _feed_album_slide(item).save(p, "JPEG", quality=90)
+            _feed_album_slide(item, redesign=redesign).save(p, "JPEG", quality=90)
             out.append(p)
     else:
         # Singles: dynamic bin-packing so we never end with a slide
@@ -1155,7 +1193,9 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
             if not chunk:
                 break
             p = _path(tipus, "", setmana, page)
-            _feed_singles_slide(chunk, page, pages).save(p, "JPEG", quality=90)
+            _feed_singles_slide(
+                chunk, page, pages, redesign=redesign, setmana=setmana
+            ).save(p, "JPEG", quality=90)
             out.append(p)
             offset += chunk_size
     return out[:10]

@@ -1,0 +1,93 @@
+{
+  "_provenance": "EXACT values extracted from the curated Claude Design export (feed1.html / 'TopQuaranta Feed - Standalone (1)') by rendering it headless (puppeteer-core + Chrome 149, 1080x1350) and dumping getComputedStyle + getBoundingClientRect per element on 2026-06-10. This file is the SOURCE OF TRUTH; it replaces the earlier hand-measured tokens. Colours are the exact computed rgb()/rgba() strings. Coordinates are px, top-left origin, relative to the 1080x1350 artboard. '@accent'/'@deep' are resolved to the row/album territory at render time.",
+  "canvas": { "w": 1080, "h": 1350 },
+
+  "brand": {
+    "ink": "rgb(10, 10, 10)",
+    "white": "rgb(255, 255, 255)",
+    "yellow": "rgb(250, 204, 21)",
+    "cream": "rgb(243, 236, 221)"
+  },
+
+  "grain": {
+    "_note": "The HTML uses a fixed SVG fractal-noise overlay; not 1:1 mappable. PIL equivalent: deterministic gaussian grey noise alpha-composited. Opacities tuned down to match the references (exported at 3x, so their grain is fine after downscale).",
+    "cover": 0.05,
+    "page": 0.035,
+    "band": 0.05,
+    "seed": 7
+  },
+
+  "territories": {
+    "_note": "deep/accent/abbr/short/name confirmed against the HTML (band bg = deep, accent text = accent): CAT deep rgb(47,90,47) accent rgb(123,191,123); VAL deep rgb(138,74,30) accent rgb(232,164,77); NOR deep rgb(122,39,48) accent rgb(221,120,130) all match the export.",
+    "pri": { "name": "Principat",        "short": "Catalunya", "abbr": "CAT", "deep": "rgb(47, 90, 47)",  "accent": "rgb(123, 191, 123)" },
+    "val": { "name": "País Valencià",    "short": "València",  "abbr": "VAL", "deep": "rgb(138, 74, 30)", "accent": "rgb(232, 164, 77)" },
+    "bal": { "name": "Illes Balears",    "short": "Balears",   "abbr": "BAL", "deep": "rgb(31, 90, 99)",  "accent": "rgb(92, 192, 204)" },
+    "nor": { "name": "Catalunya Nord",   "short": "Nord",      "abbr": "NOR", "deep": "rgb(122, 39, 48)", "accent": "rgb(221, 120, 130)" },
+    "fra": { "name": "Franja de Ponent", "short": "Franja",    "abbr": "FRA", "deep": "rgb(110, 85, 32)", "accent": "rgb(216, 178, 87)" },
+    "and": { "name": "Andorra",          "short": "Andorra",   "abbr": "AND", "deep": "rgb(44, 63, 99)",  "accent": "rgb(117, 149, 207)" },
+    "alg": { "name": "L'Alguer",         "short": "L'Alguer",  "abbr": "ALG", "deep": "rgb(122, 51, 64)", "accent": "rgb(217, 134, 160)" }
+  },
+
+  "cover": {
+    "gradient": { "shape": "radial", "at": [0.5, 0.0], "extent": [1.30, 0.80],
+      "stops": [[0.0, "rgb(66, 124, 66)"], [1.0, "rgb(47, 90, 47)"]] },
+    "logo":     { "h": 48, "cx": 540, "y": 88 },
+    "presenta": { "text": "aquesta setmana presenta", "font": "instrument", "size": 48, "italic": true, "color": "rgb(243, 236, 221)", "y": 166, "align": "center" },
+    "novetats": { "text": "NOVETATS", "font": "anton", "size": 116, "color": "rgb(255, 255, 255)", "cap_top": 535, "align": "center",
+      "_note": "cap_top = measured ink (cap) top on the 1080x1350 reference; PIL anchors by ink, not the CSS line-box, because line-height places PIL/Chrome differently." },
+    "etiqueta": { "font": "anton", "size": 250, "color": "rgb(250, 204, 21)", "ls": 1.25, "cap_top": 626, "align": "center",
+      "shadow": { "dx": 0, "dy": 8, "color": "rgba(0, 0, 0, 0.16)" },
+      "albums": "ÀLBUMS", "singles": "SINGLES",
+      "_note": "cap_top 626 = yellow main-cap ink top on the reference; the À accent rises ~57px above it, giving the ~49px overlap with the NOVETATS ink bottom (~634)." },
+    "rule":     { "y": 1156.5, "h": 2, "color": "rgba(255, 255, 255, 0.34)", "left": [80, 510], "right": [570, 1000] },
+    "star":     { "shape": "polygon", "points": 5, "cx": 540, "cy": 1159, "outer": 9.0, "inner": 3.7, "color": "rgb(250, 204, 21)",
+      "_note": "5-point star drawn as a polygon (not a text glyph), ~18x16 centred on the divider rule." },
+    "pill":     { "font": "anton", "size": 38, "ls": 2, "color": "rgb(10, 10, 10)", "bg": "rgb(250, 204, 21)", "h": 72, "pad_x": 24, "radius": 8, "y": 1198 },
+    "cadencia": { "font": "instrument", "size": 40, "italic": true, "color": "rgb(255, 255, 255)", "y": 1208, "albums": "cada dimarts", "singles": "cada divendres" },
+    "bottom_group": { "center": 540, "gap": 22 }
+  },
+
+  "album": {
+    "logo":      { "h": 42, "x": 80, "y": 70 },
+    "nou_album": { "text": "NOU ÀLBUM", "font": "anton", "size": 24, "ls": 5, "color": "@accent", "right": 1000, "y": 73 },
+    "cover":     { "size": 660, "header_bottom": 112 },
+    "band":      { "bottom": 1350, "h1": 238, "per_line": 74, "grain": 0.12 },
+    "title":     { "font": "playfair", "size": 76, "weight": 800, "color": "rgb(255, 255, 255)", "x": 80, "line_h": 74.5, "y_off_band": 50, "wrap_budget": 700, "min_size": 56 },
+    "artist":    { "font": "bricolage", "size": 38, "weight": 700, "color": "rgba(255, 255, 255, 0.85)", "x": 80, "y": 1247 },
+    "abbr":      { "font": "anton", "size": 22, "ls": 2, "color": "@accent", "right": 1000, "y": 1228 },
+    "name":      { "font": "bricolage", "size": 26, "weight": 700, "color": "rgb(255, 255, 255)", "right": 1000, "y": 1261 }
+  },
+
+  "fallback_tile": {
+    "_note": "Rendered into the album cover slot when cover==null. Sizes are fractions of the tile side (660).",
+    "bg": "@deep",
+    "initial": { "font": "anton", "size_frac": 0.5, "color": "@accent" },
+    "keyline": { "inset_frac": 0.06, "width": 2, "color": "@accent", "alpha": 0.4 },
+    "footer":  { "text": "TOPQUARANTA", "font": "anton", "size_frac": 0.04, "ls": 4, "color": "rgba(255, 255, 255, 0.5)", "y_off_frac": 0.869 }
+  },
+
+  "singles": {
+    "header": {
+      "novetats": { "text": "NOVETATS", "font": "anton", "size": 76, "ls": 0.76, "color": "rgb(255, 255, 255)", "x": 70, "y": 66 },
+      "singles":  { "text": "SINGLES", "font": "anton", "size": 76, "ls": 0.76, "color": "rgb(250, 204, 21)", "x": 70, "y": 111.4 },
+      "subtitle": { "font": "instrument", "size": 34, "color": "rgba(255, 255, 255, 0.62)", "x": 70, "y": 210.8, "prefix": "estrenes de la setmana" },
+      "logo":     { "h": 42, "right": 1010, "y": 66 }
+    },
+    "rows": {
+      "x": 70, "w": 940, "h": 85, "pitch": 95.1, "y0": 285.8, "count": 10,
+      "card_bg": "rgba(255, 255, 255, 0.04)", "card_radius": 2,
+      "chip":   { "x": 70, "w": 92, "abbr": { "font": "anton", "size": 26, "color": "@accent", "y_off": 22.5 } },
+      "thumb":  { "x": 180, "size": 72, "y_off": 6.5, "radius": 6 },
+      "title":  { "x": 270, "font": "bricolage", "size": 34, "weight": 800, "color": "rgb(255, 255, 255)", "y_off": 10.9 },
+      "artist": { "x": 270, "font": "bricolage", "size": 24, "weight": 500, "color": "rgba(255, 255, 255, 0.66)", "y_off": 46.2 },
+      "short":  { "right": 1010, "font": "instrument", "size": 26, "color": "rgba(255, 255, 255, 0.5)", "y_off": 25.5 }
+    },
+    "footer": {
+      "url":  { "text": "topquaranta.cat", "font": "instrument", "size": 30, "color": "rgba(255, 255, 255, 0.55)", "x": 70, "y": 1251 },
+      "page": {
+        "label": { "font": "bricolage", "size": 26, "weight": 700, "ls": 1, "color": "rgba(255, 255, 255, 0.6)", "right": 1010, "y": 1255 },
+        "dots":  { "y": 1265.5, "h": 10, "active_w": 26, "inactive_w": 10, "gap": 9, "gap_to_label": 16, "active": "rgb(250, 204, 21)", "inactive": "rgba(255, 255, 255, 0.25)" }
+      }
+    }
+  }
+}

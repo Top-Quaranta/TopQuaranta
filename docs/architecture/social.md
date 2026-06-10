@@ -256,6 +256,32 @@ brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
 below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
 loud. PPCC byte-identical.
 
+## Feed redesign — editorial "Sèrie 7" (gated, additive)
+
+The three novetats feed slides (carousel cover, single-album slide, singles
+grid) have an alternate editorial layout in `social/feed_redesign.py`, driven
+by `social/feed_design/feed-tokens.json` — the **exact** computed values
+(`getComputedStyle` + `getBoundingClientRect`) extracted from the curated
+Claude Design HTML export rendered headless at 1080×1350 (replaces the earlier
+hand-measured tokens). It is **off by default**, gated by
+`ConfiguracioGlobal.feed_redisseny_actiu` (additive boolean). `renderer.py`
+reads the flag once in `render_feed_novetats` and threads `redesign=` into
+`_feed_novetats_portada` / `_feed_album_slide` / `_feed_singles_slide`; when
+True each delegates to `feed_redesign.build_{cover,album,singles}`, else the
+legacy layout renders byte-for-byte.
+
+Scope is layout only: album selection, singles bin-packing, per-channel
+gating, idempotency and the Deezer cover sourcing/fallback contract
+(`cover_cache.fetch`) are untouched — only the cover-missing *tile* gets the
+new spec visual (territory `deep` fill + initial in `accent`). Territory
+palettes resolve via `feed_redesign.territori(code)` (DB code → JSON key;
+`CNO`→`nor`; aggregate/unknown → green). Rendering is deterministic (fixed
+grain seed). Album titles wrap to two lines (then shrink) instead of
+ellipsising; PPCC is never a row territory. Bricolage Grotesque 500/700/800
+are all real vendored OFL statics. Fidelity floor vs the references is text
+rasterisation (PIL FreeType vs the 3×-downscaled Chrome export) + the
+gaussian-grain approximation; positions/sizes/colours are exact.
+
 ## Static hosting
 
 Meta's IG media-fetcher rejects rendered images served through

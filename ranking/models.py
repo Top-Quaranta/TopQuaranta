@@ -180,6 +180,22 @@ class ConfiguracioGlobal(models.Model):
         "rate cau per sota del 25 % al story #N, baixa aquí a N.",
     )
 
+    # ── Feed redesign (PIL port of the editorial "Sèrie 7" feed) ────────
+    # Additive, off by default. When True, the three novetats feed slides
+    # (carousel cover, single-album slide, singles grid) render with the
+    # new editorial layout driven by `social/feed_design/feed-tokens.json`.
+    # When False, the legacy layout is served byte-for-byte. Scope is the
+    # *maquetació* only — album selection, singles bin-packing, per-channel
+    # gating, idempotency and the Deezer cover fallback are untouched.
+    feed_redisseny_actiu = models.BooleanField(
+        default=False,
+        help_text="Si True, les tres slides de novetats del feed (portada "
+        "del carrusel, slide d'àlbum i graella de singles) es renderitzen "
+        "amb el redisseny editorial PIL (tokens a "
+        "social/feed_design/feed-tokens.json). Si False, maquetació "
+        "llegada. Additiu: no afecta selecció, bin-packing ni canals.",
+    )
+
     # ── Sprint I bis: multi-channel distribution kill switches ──────
     # Each channel has its own switch so we can pause one without
     # touching the others (e.g. Mastodon instance is down, or we

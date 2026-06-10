@@ -26,6 +26,8 @@ _VENDORED = {
     # Step 3b PPCC story redesign families.
     "display_xbold": FONTS_DIR / "PlayfairDisplay-ExtraBold.ttf",
     "anton": FONTS_DIR / "Anton-Regular.ttf",
+    "bricolage_medium": FONTS_DIR / "BricolageGrotesque-Medium.ttf",
+    "bricolage_bold": FONTS_DIR / "BricolageGrotesque-Bold.ttf",
     "bricolage_xbold": FONTS_DIR / "BricolageGrotesque-ExtraBold.ttf",
     "instrument_italic": FONTS_DIR / "InstrumentSerif-Italic.ttf",
 }
@@ -40,6 +42,8 @@ _FALLBACK = {
     # dev box missing the vendored TTFs; production ships them.
     "display_xbold": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
     "anton": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "bricolage_medium": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "bricolage_bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "bricolage_xbold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "instrument_italic": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
 }
@@ -93,6 +97,16 @@ def display_xbold(size: int) -> ImageFont.FreeTypeFont:
 def anton(size: int) -> ImageFont.FreeTypeFont:
     """Anton 400 — condensed display: headlines, numbers, badges, pills."""
     return _load(_resolve("anton"), size)
+
+
+def bricolage_medium(size: int) -> ImageFont.FreeTypeFont:
+    """Bricolage Grotesque 500 — artist subtitles / lighter metadata."""
+    return _load(_resolve("bricolage_medium"), size)
+
+
+def bricolage_bold(size: int) -> ImageFont.FreeTypeFont:
+    """Bricolage Grotesque 700 — artists, page indicator, territory name."""
+    return _load(_resolve("bricolage_bold"), size)
 
 
 def bricolage_xbold(size: int) -> ImageFont.FreeTypeFont:

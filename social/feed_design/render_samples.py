@@ -8,8 +8,11 @@ Spotify. Run: .venv/bin/python _gen_feed_samples.py
 
 import datetime
 import os
+import sys
 from pathlib import Path
 
+# Repo root on sys.path so this works from any cwd / nested location.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "topquaranta.settings.test")
 import django  # noqa: E402
 
@@ -40,13 +43,19 @@ def with_cover(seed):
     return lambda url, *a, **k: (_swatch(seed) if url else None)
 
 
+# Mirrors the Claude Design reference PNGs for side-by-side comparison.
 ALBUM = {
-    "nom": "Carrer dels Àngels",
-    "artista_nom": "La Ludwig Band",
+    "nom": "Hivern a la Plana",
+    "artista_nom": "Les Glaçades",
     "artista_territori": "VAL",
     "cover_url": "x",
 }
-ALBUM_NOCOVER = {**ALBUM, "nom": "Sense Portada", "cover_url": None}
+ALBUM_NOCOVER = {
+    "nom": "Camí de Tramuntana",
+    "artista_nom": "Vent de Dalt",
+    "artista_territori": "CNO",  # Catalunya Nord → fallback tile reference
+    "cover_url": None,
+}
 
 SINGLES = [
     {
@@ -73,14 +82,16 @@ def main():
             OUT / "02_cover_singles.png"
         )
         feed_redesign.build_album(ALBUM).save(OUT / "03_album.png")
-        feed_redesign.build_singles(SINGLES, 1, 2).save(OUT / "04_singles_p1of2.png")
-        feed_redesign.build_singles(SINGLES[:7], 2, 2).save(
+        feed_redesign.build_singles(SINGLES, 1, 2, setmana=SET).save(
+            OUT / "04_singles_p1of2.png"
+        )
+        feed_redesign.build_singles(SINGLES[:7], 2, 2, setmana=SET).save(
             OUT / "05_singles_p2of2.png"
         )
         # Fallback (cover == null).
         cover_cache.fetch = lambda url, *a, **k: None
         feed_redesign.build_album(ALBUM_NOCOVER).save(OUT / "06_album_nocover.png")
-        feed_redesign.build_singles(SINGLES_NOCOVER, 1, 1).save(
+        feed_redesign.build_singles(SINGLES_NOCOVER, 1, 1, setmana=SET).save(
             OUT / "07_singles_nocover.png"
         )
     finally:

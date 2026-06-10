@@ -20,10 +20,11 @@ Every numeric/colour value is read from `feed_design/feed-tokens.json`, the
 measured source of truth. Rendering is deterministic (fixed grain seed) so the
 output is stable for tests and review renders.
 
-Font fidelity note: the spec asks for Bricolage Grotesque weights 500/700/800;
-only the 800 (ExtraBold) static is vendored today, so 500/700 roles render with
-800 as a stand-in. Layout, sizes, colours and positions match the spec. See the
-PR description — vendoring the two OFL statics is a follow-up.
+Truth hierarchy: the Claude Design reference PNGs
+(`social/feed_design/samples/` mirror them) win over `feed-tokens.json`,
+which was an approximate measurement; the JSON is still the default source
+for values the PNGs don't pin. Bricolage Grotesque is vendored at all three
+spec weights (500 Medium / 700 Bold / 800 ExtraBold).
 """
 
 from __future__ import annotations
@@ -110,9 +111,10 @@ def territori(code: str | None) -> dict:
 # ── font helpers ─────────────────────────────────────────────────────
 
 
-def _font(role: str, size: int):
-    """Map a spec font role to a vendored loader. `bricolage` always uses
-    the 800 static (500/700 not yet vendored — see module docstring)."""
+def _font(role: str, size: int, weight: int = 800):
+    """Map a spec font role to a vendored loader. `bricolage` honours the
+    spec weight (500 Medium / 700 Bold / 800 ExtraBold) — the three OFL
+    statics are vendored at `social/fonts/`."""
     if role == "anton":
         return fonts.anton(size)
     if role == "playfair":
@@ -120,6 +122,10 @@ def _font(role: str, size: int):
     if role == "instrument":
         return fonts.instrument_italic(size)
     if role == "bricolage":
+        if weight <= 500:
+            return fonts.bricolage_medium(size)
+        if weight <= 700:
+            return fonts.bricolage_bold(size)
         return fonts.bricolage_xbold(size)
     raise ValueError(f"unknown font role {role!r}")
 
@@ -179,7 +185,9 @@ def _apply_grain(img: Image.Image, opacity: float) -> None:
 def _radial_green(w: int, h: int, inner: str, outer: str) -> Image.Image:
     """`radial-gradient(130% 80% at 50% 0%, inner → outer)`."""
     cx, cy = w / 2.0, 0.0
-    rx, ry = 1.30 * w, 0.80 * h
+    # Tighter core so the top-centre glow reads and the edges fall to deep
+    # green (the JSON's 1.30×/0.80× was too gradual → looked flat).
+    rx, ry = 1.05 * w, 0.72 * h
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
     d = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
     t = np.clip(d, 0.0, 1.0)[..., None]
@@ -263,6 +271,19 @@ def _ellipsize(draw, text: str, font, max_w: float) -> str:
     return (text + ell) if text else ell
 
 
+def _wrap_two(draw, text: str, font, max_w: float) -> tuple[str, str]:
+    """Greedy break into (line1, line2). Line2 may still overflow (caller
+    ellipsizes it). Keeps as many words on line1 as fit."""
+    words = text.split()
+    line1: list[str] = []
+    for i, w in enumerate(words):
+        trial = " ".join(line1 + [w])
+        if line1 and draw.textlength(trial, font=font) > max_w:
+            return " ".join(line1), " ".join(words[i:])
+        line1.append(w)
+    return " ".join(line1), ""
+
+
 # ── slide 1 · carousel cover ─────────────────────────────────────────
 
 
@@ -276,9 +297,10 @@ def build_cover(tipus: str, setmana: datetime.date) -> Image.Image:
     etiqueta_txt = "ÀLBUMS" if is_albums else "SINGLES"
     cadencia_txt = "cada dimarts" if is_albums else "cada divendres"
 
-    img = _radial_green(
-        CANVAS_W, CANVAS_H, anchors["green_ppcc"], anchors["green_deep"]
-    )
+    # Brighter highlight at top-centre than the flat #427c42→#2f5a2f the
+    # JSON measured: the reference cover has a clear radial glow. We lift the
+    # inner toward a lighter green and keep the brand-green deep edge.
+    img = _radial_green(CANVAS_W, CANVAS_H, "#4f9450", anchors["green_deep"])
     _apply_grain(img, t["grain"]["layers"]["cover"]["opacity"])
     d = ImageDraw.Draw(img)
 
@@ -293,18 +315,55 @@ def build_cover(tipus: str, setmana: datetime.date) -> Image.Image:
         anchors["cream"],
         align="center",
     )
+    # ── Overlapping NOVETATS / ÀLBUMS block ──────────────────────────
+    # The big word fills the width at ~250 px (shrink only if it would
+    # overflow); NOVETATS sits smaller, above and nudged right, overlapping
+    # the top of the yellow word. Drop shadow on the big word (0, +8,
+    # rgba(0,0,0,0.16)) for the embossed feel of the reference.
+    margin = 70
+    max_w = CANVAS_W - 2 * margin
+    big_track = 1.25
+    big_size = 250
+
+    def _big_w(sz: int) -> float:
+        fn = _font("anton", sz)
+        return sum(d.textlength(c, font=fn) for c in etiqueta_txt) + big_track * (
+            len(etiqueta_txt) - 1
+        )
+
+    while _big_w(big_size) > max_w and big_size > 180:
+        big_size -= 4
+    f_big = _font("anton", big_size)
+    big_top = 392
     _text(
-        d, CANVAS_W / 2, 499, "NOVETATS", _font("anton", 116), "#ffffff", align="center"
+        d,
+        CANVAS_W / 2,
+        big_top + 8,
+        etiqueta_txt,
+        f_big,
+        _rgba("#000000", 0.16),
+        align="center",
+        tracking=big_track,
     )
     _text(
         d,
         CANVAS_W / 2,
-        638,
+        big_top,
         etiqueta_txt,
-        _font("anton", 250),
+        f_big,
         anchors["yellow"],
         align="center",
-        tracking=1.25,
+        tracking=big_track,
+    )
+    # NOVETATS overlaps the big word's top by ~50 px and is nudged right.
+    _text(
+        d,
+        CANVAS_W / 2 + 36,
+        big_top - 30,
+        "NOVETATS",
+        _font("anton", 116),
+        "#ffffff",
+        align="center",
     )
 
     # Star + flanking rules.
@@ -400,20 +459,27 @@ def build_album(item: dict) -> Image.Image:
         tracking=5,
     )
 
-    # Title (Playfair) + artist (Bricolage) inside the band.
+    # Title (Playfair) + artist (Bricolage) inside the band. One line at 76;
+    # if it overflows, wrap to two lines at 60 (raised) like the reference.
+    budget = CANVAS_W - 80 - 320
     f_title = _font("playfair", 76)
-    title = _ellipsize(d, item["nom"], f_title, CANVAS_W - 80 - 320)
-    _text(d, 80, 1162, title, f_title, "#ffffff")
+    if d.textlength(item["nom"], font=f_title) <= budget:
+        _text(d, 80, 1162, item["nom"], f_title, "#ffffff")
+    else:
+        f2 = _font("playfair", 60)
+        l1, l2 = _wrap_two(d, item["nom"], f2, budget)
+        _text(d, 80, 1133, l1, f2, "#ffffff")
+        _text(d, 80, 1196, _ellipsize(d, l2, f2, budget), f2, "#ffffff")
     _text(
         d,
         80,
         1246,
         item.get("artista_nom", "—"),
-        _font("bricolage", 38),
+        _font("bricolage", 38, 700),
         _rgba("#ffffff", 0.85),
     )
 
-    # Territory abbr + name, right-aligned in the band.
+    # Territory abbr + FULL name, right-aligned in the band.
     _text(
         d,
         1000,
@@ -425,7 +491,13 @@ def build_album(item: dict) -> Image.Image:
         tracking=2,
     )
     _text(
-        d, 1000, 1261, terr["short"], _font("bricolage", 26), "#ffffff", align="right"
+        d,
+        1000,
+        1261,
+        terr["name"],
+        _font("bricolage", 26, 700),
+        "#ffffff",
+        align="right",
     )
 
     return _finish(img)
@@ -434,12 +506,19 @@ def build_album(item: dict) -> Image.Image:
 # ── slide 3 · singles grid ───────────────────────────────────────────
 
 
-def build_singles(items: list[dict], page: int, total_pages: int) -> Image.Image:
+def build_singles(
+    items: list[dict], page: int, total_pages: int, setmana=None
+) -> Image.Image:
     """Up to 10 rows. `page`/`total_pages` come from the caller's bin-packing
-    (unchanged); this only lays the rows out."""
+    (unchanged); this only lays the rows out. `setmana` (ISO Monday) feeds the
+    week number in the subtitle. PPCC is never rendered as a row territory —
+    aggregate-only items are skipped (blinded)."""
     t = tokens()
     sl = t["slides"]["3_singles"]
     anchors = t["brand_anchors"]
+
+    # Blind PPCC: it is the global aggregate, never a real row territory.
+    items = [e for e in items if (e.get("artista_territori") or "").upper() != "PPCC"]
 
     img = Image.new("RGBA", (CANVAS_W, CANVAS_H), _rgb(anchors["ink"]) + (255,))
     _apply_grain(img, t["grain"]["layers"]["singles_page"]["opacity"])
@@ -448,14 +527,14 @@ def build_singles(items: list[dict], page: int, total_pages: int) -> Image.Image
     # Header.
     _text(d, 70, 43, "NOVETATS", _font("anton", 76), "#ffffff", tracking=0.76)
     _text(d, 70, 111, "SINGLES", _font("anton", 76), anchors["yellow"])
-    _text(
-        d,
-        70,
-        211,
-        "estrenes de la setmana",
-        _font("instrument", 34),
-        _rgba("#ffffff", 0.62),
-    )
+    subtitol = "estrenes de la setmana"
+    if setmana is not None:
+        from music.dates import project_week_number
+
+        subtitol = "estrenes de la setmana %d" % project_week_number(
+            setmana + datetime.timedelta(days=5)
+        )
+    _text(d, 70, 211, subtitol, _font("instrument", 34), _rgba("#ffffff", 0.62))
     _paste_logo(img, height=42, x=1010, y=70, align="right")
     d = ImageDraw.Draw(img)
 
@@ -509,8 +588,8 @@ def build_singles(items: list[dict], page: int, total_pages: int) -> Image.Image
         tx = cells["titol"]["x"]
         right_label_x = 1010 - cells["terr_short"]["padding_right"]
         text_w = right_label_x - tx - 16
-        f_title = _font("bricolage", cells["titol"]["size"])
-        f_artist = _font("bricolage", cells["artista"]["size"])
+        f_title = _font("bricolage", cells["titol"]["size"], 800)
+        f_artist = _font("bricolage", cells["artista"]["size"], 500)
         title = _ellipsize(d, e["nom"], f_title, text_w)
         artist = _ellipsize(d, e.get("artista_nom", "—"), f_artist, text_w)
         _text(d, tx, y + 14, title, f_title, "#ffffff")
@@ -547,7 +626,7 @@ def _draw_page_indicator(d, page: int, total: int, foot: dict) -> None:
     pi = foot["page_indicator"]
     dots = pi["dots"]
     label = f"{page:02d} / {total:02d}"
-    f_lab = _font("bricolage", pi["label"]["size"])
+    f_lab = _font("bricolage", pi["label"]["size"], 700)
     lab_w = sum(d.textlength(c, font=f_lab) for c in label) + (len(label) - 1) * 1
     right = 1010
     lab_x = right - lab_w

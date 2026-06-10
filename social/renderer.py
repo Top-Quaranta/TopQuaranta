@@ -1043,7 +1043,12 @@ def _feed_album_slide(item: dict, *, redesign: bool = False) -> Image.Image:
 
 
 def _feed_singles_slide(
-    items: list[dict], page: int, total_pages: int, *, redesign: bool = False
+    items: list[dict],
+    page: int,
+    total_pages: int,
+    *,
+    redesign: bool = False,
+    setmana=None,
 ) -> Image.Image:
     """Up to 10 singles in a list. Each row carries the artist's
     territory icon at the right edge so the slide stays colourful
@@ -1051,7 +1056,7 @@ def _feed_singles_slide(
     if redesign:
         from . import feed_redesign
 
-        return feed_redesign.build_singles(items, page, total_pages)
+        return feed_redesign.build_singles(items, page, total_pages, setmana=setmana)
 
     img = _feed_canvas()
     d = ImageDraw.Draw(img)
@@ -1188,9 +1193,9 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
             if not chunk:
                 break
             p = _path(tipus, "", setmana, page)
-            _feed_singles_slide(chunk, page, pages, redesign=redesign).save(
-                p, "JPEG", quality=90
-            )
+            _feed_singles_slide(
+                chunk, page, pages, redesign=redesign, setmana=setmana
+            ).save(p, "JPEG", quality=90)
             out.append(p)
             offset += chunk_size
     return out[:10]

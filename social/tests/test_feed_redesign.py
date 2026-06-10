@@ -110,6 +110,24 @@ def test_singles_respects_10_row_cap(fake_cover):
     assert img.size == (1080, 1350)
 
 
+def test_singles_blinds_ppcc(fake_cover):
+    """A PPCC (global aggregate) row is never rendered as a territory."""
+    items = [
+        {"nom": "A", "artista_nom": "x", "artista_territori": "PPCC", "cover_url": "x"},
+        {"nom": "B", "artista_nom": "y", "artista_territori": "CAT", "cover_url": "x"},
+    ]
+    only_ppcc = [items[0]]
+    # All-PPCC chunk → still a valid canvas, just no rows.
+    assert feed_redesign.build_singles(only_ppcc, 1, 1).size == (1080, 1350)
+    # Mixed → renders (the CAT row), PPCC silently dropped.
+    assert feed_redesign.build_singles(items, 1, 1).size == (1080, 1350)
+
+
+def test_territori_full_name_present():
+    assert feed_redesign.territori("VAL")["name"] == "País Valencià"
+    assert feed_redesign.territori("CNO")["name"] == "Catalunya Nord"
+
+
 # ── determinism ──────────────────────────────────────────────────────
 
 

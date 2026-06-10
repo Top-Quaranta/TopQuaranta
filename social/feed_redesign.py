@@ -3,28 +3,25 @@
 # Spec: social/feed_design/FEED-PIL-SPEC.md
 
 Additive and **gated** by `ConfiguracioGlobal.feed_redisseny_actiu` (default
-False). The renderer delegates here only when the flag is on; otherwise the
-legacy builders in `renderer.py` run byte-for-byte.
+False). `renderer.py` delegates here only when the flag is on; otherwise the
+legacy builders run byte-for-byte.
 
-Scope is strictly the *maquetació* of:
-  • the carousel cover (`build_cover`),
-  • the single-album slide (`build_album`),
-  • the singles grid (`build_singles`).
+**Source of truth: `social/feed_design/feed-tokens.json`** — EXACT computed
+values (getComputedStyle + getBoundingClientRect) extracted from the curated
+Claude Design export (`feed1.html`) rendered headless at 1080×1350. Every
+position, size, colour, letter-spacing, shadow offset and gradient stop here
+comes from that extraction, not from a verbal description. Effects without a
+1:1 mapping use their known PIL equivalent: grain = deterministic gaussian
+grey noise at the JSON opacity; text-shadow = an offset draw; CSS gradient =
+a PIL gradient.
 
-It does NOT touch album selection, singles bin-packing, per-channel gating,
-idempotency, or where covers come from: covers are fetched with the exact same
-`cover_cache.fetch(url)` Deezer path the legacy code uses; only the *visual* of
-the cover-missing tile changes (per the spec's fallback rule).
+Scope is layout only: album selection, singles bin-packing, per-channel
+gating, idempotency, and the Deezer cover sourcing/fallback contract
+(`cover_cache.fetch`) are untouched — only the cover-missing tile's visual.
 
-Every numeric/colour value is read from `feed_design/feed-tokens.json`, the
-measured source of truth. Rendering is deterministic (fixed grain seed) so the
-output is stable for tests and review renders.
-
-Truth hierarchy: the Claude Design reference PNGs
-(`social/feed_design/samples/` mirror them) win over `feed-tokens.json`,
-which was an approximate measurement; the JSON is still the default source
-for values the PNGs don't pin. Bricolage Grotesque is vendored at all three
-spec weights (500 Medium / 700 Bold / 800 ExtraBold).
+Content rules: album title NEVER ellipsised (wrap to 2 lines, then shrink);
+full territory name on the album, short name on singles; PPCC is never a row
+territory; Bricolage 500/700/800 are real vendored statics.
 """
 
 from __future__ import annotations
@@ -33,50 +30,47 @@ import datetime
 import functools
 import json
 import logging
+import re
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 from social import cover_cache, fonts, svg_assets
 
 logger = logging.getLogger(__name__)
 
-_DESIGN_DIR = Path(__file__).resolve().parent / "feed_design"
-_TOKENS_PATH = _DESIGN_DIR / "feed-tokens.json"
-
+_TOKENS_PATH = Path(__file__).resolve().parent / "feed_design" / "feed-tokens.json"
 CANVAS_W, CANVAS_H = 1080, 1350
-
-# Deterministic grain so renders are reproducible across runs/tests.
 _GRAIN_SEED = 7
 
 
 @functools.lru_cache(maxsize=1)
 def tokens() -> dict:
-    """The measured token table (`feed-tokens.json`), cached."""
+    """The exact extracted token table, cached."""
     with open(_TOKENS_PATH, encoding="utf-8") as fh:
         return json.load(fh)
 
 
-# ── colour helpers ───────────────────────────────────────────────────
+# ── colour parsing ───────────────────────────────────────────────────
+
+_RGB_RE = re.compile(
+    r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)"
+)
 
 
-def _rgb(hex_str: str) -> tuple[int, int, int]:
-    h = hex_str.lstrip("#")
-    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+def _col(s: str) -> tuple[int, int, int, int]:
+    """Parse an exact CSS `rgb()/rgba()` string to an RGBA tuple."""
+    m = _RGB_RE.match(s.strip())
+    if not m:
+        h = s.lstrip("#")
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
+    r, g, b, a = m.groups()
+    return (int(r), int(g), int(b), int(round(float(a) * 255)) if a else 255)
 
 
-def _rgba(hex_or_rgb, alpha: float) -> tuple[int, int, int, int]:
-    if isinstance(hex_or_rgb, str):
-        r, g, b = _rgb(hex_or_rgb)
-    else:
-        r, g, b = hex_or_rgb
-    return (r, g, b, int(round(alpha * 255)))
+# ── territory resolver ───────────────────────────────────────────────
 
-
-# DB territory code → spec territory key. The JSON uses `nor` for Catalunya
-# Nord (DB code `CNO`); everything else matches the abbr. Aggregate/unknown
-# codes (PPCC, ALT, CAR, …) fall back to the PPCC green anchors.
 _CODE_TO_KEY = {
     "CAT": "pri",
     "VAL": "val",
@@ -90,31 +84,26 @@ _CODE_TO_KEY = {
 
 
 def territori(code: str | None) -> dict:
-    """Resolve a DB territory code to `{deep, accent, abbr, short, name}`.
-
-    Unknown / aggregate codes fall back to the PPCC green anchors so the
-    function is total (it never raises on a future code)."""
-    t = tokens()
+    """DB territory code → `{deep, accent, abbr, short, name}` (exact rgb
+    strings). Aggregate/unknown → a green fallback so the fn is total."""
+    t = tokens()["territories"]
     key = _CODE_TO_KEY.get((code or "").upper())
-    if key and key in t["territories"]:
-        return t["territories"][key]
-    a = t["brand_anchors"]
+    if key and key in t:
+        return t[key]
     return {
         "name": "Països Catalans",
         "short": "Global",
         "abbr": (code or "PPCC").upper()[:4],
-        "deep": a["green_deep"],
-        "accent": a["green_light"],
+        "deep": "rgb(47, 90, 47)",
+        "accent": "rgb(123, 191, 123)",
     }
 
 
-# ── font helpers ─────────────────────────────────────────────────────
+# ── fonts ────────────────────────────────────────────────────────────
 
 
-def _font(role: str, size: int, weight: int = 800):
-    """Map a spec font role to a vendored loader. `bricolage` honours the
-    spec weight (500 Medium / 700 Bold / 800 ExtraBold) — the three OFL
-    statics are vendored at `social/fonts/`."""
+def _font(role: str, size, weight: int = 800):
+    size = int(round(size))
     if role == "anton":
         return fonts.anton(size)
     if role == "playfair":
@@ -130,24 +119,22 @@ def _font(role: str, size: int, weight: int = 800):
     raise ValueError(f"unknown font role {role!r}")
 
 
-def _text(
-    draw: ImageDraw.ImageDraw,
-    x: float,
-    y: float,
-    text: str,
-    font,
-    fill,
-    *,
-    align: str = "left",
-    tracking: float = 0.0,
-):
-    """Draw a single line whose top-left box corner is `(x, y)` for
-    `align="left"`. For `center`, `x` is the centre; for `right`, `x` is the
-    right edge. `tracking` (letter-spacing, px) is honoured by drawing glyph
-    by glyph. `y` is the top of the cap box (PIL anchor "a")."""
+# ── primitive draw helpers (alpha-correct via overlay composite) ─────
+
+
+def _layer():
+    return Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
+
+
+def _text(img, x, y, text, font, fill, *, align="left", tracking=0.0):
+    """Draw one line; `y` is the line-box top (CSS box top, anchor 'la').
+    `align`: x is left / centre / right edge. `tracking` = letter-spacing px.
+    Alpha-correct: drawn on a transparent layer then composited."""
     if not text:
         return
-    advances = [draw.textlength(ch, font=font) for ch in text]
+    lay = _layer()
+    d = ImageDraw.Draw(lay)
+    advances = [d.textlength(ch, font=font) for ch in text]
     total = sum(advances) + tracking * max(0, len(text) - 1)
     if align == "center":
         cx = x - total / 2
@@ -156,493 +143,495 @@ def _text(
     else:
         cx = x
     if tracking == 0:
-        draw.text((cx, y), text, font=font, fill=fill, anchor="la")
-        return
-    for ch, adv in zip(text, advances):
-        draw.text((cx, y), ch, font=font, fill=fill, anchor="la")
-        cx += adv + tracking
+        d.text((cx, y), text, font=font, fill=fill, anchor="la")
+    else:
+        for ch, adv in zip(text, advances):
+            d.text((cx, y), ch, font=font, fill=fill, anchor="la")
+            cx += adv + tracking
+    img.alpha_composite(lay)
 
 
-# ── texture helpers ──────────────────────────────────────────────────
+def _rect(img, box, *, fill=None, radius=0, outline=None, width=1):
+    lay = _layer()
+    ImageDraw.Draw(lay).rounded_rectangle(
+        box, radius=radius, fill=fill, outline=outline, width=width
+    )
+    img.alpha_composite(lay)
 
 
-def _grain(w: int, h: int, opacity: float) -> Image.Image:
-    """Deterministic monochrome grain as an RGBA overlay. A subtle linear
-    blend toward grey noise — a pragmatic stand-in for the SVG soft-light/
-    overlay filter (close enough at these low opacities)."""
+# ── texture / gradient ───────────────────────────────────────────────
+
+
+def _apply_grain(img, opacity):
     rng = np.random.default_rng(_GRAIN_SEED)
-    noise = rng.normal(128, 38, size=(h, w)).clip(0, 255).astype(np.uint8)
-    a = np.full((h, w), int(round(opacity * 255)), dtype=np.uint8)
-    arr = np.dstack([noise, noise, noise, a])
-    return Image.fromarray(arr, "RGBA")
+    noise = rng.normal(128, 38, (img.height, img.width)).clip(0, 255).astype(np.uint8)
+    a = np.full((img.height, img.width), int(round(opacity * 255)), np.uint8)
+    img.alpha_composite(Image.fromarray(np.dstack([noise, noise, noise, a]), "RGBA"))
 
 
-def _apply_grain(img: Image.Image, opacity: float) -> None:
-    g = _grain(img.width, img.height, opacity)
-    img.alpha_composite(g)
-
-
-def _radial_green(w: int, h: int, inner: str, outer: str) -> Image.Image:
-    """`radial-gradient(130% 80% at 50% 0%, inner → outer)`."""
-    cx, cy = w / 2.0, 0.0
-    # Tighter core so the top-centre glow reads and the edges fall to deep
-    # green (the JSON's 1.30×/0.80× was too gradual → looked flat).
-    rx, ry = 1.05 * w, 0.72 * h
+def _radial(spec) -> Image.Image:
+    """CSS radial-gradient(extent at pos, stops) → RGBA image. `extent` is
+    (rx, ry) as fractions of (w, h); `at` is (fx, fy) fractions."""
+    w, h = CANVAS_W, CANVAS_H
+    (fx, fy), (ex, ey) = spec["at"], spec["extent"]
+    cx, cy, rx, ry = fx * w, fy * h, ex * w, ey * h
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
-    d = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
-    t = np.clip(d, 0.0, 1.0)[..., None]
-    a = np.array(_rgb(inner), dtype=np.float64)
-    b = np.array(_rgb(outer), dtype=np.float64)
+    t = np.clip(np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2), 0, 1)[..., None]
+    s0, s1 = spec["stops"][0], spec["stops"][1]
+    a = np.array(_col(s0[1])[:3], np.float64)
+    b = np.array(_col(s1[1])[:3], np.float64)
     arr = (a * (1 - t) + b * t).astype(np.uint8)
     return Image.fromarray(arr, "RGB").convert("RGBA")
 
 
-# ── cover / fallback tile ────────────────────────────────────────────
+# ── cover slot / fallback tile ───────────────────────────────────────
 
 
-def _cover_or_tile(cover_url: str | None, size: int, title: str, terr: dict):
-    """Square cover at `size`. Uses the SAME Deezer fetch as the legacy path
-    (`cover_cache.fetch`); on miss, renders the spec fallback tile. Returns
-    (RGBA image, used_fallback)."""
+def _cover_or_tile(cover_url, size, title, terr, *, simple=False):
     img = cover_cache.fetch(cover_url) if cover_url else None
     if img is not None:
-        return img.convert("RGBA").resize((size, size), Image.LANCZOS), False
-    return _fallback_tile(size, title, terr), True
+        return img.convert("RGBA").resize((size, size), Image.LANCZOS)
+    return _tile(size, title, terr, simple=simple)
 
 
-def _fallback_tile(size: int, title: str, terr: dict) -> Image.Image:
-    """Spec fallback (cover == null): deep-fill tile, big initial in accent,
-    inner keyline, TOPQUARANTA footer."""
-    img = Image.new("RGBA", (size, size), _rgb(terr["deep"]) + (255,))
-    d = ImageDraw.Draw(img)
+def _tile(size, title, terr, *, simple=False) -> Image.Image:
+    fb = tokens()["fallback_tile"]
+    tile = Image.new("RGBA", (size, size), _col(terr["deep"]))
     initial = (title or "?").strip()[:1].upper() or "?"
-    f_init = _font("anton", int(size * 0.5))
-    d.text((size / 2, size / 2), initial, font=f_init, fill=terr["accent"], anchor="mm")
-    inset = int(round(size * 0.06))
-    d.rounded_rectangle(
+    f = _font("anton", size * fb["initial"]["size_frac"])
+    ImageDraw.Draw(tile).text(
+        (size / 2, size / 2), initial, font=f, fill=_col(terr["accent"]), anchor="mm"
+    )
+    if simple:
+        return tile
+    ky = fb["keyline"]
+    inset = int(round(size * ky["inset_frac"]))
+    ar, ag, ab, _a = _col(terr["accent"])
+    ImageDraw.Draw(tile).rectangle(
         (inset, inset, size - inset, size - inset),
-        radius=0,
-        outline=_rgba(terr["accent"], 0.4),
-        width=2,
+        outline=(ar, ag, ab, int(ky["alpha"] * 255)),
+        width=ky["width"],
     )
-    f_foot = _font("anton", max(8, int(size * 0.04)))
-    _text(
-        d,
-        size / 2,
-        size - int(round(size * 0.07)),
-        "TOPQUARANTA",
-        f_foot,
-        _rgba("#ffffff", 0.5),
-        align="center",
-        tracking=4,
-    )
-    return img
+    ff = fb["footer"]
+    lay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(lay)
+    f2 = _font("anton", max(8, size * ff["size_frac"]))
+    txt = ff["text"]
+    advs = [d.textlength(c, font=f2) for c in txt]
+    tw = sum(advs) + ff["ls"] * (len(txt) - 1)
+    cx = size / 2 - tw / 2
+    fy = size * ff["y_off_frac"]
+    for c, adv in zip(txt, advs):
+        d.text((cx, fy), c, font=f2, fill=_col(ff["color"]), anchor="la")
+        cx += adv + ff["ls"]
+    tile.alpha_composite(lay)
+    return tile
 
 
-def _paste_logo(img: Image.Image, *, height: int, x, y: int, align: str = "left"):
-    """White wordmark at the given height. `x` is left/centre/right per align;
-    `align="right"` treats `x` as the right edge."""
-    width = int(round(height * svg_assets.LOGO_ASPECT))
+def _paste_logo(img, *, h, x, y, align="left"):
+    width = int(round(h * svg_assets.LOGO_ASPECT))
     logo = svg_assets.logo_image_mono(width, "#ffffff")
     if logo is None:
         return
-    if align == "center":
-        lx = int(round(x - logo.width / 2))
-    elif align == "right":
-        lx = int(round(x - logo.width))
-    else:
-        lx = int(round(x))
-    img.alpha_composite(logo.convert("RGBA"), (lx, y))
+    lx = {"center": x - logo.width / 2, "right": x - logo.width}.get(align, x)
+    img.alpha_composite(logo.convert("RGBA"), (int(round(lx)), int(round(y))))
 
 
-def _finish(img: Image.Image) -> Image.Image:
-    """Flatten RGBA → RGB on ink so JPEG save matches the legacy contract."""
-    bg = Image.new("RGB", img.size, _rgb(tokens()["brand_anchors"]["ink"]))
+def _finish(img) -> Image.Image:
+    bg = Image.new("RGB", img.size, _col(tokens()["brand"]["ink"])[:3])
     bg.paste(img, (0, 0), img)
     return bg
 
 
-def _ellipsize(draw, text: str, font, max_w: float) -> str:
-    if draw.textlength(text, font=font) <= max_w:
-        return text
-    ell = "…"
-    while text and draw.textlength(text + ell, font=font) > max_w:
-        text = text[:-1]
-    return (text + ell) if text else ell
+def _wrap(d, text, font, budget):
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if cur and d.textlength(trial, font=font) > budget:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return lines
 
 
-def _wrap_two(draw, text: str, font, max_w: float) -> tuple[str, str]:
-    """Greedy break into (line1, line2). Line2 may still overflow (caller
-    ellipsizes it). Keeps as many words on line1 as fit."""
-    words = text.split()
-    line1: list[str] = []
-    for i, w in enumerate(words):
-        trial = " ".join(line1 + [w])
-        if line1 and draw.textlength(trial, font=font) > max_w:
-            return " ".join(line1), " ".join(words[i:])
-        line1.append(w)
-    return " ".join(line1), ""
+# ── slide 1 · cover ──────────────────────────────────────────────────
 
 
-# ── slide 1 · carousel cover ─────────────────────────────────────────
-
-
-def build_cover(tipus: str, setmana: datetime.date) -> Image.Image:
-    """Camp verd. `tipus` ∈ {nous_albums, nous_singles}."""
+def build_cover(tipus: str, setmana) -> Image.Image:
     from .captions import _setmana_label
 
-    t = tokens()
-    anchors = t["brand_anchors"]
-    is_albums = tipus == "nous_albums"
-    etiqueta_txt = "ÀLBUMS" if is_albums else "SINGLES"
-    cadencia_txt = "cada dimarts" if is_albums else "cada divendres"
+    C = tokens()["cover"]
+    is_alb = tipus == "nous_albums"
+    img = _radial(C["gradient"])
+    _apply_grain(img, tokens()["grain"]["cover"])
 
-    # Brighter highlight at top-centre than the flat #427c42→#2f5a2f the
-    # JSON measured: the reference cover has a clear radial glow. We lift the
-    # inner toward a lighter green and keep the brand-green deep edge.
-    img = _radial_green(CANVAS_W, CANVAS_H, "#4f9450", anchors["green_deep"])
-    _apply_grain(img, t["grain"]["layers"]["cover"]["opacity"])
-    d = ImageDraw.Draw(img)
-
-    _paste_logo(img, height=48, x=CANVAS_W / 2, y=88, align="center")
-    d = ImageDraw.Draw(img)
-    _text(
-        d,
-        CANVAS_W / 2,
-        166,
-        "aquesta setmana presenta",
-        _font("instrument", 48),
-        anchors["cream"],
-        align="center",
+    _paste_logo(
+        img, h=C["logo"]["h"], x=C["logo"]["cx"], y=C["logo"]["y"], align="center"
     )
-    # ── Overlapping NOVETATS / ÀLBUMS block ──────────────────────────
-    # The big word fills the width at ~250 px (shrink only if it would
-    # overflow); NOVETATS sits smaller, above and nudged right, overlapping
-    # the top of the yellow word. Drop shadow on the big word (0, +8,
-    # rgba(0,0,0,0.16)) for the embossed feel of the reference.
-    margin = 70
-    max_w = CANVAS_W - 2 * margin
-    big_track = 1.25
-    big_size = 250
 
-    def _big_w(sz: int) -> float:
-        fn = _font("anton", sz)
-        return sum(d.textlength(c, font=fn) for c in etiqueta_txt) + big_track * (
-            len(etiqueta_txt) - 1
-        )
-
-    while _big_w(big_size) > max_w and big_size > 180:
-        big_size -= 4
-    f_big = _font("anton", big_size)
-    big_top = 392
+    p = C["presenta"]
     _text(
-        d,
-        CANVAS_W / 2,
-        big_top + 8,
-        etiqueta_txt,
-        f_big,
-        _rgba("#000000", 0.16),
-        align="center",
-        tracking=big_track,
-    )
-    _text(
-        d,
-        CANVAS_W / 2,
-        big_top,
-        etiqueta_txt,
-        f_big,
-        anchors["yellow"],
-        align="center",
-        tracking=big_track,
-    )
-    # NOVETATS overlaps the big word's top by ~50 px and is nudged right.
-    _text(
-        d,
-        CANVAS_W / 2 + 36,
-        big_top - 30,
-        "NOVETATS",
-        _font("anton", 116),
-        "#ffffff",
+        img,
+        540,
+        p["y"],
+        p["text"],
+        _font("instrument", p["size"]),
+        _col(p["color"]),
         align="center",
     )
 
-    # Star + flanking rules.
-    star_y = 1139
-    f_star = _font("anton", 24)
-    _text(d, CANVAS_W / 2, star_y, "★", f_star, anchors["yellow"], align="center")
-    sw = d.textlength("★", font=f_star)
-    rule_col = _rgba("#ffffff", 0.34)
-    gap = 18
-    for sign in (-1, 1):
-        x0 = CANVAS_W / 2 + sign * (sw / 2 + gap)
-        x1 = x0 + sign * 150
-        d.line(
-            [(min(x0, x1), star_y + 14), (max(x0, x1), star_y + 14)],
-            fill=rule_col,
-            width=2,
-        )
+    n = C["novetats"]
+    _text(
+        img,
+        540,
+        n["y"],
+        n["text"],
+        _font("anton", n["size"]),
+        _col(n["color"]),
+        align="center",
+    )
 
-    # Bottom row: SETMANA pill (yellow, ink, real project-week number) +
-    # cadència whisper, centred together with gap 22.
+    e = C["etiqueta"]
+    et = e["albums"] if is_alb else e["singles"]
+    f_e = _font("anton", e["size"])
+    sh = e["shadow"]
+    _text(
+        img,
+        540 + sh["dx"],
+        e["y"] + sh["dy"],
+        et,
+        f_e,
+        _col(sh["color"]),
+        align="center",
+        tracking=e["ls"],
+    )
+    _text(img, 540, e["y"], et, f_e, _col(e["color"]), align="center", tracking=e["ls"])
+
+    r = C["rule"]
+    _rect(
+        img,
+        (r["left"][0], r["y"], r["left"][1], r["y"] + r["h"]),
+        fill=_col(r["color"]),
+    )
+    _rect(
+        img,
+        (r["right"][0], r["y"], r["right"][1], r["y"] + r["h"]),
+        fill=_col(r["color"]),
+    )
+    s = C["star"]
+    _text(
+        img,
+        s["cx"],
+        s["y"],
+        s["text"],
+        _font("anton", s["size"]),
+        _col(s["color"]),
+        align="center",
+    )
+
+    # Bottom row: SETMANA pill (left) + cadència italic (right), group centred.
+    pill, cad, grp = C["pill"], C["cadencia"], C["bottom_group"]
     setmana_txt = _setmana_label(setmana).upper()
-    f_pill = _font("anton", 38)
-    pad_x, pad_y = 20, 7
-    pill_tw = sum(d.textlength(c, font=f_pill) for c in setmana_txt) + 2 * (
+    f_pill = _font("anton", pill["size"])
+    lay = ImageDraw.Draw(_layer())
+    ptw = sum(lay.textlength(c, font=f_pill) for c in setmana_txt) + pill["ls"] * (
         len(setmana_txt) - 1
     )
-    pill_w = pill_tw + 2 * pad_x
-    pill_h = 38 + 2 * pad_y
-    f_cad = _font("instrument", 40)
-    cad_w = d.textlength(cadencia_txt, font=f_cad)
-    gap = 22
-    group_w = pill_w + gap + cad_w
-    gx = CANVAS_W / 2 - group_w / 2
-    py = 1206
-    d.rounded_rectangle(
-        (gx, py, gx + pill_w, py + pill_h), radius=8, fill=anchors["yellow"]
+    pill_w = ptw + 2 * pill["pad_x"]
+    cad_txt = cad["albums"] if is_alb else cad["singles"]
+    f_cad = _font("instrument", cad["size"])
+    cad_w = lay.textlength(cad_txt, font=f_cad)
+    group_w = pill_w + grp["gap"] + cad_w
+    gx = grp["center"] - group_w / 2
+    py = pill["y"]
+    _rect(
+        img,
+        (gx, py, gx + pill_w, py + pill["h"]),
+        fill=_col(pill["bg"]),
+        radius=pill["radius"],
     )
-    _text(d, gx + pad_x, py + pad_y, setmana_txt, f_pill, anchors["ink"], tracking=2)
-    _text(d, gx + pill_w + gap, py + (pill_h - 40) / 2, cadencia_txt, f_cad, "#ffffff")
+    _text(
+        img,
+        gx + pill["pad_x"],
+        py + (pill["h"] - pill["size"]) / 2 - 2,
+        setmana_txt,
+        f_pill,
+        _col(pill["color"]),
+        tracking=pill["ls"],
+    )
+    _text(img, gx + pill_w + grp["gap"], cad["y"], cad_txt, f_cad, _col(cad["color"]))
 
     return _finish(img)
 
 
-# ── slide 2 · single album ───────────────────────────────────────────
+# ── slide 2 · album ──────────────────────────────────────────────────
 
 
 def build_album(item: dict) -> Image.Image:
-    t = tokens()
-    sl = t["slides"]["2_album"]
-    anchors = t["brand_anchors"]
+    A = tokens()["album"]
     terr = territori(item.get("artista_territori"))
+    accent = _col(terr["accent"])
 
-    img = Image.new("RGBA", (CANVAS_W, CANVAS_H), _rgb(anchors["ink"]) + (255,))
-    _apply_grain(img, t["grain"]["layers"]["album_page"]["opacity"])
+    img = Image.new("RGBA", (CANVAS_W, CANVAS_H), _col(tokens()["brand"]["ink"]))
+    _apply_grain(img, tokens()["grain"]["page"])
 
-    # Hero cover 660, centred horizontally, per the measured y.
-    size = sl["cover"]["size"]
-    cover, _fb = _cover_or_tile(item.get("cover_url"), size, item.get("nom", "?"), terr)
-    cx = (CANVAS_W - size) // 2
-    cy = sl["cover"]["y"]
-    # Soft drop shadow.
-    shadow = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(shadow)
-    sd.rectangle((cx, cy + 24, cx + size, cy + size + 24), fill=(0, 0, 0, 115))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(30))
-    img.alpha_composite(shadow)
-    img.alpha_composite(cover, (cx, cy))
-    # Inset keyline on the cover.
-    ImageDraw.Draw(img).rectangle(
-        (cx, cy, cx + size - 1, cy + size - 1), outline=_rgba("#ffffff", 0.07), width=1
+    # Title wrap: never ellipsise — wrap to ≤2 lines, shrink if still wider.
+    tcfg = A["title"]
+    budget = tcfg["wrap_budget"]
+    size = tcfg["size"]
+    probe = ImageDraw.Draw(_layer())
+    while True:
+        f_title = _font("playfair", size, tcfg["weight"])
+        lines = _wrap(probe, item["nom"], f_title, budget)
+        if len(lines) <= 2 or size <= tcfg["min_size"]:
+            break
+        size -= 4
+    lines = lines[:2]
+    nlines = len(lines)
+
+    band = A["band"]
+    band_h = band["h1"] + band["per_line"] * (nlines - 1)
+    band_top = band["bottom"] - band_h
+    cov = A["cover"]
+    cover_y = cov["header_bottom"] + (band_top - cov["header_bottom"] - cov["size"]) / 2
+    cx = (CANVAS_W - cov["size"]) // 2
+
+    # Hero cover (or fallback tile).
+    tile = _cover_or_tile(
+        item.get("cover_url"), cov["size"], item.get("nom", "?"), terr
     )
+    img.alpha_composite(tile, (cx, int(round(cover_y))))
 
-    # Territory band along the bottom.
-    band = sl["band"]
-    by = band["y"]
-    band_img = Image.new(
-        "RGBA", (CANVAS_W, band["height"]), _rgb(terr["deep"]) + (255,)
+    # Territory band (deep) + grain within the band.
+    band_img = Image.new("RGBA", (CANVAS_W, band_h), _col(terr["deep"]))
+    rng = np.random.default_rng(_GRAIN_SEED)
+    noise = rng.normal(128, 38, (band_h, CANVAS_W)).clip(0, 255).astype(np.uint8)
+    aa = np.full((band_h, CANVAS_W), int(band["grain"] * 255), np.uint8)
+    band_img.alpha_composite(
+        Image.fromarray(np.dstack([noise, noise, noise, aa]), "RGBA")
     )
-    _apply_grain(band_img, t["grain"]["layers"]["album_band"]["opacity"])
-    img.alpha_composite(band_img, (0, by))
+    img.alpha_composite(band_img, (0, int(round(band_top))))
 
-    d = ImageDraw.Draw(img)
-    _paste_logo(img, height=42, x=80, y=70)
-    d = ImageDraw.Draw(img)
+    _paste_logo(img, h=A["logo"]["h"], x=A["logo"]["x"], y=A["logo"]["y"])
+    na = A["nou_album"]
     _text(
-        d,
-        1000,
-        73,
-        "NOU ÀLBUM",
-        _font("anton", 24),
-        terr["accent"],
+        img,
+        na["right"],
+        na["y"],
+        na["text"],
+        _font("anton", na["size"]),
+        accent,
         align="right",
-        tracking=5,
+        tracking=na["ls"],
     )
 
-    # Title (Playfair) + artist (Bricolage) inside the band. One line at 76;
-    # if it overflows, wrap to two lines at 60 (raised) like the reference.
-    budget = CANVAS_W - 80 - 320
-    f_title = _font("playfair", 76)
-    if d.textlength(item["nom"], font=f_title) <= budget:
-        _text(d, 80, 1162, item["nom"], f_title, "#ffffff")
-    else:
-        f2 = _font("playfair", 60)
-        l1, l2 = _wrap_two(d, item["nom"], f2, budget)
-        _text(d, 80, 1133, l1, f2, "#ffffff")
-        _text(d, 80, 1196, _ellipsize(d, l2, f2, budget), f2, "#ffffff")
+    title_y = band_top + tcfg["y_off_band"]
+    for i, ln in enumerate(lines):
+        _text(
+            img,
+            tcfg["x"],
+            title_y + i * tcfg["line_h"],
+            ln,
+            f_title,
+            _col(tcfg["color"]),
+        )
+    ar = A["artist"]
     _text(
-        d,
-        80,
-        1246,
+        img,
+        ar["x"],
+        ar["y"],
         item.get("artista_nom", "—"),
-        _font("bricolage", 38, 700),
-        _rgba("#ffffff", 0.85),
+        _font("bricolage", ar["size"], ar["weight"]),
+        _col(ar["color"]),
     )
-
-    # Territory abbr + FULL name, right-aligned in the band.
+    ab = A["abbr"]
     _text(
-        d,
-        1000,
-        1228,
+        img,
+        ab["right"],
+        ab["y"],
         terr["abbr"],
-        _font("anton", 22),
-        terr["accent"],
+        _font("anton", ab["size"]),
+        accent,
         align="right",
-        tracking=2,
+        tracking=ab["ls"],
     )
+    nm = A["name"]
     _text(
-        d,
-        1000,
-        1261,
+        img,
+        nm["right"],
+        nm["y"],
         terr["name"],
-        _font("bricolage", 26, 700),
-        "#ffffff",
+        _font("bricolage", nm["size"], nm["weight"]),
+        _col(nm["color"]),
         align="right",
     )
 
     return _finish(img)
 
 
-# ── slide 3 · singles grid ───────────────────────────────────────────
+# ── slide 3 · singles ────────────────────────────────────────────────
 
 
 def build_singles(
     items: list[dict], page: int, total_pages: int, setmana=None
 ) -> Image.Image:
-    """Up to 10 rows. `page`/`total_pages` come from the caller's bin-packing
-    (unchanged); this only lays the rows out. `setmana` (ISO Monday) feeds the
-    week number in the subtitle. PPCC is never rendered as a row territory —
-    aggregate-only items are skipped (blinded)."""
-    t = tokens()
-    sl = t["slides"]["3_singles"]
-    anchors = t["brand_anchors"]
-
-    # Blind PPCC: it is the global aggregate, never a real row territory.
+    S = tokens()["singles"]
+    # Blind PPCC — never a row territory.
     items = [e for e in items if (e.get("artista_territori") or "").upper() != "PPCC"]
 
-    img = Image.new("RGBA", (CANVAS_W, CANVAS_H), _rgb(anchors["ink"]) + (255,))
-    _apply_grain(img, t["grain"]["layers"]["singles_page"]["opacity"])
-    d = ImageDraw.Draw(img)
+    img = Image.new("RGBA", (CANVAS_W, CANVAS_H), _col(tokens()["brand"]["ink"]))
+    _apply_grain(img, tokens()["grain"]["page"])
 
-    # Header.
-    _text(d, 70, 43, "NOVETATS", _font("anton", 76), "#ffffff", tracking=0.76)
-    _text(d, 70, 111, "SINGLES", _font("anton", 76), anchors["yellow"])
-    subtitol = "estrenes de la setmana"
+    H = S["header"]
+    for key in ("novetats", "singles"):
+        e = H[key]
+        _text(
+            img,
+            e["x"],
+            e["y"],
+            e["text"],
+            _font("anton", e["size"]),
+            _col(e["color"]),
+            tracking=e["ls"],
+        )
+    sub = H["subtitle"]
+    txt = sub["prefix"]
     if setmana is not None:
         from music.dates import project_week_number
 
-        subtitol = "estrenes de la setmana %d" % project_week_number(
-            setmana + datetime.timedelta(days=5)
+        txt = "%s %d" % (
+            sub["prefix"],
+            project_week_number(setmana + datetime.timedelta(days=5)),
         )
-    _text(d, 70, 211, subtitol, _font("instrument", 34), _rgba("#ffffff", 0.62))
-    _paste_logo(img, height=42, x=1010, y=70, align="right")
-    d = ImageDraw.Draw(img)
+    _text(
+        img,
+        sub["x"],
+        sub["y"],
+        txt,
+        _font("instrument", sub["size"]),
+        _col(sub["color"]),
+    )
+    _paste_logo(
+        img, h=H["logo"]["h"], x=H["logo"]["right"], y=H["logo"]["y"], align="right"
+    )
 
-    rows = sl["rows"]
-    y_starts = rows["row_y_starts"]
-    row_h = rows["row_height"]
-    cells = rows["cells"]
-    for i, e in enumerate(items[: rows["count_max"]]):
-        y = y_starts[i]
+    R = S["rows"]
+    for i, e in enumerate(items[: R["count"]]):
+        y = R["y0"] + i * R["pitch"]
         terr = territori(e.get("artista_territori"))
-
-        # Row background card + keyline.
-        d.rounded_rectangle(
-            (
-                rows["container"]["x"],
-                y,
-                rows["container"]["x"] + rows["container"]["width"],
-                y + row_h,
-            ),
-            radius=10,
-            fill=_rgba("#ffffff", 0.035),
-            outline=_rgba("#ffffff", 0.06),
-            width=1,
+        _rect(
+            img,
+            (R["x"], y, R["x"] + R["w"], y + R["h"]),
+            fill=_col(R["card_bg"]),
+            radius=R["card_radius"],
         )
-
-        # Territory chip (deep) with abbr (accent).
-        ch = cells["terr_chip"]
-        d.rounded_rectangle(
-            (ch["x"], y, ch["x"] + ch["width"], y + row_h),
-            radius=10,
-            fill=_rgb(terr["deep"]),
+        ch = R["chip"]
+        _rect(
+            img,
+            (ch["x"], y, ch["x"] + ch["w"], y + R["h"]),
+            fill=_col(terr["deep"]),
+            radius=R["card_radius"],
         )
+        ab = ch["abbr"]
         _text(
-            d,
-            ch["x"] + ch["width"] / 2,
-            y + row_h / 2 - 13,
+            img,
+            ch["x"] + ch["w"] / 2,
+            y + ab["y_off"],
             terr["abbr"],
-            _font("anton", ch["abbr"]["size"]),
-            terr["accent"],
+            _font("anton", ab["size"]),
+            _col(terr["accent"]),
             align="center",
         )
-
-        # Thumb 72, vertically centred.
-        thumb = cells["thumb"]
-        tsize = thumb["size"]
-        cover, _fb = _cover_or_tile(e.get("cover_url"), tsize, e.get("nom", "?"), terr)
-        ty = y + (row_h - tsize) // 2
-        img.alpha_composite(cover, (thumb["x"], ty))
-
-        # Title + artist.
-        tx = cells["titol"]["x"]
-        right_label_x = 1010 - cells["terr_short"]["padding_right"]
-        text_w = right_label_x - tx - 16
-        f_title = _font("bricolage", cells["titol"]["size"], 800)
-        f_artist = _font("bricolage", cells["artista"]["size"], 500)
-        title = _ellipsize(d, e["nom"], f_title, text_w)
-        artist = _ellipsize(d, e.get("artista_nom", "—"), f_artist, text_w)
-        _text(d, tx, y + 14, title, f_title, "#ffffff")
-        _text(d, tx, y + 50, artist, f_artist, _rgba("#ffffff", 0.66))
-
-        # Territory short name (Instrument italic), right.
+        th = R["thumb"]
+        tile = _cover_or_tile(
+            e.get("cover_url"), th["size"], e.get("nom", "?"), terr, simple=True
+        )
+        if th["radius"]:
+            mask = Image.new("L", (th["size"], th["size"]), 0)
+            ImageDraw.Draw(mask).rounded_rectangle(
+                (0, 0, th["size"], th["size"]), radius=th["radius"], fill=255
+            )
+            img.paste(tile.convert("RGB"), (th["x"], int(round(y + th["y_off"]))), mask)
+        else:
+            img.alpha_composite(tile, (th["x"], int(round(y + th["y_off"]))))
+        ti, ar, sh = R["title"], R["artist"], R["short"]
+        text_w = (sh["right"] - 16) - ti["x"]
+        f_ti = _font("bricolage", ti["size"], ti["weight"])
+        f_ar = _font("bricolage", ar["size"], ar["weight"])
         _text(
-            d,
-            1010,
-            y + row_h / 2 - 13,
+            img,
+            ti["x"],
+            y + ti["y_off"],
+            _ellipsize(img, e["nom"], f_ti, text_w),
+            f_ti,
+            _col(ti["color"]),
+        )
+        _text(
+            img,
+            ar["x"],
+            y + ar["y_off"],
+            _ellipsize(img, e.get("artista_nom", "—"), f_ar, text_w),
+            f_ar,
+            _col(ar["color"]),
+        )
+        _text(
+            img,
+            sh["right"],
+            y + sh["y_off"],
             terr["short"],
-            _font("instrument", cells["terr_short"]["size"]),
-            _rgba("#ffffff", 0.5),
+            _font("instrument", sh["size"]),
+            _col(sh["color"]),
             align="right",
         )
 
-    # Footer: url + page indicator (only when multi-page).
-    foot = sl["footer"]
+    F = S["footer"]
+    u = F["url"]
     _text(
-        d,
-        foot["left"]["x"],
-        foot["y"],
-        "topquaranta.cat",
-        _font("instrument", foot["left"]["size"]),
-        _rgba("#ffffff", 0.55),
+        img, u["x"], u["y"], u["text"], _font("instrument", u["size"]), _col(u["color"])
     )
     if total_pages > 1:
-        _draw_page_indicator(d, page, total_pages, foot)
+        _page_indicator(img, page, total_pages, F["page"])
 
     return _finish(img)
 
 
-def _draw_page_indicator(d, page: int, total: int, foot: dict) -> None:
-    pi = foot["page_indicator"]
-    dots = pi["dots"]
-    label = f"{page:02d} / {total:02d}"
-    f_lab = _font("bricolage", pi["label"]["size"], 700)
-    lab_w = sum(d.textlength(c, font=f_lab) for c in label) + (len(label) - 1) * 1
-    right = 1010
-    lab_x = right - lab_w
-    _text(d, lab_x, foot["y"], label, f_lab, _rgba("#ffffff", 0.6), tracking=1)
+def _ellipsize(img, text, font, max_w):
+    d = ImageDraw.Draw(_layer())
+    if d.textlength(text, font=font) <= max_w:
+        return text
+    while text and d.textlength(text + "…", font=font) > max_w:
+        text = text[:-1]
+    return (text + "…") if text else "…"
 
-    # Dots to the left of the label.
-    x = lab_x - pi["gap_to_label"]
-    dot_y = foot["y"] + 6
+
+def _page_indicator(img, page, total, P):
+    lab = P["label"]
+    label = f"{page:02d} / {total:02d}"
+    f = _font("bricolage", lab["size"], lab["weight"])
+    d = ImageDraw.Draw(_layer())
+    lw = sum(d.textlength(c, font=f) for c in label) + lab["ls"] * (len(label) - 1)
+    _text(
+        img,
+        lab["right"],
+        lab["y"],
+        label,
+        f,
+        _col(lab["color"]),
+        align="right",
+        tracking=lab["ls"],
+    )
+    dots = P["dots"]
+    x = lab["right"] - lw - dots["gap_to_label"]
     for i in range(total - 1, -1, -1):
-        active = i == (page - 1)
-        w = dots["active_width"] if active else dots["inactive_width"]
-        col = dots["active_color"] if active else dots["inactive_color"]
-        col = col if isinstance(col, str) else col
-        x0 = x - w
-        fill = _rgb(dots["active_color"]) if active else _rgba("#ffffff", 0.25)
-        d.rounded_rectangle(
-            (x0, dot_y, x, dot_y + dots["height"]), radius=dots["radius"], fill=fill
+        w = dots["active_w"] if i == (page - 1) else dots["inactive_w"]
+        c = _col(dots["active"]) if i == (page - 1) else _col(dots["inactive"])
+        _rect(
+            img,
+            (x - w, dots["y"], x, dots["y"] + dots["h"]),
+            fill=c,
+            radius=dots["h"] / 2,
         )
-        x = x0 - dots["gap"]
+        x -= w + dots["gap"]

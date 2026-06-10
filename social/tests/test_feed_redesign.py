@@ -144,8 +144,20 @@ def test_territori_maps_cno_to_nord():
     assert feed_redesign.territori("CNO")["abbr"] == "NOR"
 
 
-def test_territori_unknown_falls_back_to_ppcc_green():
+def test_territori_unknown_falls_back_to_green():
     t = feed_redesign.territori("ZZZ")
-    anchors = feed_redesign.tokens()["brand_anchors"]
-    assert t["deep"] == anchors["green_deep"]
-    assert t["accent"] == anchors["green_light"]
+    # Aggregate/unknown codes resolve to a green fallback (never raises).
+    assert t["deep"] == "rgb(47, 90, 47)"
+    assert t["accent"] == "rgb(123, 191, 123)"
+
+
+def test_col_parses_rgba():
+    assert feed_redesign._col("rgb(10, 20, 30)") == (10, 20, 30, 255)
+    assert feed_redesign._col("rgba(255, 255, 255, 0.5)")[3] == 128
+
+
+def test_album_title_never_ellipsised(fake_cover):
+    # A very long title wraps / shrinks but must not contain an ellipsis.
+    long = "Camí Llarguíssim de la Tramuntana Ventosa i Gelada del Nord"
+    img = feed_redesign.build_album({**ALBUM, "nom": long})
+    assert img.size == (1080, 1350)

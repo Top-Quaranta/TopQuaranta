@@ -1,141 +1,90 @@
 {
-  "_meta": {
-    "project": "TopQuaranta · Feed de novetats",
-    "canvas": { "width": 1080, "height": 1350, "note": "Llenç fix per a TOTS els canals. Canals truncats (Mastodon/Bluesky) mostren només 4 slides: portada + primeres han de funcionar soles." },
-    "units": "Tots els valors en píxels sobre el llenç 1080×1350, llevat indicació. letterSpacing en px. Coordenades x,y = cantó superior esquerre de la caixa de l'element (mesurades del render real).",
-    "coordinate_origin": "top-left"
-  },
+  "_provenance": "EXACT values extracted from the curated Claude Design export (feed1.html / 'TopQuaranta Feed - Standalone (1)') by rendering it headless (puppeteer-core + Chrome 149, 1080x1350) and dumping getComputedStyle + getBoundingClientRect per element on 2026-06-10. This file is the SOURCE OF TRUTH; it replaces the earlier hand-measured tokens. Colours are the exact computed rgb()/rgba() strings. Coordinates are px, top-left origin, relative to the 1080x1350 artboard. '@accent'/'@deep' are resolved to the row/album territory at render time.",
+  "canvas": { "w": 1080, "h": 1350 },
 
-  "brand_anchors": {
-    "ink":        "#0a0a0a",
-    "ink_warm":   "#141210",
-    "yellow":     "#facc15",
-    "green_ppcc": "#427c42",
-    "green_deep": "#2f5a2f",
-    "green_light":"#7bbf7b",
-    "white":      "#ffffff",
-    "cream":      "#f3ecdd"
-  },
-
-  "territories": {
-    "pri": { "name": "Principat",        "short": "Catalunya", "abbr": "CAT", "deep": "#2f5a2f", "accent": "#7bbf7b" },
-    "val": { "name": "País Valencià",    "short": "València",  "abbr": "VAL", "deep": "#8a4a1e", "accent": "#e8a44d" },
-    "bal": { "name": "Illes Balears",    "short": "Balears",   "abbr": "BAL", "deep": "#1f5a63", "accent": "#5cc0cc" },
-    "nor": { "name": "Catalunya Nord",   "short": "Nord",      "abbr": "NOR", "deep": "#7a2730", "accent": "#dd7882" },
-    "fra": { "name": "Franja de Ponent", "short": "Franja",    "abbr": "FRA", "deep": "#6e5520", "accent": "#d8b257" },
-    "and": { "name": "Andorra",          "short": "Andorra",   "abbr": "AND", "deep": "#2c3f63", "accent": "#7595cf" },
-    "alg": { "name": "L'Alguer",         "short": "L'Alguer",  "abbr": "ALG", "deep": "#7a3340", "accent": "#d986a0" }
-  },
-
-  "fonts": {
-    "anton":      { "family": "Anton",              "weights": [400], "role": "crits curts (NOVETATS, ÀLBUMS/SINGLES, capçaleres, abreviatures, pills)", "note": "una sola gruixa; visualment black" },
-    "playfair":   { "family": "Playfair Display",   "weights": [700, 800, 900], "role": "glòria editorial (títols d'àlbum)" },
-    "instrument": { "family": "Instrument Serif",   "weights": [400], "style": "italic", "role": "xiuxiueig (dates, peus, territori als singles)" },
-    "bricolage":  { "family": "Bricolage Grotesque","weights": [500, 700, 800], "role": "mobiliari (artistes, metadades, indicador de pàgina)" }
+  "brand": {
+    "ink": "rgb(10, 10, 10)",
+    "white": "rgb(255, 255, 255)",
+    "yellow": "rgb(250, 204, 21)",
+    "cream": "rgb(243, 236, 221)"
   },
 
   "grain": {
-    "technique": "soroll monocrom (feTurbulence fractalNoise baseFrequency 0.85, numOctaves 2, escala de grisos) sobreposat amb mode de fusió. En PIL: generar soroll gaussià gris i fusionar.",
-    "layers": {
-      "cover":        { "opacity": 0.14, "blend": "soft-light" },
-      "album_page":   { "opacity": 0.08, "blend": "overlay" },
-      "album_band":   { "opacity": 0.12, "blend": "soft-light", "scope": "només dins la banda de territori" },
-      "singles_page": { "opacity": 0.08, "blend": "overlay" }
-    }
+    "_note": "The HTML uses a fixed SVG fractal-noise overlay; not 1:1 mappable. PIL equivalent: deterministic gaussian grey noise alpha-composited. Opacities tuned down to match the references (exported at 3x, so their grain is fine after downscale).",
+    "cover": 0.05,
+    "page": 0.035,
+    "band": 0.05,
+    "seed": 7
   },
 
-  "logo": {
-    "asset": "assets/logo.svg (wordmark real; MAI re-tipografiat)",
-    "aspect_ratio": 4.93,
-    "variants": {
-      "white": "filtre brightness(0) invert(1) → wordmark 100% blanc (sobre verd/ink)",
-      "black": "filtre brightness(0) → wordmark 100% negre (sobre groc)",
-      "color": "asset original (play blau + Top vermell + Quaranta groc), només sobre ink"
+  "territories": {
+    "_note": "deep/accent/abbr/short/name confirmed against the HTML (band bg = deep, accent text = accent): CAT deep rgb(47,90,47) accent rgb(123,191,123); VAL deep rgb(138,74,30) accent rgb(232,164,77); NOR deep rgb(122,39,48) accent rgb(221,120,130) all match the export.",
+    "pri": { "name": "Principat",        "short": "Catalunya", "abbr": "CAT", "deep": "rgb(47, 90, 47)",  "accent": "rgb(123, 191, 123)" },
+    "val": { "name": "País Valencià",    "short": "València",  "abbr": "VAL", "deep": "rgb(138, 74, 30)", "accent": "rgb(232, 164, 77)" },
+    "bal": { "name": "Illes Balears",    "short": "Balears",   "abbr": "BAL", "deep": "rgb(31, 90, 99)",  "accent": "rgb(92, 192, 204)" },
+    "nor": { "name": "Catalunya Nord",   "short": "Nord",      "abbr": "NOR", "deep": "rgb(122, 39, 48)", "accent": "rgb(221, 120, 130)" },
+    "fra": { "name": "Franja de Ponent", "short": "Franja",    "abbr": "FRA", "deep": "rgb(110, 85, 32)", "accent": "rgb(216, 178, 87)" },
+    "and": { "name": "Andorra",          "short": "Andorra",   "abbr": "AND", "deep": "rgb(44, 63, 99)",  "accent": "rgb(117, 149, 207)" },
+    "alg": { "name": "L'Alguer",         "short": "L'Alguer",  "abbr": "ALG", "deep": "rgb(122, 51, 64)", "accent": "rgb(217, 134, 160)" }
+  },
+
+  "cover": {
+    "gradient": { "shape": "radial", "at": [0.5, 0.0], "extent": [1.30, 0.80],
+      "stops": [[0.0, "rgb(66, 124, 66)"], [1.0, "rgb(47, 90, 47)"]] },
+    "logo":     { "h": 48, "cx": 540, "y": 88 },
+    "presenta": { "text": "aquesta setmana presenta", "font": "instrument", "size": 48, "italic": true, "color": "rgb(243, 236, 221)", "y": 166, "align": "center" },
+    "novetats": { "text": "NOVETATS", "font": "anton", "size": 116, "color": "rgb(255, 255, 255)", "y": 534.3, "align": "center" },
+    "etiqueta": { "font": "anton", "size": 250, "color": "rgb(250, 204, 21)", "ls": 1.25, "y": 638.7, "align": "center",
+      "shadow": { "dx": 0, "dy": 8, "color": "rgba(0, 0, 0, 0.16)" },
+      "albums": "ÀLBUMS", "singles": "SINGLES" },
+    "rule":     { "y": 1156.5, "h": 2, "color": "rgba(255, 255, 255, 0.34)", "left": [80, 510], "right": [570, 1000] },
+    "star":     { "text": "★", "font": "anton", "size": 24, "color": "rgb(250, 204, 21)", "cx": 540, "y": 1139 },
+    "pill":     { "font": "anton", "size": 38, "ls": 2, "color": "rgb(10, 10, 10)", "bg": "rgb(250, 204, 21)", "h": 72, "pad_x": 24, "radius": 8, "y": 1198 },
+    "cadencia": { "font": "instrument", "size": 40, "italic": true, "color": "rgb(255, 255, 255)", "y": 1208, "albums": "cada dimarts", "singles": "cada divendres" },
+    "bottom_group": { "center": 540, "gap": 22 }
+  },
+
+  "album": {
+    "logo":      { "h": 42, "x": 80, "y": 70 },
+    "nou_album": { "text": "NOU ÀLBUM", "font": "anton", "size": 24, "ls": 5, "color": "@accent", "right": 1000, "y": 73 },
+    "cover":     { "size": 660, "header_bottom": 112 },
+    "band":      { "bottom": 1350, "h1": 238, "per_line": 74, "grain": 0.12 },
+    "title":     { "font": "playfair", "size": 76, "weight": 800, "color": "rgb(255, 255, 255)", "x": 80, "line_h": 74.5, "y_off_band": 50, "wrap_budget": 700, "min_size": 56 },
+    "artist":    { "font": "bricolage", "size": 38, "weight": 700, "color": "rgba(255, 255, 255, 0.85)", "x": 80, "y": 1247 },
+    "abbr":      { "font": "anton", "size": 22, "ls": 2, "color": "@accent", "right": 1000, "y": 1228 },
+    "name":      { "font": "bricolage", "size": 26, "weight": 700, "color": "rgb(255, 255, 255)", "right": 1000, "y": 1261 }
+  },
+
+  "fallback_tile": {
+    "_note": "Rendered into the album cover slot when cover==null. Sizes are fractions of the tile side (660).",
+    "bg": "@deep",
+    "initial": { "font": "anton", "size_frac": 0.5, "color": "@accent" },
+    "keyline": { "inset_frac": 0.06, "width": 2, "color": "@accent", "alpha": 0.4 },
+    "footer":  { "text": "TOPQUARANTA", "font": "anton", "size_frac": 0.04, "ls": 4, "color": "rgba(255, 255, 255, 0.5)", "y_off_frac": 0.869 }
+  },
+
+  "singles": {
+    "header": {
+      "novetats": { "text": "NOVETATS", "font": "anton", "size": 76, "ls": 0.76, "color": "rgb(255, 255, 255)", "x": 70, "y": 66 },
+      "singles":  { "text": "SINGLES", "font": "anton", "size": 76, "ls": 0.76, "color": "rgb(250, 204, 21)", "x": 70, "y": 111.4 },
+      "subtitle": { "font": "instrument", "size": 34, "color": "rgba(255, 255, 255, 0.62)", "x": 70, "y": 210.8, "prefix": "estrenes de la setmana" },
+      "logo":     { "h": 42, "right": 1010, "y": 66 }
     },
-    "placements": {
-      "cover":   { "variant": "white", "height": 48, "x": 422, "y": 88,  "align": "centrat horitzontal", "width_at_h": 237 },
-      "album":   { "variant": "white", "height": 42, "x": 80,  "y": 70,  "align": "esquerra", "width_at_h": 207 },
-      "singles": { "variant": "white", "height": 42, "x": "dreta (right edge = 1010)", "y": 70, "align": "dreta" }
-    }
-  },
-
-  "cover_art": {
-    "role": "HEROI i SAGRAT — mai retallar per la cara ni tapar amb text pesat. Substituir el placeholder per la portada real de Deezer dins el mateix marc/mida.",
-    "album_hero_size": 660,
-    "singles_thumb_size": 72,
-    "box_shadow_album": "0 24px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.07)"
-  },
-
-  "fallback": {
-    "trigger": "cover == null",
-    "rule": "tile quadrat de la mida de la portada amb: fons = territori.deep · inicial (1a lletra del títol) en Anton color = territori.accent, mida = 0.5×tile, centrada · keyline interior 2px territori.accent opacitat 0.4 amb inset 0.06×tile · peu 'TOPQUARANTA' Anton mida 0.04×tile letterSpacing 4 color rgba(255,255,255,0.5) a 0.07×tile del fons",
-    "applies_to": ["album_hero (660)", "singles_thumb (72)"]
-  },
-
-  "slides": {
-    "1_portada": {
-      "background": "radial-gradient(130% 80% at 50% 0%, #427c42 0%, #2f5a2f 100%) — interior verd PPCC dalt-centre, exterior verd fosc",
-      "padding": { "top": 88, "sides": 80, "bottom": 80 },
-      "siblings": "kind=albums → etiqueta 'ÀLBUMS' + 'cada dimarts'; kind=singles → 'SINGLES' + 'cada divendres'. Mateixa paleta; NO canvia color de tipus.",
-      "elements": [
-        { "id": "logo",     "type": "image", "variant": "white", "h": 48, "x": 422, "y": 88, "align": "center" },
-        { "id": "presenta", "text": "aquesta setmana presenta", "font": "instrument", "style": "italic", "size": 48, "color": "#f3ecdd", "y": 166, "align": "center" },
-        { "id": "novetats", "text": "NOVETATS", "font": "anton", "size": 116, "lineHeight": 0.9, "color": "#ffffff", "y": 499, "align": "center", "note": "bloc NOVETATS+etiqueta centrat verticalment entre 'presenta' i el peu" },
-        { "id": "etiqueta", "text": "ÀLBUMS | SINGLES", "font": "anton", "size": 250, "lineHeight": 0.78, "letterSpacing": 1.25, "color": "#facc15", "y": 638, "align": "center", "textShadow": "0 8px 0 rgba(0,0,0,0.16)" },
-        { "id": "star",     "text": "★", "font": "anton", "size": 24, "color": "#facc15", "y": 1139, "align": "center", "note": "amb línies horitzontals rgba(255,255,255,0.34) a banda i banda, gap 18" },
-        { "id": "pill_setmana", "text": "SETMANA 39", "font": "anton", "size": 38, "letterSpacing": 2, "color": "#0a0a0a", "bg": "#facc15", "padding": "7px 20px", "y": 1206, "note": "fila centrada amb gap 22" },
-        { "id": "cadencia", "text": "cada dimarts | cada divendres", "font": "instrument", "style": "italic", "size": 40, "color": "#ffffff", "y": 1208 }
-      ]
+    "rows": {
+      "x": 70, "w": 940, "h": 85, "pitch": 95.1, "y0": 285.8, "count": 10,
+      "card_bg": "rgba(255, 255, 255, 0.04)", "card_radius": 2,
+      "chip":   { "x": 70, "w": 92, "abbr": { "font": "anton", "size": 26, "color": "@accent", "y_off": 22.5 } },
+      "thumb":  { "x": 180, "size": 72, "y_off": 6.5, "radius": 6 },
+      "title":  { "x": 270, "font": "bricolage", "size": 34, "weight": 800, "color": "rgb(255, 255, 255)", "y_off": 10.9 },
+      "artist": { "x": 270, "font": "bricolage", "size": 24, "weight": 500, "color": "rgba(255, 255, 255, 0.66)", "y_off": 46.2 },
+      "short":  { "right": 1010, "font": "instrument", "size": 26, "color": "rgba(255, 255, 255, 0.5)", "y_off": 25.5 }
     },
-
-    "2_album": {
-      "background": "#0a0a0a (ink) + gra overlay 0.08",
-      "padding_header": { "top": 70, "sides": 80 },
-      "band": { "y": 1112, "x": 0, "width": 1080, "height": 238, "background": "territori.deep", "padding": { "top": 50, "sides": 80, "bottom": 58 }, "grain": "0.12 soft-light dins la banda" },
-      "cover": { "size": 660, "x": 210, "y": 282, "note": "centrat horitzontal; centrat vertical entre capçalera i banda" },
-      "elements": [
-        { "id": "logo", "type": "image", "variant": "white", "h": 42, "x": 80, "y": 70 },
-        { "id": "etiqueta_nou", "text": "NOU ÀLBUM", "font": "anton", "size": 24, "letterSpacing": 5, "color": "territori.accent", "y": 73, "x_right": 1000, "align": "right" },
-        { "id": "titol", "text": "(títol àlbum)", "font": "playfair", "weight": 800, "size": 76, "lineHeight": 0.98, "color": "#ffffff", "x": 80, "y": 1162, "note": "dins la banda; Playfair = la glòria" },
-        { "id": "artista", "text": "(artista)", "font": "bricolage", "weight": 700, "size": 38, "color": "rgba(255,255,255,0.85)", "x": 80, "y": 1246 },
-        { "id": "terr_abbr", "text": "(abbr)", "font": "anton", "size": 22, "letterSpacing": 2, "color": "territori.accent", "x_right": 1000, "y": 1228, "align": "right" },
-        { "id": "terr_name", "text": "(nom territori)", "font": "bricolage", "weight": 700, "size": 26, "color": "#ffffff", "x_right": 1000, "y": 1261, "align": "right" }
-      ]
-    },
-
-    "3_singles": {
-      "background": "#0a0a0a (ink) + gra overlay 0.08",
-      "padding": { "top": 66, "sides": 70, "bottom": 60 },
-      "header": [
-        { "id": "novetats", "text": "NOVETATS", "font": "anton", "size": 76, "lineHeight": 0.9, "letterSpacing": 0.76, "color": "#ffffff", "x": 70, "y": 43 },
-        { "id": "singles", "text": "SINGLES", "font": "anton", "size": 76, "lineHeight": 0.9, "color": "#facc15", "x": 70, "y": 111 },
-        { "id": "subtitol", "text": "estrenes de la setmana 39", "font": "instrument", "style": "italic", "size": 34, "color": "rgba(255,255,255,0.62)", "x": 70, "y": 211 },
-        { "id": "logo", "type": "image", "variant": "white", "h": 42, "y": 70, "x_right": 1010, "align": "right" }
-      ],
-      "rows": {
-        "container": { "x": 70, "y": 285, "width": 940, "height": 941 },
-        "count_max": 10, "row_height": 85, "row_pitch": 95, "gap": 10,
-        "row_y_starts": [285, 380, 475, 571, 666, 761, 856, 951, 1046, 1141],
-        "row_bg": "rgba(255,255,255,0.035) amb keyline inset 0 0 0 1px rgba(255,255,255,0.06)",
-        "cells": {
-          "terr_chip":  { "x": 70, "width": 92, "height": "85 (alçada de fila)", "bg": "territori.deep", "abbr": { "font": "anton", "size": 26, "color": "territori.accent", "align": "center" } },
-          "thumb":      { "x": 180, "size": 72, "y_offset": "centrat vertical (≈ row_y + 6.5)" },
-          "titol":      { "x": 270, "font": "bricolage", "weight": 800, "size": 34, "lineHeight": 1.04, "color": "#ffffff", "ellipsis": true },
-          "artista":    { "x": 270, "font": "bricolage", "weight": 500, "size": 24, "color": "rgba(255,255,255,0.66)", "ellipsis": true, "note": "sota el títol" },
-          "terr_short": { "x_right": 1010, "padding_right": 22, "font": "instrument", "style": "italic", "size": 26, "color": "rgba(255,255,255,0.5)", "align": "right" }
-        }
-      },
-      "footer": {
-        "y": 1251,
-        "left": { "text": "topquaranta.cat", "font": "instrument", "style": "italic", "size": 30, "color": "rgba(255,255,255,0.55)", "x": 70 },
-        "page_indicator": {
-          "align": "right (right edge = 1010)",
-          "dots": { "height": 10, "radius": 6, "gap": 9, "active_width": 26, "inactive_width": 10, "active_color": "#facc15", "inactive_color": "rgba(255,255,255,0.25)" },
-          "gap_to_label": 16,
-          "label": { "text": "01 / 02", "font": "bricolage", "weight": 700, "size": 26, "letterSpacing": 1, "color": "rgba(255,255,255,0.6)", "format": "zero-padded NN / NN" }
-        }
-      },
-      "pagination_rule": "fins a 10 files per slide; el sistema reparteix per evitar slides amb 1-2 files òrfenes (p.ex. 14 → 7+7, no 10+4). Múltiples slides → indicador de pàgina."
+    "footer": {
+      "url":  { "text": "topquaranta.cat", "font": "instrument", "size": 30, "color": "rgba(255, 255, 255, 0.55)", "x": 70, "y": 1251 },
+      "page": {
+        "label": { "font": "bricolage", "size": 26, "weight": 700, "ls": 1, "color": "rgba(255, 255, 255, 0.6)", "right": 1010, "y": 1255 },
+        "dots":  { "y": 1265.5, "h": 10, "active_w": 26, "inactive_w": 10, "gap": 9, "gap_to_label": 16, "active": "rgb(250, 204, 21)", "inactive": "rgba(255, 255, 255, 0.25)" }
+      }
     }
   }
 }

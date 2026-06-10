@@ -260,8 +260,10 @@ loud. PPCC byte-identical.
 
 The three novetats feed slides (carousel cover, single-album slide, singles
 grid) have an alternate editorial layout in `social/feed_redesign.py`, driven
-by the measured token table `social/feed_design/feed-tokens.json` (source of
-truth) + `FEED-PIL-SPEC.md`. It is **off by default**, gated by
+by `social/feed_design/feed-tokens.json` — the **exact** computed values
+(`getComputedStyle` + `getBoundingClientRect`) extracted from the curated
+Claude Design HTML export rendered headless at 1080×1350 (replaces the earlier
+hand-measured tokens). It is **off by default**, gated by
 `ConfiguracioGlobal.feed_redisseny_actiu` (additive boolean). `renderer.py`
 reads the flag once in `render_feed_novetats` and threads `redesign=` into
 `_feed_novetats_portada` / `_feed_album_slide` / `_feed_singles_slide`; when
@@ -273,9 +275,12 @@ gating, idempotency and the Deezer cover sourcing/fallback contract
 (`cover_cache.fetch`) are untouched — only the cover-missing *tile* gets the
 new spec visual (territory `deep` fill + initial in `accent`). Territory
 palettes resolve via `feed_redesign.territori(code)` (DB code → JSON key;
-`CNO`→`nor`; aggregate/unknown → PPCC green). Rendering is deterministic
-(fixed grain seed). Font note: Bricolage Grotesque 500/700 roles currently
-render with the vendored 800 static until the two OFL weights are vendored.
+`CNO`→`nor`; aggregate/unknown → green). Rendering is deterministic (fixed
+grain seed). Album titles wrap to two lines (then shrink) instead of
+ellipsising; PPCC is never a row territory. Bricolage Grotesque 500/700/800
+are all real vendored OFL statics. Fidelity floor vs the references is text
+rasterisation (PIL FreeType vs the 3×-downscaled Chrome export) + the
+gaussian-grain approximation; positions/sizes/colours are exact.
 
 ## Static hosting
 

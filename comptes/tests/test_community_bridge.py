@@ -82,11 +82,19 @@ def test_creates_public_post_authored_by_admin(admin_user, draft):
     assert draft.publicacio_id == pub.id
 
 
-def test_body_is_plain_text_no_html(admin_user, draft):
+def test_body_is_markdown_without_raw_html(admin_user, draft):
     _set_gate(True)
     pub = community_bridge.publicar_draft_a_comunitat(draft)
-    assert "<" not in pub.cos and ">" not in pub.cos
-    assert "línia" in pub.cos and "Segona & final" in pub.cos  # entity unescaped
+    # No raw HTML tags survive → safe + clean for both stripMarkdown (preview)
+    # and react-markdown (full render, which never emits raw HTML anyway).
+    # (The JS renderers can't run in pytest; this asserts their invariant.)
+    import re
+
+    assert not re.search(r"<[a-zA-Z/][^>]*>", pub.cos)
+    # Markdown formatting is preserved, not flattened to plain text.
+    assert "**línia**" in pub.cos
+    assert "# Hola" in pub.cos
+    assert "Segona & final" in pub.cos  # entity unescaped
 
 
 def test_idempotent(admin_user, draft):
@@ -104,10 +112,30 @@ def test_never_sends_email(admin_user, draft):
     assert mail.outbox == []
 
 
-def test_html_to_text_strips_tags():
-    out = community_bridge._html_to_text("<p>A<br>B</p><p>C&amp;D</p>")
-    assert "<" not in out
-    assert "A" in out and "B" in out and "C&D" in out
+def test_html_to_markdown_cleans_ugly_cases():
+    import re
+
+    html = (
+        "<h2>Top</h2>"
+        '<p>Lidera <strong><a href="/artista/x">X</a></strong> i '
+        '<em><a href="https://topquaranta.cat/t">el top</a></em>.</p>'
+        '<img src="https://brevo.cdn/c.png" alt="cover">'
+        "<table><tr><th>P</th></tr><tr><td>1</td></tr></table>"
+    )
+    out = community_bridge._html_to_markdown(html)
+    # No raw HTML anywhere.
+    assert not re.search(r"<[a-zA-Z/][^>]*>", out)
+    # Markdown link/emphasis preserved; relative link absolutised.
+    assert "[X](https://www.topquaranta.cat/artista/x)" in out
+    assert "https://topquaranta.cat/t" in out  # already-absolute kept
+    # Images dropped (no markdown image syntax).
+    assert "![" not in out
+    # GFM table survives as markdown (react-markdown has remark-gfm).
+    assert "| P |" in out or "|P|" in out.replace(" ", "")
+
+
+def test_html_to_markdown_empty():
+    assert community_bridge._html_to_markdown("") == ""
 
 
 # ── endpoint ─────────────────────────────────────────────────────────

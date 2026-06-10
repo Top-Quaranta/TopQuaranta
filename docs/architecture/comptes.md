@@ -306,11 +306,13 @@ off by default**, gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`
 - Endpoint: `POST /api/v1/staff/newsletter/esborrany/publicar-comunitat/`
   (`web/api/staff/newsletter.py::esborrany_publicar_comunitat`) — 409 while
   the gate is off; staff button in `NewsletterDraftEditor.jsx`.
-- Body note: the feed renders `Publicacio.cos` as markdown
-  (`react-markdown`, no raw HTML) and previews via `stripMarkdown`, while the
-  draft stores `narrative_html`. So the bridge stores a **plain-text**
-  rendition (`_html_to_text`, dependency-free). Lossy but renders correctly;
-  a richer HTML→markdown path is a deliberate follow-up.
+- Body: the draft's `narrative_html` is converted to **markdown**
+  (`community_bridge._html_to_markdown`, via the `markdownify` dependency) and
+  stored in `Publicacio.cos`. The feed renders `cos` with `react-markdown` +
+  `remark-gfm` (never raw HTML) and previews via `stripMarkdown`, so markdown
+  is the right shape. The service cleans the ugly cases first: images dropped,
+  relative links absolutised to `PUBLIC_SITE_BASE`, blank-line runs collapsed;
+  the result contains no raw HTML.
 
 ## Related
 

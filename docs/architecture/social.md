@@ -256,19 +256,18 @@ brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
 below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
 loud. PPCC byte-identical.
 
-## Feed redesign — editorial "Sèrie 7" (gated, additive)
+## Feed redesign — editorial "Sèrie 7" (the only novetats renderer)
 
 The three novetats feed slides (carousel cover, single-album slide, singles
-grid) have an alternate editorial layout in `social/feed_redesign.py`, driven
+grid) render with the editorial layout in `social/feed_redesign.py`, driven
 by `social/feed_design/feed-tokens.json` — the **exact** computed values
 (`getComputedStyle` + `getBoundingClientRect`) extracted from the curated
-Claude Design HTML export rendered headless at 1080×1350 (replaces the earlier
-hand-measured tokens). It is **off by default**, gated by
-`ConfiguracioGlobal.feed_redisseny_actiu` (additive boolean). `renderer.py`
-reads the flag once in `render_feed_novetats` and threads `redesign=` into
-`_feed_novetats_portada` / `_feed_album_slide` / `_feed_singles_slide`; when
-True each delegates to `feed_redesign.build_{cover,album,singles}`, else the
-legacy layout renders byte-for-byte.
+Claude Design HTML export rendered headless at 1080×1350. **This is the only
+path** (2026-06-11): `renderer.py::render_feed_novetats` delegates the three
+pieces straight to `feed_redesign.build_{cover,album,singles}`. The earlier
+`ConfiguracioGlobal.feed_redisseny_actiu` gate and the legacy PIL layout were
+**removed** once the design was approved (migration `ranking/0029` drops the
+field). The legacy top-feed (`render_feed_top`) is unrelated and unchanged.
 
 Scope is layout only: album selection, singles bin-packing, per-channel
 gating, idempotency and the Deezer cover sourcing/fallback contract

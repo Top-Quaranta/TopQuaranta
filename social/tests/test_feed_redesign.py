@@ -1,9 +1,10 @@
-"""No-regression pins + smoke for the gated feed redesign.
+"""No-regression pins + smoke for the novetats feed renderer.
 
-The redesign is additive and OFF by default; these pins assert (a) the gate
-default, (b) routing (off → legacy, on → redesign), (c) the three redesign
-builders produce a valid 1080×1350 image incl. the cover==null fallback, and
-(d) deterministic output. No network: the Deezer cover fetch is monkeypatched.
+The editorial redesign is the only path (the gate + legacy layout were removed
+2026-06-11). These pins assert (a) `render_feed_novetats` delegates to the
+redesign builders, (b) the three builders produce a valid 1080×1350 image incl.
+the cover==null fallback, (c) deterministic output, and (d) the pixel-measured
+fidelity milestones. No network: the Deezer cover fetch is monkeypatched.
 """
 
 from __future__ import annotations
@@ -47,31 +48,31 @@ def fake_cover(monkeypatch):
     return swatch
 
 
-# ── gate ─────────────────────────────────────────────────────────────
+# ── render path: novetats slides come from the redesign (the only path) ──
 
 
-@pytest.mark.django_db
-def test_flag_defaults_off():
-    from ranking.models import ConfiguracioGlobal
-
-    assert ConfiguracioGlobal.load().feed_redisseny_actiu is False
-
-
-def test_routing_off_uses_legacy(monkeypatch, fake_cover):
-    """redesign=False must NOT call the redesign module."""
-    monkeypatch.setattr(
-        feed_redesign,
-        "build_album",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("redesign called")),
-    )
-    img = renderer._feed_album_slide(ALBUM, redesign=False)
-    assert img.size == (1080, 1350)
-
-
-def test_routing_on_uses_redesign(monkeypatch):
-    sentinel = Image.new("RGB", (1080, 1350), (1, 2, 3))
-    monkeypatch.setattr(feed_redesign, "build_album", lambda item: sentinel)
-    assert renderer._feed_album_slide(ALBUM, redesign=True) is sentinel
+def test_render_feed_novetats_uses_redesign(monkeypatch, fake_cover, tmp_path):
+    """render_feed_novetats delegates the three pieces to feed_redesign
+    (legacy + the feed_redisseny_actiu gate are gone)."""
+    calls = []
+    monkeypatch.setattr(renderer, "_renders_dir", lambda: tmp_path)
+    for name in ("build_cover", "build_album", "build_singles"):
+        monkeypatch.setattr(
+            feed_redesign,
+            name,
+            (
+                lambda n: (
+                    lambda *a, **k: (calls.append(n) or Image.new("RGB", (1080, 1350)))
+                )
+            )(name),
+        )
+    items = [
+        {"nom": "X", "artista_nom": "Y", "artista_territori": "CAT", "cover_url": None}
+    ]
+    renderer.render_feed_novetats("nous_singles", SET, items)
+    assert "build_cover" in calls and "build_singles" in calls
+    renderer.render_feed_novetats("nous_albums", SET, items)
+    assert "build_album" in calls
 
 
 # ── smoke: builders produce valid canvases ───────────────────────────

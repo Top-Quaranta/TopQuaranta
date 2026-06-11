@@ -2,9 +2,11 @@
 
 # Spec: social/feed_design/FEED-PIL-SPEC.md
 
-Additive and **gated** by `ConfiguracioGlobal.feed_redisseny_actiu` (default
-False). `renderer.py` delegates here only when the flag is on; otherwise the
-legacy builders run byte-for-byte.
+This is the **only** novetats feed renderer (since 2026-06-11): `renderer.py`'s
+`render_feed_novetats` delegates the three pieces (cover, single-album, singles
+grid) straight to `build_cover` / `build_album` / `build_singles`. The earlier
+`ConfiguracioGlobal.feed_redisseny_actiu` gate and the legacy PIL layout were
+removed once the redesign was approved.
 
 **Source of truth: `social/feed_design/feed-tokens.json`** — EXACT computed
 values (getComputedStyle + getBoundingClientRect) extracted from the curated

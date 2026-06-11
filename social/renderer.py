@@ -869,333 +869,44 @@ def render_feed_top(
 # ── FEED · novetats (album/single carousel) ──────────────────────────
 
 
-def _feed_novetats_portada(
-    tipus: str, setmana, *, redesign: bool = False
-) -> Image.Image:
-    """Cover slide for nous_albums / nous_singles.
-
-    Mirrors the territorial cover layout exactly — same pill sizes,
-    same vertical anchors, same fonts — with three substitutions:
-      • Background: solid ink (no album cover at all — novetats
-        aren't anchored to a single artist).
-      • Top-right pill: tipus label ("Nous àlbums" / "Nous singles"),
-        no leading icon. Fill = brand red (singles) or brand blue
-        (àlbums).
-      • Logo pill: same accent fill as the top-right chip, white
-        monochrome logo.
-    Setmana pill is identical to the territorial variant.
-    """
-    if redesign:
-        from . import feed_redesign
-
-        return feed_redesign.build_cover(tipus, setmana)
-
-    from .captions import _setmana_label
-
-    accent = (
-        colors.COLOR_NOVETATS_ALBUMS
-        if tipus == "nous_albums"
-        else colors.COLOR_NOVETATS_SINGLES
-    )
-    label = "Nous àlbums" if tipus == "nous_albums" else "Nous singles"
-
-    img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
-    d = ImageDraw.Draw(img)
-
-    # ── Top-right pill (no icon, just the tipus label) ───────────
-    f_chip = fonts.sans_bold(34)
-    chip_w, _ = _measure_pill(text=label, font=f_chip, pad_x=20, pad_y=12)
-    _pill(
-        img,
-        x=int(FEED_W - 30 - chip_w),
-        y=30,
-        text=label,
-        font=f_chip,
-        fill=accent,
-        text_fill=colors.COLOR_WHITE,
-        pad_x=20,
-        pad_y=12,
-        radius=12,  # mm-design `--mm-radius-lg`
-    )
-
-    # ── Logo pill, lower band (geometry shared with territorial) ─
-    pill_w = int(FEED_W * 0.70)  # 756
-    # Left margin bumped from 30 → 84 (+54 px = 5% of FEED_W) per the
-    # May-2026 readability pass: same left-aligned stack, more
-    # breathing room from the canvas edge.
-    pill_x = 84
-    pill_y = 944  # 1012 − 5% × 1350 ≈ 68
-    logo_h = 106  # 88 × 1.20
-    logo_w = int(round(logo_h * svg_assets.LOGO_ASPECT))
-    pill_h = logo_h + 28
-    d.rounded_rectangle(
-        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=12,
-        fill=accent,
-    )
-    logo = svg_assets.logo_image_mono(logo_w, colors.COLOR_WHITE)
-    if logo is not None:
-        img.paste(
-            logo,
-            (
-                pill_x + 20,
-                pill_y + (pill_h - logo.size[1]) // 2,
-            ),
-            logo,
-        )
-
-    # ── Setmana pill (identical to territorial) ──────────────────
-    sm_x = 84  # mirrors pill_x — keeps the two-pill stack aligned
-    sm_y = pill_y + pill_h + 15
-    sm_w, sm_h = pill_w, 84
-    d.rounded_rectangle(
-        (sm_x, sm_y, sm_x + sm_w, sm_y + sm_h),
-        radius=12,
-        fill=colors.COLOR_WHITE,
-    )
-    f_sm = fonts.sans_bold(38)
-    txt = _setmana_label(setmana)
-    bbox = f_sm.getbbox(txt)
-    text_h = bbox[3] - bbox[1]
-    d.text(
-        (sm_x + 20, sm_y + (sm_h - text_h) // 2 - bbox[1]),
-        txt,
-        font=f_sm,
-        fill=colors.COLOR_BG,
-    )
-    return img
-
-
-def _feed_album_slide(item: dict, *, redesign: bool = False) -> Image.Image:
-    """One album per slide.
-
-    Top-left: brand logo.
-    Top-right: territory icon-only pill in the artist's territory
-    colour (no text — the icon is enough).
-    Centre: big cover.
-    Bottom: title + artist.
-    """
-    if redesign:
-        from . import feed_redesign
-
-        return feed_redesign.build_album(item)
-
-    img = _feed_canvas()
-    d = ImageDraw.Draw(img)
-    _logo_block(img, 60, 50, width=270)
-
-    # Territory icon-only pill, top-right.
-    ter = item.get("artista_territori") or "PPCC"
-    ter_color = colors.terr_color(ter)
-    icon_pill_w, icon_pill_h = _measure_pill(
-        text="",
-        font=fonts.sans_bold(20),
-        pad_x=20,
-        pad_y=14,
-        icon_codi=ter,
-        icon_size=44,
-    )
-    _pill(
-        img,
-        x=int(FEED_W - 60 - icon_pill_w),
-        y=44,
-        text="",
-        font=fonts.sans_bold(20),
-        fill=ter_color,
-        pad_x=20,
-        pad_y=14,
-        radius=22,
-        icon_codi=ter,
-        icon_size=44,
-        icon_fill=colors.COLOR_WHITE,
-    )
-
-    # Big cover centred
-    cover = _cover(item.get("cover_url"), 800, fallback_letter=item.get("nom", "?")[:1])
-    cover_r = _rounded(cover, 24)
-    img.paste(cover_r, ((FEED_W - 800) // 2, 160), cover_r)
-
-    # Title + artist underneath. May-2026 readability v3: artist
-    # bumped 36 → 44 (matches the story-canço pattern) and the
-    # vertical anchors slide up 30 px so the block hugs the cover.
-    # Cover is at y=160, h=800 → bottom at y=960; we want a small
-    # ~20 px gutter, so title at y=980 and artist at y=1054 (line
-    # height 74, room for the 44-pt body without descender clipping).
-    f_t = fonts.display_bold(54)
-    f_a = fonts.sans_regular(44)
-    title = _truncate(d, item["nom"], f_t, FEED_W - 120)
-    artist = _truncate(d, item["artista_nom"], f_a, FEED_W - 120)
-    d.text(
-        ((FEED_W - d.textlength(title, font=f_t)) // 2, 980),
-        title,
-        font=f_t,
-        fill=colors.COLOR_WHITE,
-    )
-    d.text(
-        ((FEED_W - d.textlength(artist, font=f_a)) // 2, 1054),
-        artist,
-        font=f_a,
-        fill=colors.COLOR_TEXT_MUTED,
-    )
-
-    _footer(d, FEED_W, FEED_H)
-    return img
-
-
-def _feed_singles_slide(
-    items: list[dict],
-    page: int,
-    total_pages: int,
-    *,
-    redesign: bool = False,
-    setmana=None,
-) -> Image.Image:
-    """Up to 10 singles in a list. Each row carries the artist's
-    territory icon at the right edge so the slide stays colourful
-    even when titles are short."""
-    if redesign:
-        from . import feed_redesign
-
-        return feed_redesign.build_singles(items, page, total_pages, setmana=setmana)
-
-    img = _feed_canvas()
-    d = ImageDraw.Draw(img)
-    _logo_block(img, 60, 50, width=270)
-
-    # "Nous singles" pill top-right in brand red.
-    f_h = fonts.sans_bold(24)
-    chip_w, _ = _measure_pill(text="Nous singles", font=f_h, pad_x=20, pad_y=10)
-    _pill(
-        img,
-        x=int(FEED_W - 60 - chip_w),
-        y=44,
-        text="Nous singles",
-        font=f_h,
-        fill=colors.COLOR_NOVETATS_SINGLES,
-        text_fill=colors.COLOR_WHITE,
-        pad_x=20,
-        pad_y=10,
-        radius=18,
-    )
-
-    # Accent rule under the header.
-    d.rounded_rectangle(
-        (60, 130, FEED_W - 60, 138),
-        radius=4,
-        fill=colors.COLOR_NOVETATS_SINGLES,
-    )
-
-    # May-2026 readability v3 pass — mirror `_feed_list_slide`. Same
-    # row_h/list_top, but the song title gets bumped 28 → 40 pt and
-    # both glyphs hug the top of the row (y+0 / y+54). Cover (80 px)
-    # and territory icon (48 px) anchors are unchanged so the rest of
-    # the layout stays put. Row geometry shared with `_feed_list_slide`
-    # via social/constants.py.
-    f_song = fonts.display_bold(40)  # was 28
-    f_artist = fonts.sans_regular(22)
-    icon_size = 48
-
-    for i, e in enumerate(items[:10]):
-        y = LIST_TOP_Y + i * LIST_ROW_HEIGHT
-        ter = e.get("artista_territori") or "PPCC"
-        ter_color = colors.terr_color(ter)
-
-        # Tinted row card per territory so colour leaks through.
-        card_fill = colors.darken(ter_color, 0.78 if i % 2 == 0 else 0.85)
-        d.rounded_rectangle(
-            (40, y - 6, FEED_W - 40, y + 80 + 10),
-            radius=18,
-            fill=card_fill,
-        )
-
-        # Cover thumbnail left.
-        cover = _cover(e.get("cover_url"), 80, fallback_letter=e.get("nom", "?")[:1])
-        cover_r = _rounded(cover, 12)
-        img.paste(cover_r, (60, y), cover_r)
-
-        # Territory icon at the right, in brand colour.
-        t_icon = svg_assets.territory_icon(ter, icon_size, ter_color)
-        if t_icon is not None:
-            img.paste(
-                t_icon,
-                (FEED_W - 60 - icon_size, y + (80 - icon_size) // 2),
-                t_icon,
-            )
-
-        text_x = 175
-        text_w = (FEED_W - 60 - icon_size - 20) - text_x
-        song = _truncate(d, e["nom"], f_song, text_w)
-        artist = _truncate(d, e["artista_nom"], f_artist, text_w)
-        # Tight top padding (y+0) for the 40-pt song; artist drops to
-        # y+54 to clear the title's descenders.
-        d.text((text_x, y), song, font=f_song, fill=colors.COLOR_WHITE)
-        d.text((text_x, y + 54), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
-
-    if total_pages > 1:
-        f_p = fonts.sans_bold(22)
-        text = f"{page}/{total_pages}"
-        tw = d.textlength(text, font=f_p)
-        d.text(
-            ((FEED_W - tw) // 2, FEED_H - 80),
-            text,
-            font=f_p,
-            fill=colors.COLOR_TEXT_MUTED,
-        )
-
-    _footer(d, FEED_W, FEED_H)
-    return img
-
-
-def _feed_redisseny_actiu() -> bool:
-    """Read the additive feed-redesign gate. Defaults to False and never
-    raises (a missing config row / DB hiccup → legacy layout)."""
-    try:
-        from ranking.models import ConfiguracioGlobal
-
-        return bool(ConfiguracioGlobal.load().feed_redisseny_actiu)
-    except Exception:  # noqa: BLE001 — gate must never break a render
-        return False
-
-
 def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
-    """`tipus` is `nous_albums` (1 per slide) or `nous_singles`
-    (10 per slide, list-style)."""
-    redesign = _feed_redisseny_actiu()
+    """The three novetats slides (cover, single-album, singles grid) via the
+    editorial redesign in `social/feed_redesign.py` — the ONLY path since
+    2026-06-11 (the gated legacy layout + `feed_redisseny_actiu` flag were
+    removed). Selection, singles bin-packing, idempotency and the Deezer cover
+    sourcing/fallback contract stay here; the editorial layout lives there.
+
+    `tipus` is `nous_albums` (1 per slide) or `nous_singles` (≤10 per slide)."""
+    from . import feed_redesign
+
     out: list[Path] = []
     p = _path(tipus, "", setmana, 0)
-    _feed_novetats_portada(tipus, setmana, redesign=redesign).save(
-        p, "JPEG", quality=90
-    )
+    feed_redesign.build_cover(tipus, setmana).save(p, "JPEG", quality=90)
     out.append(p)
 
     if tipus == "nous_albums":
         for i, item in enumerate(items[:9], start=1):
             p = _path(tipus, "", setmana, i)
-            _feed_album_slide(item, redesign=redesign).save(p, "JPEG", quality=90)
+            feed_redesign.build_album(item).save(p, "JPEG", quality=90)
             out.append(p)
     else:
-        # Singles: dynamic bin-packing so we never end with a slide
-        # holding 1-2 orphan rows. Up to 10 per slide is the hard cap
-        # (anything denser stops being legible). Within that cap we
-        # split as evenly as possible:
-        #   ≤10 → 1 slide
-        #   11-20 → 2 slides (e.g. 11 → 6+5, 13 → 7+6, 20 → 10+10)
-        #   21-30 → 3 slides, etc.
+        # Singles: dynamic bin-packing so we never end with a slide holding
+        # 1-2 orphan rows. Up to 10 per slide is the hard cap. Within it we
+        # split as evenly as possible (≤10→1, 11-20→2, 21-30→3, …).
         n = len(items)
         n_slides = max(1, (n + 9) // 10)
         per_slide = -(-n // n_slides)  # ceil-div
         pages = n_slides
         offset = 0
         for page in range(1, pages + 1):
-            # Last slide may end up smaller; that's intentional.
             chunk_size = per_slide if (offset + per_slide) <= n else n - offset
             chunk = items[offset : offset + chunk_size]
             if not chunk:
                 break
             p = _path(tipus, "", setmana, page)
-            _feed_singles_slide(
-                chunk, page, pages, redesign=redesign, setmana=setmana
-            ).save(p, "JPEG", quality=90)
+            feed_redesign.build_singles(chunk, page, pages, setmana=setmana).save(
+                p, "JPEG", quality=90
+            )
             out.append(p)
             offset += chunk_size
     return out[:10]

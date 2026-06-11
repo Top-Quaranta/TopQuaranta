@@ -54,3 +54,39 @@ def test_round_trip_patch_get_identical(staff_client):
     assert p.status_code == 200
     g = staff_client.get("/api/v1/staff/configuracio/")
     assert _fields(g)["editorial_veu"]["value"] == voice
+
+
+@pytest.mark.django_db
+def test_distribution_section_hidden_from_config_view(staff_client):
+    """Distribution lives in the cockpit/matrix, not Configuració. The
+    distribution fields must NOT appear in the view, the sections list must
+    not include 'Distribució i canals', and a PATCH to a distribution field
+    is ignored (the field keeps its value)."""
+    from ranking.models import ConfiguracioGlobal
+
+    r = staff_client.get("/api/v1/staff/configuracio/")
+    fields = _fields(r)
+    for hidden in (
+        "distribucio_activa",
+        "instagram_actiu",
+        "newsletter_actiu",
+        "rss_actiu",
+        "delay_instagram_min",
+        "newsletter_publicacio_pont_actiu",
+    ):
+        assert hidden not in fields, f"{hidden} should be hidden from Config"
+    assert "Distribució i canals" not in r.data["sections"]
+    # Ranking/soft-cap/editorial stay visible.
+    assert "min_escoltes_top" in fields
+    assert "soft_cap_actiu" in fields
+    assert "editorial_veu" in fields
+
+    # A PATCH targeting a distribution field is a no-op (cockpit owns it).
+    ConfiguracioGlobal.objects.update_or_create(
+        pk=1, defaults={"instagram_actiu": True}
+    )
+    r2 = staff_client.patch(
+        "/api/v1/staff/configuracio/", {"instagram_actiu": "False"}, format="json"
+    )
+    assert r2.status_code == 200
+    assert ConfiguracioGlobal.load().instagram_actiu is True  # unchanged

@@ -152,14 +152,31 @@ SECTION_ORDER = [
 ]
 
 
+# Sections the Config view does NOT surface. Distribution lives in the
+# distribution cockpit / matrix (`/staff/social/*`), so it's hidden here —
+# Configuració is rankings + soft cap + editorial. The fields stay on the
+# model and `pot_publicar` / the cockpit are unchanged; they just don't appear
+# (or accept writes) via `/staff/configuracio/`.
+_HIDDEN_SECTIONS = {SECTION_DISTRIBUCIO}
+
+
 def _section_for(name: str) -> str:
     return _SECTION_MAP.get(name, SECTION_ALTRES)
+
+
+def _is_config_visible(name: str) -> bool:
+    """False for fields whose section is hidden from the Config view."""
+    return _section_for(name) not in _HIDDEN_SECTIONS
 
 
 def _config_fields(config):
     out = []
     for field in ConfiguracioGlobal._meta.get_fields():
-        if hasattr(field, "attname") and field.attname != "id":
+        if (
+            hasattr(field, "attname")
+            and field.attname != "id"
+            and _is_config_visible(field.attname)
+        ):
             raw_value = getattr(config, field.attname)
             display_value = (
                 _mask_secret(raw_value)
@@ -186,10 +203,14 @@ def configuracio(request: Request) -> Response:
     config = ConfiguracioGlobal.load()
     if request.method == "PATCH":
         data = request.data or {}
+        # Only the visible (non-distribution) fields are writable here; the
+        # distribution switches are owned by the cockpit/matrix endpoints.
         fields = [
             f
             for f in ConfiguracioGlobal._meta.get_fields()
-            if hasattr(f, "attname") and f.attname != "id"
+            if hasattr(f, "attname")
+            and f.attname != "id"
+            and _is_config_visible(f.attname)
         ]
         before = {f.attname: getattr(config, f.attname) for f in fields}
         for f in fields:

@@ -170,7 +170,7 @@ every message in the media-group (Telegram has no group-level delete).
 | GET | `/staff/senyal/` | Daily Last.fm signal inspector. |
 | POST | `/staff/senyal/<canco_pk>/acceptar-correccio/` | R5: accept Last.fm's autocorrect for a track. |
 | GET | `/staff/historial/` | Read-only HistorialRevisio. |
-| GET/PATCH | `/staff/configuracio/` | ConfiguracioGlobal coeffs (auto-reflected). GET returns `{fields, sections}`: each field carries a `section` (Rànquing i fórmules · Soft cap · Editorial · Distribució i canals · Altres) so the SPA groups them; PATCH logs field-level diff to audit. The legacy `/staff/social/story-cap/` endpoint + `story_max_cancons_ppcc` were removed 2026-06-11 (governed nothing). |
+| GET/PATCH | `/staff/configuracio/` | ConfiguracioGlobal coeffs (auto-reflected). GET returns `{fields, sections}`: each field carries a `section` (Rànquing i fórmules · Soft cap · Editorial · Altres) so the SPA groups them; PATCH logs field-level diff to audit. **The `Distribució i canals` section is hidden here (2026-06-11)** — distribution switches/delays live in the cockpit/matrix (`/staff/social/*`); those fields stay on the model and `pot_publicar` is unchanged, but Config neither shows nor writes them. The legacy `/staff/social/story-cap/` endpoint + `story_max_cancons_ppcc` were removed 2026-06-11 (governed nothing). |
 | GET | `/staff/auditlog/` | Read-only StaffAuditLog (R9). |
 | GET | `/staff/usuaris/` | User list with filters. |
 | GET | `/staff/usuaris/<pk>/` | Detail with propostes + sol·licituds + audit. |

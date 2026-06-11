@@ -93,6 +93,23 @@ SINGLES_10 = [
 ]
 SINGLES_NOCOVER = [{**s, "cover_url": None} for s in SINGLES[:6]]
 
+# One row per territory — shows ALL 9 chip silhouettes incl. ALT (globus) and
+# CAR (El Carxe). CAT is the senyera (never the cross). No PPCC (blinded).
+SINGLES_9TERR = [
+    {"nom": nom, "artista_nom": art, "artista_territori": code, "cover_url": "x"}
+    for nom, art, code in [
+        ("Senyera endins", "Marès", "CAT"),
+        ("Rat penat", "Nèstor Vidal", "VAL"),
+        ("Entre illes", "Aurora Blau", "BAL"),
+        ("Flama del Canigó", "Cabanes", "CNO"),
+        ("Vent de la Franja", "Els Pèlags", "FRA"),
+        ("Bàcul i muntanya", "Mistral", "AND"),
+        ("Onada de l'Alguer", "Bruna", "ALG"),
+        ("De fora estant", "Globus", "ALT"),
+        ("Plana del Carxe", "Verdic", "CAR"),
+    ]
+]
+
 
 def main():
     orig = cover_cache.fetch
@@ -121,6 +138,10 @@ def main():
         cover_cache.fetch = with_cover(2)
         feed_redesign.build_singles(SINGLES_10, 1, 2, setmana=SET).save(
             OUT / "08_singles_10_noppcc.png"
+        )
+        # One row per territory — all 9 chip silhouettes incl. ALT + CAR.
+        feed_redesign.build_singles(SINGLES_9TERR, 1, 1, setmana=SET).save(
+            OUT / "09_singles_9_territories.png"
         )
     finally:
         cover_cache.fetch = orig

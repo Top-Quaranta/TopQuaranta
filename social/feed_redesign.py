@@ -42,7 +42,9 @@ from social import cover_cache, fonts, svg_assets
 
 logger = logging.getLogger(__name__)
 
-_TOKENS_PATH = Path(__file__).resolve().parent / "feed_design" / "feed-tokens.json"
+_DESIGN_DIR = Path(__file__).resolve().parent / "feed_design"
+_TOKENS_PATH = _DESIGN_DIR / "feed-tokens.json"
+_LOGO_DIR = _DESIGN_DIR / "territory_logos"
 CANVAS_W, CANVAS_H = 1080, 1350
 _GRAIN_SEED = 7
 
@@ -52,6 +54,36 @@ def tokens() -> dict:
     """The exact extracted token table, cached."""
     with open(_TOKENS_PATH, encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _terr_key(code: str | None) -> str:
+    """Design key (pri/val/…) for a DB territory code; falls back to pri."""
+    return _CODE_TO_KEY.get((code or "").upper(), "pri")
+
+
+@functools.lru_cache(maxsize=16)
+def _logo_base(key: str):
+    """Loaded silhouette PNG (alpha = shape), cached."""
+    return Image.open(_LOGO_DIR / f"{key}.png").convert("RGBA")
+
+
+def _terr_logo(key: str, accent):
+    """Territory silhouette recoloured to `accent`, optically sized for the
+    chip: width = optH*aspect capped at maxW (then height scales down). The
+    PNG's alpha is the mask; the fill is `accent` (so a token recolour
+    follows). Returns an RGBA image, or None if the key has no logo spec."""
+    spec = tokens()["territory_logos"]
+    pt = spec["per_territory"].get(key)
+    if pt is None:
+        return None
+    opt_h, aspect, max_w = pt["optH"], pt["aspect"], spec["maxW"]
+    w, h = opt_h * aspect, float(opt_h)
+    if w > max_w:
+        w, h = float(max_w), max_w / aspect
+    base = _logo_base(key)
+    silh = Image.new("RGBA", base.size, tuple(accent))
+    silh.putalpha(base.getchannel("A"))
+    return silh.resize((max(1, round(w)), max(1, round(h))), Image.LANCZOS)
 
 
 # ── colour parsing ───────────────────────────────────────────────────
@@ -82,6 +114,8 @@ _CODE_TO_KEY = {
     "FRA": "fra",
     "AND": "and",
     "ALG": "alg",
+    "ALT": "alt",
+    "CAR": "car",
 }
 
 
@@ -568,16 +602,26 @@ def build_singles(
             fill=_col(terr["deep"]),
             radius=R["card_radius"],
         )
-        ab = ch["abbr"]
-        _text(
-            img,
-            ch["x"] + ch["w"] / 2,
-            y + ab["y_off"],
-            terr["abbr"],
-            _font("anton", ab["size"]),
-            _col(terr["accent"]),
-            align="center",
-        )
+        # Territory silhouette (replaces the old abbr text), centred in the chip.
+        if ch.get("logo"):
+            logo = _terr_logo(
+                _terr_key(e.get("artista_territori")), _col(terr["accent"])
+            )
+            if logo is not None:
+                lx = ch["x"] + (ch["w"] - logo.width) / 2
+                ly = y + (R["h"] - logo.height) / 2
+                img.alpha_composite(logo, (int(round(lx)), int(round(ly))))
+        elif ch.get("abbr"):  # legacy fallback
+            ab = ch["abbr"]
+            _text(
+                img,
+                ch["x"] + ch["w"] / 2,
+                y + ab["y_off"],
+                terr["abbr"],
+                _font("anton", ab["size"]),
+                _col(terr["accent"]),
+                align="center",
+            )
         th = R["thumb"]
         tile = _cover_or_tile(
             e.get("cover_url"), th["size"], e.get("nom", "?"), terr, simple=True

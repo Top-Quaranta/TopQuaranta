@@ -285,3 +285,46 @@ def test_singles_blinds_ppcc_row_count(fake_cover):
             tops.append(r)
         prev = r
     assert len(tops) == 4
+
+
+def test_chip_shows_recoloured_silhouette_not_text(fake_cover):
+    """The singles chip contains the territory silhouette in its accent colour,
+    optically sized (height ≈ optH from the fitxa) and vertically centred in the
+    92×85 chip — a stable proxy for 'logo, not abbr text' (the old abbr was
+    top-anchored 26 px text; the silhouette is centred and optH-tall). 'No glyph'
+    isn't asserted directly (hard to measure robustly); the abbr code path is
+    gone — see build_singles."""
+    for code, key in (("CAT", "pri"), ("VAL", "val")):  # val exercises the maxW cap
+        row = [
+            {
+                "nom": "X",
+                "artista_nom": "Y",
+                "artista_territori": code,
+                "cover_url": "x",
+            }
+        ]
+        img = feed_redesign.build_singles(row, 1, 1)
+        a = np.asarray(img.convert("RGB"), np.int16)
+        terr = feed_redesign.territori(code)
+        ar, ag, ab, _ = feed_redesign._col(terr["accent"])
+        R = feed_redesign.tokens()["singles"]["rows"]
+        y0, rh = int(R["y0"]), R["h"]
+        ch = R["chip"]
+        # accent pixels (close to the territory accent) inside the chip box
+        region = a[y0 : y0 + rh, ch["x"] : ch["x"] + ch["w"], :]
+        d = (
+            np.abs(region[..., 0] - ar)
+            + np.abs(region[..., 1] - ag)
+            + np.abs(region[..., 2] - ab)
+        )
+        ys, xs = np.where(d < 40)
+        assert ys.size > 60, f"{code}: expected an accent silhouette in the chip"
+        # optically sized: bbox height ≈ optH (capped case scales down).
+        pt = feed_redesign.tokens()["territory_logos"]
+        spec = pt["per_territory"][key]
+        w = spec["optH"] * spec["aspect"]
+        exp_h = spec["optH"] if w <= pt["maxW"] else pt["maxW"] / spec["aspect"]
+        assert abs((ys.max() - ys.min() + 1) - exp_h) <= 8, f"{code}: height off"
+        # vertically centred in the chip (silhouette, not top-anchored text).
+        centre = (ys.min() + ys.max()) / 2
+        assert abs(centre - rh / 2) <= 6, f"{code}: not vertically centred"

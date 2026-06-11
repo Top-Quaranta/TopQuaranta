@@ -306,6 +306,38 @@ def artista_crear(request: Request) -> Response:
     return Response({"ok": True, "pk": artista.pk, "slug": artista.slug})
 
 
+def _homonims_payload(artista: Artista) -> list[dict]:
+    """Other artistes sharing this one's homonym key (same name modulo accents
+    + punctuation). Drives the staff heads-up marker. Each entry carries enough
+    to disambiguate by eye: estat, location, Deezer IDs, verified-song count."""
+    out = []
+    for h in (
+        artista.homonims()
+        .prefetch_related("localitats__municipi", "deezer_ids")
+        .order_by("-aprovat", "nom")
+    ):
+        locs = []
+        for loc in h.localitats.all():
+            if loc.municipi_id:
+                locs.append(loc.municipi.nom)
+            elif loc.localitat_manual:
+                locs.append(loc.localitat_manual)
+        out.append(
+            {
+                "pk": h.pk,
+                "nom": h.nom,
+                "slug": h.slug,
+                "aprovat": h.aprovat,
+                "localitats": locs[:4],
+                "deezer_ids": list(h.deezer_ids.values_list("deezer_id", flat=True)),
+                "n_cancons_verificades": Canco.objects.filter(
+                    artista=h, verificada=True, activa=True
+                ).count(),
+            }
+        )
+    return out
+
+
 @api_view(["GET", "PATCH"])
 @permission_classes([IsStaff])
 def artista_detail(request: Request, pk: int) -> Response:
@@ -468,6 +500,7 @@ def artista_detail(request: Request, pk: int) -> Response:
     row = _artista_card(artista)
     row.update(
         {
+            "homonims": _homonims_payload(artista),
             "lastfm_nom": artista.lastfm_nom or "",
             "percentatge_femeni": artista.percentatge_femeni or "",
             "genere_canonical": artista.genere_canonical or "",

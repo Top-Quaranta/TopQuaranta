@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -5,6 +8,20 @@ from django.db import models
 from django.utils.text import slugify
 
 from music.constants import SOCIAL_LINK_FIELDS as _SOCIAL_LINK_FIELDS
+
+_HOMONIM_STRIP_RE = re.compile(r"[^a-z0-9]+")
+
+
+def normalitza_nom_homonim(nom: str) -> str:
+    """Normalised key for homonym detection: lowercase, strip diacritics, and
+    drop EVERYTHING that isn't a-z0-9 (punctuation, apostrophes, spaces). So
+    "Sr. À", "sra" and "S R A" collapse to the same key. Deliberately
+    aggressive — it backs a staff *heads-up* marker (possible homonym), never
+    an automatic block."""
+    s = unicodedata.normalize("NFKD", nom or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return _HOMONIM_STRIP_RE.sub("", s.lower())
+
 
 # Same shape as `comptes.models.HTTP_ONLY_URL` — defined locally to
 # avoid a music→comptes cross-app import (`comptes` already depends
@@ -121,6 +138,12 @@ class Artista(models.Model):
     # Last.fm but never consumed by any code path. Regenerate via a
     # Last.fm artist.getInfo call if ever needed.
     nom = models.CharField(max_length=255)
+    # Homonym key: `normalitza_nom_homonim(nom)` (lowercase, no diacritics, no
+    # punctuation/spaces). Maintained in `save()` + backfilled by migration.
+    # Two artistes with the same non-empty value are homonyms → the staff UI
+    # flags them so reviewers are extra careful (the Crim case: same name,
+    # different bands, can't both be approved on one shared Deezer profile).
+    nom_normalitzat = models.CharField(max_length=255, blank=True, db_index=True)
     slug = models.SlugField(max_length=280, unique=True, blank=True)
     territoris = models.ManyToManyField(
         Territori,
@@ -437,7 +460,16 @@ class Artista(models.Model):
         codis = ",".join(self.territoris.values_list("codi", flat=True))
         return f"{self.nom} ({codis})" if codis else self.nom
 
+    def homonims(self):
+        """Other Artista rows whose name is the same modulo accents +
+        punctuation (the homonym marker). Empty for a blank key."""
+        key = self.nom_normalitzat or normalitza_nom_homonim(self.nom)
+        if not key:
+            return Artista.objects.none()
+        return Artista.objects.filter(nom_normalitzat=key).exclude(pk=self.pk)
+
     def save(self, *args, **kwargs) -> None:
+        self.nom_normalitzat = normalitza_nom_homonim(self.nom)
         if not self.slug:
             base = slugify(self.nom) or "artista"
             slug = base

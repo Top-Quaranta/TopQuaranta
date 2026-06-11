@@ -30,7 +30,7 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 | Group | Fields |
 |---|---|
-| Core | `nom`, `slug`, `lastfm_nom` |
+| Core | `nom`, `nom_normalitzat` (homonym key: `normalitza_nom_homonim(nom)` — lowercase, no diacritics, no punctuation/spaces; maintained in `save()`, indexed; backs the staff homonym marker), `slug`, `lastfm_nom` |
 | Approval state | `aprovat` ✦, `pendent_review` ✦ |
 | Discovery provenance (immutable) | `auto_descobert`, `font_descoberta` |
 | Discovery cache | `last_checked_deezer` |
@@ -77,6 +77,7 @@ queue-membership flag, a conflation the 0042 migration resolved.
 - `sync_territoris_from_localitats()` — recomputes M2M from ArtistaLocalitat → Municipi
 - `deezer_id_principal` (property) — primary Deezer ID from ArtistaDeezer
 - `all_deezer_ids` (property) — list of all Deezer IDs
+- `homonims()` — other Artista rows with the same `nom_normalitzat` (same name modulo accents + punctuation); backs the staff homonym heads-up marker
 - `clean()` — requires a location when `aprovat=True`
 
 ### `ArtistaDeezer` — `music_artistadeezer`

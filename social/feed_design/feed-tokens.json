@@ -25,7 +25,25 @@
     "nor": { "name": "Catalunya Nord",   "short": "Nord",      "abbr": "NOR", "deep": "rgb(122, 39, 48)", "accent": "rgb(221, 120, 130)" },
     "fra": { "name": "Franja de Ponent", "short": "Franja",    "abbr": "FRA", "deep": "rgb(110, 85, 32)", "accent": "rgb(216, 178, 87)" },
     "and": { "name": "Andorra",          "short": "Andorra",   "abbr": "AND", "deep": "rgb(44, 63, 99)",  "accent": "rgb(117, 149, 207)" },
-    "alg": { "name": "L'Alguer",         "short": "L'Alguer",  "abbr": "ALG", "deep": "rgb(122, 51, 64)", "accent": "rgb(217, 134, 160)" }
+    "alg": { "name": "L'Alguer",         "short": "L'Alguer",  "abbr": "ALG", "deep": "rgb(122, 51, 64)", "accent": "rgb(217, 134, 160)" },
+    "alt": { "name": "Altres",           "short": "Altres",    "abbr": "ALT", "deep": "rgb(51, 55, 61)",  "accent": "rgb(154, 160, 166)" },
+    "car": { "name": "El Carxe",         "short": "El Carxe",  "abbr": "CAR", "deep": "rgb(74, 64, 52)",  "accent": "rgb(189, 169, 136)" }
+  },
+
+  "territory_logos": {
+    "_note": "Per-territory hand-drawn silhouette inside the singles chip — replaces the old abbr TEXT (cold + redundant with the name on the right). Source: social/feed_design/territory_logos/{key}.png (alpha = shape; recoloured with territori.accent via alpha-mask in PIL). Optical sizing (not geometric): w = optH*aspect, capped at maxW=74 (then h scales down); centred in the unchanged 92x85 deep chip. Values from the Claude Design feed-kit (handoff 2026-06-11). CAT(pri) = senyera (from territory-ppcc.svg), NEVER the cross; PPCC never a row.",
+    "maxW": 74,
+    "per_territory": {
+      "pri": { "optH": 44, "aspect": 1.454545, "motif": "senyera (4 barres)" },
+      "val": { "optH": 36, "aspect": 2.124481, "motif": "rat penat" },
+      "bal": { "optH": 44, "aspect": 1.620253, "motif": "illes" },
+      "nor": { "optH": 46, "aspect": 1.391304, "motif": "flama del Canigó" },
+      "fra": { "optH": 44, "aspect": 1.354497, "motif": "bandera Franja" },
+      "and": { "optH": 52, "aspect": 0.902344, "motif": "escut amb bàcul" },
+      "alg": { "optH": 50, "aspect": 1.333333, "motif": "illa + ones" },
+      "alt": { "optH": 50, "aspect": 1.019920, "motif": "globus" },
+      "car": { "optH": 50, "aspect": 0.994141, "motif": "El Carxe" }
+    }
   },
 
   "cover": {
@@ -76,7 +94,7 @@
     "rows": {
       "x": 70, "w": 940, "h": 85, "pitch": 95.1, "y0": 285.8, "count": 10,
       "card_bg": "rgba(255, 255, 255, 0.04)", "card_radius": 2,
-      "chip":   { "x": 70, "w": 92, "abbr": { "font": "anton", "size": 26, "color": "@accent", "y_off": 22.5 } },
+      "chip":   { "x": 70, "w": 92, "logo": true },
       "thumb":  { "x": 180, "size": 72, "y_off": 6.5, "radius": 6 },
       "title":  { "x": 270, "font": "bricolage", "size": 34, "weight": 800, "color": "rgb(255, 255, 255)", "y_off": 10.9 },
       "artist": { "x": 270, "font": "bricolage", "size": 24, "weight": 500, "color": "rgba(255, 255, 255, 0.66)", "y_off": 46.2 },

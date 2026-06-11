@@ -282,6 +282,18 @@ are all real vendored OFL statics. Fidelity floor vs the references is text
 rasterisation (PIL FreeType vs the 3×-downscaled Chrome export) + the
 gaussian-grain approximation; positions/sizes/colours are exact.
 
+**Singles chip = territory silhouette (2026-06-11).** The singles-grid chip no
+longer shows the abbr TEXT (CAT/VAL…); it shows a hand-drawn territory
+**silhouette** (senyera, rat penat, flama del Canigó, …) recoloured to
+`territori.accent`. Assets: `social/feed_design/territory_logos/{key}.png`
+(alpha = shape; recoloured via alpha-mask in `feed_redesign._terr_logo`). The
+chip geometry is unchanged (92×85 `deep`); only its content. Sizing is
+**optical, not geometric** — per-territory `optH` + `aspect` in the
+`territory_logos` token block, width capped at `maxW=74`, centred. `CAT`(pri) =
+the **senyera** (`territory-ppcc.svg` art), never the cross; `ALT`/`CAR` added
+to the palette + code map. The territory short name stays at the right
+(Instrument italic, one line). Values from the Claude Design feed-kit handoff.
+
 ## Static hosting
 
 Meta's IG media-fetcher rejects rendered images served through

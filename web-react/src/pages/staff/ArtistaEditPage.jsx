@@ -378,6 +378,30 @@ export default function ArtistaEditPage() {
       {err && <p className="text-sm text-red-300 mb-3">{err}</p>}
       {msg && <p className="text-sm text-emerald-300 mb-3">{msg}</p>}
 
+      {a.homonims?.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-400/50 bg-amber-400/10 p-3">
+          <p className="text-sm font-semibold text-amber-200">
+            ⚠️ Homònim{a.homonims.length > 1 ? 's' : ''}: hi ha {a.homonims.length}{' '}
+            artista{a.homonims.length > 1 ? 's' : ''} amb el mateix nom (ignorant
+            accents i puntuació). Compte abans d'aprovar o assignar cançons.
+          </p>
+          <ul className="mt-2 flex flex-col gap-1 text-xs">
+            {a.homonims.map(h => (
+              <li key={h.pk} className="text-white/80">
+                <Link to={`/staff/artistes/${h.pk}`} className="underline font-mono">
+                  pk={h.pk}
+                </Link>{' '}
+                <span className="font-semibold">{h.nom}</span>{' · '}
+                {h.aprovat ? 'aprovat' : 'pendent'}
+                {h.localitats?.length > 0 && <> · {h.localitats.join(', ')}</>}
+                {' · '}deezer={h.deezer_ids?.length ? h.deezer_ids.join(', ') : '—'}
+                {' · '}{h.n_cancons_verificades} cançons verif.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-4">
         <TableCard className="p-4">
           <h2 className="font-semibold mb-3">Bàsics</h2>

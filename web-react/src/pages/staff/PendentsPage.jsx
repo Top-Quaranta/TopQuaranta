@@ -105,6 +105,14 @@ function Row({ a, onApproved, onDiscarded }) {
         >
           {a.nom}
         </Link>
+        {a.te_homonims && (
+          <span
+            className="ml-1 text-[10px] font-semibold text-amber-700"
+            title="Hi ha un altre artista amb el mateix nom (ignorant accents i puntuació). Compte: possible homònim (cas Crim)."
+          >
+            ⚠ homònim
+          </span>
+        )}
         <div className="text-xs opacity-60 flex flex-wrap items-center gap-1">
           {/* Drill-down: clicking the verified-track count opens the
               Cançons list pre-scoped to this artist + verificada=1. */}

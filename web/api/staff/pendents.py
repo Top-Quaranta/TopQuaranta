@@ -72,7 +72,7 @@ from web.api.search_utils import unaccent_field as _unaccent_field
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.
-from web.api.staff._common import IsStaff, _paginate
+from web.api.staff._common import IsStaff, _paginate, noms_amb_homonims
 
 # ═════════════════════════════════════════════════════════════════════════
 # Pendents — auto-discovered artists awaiting review
@@ -113,7 +113,7 @@ def _compute_propostes_per_artista_map() -> dict[int, int]:
     return dict(counter)
 
 
-def _artista_card(a) -> dict:
+def _artista_card(a, homset=None) -> dict:
     """Compact artist shape for staff tables (pendents + artistes).
 
     Callers MUST `prefetch_related("localitats__municipi", "deezer_ids",
@@ -150,6 +150,13 @@ def _artista_card(a) -> dict:
         "genere": a.genere or "",
         "aprovat": a.aprovat,
         "pendent_review": a.pendent_review,
+        # Homonym marker: another artista shares this name (modulo accents +
+        # punctuation). Flags the Crim-style traps in the pendents queue.
+        "te_homonims": (
+            bool(a.nom_normalitzat) and a.nom_normalitzat in homset
+            if homset is not None
+            else a.homonims().exists()
+        ),
         "auto_descobert": a.auto_descobert,
         "font_descoberta": a.font_descoberta or "",
         # Read from the prefetch cache (`.values_list()` would bypass it
@@ -259,9 +266,10 @@ def pendents_list(request: Request) -> Response:
     else:
         qs = qs.order_by("-n_propostes", "-nb_verif", "nom")
     page, meta = _paginate(qs, request)
+    homset = noms_amb_homonims()
     rows = []
     for a in page.object_list:
-        row = _artista_card(a)
+        row = _artista_card(a, homset)
         row["nb_verif"] = a.nb_verif
         row["n_propostes"] = getattr(a, "n_propostes", 0) or 0
         rows.append(row)

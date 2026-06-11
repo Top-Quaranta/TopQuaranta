@@ -90,3 +90,44 @@ def test_artista_detail_exposes_homonims():
         "deezer_ids",
         "n_cancons_verificades",
     }
+
+
+@pytest.mark.django_db
+def test_te_homonims_flag_in_list_endpoints():
+    """artistes_list, pendents_list and cancons_list each flag rows whose
+    artista shares a homonym key (the visible marker)."""
+    from rest_framework.test import APIClient
+
+    from comptes.models import Usuari
+    from music.models import Album, Canco
+
+    a1 = Artista.objects.create(nom="Crim", aprovat=True)
+    a2 = Artista.objects.create(nom="Crïm", aprovat=False, pendent_review=True)
+    solo = Artista.objects.create(nom="Manel", aprovat=False, pendent_review=True)
+    # a canço under the homonym artista for the workbench
+    alb = Album.objects.create(nom="X", artista=a1)
+    Canco.objects.create(nom="t", artista=a1, album=alb, verificada=False, activa=True)
+
+    u = Usuari.objects.create_user(
+        username="hl", email="hl@example.com", password="x", is_staff=True
+    )
+    c = APIClient()
+    c.force_authenticate(user=u)
+
+    # artistes list
+    rows = {
+        r["pk"]: r for r in c.get("/api/v1/staff/artistes/?aprovat=").data["results"]
+    }
+    assert rows[a1.pk]["te_homonims"] is True
+    assert rows[a2.pk]["te_homonims"] is True
+    assert rows[solo.pk]["te_homonims"] is False
+
+    # pendents list (aprovat=False rows)
+    pend = {r["pk"]: r for r in c.get("/api/v1/staff/pendents/").data["results"]}
+    assert pend[a2.pk]["te_homonims"] is True
+    assert pend[solo.pk]["te_homonims"] is False
+
+    # cançons workbench
+    cr = c.get("/api/v1/staff/cancons/").data["results"]
+    mine = [r for r in cr if r["artista"] and r["artista"]["pk"] == a1.pk]
+    assert mine and mine[0]["artista"]["te_homonims"] is True

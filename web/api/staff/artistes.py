@@ -77,7 +77,7 @@ from web.api.search_utils import unaccent_field as _unaccent_field
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.
-from web.api.staff._common import IsStaff, _paginate
+from web.api.staff._common import IsStaff, _paginate, noms_amb_homonims
 from web.api.staff.estat import _homonym_suspects_qs
 from web.api.staff.pendents import _artista_card
 
@@ -231,7 +231,10 @@ def artistes_list(request: Request) -> Response:
         qs = qs.distinct().order_by(Lower("nom"))
 
     page, meta = _paginate(qs, request)
-    return Response({"results": [_artista_card(a) for a in page.object_list], **meta})
+    homset = noms_amb_homonims()
+    return Response(
+        {"results": [_artista_card(a, homset) for a in page.object_list], **meta}
+    )
 
 
 @api_view(["GET"])

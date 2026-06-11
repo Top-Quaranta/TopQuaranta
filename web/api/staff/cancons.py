@@ -74,14 +74,14 @@ from web.api.staff._spotify_url import SpotifyUrlError, parse_track_id
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.
-from web.api.staff._common import IsStaff, _paginate
+from web.api.staff._common import IsStaff, _paginate, noms_amb_homonims
 
 # ═════════════════════════════════════════════════════════════════════════
 # Cançons — track management
 # ═════════════════════════════════════════════════════════════════════════
 
 
-def _canco_row(c) -> dict:
+def _canco_row(c, homset=None) -> dict:
     # Spotify enrichment payload (Process B, see ADR-0012). The
     # OneToOne reverse accessor raises DoesNotExist when there's no
     # SpotifyMetadata row, which is the legitimate state for Cançons
@@ -152,6 +152,14 @@ def _canco_row(c) -> dict:
                 # cançons. >1 is the "possible Deezer barreja" badge
                 # the SPA surfaces on the row.
                 "spotify_dispersio": c.artista.spotify_artist_dispersio,
+                # Homonym marker: another artista shares this name (modulo
+                # accents + punctuation). Heads-up for the Crim case.
+                "te_homonims": (
+                    bool(c.artista.nom_normalitzat)
+                    and c.artista.nom_normalitzat in homset
+                    if homset is not None
+                    else c.artista.homonims().exists()
+                ),
             }
             if c.artista
             else None
@@ -312,7 +320,10 @@ def cancons_list(request: Request) -> Response:
         direction, key = "-", "ml_confianca"
     qs = qs.order_by(f"{direction}{sort_map[key]}", "nom")
     page, meta = _paginate(qs, request)
-    return Response({"results": [_canco_row(c) for c in page.object_list], **meta})
+    homset = noms_amb_homonims()
+    return Response(
+        {"results": [_canco_row(c, homset) for c in page.object_list], **meta}
+    )
 
 
 @api_view(["POST"])

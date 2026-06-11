@@ -291,7 +291,17 @@ export default function StaffArtistesPage() {
                   />
                 </Td>
                 <Td>
-                  <div className="font-semibold">{a.nom}</div>
+                  <div className="font-semibold">
+                    {a.nom}
+                    {a.te_homonims && (
+                      <span
+                        className="ml-1 text-[10px] font-semibold text-amber-700"
+                        title="Hi ha un altre artista amb el mateix nom (ignorant accents i puntuació). Compte: possible homònim (cas Crim)."
+                      >
+                        ⚠ homònim
+                      </span>
+                    )}
+                  </div>
                   {a.genere && <div className="text-xs opacity-60">{a.genere}</div>}
                 </Td>
                 {sort === 'cancons_tops_desc' && (

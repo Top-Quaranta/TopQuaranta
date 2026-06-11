@@ -70,7 +70,7 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 ### Artistes
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/staff/artistes/` | Filters: `q`, `aprovat`, `deezer`, `territori`. |
+| GET | `/staff/artistes/` | Filters: `q`, `aprovat`, `deezer`, `territori`. Each row carries `te_homonims` (another artista shares the name modulo accents + punctuation). |
 | GET | `/staff/artistes/search/?q=` | Typeahead for pickers. Returns up to 10 results. |
 | POST | `/staff/artistes/crear/` | Body: `nom`, `lastfm_nom?`, `deezer_id?`. |
 | GET/PATCH | `/staff/artistes/<pk>/` | Detail + replace-semantics PATCH over `nom`, `lastfm_nom`, `genere`, `percentatge_femeni`, `aprovat`, social URLs, `localitats[]`, `deezer_ids[]`. **One transaction (2026-06):** the `aprovat=True` flip is deferred until after the localitat + Deezer writes, then gated (rejects 400 without ≥1 Deezer or localitat). A `deezer_ids[]` entry already owned by another artist now returns **409** with `owner_pk` (was a silent no-op); the rollback leaves nothing half-written. **Homonym marker (2026-06-11):** GET also returns `homonims[]` — other artistes with the same `nom_normalitzat` (name modulo accents + punctuation), each with `{pk, nom, slug, aprovat, localitats, deezer_ids, n_cancons_verificades}`. The edit page shows an amber warning so reviewers are careful before approving / assigning songs (the Crim case: same name, different bands). |
@@ -78,7 +78,7 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 ### Cançons
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/staff/cancons/` | Filters: `q`, `verificada`, `ml_classe`, `whisper`, `deezer`, `sort`, `artista_pk`. |
+| GET | `/staff/cancons/` | Filters: `q`, `verificada`, `ml_classe`, `whisper`, `deezer`, `sort`, `artista_pk`. The row's `artista` carries `te_homonims` (shown as a "⚠ homònim" badge in the workbench). |
 | POST | `/staff/cancons/accio/` | Bulk `aprovar` / `rebutjar` with `motiu`. `artista_incorrecte` → cascades to `rebutjar_artista`; `album_incorrecte` → `rebutjar_album`. |
 | GET/PATCH | `/staff/cancons/<pk>/` | Detail + PATCH incl. `artista_pk` reassignment + `artistes_col_pks` replace + `spotify_url` (manual Spotify track id, see below). |
 

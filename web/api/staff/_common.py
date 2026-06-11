@@ -92,6 +92,20 @@ class IsStaff(BasePermission):
         return True if is_verified is None else bool(is_verified())
 
 
+def noms_amb_homonims() -> set[str]:
+    """Set of `Artista.nom_normalitzat` values shared by >1 artista — the
+    homonym keys (same name modulo accents + punctuation). One GROUP BY;
+    callers flag a row with `a.nom_normalitzat in this_set`. Empty key is
+    never a homonym (names that are all punctuation)."""
+    return set(
+        Artista.objects.exclude(nom_normalitzat="")
+        .values("nom_normalitzat")
+        .annotate(_n=Count("id"))
+        .filter(_n__gt=1)
+        .values_list("nom_normalitzat", flat=True)
+    )
+
+
 def _paginate(qs, request: Request, default_per_page: int = 50):
     """Staff variant of :func:`web.api.utils.paginate` with a 200-cap.
 

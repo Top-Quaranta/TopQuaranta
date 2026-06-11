@@ -308,7 +308,17 @@ export default function StaffCanconsPage() {
                   {c.isrc && <div className="text-[11px] opacity-60">ISRC {c.isrc}</div>}
                 </Td>
                 <Td>
-                  <div>{c.artista.nom}</div>
+                  <div>
+                    {c.artista.nom}
+                    {c.artista.te_homonims && (
+                      <span
+                        className="ml-1 text-[10px] font-semibold text-amber-700"
+                        title="Hi ha un altre artista amb el mateix nom (ignorant accents i puntuació). Compte: possible homònim (cas Crim)."
+                      >
+                        ⚠ homònim
+                      </span>
+                    )}
+                  </div>
                   {/* Spotify canonical artist name when it differs from
                       Deezer's, plus the dispersion badge. Discreet on
                       purpose: only surfaces when the data is there,

@@ -30,7 +30,13 @@ from pathlib import Path
 
 import numpy as np
 import requests
-import soundfile as sf
+
+# `soundfile` (and `faster_whisper`, imported in `get_model`) are heavy,
+# optional runtime deps only needed when audio is actually decoded. They are
+# imported lazily so this module — and the `analitzar_whisper` management
+# command that imports it — can load for help/description reflection on a host
+# without the audio/ML stack installed (e.g. local dev, the cron-description
+# test). Behaviour is unchanged when the deps are present.
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +122,8 @@ def _detect_language(wav_path: Path) -> tuple[str, float, dict[str, float]] | No
     `all_probs` covers every language in Whisper's vocabulary; caller keeps
     only what it needs (typically `ca`, `es`, top-1).
     """
+    import soundfile as sf  # lazy: heavy optional dep, see module header
+
     try:
         data, sr = sf.read(str(wav_path), dtype="float32")
         if data.ndim > 1:

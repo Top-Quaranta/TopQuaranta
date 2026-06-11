@@ -236,8 +236,9 @@ trend cues anywhere.
 Covers resolve **local self-hosted portada first** (`ingesta.portades`,
 250 px for small slots / 500 px for large) then the live Deezer CDN URL
 then a placeholder tile — the newsletter placeholder does NOT apply here.
-`story_max_cancons_ppcc` no longer governs the PPCC set (kept for the
-config/staff surfaces). The `#1` headline comes from
+The PPCC story set is a fixed 7-slide editorial sequence (the
+`story_max_cancons_ppcc` field + its `/staff/social/story-cap/` endpoint were
+removed 2026-06-11 — they governed nothing). The `#1` headline comes from
 `_story_hero_headline(setmana, territori)`. Output stays JPEG q90; a
 full set is ~1 MB (7 JPG) vs the legacy ~42 PNG.
 

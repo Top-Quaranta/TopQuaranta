@@ -437,11 +437,6 @@ urlpatterns = [
         name="staff_social_matriu_toggle",
     ),
     path(
-        "staff/social/story-cap/",
-        staff_views.social_story_cap,
-        name="staff_social_story_cap",
-    ),
-    path(
         "staff/social/delay/",
         staff_views.social_delay,
         name="staff_social_delay",

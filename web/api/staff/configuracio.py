@@ -100,6 +100,62 @@ def _mask_secret(value):
     return f"{s[:4]}…{s[-4:]}"
 
 
+# Sectioning of the (auto-reflected) ConfiguracioGlobal fields so the SPA can
+# group them. Same view, just labelled. Order here is the display order. Fields
+# not listed fall through to "Altres" (e.g. a future field, or secrets).
+SECTION_RANKINGS = "Rànquing i fórmules"
+SECTION_SOFTCAP = "Soft cap (outliers)"
+SECTION_EDITORIAL = "Editorial"
+SECTION_DISTRIBUCIO = "Distribució i canals"
+SECTION_ALTRES = "Altres"
+
+_SECTION_MAP = {
+    # A — ranking / formula
+    "exponent_penalitzacio_antiguitat": SECTION_RANKINGS,
+    "penalitzacio_album_per_canco": SECTION_RANKINGS,
+    "penalitzacio_artista_per_canco": SECTION_RANKINGS,
+    "coeficient_penalitzacio_top": SECTION_RANKINGS,
+    "min_cancons_ranking_propi": SECTION_RANKINGS,
+    "min_escoltes_top": SECTION_RANKINGS,
+    "ppcc_penalitzacio_per_posicio": SECTION_RANKINGS,
+    # soft-cap scoring (all tunables together)
+    "soft_cap_actiu": SECTION_SOFTCAP,
+    "soft_cap_multiplicador": SECTION_SOFTCAP,
+    "soft_cap_floor_escoltes": SECTION_SOFTCAP,
+    "soft_cap_base_top_n": SECTION_SOFTCAP,
+    # D — editorial
+    "editorial_veu": SECTION_EDITORIAL,
+    # B — distribution / channels (managed primarily in the distribution
+    # cockpit; surfaced here read/write because the model is reflected).
+    "newsletter_publicacio_pont_actiu": SECTION_DISTRIBUCIO,
+    "distribucio_activa": SECTION_DISTRIBUCIO,
+    "instagram_actiu": SECTION_DISTRIBUCIO,
+    "mastodon_actiu": SECTION_DISTRIBUCIO,
+    "bluesky_actiu": SECTION_DISTRIBUCIO,
+    "telegram_actiu": SECTION_DISTRIBUCIO,
+    "newsletter_actiu": SECTION_DISTRIBUCIO,
+    "rss_actiu": SECTION_DISTRIBUCIO,
+    "delay_instagram_min": SECTION_DISTRIBUCIO,
+    "delay_mastodon_min": SECTION_DISTRIBUCIO,
+    "delay_bluesky_min": SECTION_DISTRIBUCIO,
+    "delay_telegram_min": SECTION_DISTRIBUCIO,
+    "delay_newsletter_min": SECTION_DISTRIBUCIO,
+}
+
+# Stable display order of the sections in the SPA.
+SECTION_ORDER = [
+    SECTION_RANKINGS,
+    SECTION_SOFTCAP,
+    SECTION_EDITORIAL,
+    SECTION_DISTRIBUCIO,
+    SECTION_ALTRES,
+]
+
+
+def _section_for(name: str) -> str:
+    return _SECTION_MAP.get(name, SECTION_ALTRES)
+
+
 def _config_fields(config):
     out = []
     for field in ConfiguracioGlobal._meta.get_fields():
@@ -118,6 +174,7 @@ def _config_fields(config):
                     "is_secret": _is_secret_field(field.attname),
                     "help": getattr(field, "help_text", "") or "",
                     "type": field.get_internal_type(),
+                    "section": _section_for(field.attname),
                 }
             )
     return out
@@ -175,4 +232,7 @@ def configuracio(request: Request) -> Response:
                 changed_fields=list(diff.keys()),
                 diff=diff,
             )
-    return Response({"fields": _config_fields(config)})
+    fields = _config_fields(config)
+    present = {f["section"] for f in fields}
+    sections = [s for s in SECTION_ORDER if s in present]
+    return Response({"fields": fields, "sections": sections})

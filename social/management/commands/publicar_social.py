@@ -11,7 +11,7 @@ setmana) via the SocialPost row. Modes:
   --force             ignore existing publicat row + re-publish
 
 The command:
-  1. Reads ConfiguracioGlobal.{instagram_actiu, story_max_cancons_ppcc}.
+  1. Reads ConfiguracioGlobal.instagram_actiu.
   2. Walks the calendari for the target weekday.
   3. For each slot (gated by the distribution matrix), builds payload,
      renders PNGs, uploads + publishes via the IG client.
@@ -360,7 +360,7 @@ class Command(BaseCommand):
         if territori == "PPCC":
             # Step 3b: the PPCC story set is a fixed 7-slide editorial
             # sequence (intro → 11-40 → 4-10 → podi → #1 hero → novetats
-            # → outro). `story_max_cancons_ppcc` no longer governs it.
+            # → outro).
             novetats_items = self._story_novetats_items(setmana, opts)
             hero_headline = self._story_hero_headline(setmana)
             paths = renderer.render_stories_ppcc(

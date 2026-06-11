@@ -12,9 +12,9 @@
  * Self-fetches `/staff/social/` for config + credentials (same data the
  * cockpit used to). Endpoints: `credentials/`, `credentials/test/`,
  * `credentials/clear/`. The legacy per-slot distribution phase was
- * removed 2026-06 (the matrix's dia_setmana replaces it). The story-cap
- * knob (`story_max_cancons_ppcc`) is no longer edited here — it stays an
- * operational knob in /staff/configuracio, read by the stories cron.
+ * removed 2026-06 (the matrix's dia_setmana replaces it). The legacy
+ * story-cap knob (`story_max_cancons_ppcc`) was removed 2026-06-11: the
+ * PPCC story set is a fixed 7-slide sequence, so the cap governed nothing.
  */
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";

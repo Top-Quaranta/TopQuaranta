@@ -41,7 +41,6 @@ class ConfiguracioGlobal(models.Model):
 
     # Defaults are Decimal(str) — never float — so full_clean() doesn't trip
     # on imprecise float → Decimal round-tripping.
-    dia_setmana_ranking = models.IntegerField(default=6, validators=_DAY_RANGE)
     exponent_penalitzacio_antiguitat = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -185,12 +184,6 @@ class ConfiguracioGlobal(models.Model):
         help_text="Switch per canal d'Instagram. Si False (o el mestre "
         "`distribucio_activa` False), `publicar_social` surt sense fer res. "
         "NO és el switch global; per a això hi ha `distribucio_activa`.",
-    )
-    story_max_cancons_ppcc = models.PositiveSmallIntegerField(
-        default=40,
-        help_text="Quantes cançons del top PPCC publicar com a stories "
-        "individuals. Per defecte 40 (totes); si la story completion "
-        "rate cau per sota del 25 % al story #N, baixa aquí a N.",
     )
 
     # ── Sprint I bis: multi-channel distribution kill switches ──────

@@ -115,7 +115,6 @@ from web.api.staff.social import (  # noqa: F401
     social_republicar,
     social_reset,
     social_slides_for,
-    social_story_cap,
     social_telegram_clear,
     social_telegram_save,
     social_telegram_test,

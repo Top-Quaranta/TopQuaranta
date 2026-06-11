@@ -37,7 +37,6 @@ def cfg_all_on(db):
     cfg.bluesky_actiu = True
     cfg.telegram_actiu = True
     cfg.newsletter_actiu = True
-    cfg.story_max_cancons_ppcc = 5
     cfg.save()
     return cfg
 

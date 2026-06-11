@@ -35,7 +35,7 @@ def test_get_exposes_field_type(staff_client):
     # editorial_veu is a TextField → the SPA renders it as a textarea.
     assert fields["editorial_veu"]["type"] == "TextField"
     # A numeric coefficient is NOT a TextField (stays a one-line input).
-    assert fields["story_max_cancons_ppcc"]["type"] != "TextField"
+    assert fields["min_escoltes_top"]["type"] != "TextField"
 
 
 @pytest.mark.django_db

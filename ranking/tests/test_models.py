@@ -11,7 +11,7 @@ class TestConfiguracioGlobal:
     def test_load_creates_singleton(self):
         config = ConfiguracioGlobal.load()
         assert config.pk == 1
-        assert config.dia_setmana_ranking == 6
+        assert config.min_escoltes_top == 5
 
     def test_save_forces_pk_1(self):
         config = ConfiguracioGlobal(pk=99, coeficient_penalitzacio_top=Decimal("0.05"))

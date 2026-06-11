@@ -148,7 +148,6 @@ def test_caption_drops_malformed_handle():
 def cfg_ig_on(db):
     cfg = ConfiguracioGlobal.load()
     cfg.instagram_actiu = True
-    cfg.story_max_cancons_ppcc = 5  # keep tests fast
     cfg.save()
     return cfg
 

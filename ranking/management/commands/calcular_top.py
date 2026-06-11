@@ -34,7 +34,6 @@ ALGORITHM_VERSION = "v2.0"
 # R1: coefficients we snapshot into each TopSetmanal row. Only the
 # fields that still live on ConfiguracioGlobal after the v2.0 simplification.
 _CONFIG_SNAPSHOT_FIELDS = [
-    "dia_setmana_ranking",
     "exponent_penalitzacio_antiguitat",
     "penalitzacio_album_per_canco",
     "penalitzacio_artista_per_canco",

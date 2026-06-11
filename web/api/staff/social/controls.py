@@ -49,21 +49,6 @@ def social_toggle(request: Request) -> Response:
     return Response({field: new_val})
 
 
-@api_view(["POST"])
-@permission_classes([IsStaff])
-def social_story_cap(request: Request) -> Response:
-    try:
-        n = int(request.data.get("n"))
-    except (TypeError, ValueError):
-        return Response({"error": "n must be int 1-40"}, status=400)
-    if n < 1 or n > 40:
-        return Response({"error": "n must be in [1, 40]"}, status=400)
-    cfg = ConfiguracioGlobal.load()
-    cfg.story_max_cancons_ppcc = n
-    cfg.save(update_fields=["story_max_cancons_ppcc"])
-    return Response({"story_max_cancons_ppcc": cfg.story_max_cancons_ppcc})
-
-
 _DELAY_CHANNELS = ("instagram", "mastodon", "bluesky", "telegram", "newsletter")
 
 

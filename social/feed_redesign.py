@@ -32,13 +32,11 @@ import datetime
 import functools
 import json
 import logging
-import re
 from pathlib import Path
 
-import numpy as np
 from PIL import Image, ImageDraw
 
-from social import cover_cache, fonts, svg_assets
+from social import cover_cache, fonts, render_core, svg_assets
 
 logger = logging.getLogger(__name__)
 
@@ -56,22 +54,18 @@ def tokens() -> dict:
         return json.load(fh)
 
 
-def _terr_key(code: str | None) -> str:
-    """Design key (pri/val/…) for a DB territory code; falls back to pri."""
-    return _CODE_TO_KEY.get((code or "").upper(), "pri")
-
-
-@functools.lru_cache(maxsize=16)
-def _logo_base(key: str):
-    """Loaded silhouette PNG (alpha = shape), cached."""
-    return Image.open(_LOGO_DIR / f"{key}.png").convert("RGBA")
+# Primitives live once in `render_core`; these thin aliases keep the build_*
+# call sites unchanged. Token-bound wrappers (territori, _terr_logo, _tile,
+# _font) stay here because their geometry/palette comes from `feed-tokens.json`.
+_col = render_core.col
+_CODE_TO_KEY = render_core.CODE_TO_KEY
+_terr_key = render_core.terr_key
 
 
 def _terr_logo(key: str, accent):
-    """Territory silhouette recoloured to `accent`, optically sized for the
-    chip: width = optH*aspect capped at maxW (then height scales down). The
-    PNG's alpha is the mask; the fill is `accent` (so a token recolour
-    follows). Returns an RGBA image, or None if the key has no logo spec."""
+    """Territory silhouette recoloured to `accent`, optically sized for the chip
+    (width = optH*aspect capped at maxW, then height scales). Geometry from the
+    tokens; the recolour/resize is `render_core.silhouette`. None if no spec."""
     spec = tokens()["territory_logos"]
     pt = spec["per_territory"].get(key)
     if pt is None:
@@ -80,43 +74,7 @@ def _terr_logo(key: str, accent):
     w, h = opt_h * aspect, float(opt_h)
     if w > max_w:
         w, h = float(max_w), max_w / aspect
-    base = _logo_base(key)
-    silh = Image.new("RGBA", base.size, tuple(accent))
-    silh.putalpha(base.getchannel("A"))
-    return silh.resize((max(1, round(w)), max(1, round(h))), Image.LANCZOS)
-
-
-# ── colour parsing ───────────────────────────────────────────────────
-
-_RGB_RE = re.compile(
-    r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)"
-)
-
-
-def _col(s: str) -> tuple[int, int, int, int]:
-    """Parse an exact CSS `rgb()/rgba()` string to an RGBA tuple."""
-    m = _RGB_RE.match(s.strip())
-    if not m:
-        h = s.lstrip("#")
-        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
-    r, g, b, a = m.groups()
-    return (int(r), int(g), int(b), int(round(float(a) * 255)) if a else 255)
-
-
-# ── territory resolver ───────────────────────────────────────────────
-
-_CODE_TO_KEY = {
-    "CAT": "pri",
-    "VAL": "val",
-    "BAL": "bal",
-    "CNO": "nor",
-    "NOR": "nor",
-    "FRA": "fra",
-    "AND": "and",
-    "ALG": "alg",
-    "ALT": "alt",
-    "CAR": "car",
-}
+    return render_core.silhouette(_LOGO_DIR / f"{key}.png", accent, round(w), round(h))
 
 
 def territori(code: str | None) -> dict:
@@ -159,75 +117,49 @@ def _font(role: str, size, weight: int = 800):
 
 
 def _layer():
-    return Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
+    return render_core.layer((CANVAS_W, CANVAS_H))
 
 
-def _cap_offset(font) -> float:
-    """Vertical offset from a 'la'-anchored draw point to the cap-top ink,
-    using a plain capital. Lets us anchor by INK position (robust to the
-    font's line-height) instead of the CSS box, which PIL places lower."""
-    return font.getbbox("H", anchor="la")[1]
+_cap_offset = render_core.cap_offset
 
 
 def _text(img, x, y, text, font, fill, *, align="left", tracking=0.0, cap_top=None):
-    """Draw one line. `y` is the line-box top (anchor 'la'); if `cap_top` is
-    given instead, the glyph CAP-TOP ink lands at `cap_top` (ink-anchored).
-    `align`: x is left / centre / right edge. `tracking` = letter-spacing px.
-    Alpha-correct: drawn on a transparent layer then composited."""
-    if not text:
-        return
-    if cap_top is not None:
-        y = cap_top - _cap_offset(font)
-    lay = _layer()
-    d = ImageDraw.Draw(lay)
-    advances = [d.textlength(ch, font=font) for ch in text]
-    total = sum(advances) + tracking * max(0, len(text) - 1)
-    if align == "center":
-        cx = x - total / 2
-    elif align == "right":
-        cx = x - total
-    else:
-        cx = x
-    if tracking == 0:
-        d.text((cx, y), text, font=font, fill=fill, anchor="la")
-    else:
-        for ch, adv in zip(text, advances):
-            d.text((cx, y), ch, font=font, fill=fill, anchor="la")
-            cx += adv + tracking
-    img.alpha_composite(lay)
-
-
-def _rect(img, box, *, fill=None, radius=0, outline=None, width=1):
-    lay = _layer()
-    ImageDraw.Draw(lay).rounded_rectangle(
-        box, radius=radius, fill=fill, outline=outline, width=width
+    """Feed one-line text (transparent-layer composite, cap-top/em-box anchor)."""
+    render_core.draw_text(
+        img,
+        x,
+        y,
+        text,
+        font,
+        fill,
+        align=align,
+        tracking=tracking,
+        cap_top=cap_top,
+        composite=True,
     )
-    img.alpha_composite(lay)
 
 
-# ── texture / gradient ───────────────────────────────────────────────
+_rect = render_core.rect
+_wrap = render_core.wrap
 
 
 def _apply_grain(img, opacity):
-    rng = np.random.default_rng(_GRAIN_SEED)
-    noise = rng.normal(128, 38, (img.height, img.width)).clip(0, 255).astype(np.uint8)
-    a = np.full((img.height, img.width), int(round(opacity * 255)), np.uint8)
-    img.alpha_composite(Image.fromarray(np.dstack([noise, noise, noise, a]), "RGBA"))
+    render_core.apply_grain(img, opacity, seed=_GRAIN_SEED)
 
 
 def _radial(spec) -> Image.Image:
-    """CSS radial-gradient(extent at pos, stops) → RGBA image. `extent` is
-    (rx, ry) as fractions of (w, h); `at` is (fx, fy) fractions."""
-    w, h = CANVAS_W, CANVAS_H
-    (fx, fy), (ex, ey) = spec["at"], spec["extent"]
-    cx, cy, rx, ry = fx * w, fy * h, ex * w, ey * h
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
-    t = np.clip(np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2), 0, 1)[..., None]
-    s0, s1 = spec["stops"][0], spec["stops"][1]
-    a = np.array(_col(s0[1])[:3], np.float64)
-    b = np.array(_col(s1[1])[:3], np.float64)
-    arr = (a * (1 - t) + b * t).astype(np.uint8)
-    return Image.fromarray(arr, "RGB").convert("RGBA")
+    """CSS radial-gradient(extent at pos, stops) → RGBA. Feed semantics: the
+    distance is clipped to 1 (stop=1.0), float64."""
+    return render_core.radial_bg(
+        (CANVAS_W, CANVAS_H),
+        spec["stops"][0][1],
+        spec["stops"][1][1],
+        spec["at"],
+        spec["extent"],
+        stop=1.0,
+        dtype="float64",
+        mode="RGBA",
+    )
 
 
 # ── cover slot / fallback tile ───────────────────────────────────────
@@ -241,46 +173,25 @@ def _cover_or_tile(cover_url, size, title, terr, *, simple=False):
 
 
 def _tile(size, title, terr, *, simple=False) -> Image.Image:
+    """Feed fallback tile — geometry from `fallback_tile` tokens, drawn by
+    `render_core.tile`."""
     fb = tokens()["fallback_tile"]
-    tile = Image.new("RGBA", (size, size), _col(terr["deep"]))
     initial = (title or "?").strip()[:1].upper() or "?"
-    f = _font("anton", size * fb["initial"]["size_frac"])
-    ImageDraw.Draw(tile).text(
-        (size / 2, size / 2), initial, font=f, fill=_col(terr["accent"]), anchor="mm"
+    footer = {**fb["footer"], "color": _col(fb["footer"]["color"])}
+    return render_core.tile(
+        size,
+        _col(terr["deep"]),
+        _col(terr["accent"]),
+        initial,
+        initial_frac=fb["initial"]["size_frac"],
+        simple=simple,
+        keyline=fb["keyline"],
+        footer=footer,
     )
-    if simple:
-        return tile
-    ky = fb["keyline"]
-    inset = int(round(size * ky["inset_frac"]))
-    ar, ag, ab, _a = _col(terr["accent"])
-    ImageDraw.Draw(tile).rectangle(
-        (inset, inset, size - inset, size - inset),
-        outline=(ar, ag, ab, int(ky["alpha"] * 255)),
-        width=ky["width"],
-    )
-    ff = fb["footer"]
-    lay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(lay)
-    f2 = _font("anton", max(8, size * ff["size_frac"]))
-    txt = ff["text"]
-    advs = [d.textlength(c, font=f2) for c in txt]
-    tw = sum(advs) + ff["ls"] * (len(txt) - 1)
-    cx = size / 2 - tw / 2
-    fy = size * ff["y_off_frac"]
-    for c, adv in zip(txt, advs):
-        d.text((cx, fy), c, font=f2, fill=_col(ff["color"]), anchor="la")
-        cx += adv + ff["ls"]
-    tile.alpha_composite(lay)
-    return tile
 
 
 def _paste_logo(img, *, h, x, y, align="left"):
-    width = int(round(h * svg_assets.LOGO_ASPECT))
-    logo = svg_assets.logo_image_mono(width, "#ffffff")
-    if logo is None:
-        return
-    lx = {"center": x - logo.width / 2, "right": x - logo.width}.get(align, x)
-    img.alpha_composite(logo.convert("RGBA"), (int(round(lx)), int(round(y))))
+    render_core.paste_logo(img, h=h, x=x, y=y, align=align, hex_color="#ffffff")
 
 
 def _finish(img) -> Image.Image:
@@ -289,34 +200,18 @@ def _finish(img) -> Image.Image:
     return bg
 
 
-def _wrap(d, text, font, budget):
-    words, lines, cur = text.split(), [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if cur and d.textlength(trial, font=font) > budget:
-            lines.append(cur)
-            cur = w
-        else:
-            cur = trial
-    if cur:
-        lines.append(cur)
-    return lines
-
-
 def _star(img, s):
-    """Draw a 5-point star as a polygon (not a text glyph)."""
-    import math
-
-    cx, cy = s["cx"], s["cy"]
-    R, r = s["outer"], s["inner"]
-    pts = []
-    for i in range(s["points"] * 2):
-        rad = R if i % 2 == 0 else r
-        ang = -math.pi / 2 + i * math.pi / s["points"]
-        pts.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
-    lay = _layer()
-    ImageDraw.Draw(lay).polygon(pts, fill=_col(s["color"]))
-    img.alpha_composite(lay)
+    """Five-point star from the cover token spec (absolute inner radius)."""
+    render_core.star(
+        img,
+        s["cx"],
+        s["cy"],
+        s["outer"],
+        _col(s["color"]),
+        inner_ratio=s["inner"] / s["outer"],
+        points=s["points"],
+        composite=True,
+    )
 
 
 # ── slide 1 · cover ──────────────────────────────────────────────────
@@ -472,13 +367,10 @@ def build_album(item: dict) -> Image.Image:
     )
     img.alpha_composite(tile, (cx, int(round(cover_y))))
 
-    # Territory band (deep) + grain within the band.
+    # Territory band (deep) + grain within the band (truncated alpha — exact).
     band_img = Image.new("RGBA", (CANVAS_W, band_h), _col(terr["deep"]))
-    rng = np.random.default_rng(_GRAIN_SEED)
-    noise = rng.normal(128, 38, (band_h, CANVAS_W)).clip(0, 255).astype(np.uint8)
-    aa = np.full((band_h, CANVAS_W), int(band["grain"] * 255), np.uint8)
-    band_img.alpha_composite(
-        Image.fromarray(np.dstack([noise, noise, noise, aa]), "RGBA")
+    render_core.apply_grain(
+        band_img, band["grain"], seed=_GRAIN_SEED, round_alpha=False
     )
     img.alpha_composite(band_img, (0, int(round(band_top))))
 

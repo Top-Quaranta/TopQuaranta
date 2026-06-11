@@ -257,6 +257,22 @@ brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
 below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
 loud. PPCC byte-identical.
 
+## Render engine — `social/render_core.py` (shared primitives)
+
+The low-level PIL primitives live **once** in `social/render_core.py` and are
+consumed by both `feed_redesign.py` (feed novetats) and `renderer.py` (the
+editorial stories): ink-anchored text (`draw_text` — em-box / cap-top / ink-top,
+composite or direct, glyph-by-glyph or whole-string), `radial_bg` (the gradient,
+`stop`/`dtype` covering both the feed float64 and story float32 variants),
+`rect`, `star`, `apply_grain` (`round_alpha` covering the cover/page vs album-band
+variants), `paste_logo`/`logo_mono`, the territory code resolution (`CODE_TO_KEY`
+/ `terr_key`, ALT/CAR, CAT=senyera), the `silhouette` mask and the fallback
+`tile`. Each parameter exists so a call site reproduces its previous output
+**pixel-for-pixel** (guarded by the feed + story fidelity pins). Geometry stays
+with each caller — the feed in `feed-tokens.json`, the stories inline (a later
+pass moves the story geometry to its own tokens file). The legacy top-feed
+(`render_feed_top`) is untouched until its Claude Design handoff arrives.
+
 ## Feed redesign — editorial "Sèrie 7" (the only novetats renderer)
 
 The three novetats feed slides (carousel cover, single-album slide, singles

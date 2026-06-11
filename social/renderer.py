@@ -22,15 +22,13 @@ Layout reference (Sprint I prompt, lightly adapted to mm-design):
 from __future__ import annotations
 
 import logging
-import math
 from io import BytesIO
 from pathlib import Path
 
-import numpy as np
 from django.conf import settings
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
-from . import colors, fonts, svg_assets
+from . import colors, fonts, render_core, svg_assets
 from .constants import LIST_ROW_HEIGHT, LIST_TOP_Y
 from .cover_cache import fetch as fetch_cover
 
@@ -951,52 +949,46 @@ _STORY_ICON_CODI = {"CAT": "PPCC"}
 # ── low-level text + background helpers ──────────────────────────────
 
 
-def _tracked_width(d: ImageDraw.ImageDraw, text: str, font, tracking: float) -> float:
-    """Advance width of `text` with `tracking` px added after each glyph
-    except the last (PIL has no native letter-spacing)."""
-    if not text:
-        return 0.0
-    w = sum(d.textlength(ch, font=font) for ch in text)
-    return w + tracking * (len(text) - 1)
+# Story text/star primitives live once in `render_core`; these adapters keep the
+# `_story_*` call sites unchanged. Story semantics: ink-top anchor, glyph-by-glyph,
+# direct draw (no compositing).
+_tracked_width = render_core.tracked_width
 
 
-def _draw_tracked(
-    d: ImageDraw.ImageDraw,
-    x: float,
-    y_top: float,
-    text: str,
-    font,
-    fill,
-    *,
-    tracking: float = 0.0,
-    center_w: int | None = None,
-):
-    """Draw a single line glyph-by-glyph with letter-spacing.
-
-    `y_top` is the visual top of the inked glyphs (we offset by the
-    line's bbox top so callers can stack lines by a chosen line-height
-    instead of PIL's em-box top). When `center_w` is given, the line is
-    horizontally centred within `[0, center_w]`."""
-    w = _tracked_width(d, text, font, tracking)
+def _draw_tracked(d, x, y_top, text, font, fill, *, tracking=0.0, center_w=None):
+    """Single line with letter-spacing; ink-top anchored at `y_top`. When
+    `center_w` is given, centred within `[0, center_w]`. Returns advance width."""
     if center_w is not None:
-        x = (center_w - w) / 2
-    top_off = d.textbbox((0, 0), text, font=font)[1]
-    cx = x
-    for ch in text:
-        d.text((cx, y_top - top_off), ch, font=font, fill=fill)
-        cx += d.textlength(ch, font=font) + tracking
-    return w
+        return render_core.draw_text(
+            d,
+            center_w / 2,
+            y_top,
+            text,
+            font,
+            fill,
+            align="center",
+            tracking=tracking,
+            ink_top=True,
+            glyphwise=True,
+            composite=False,
+        )
+    return render_core.draw_text(
+        d,
+        x,
+        y_top,
+        text,
+        font,
+        fill,
+        tracking=tracking,
+        ink_top=True,
+        glyphwise=True,
+        composite=False,
+    )
 
 
-def _draw_star(d: ImageDraw.ImageDraw, cx: float, cy: float, r_out: float, fill):
-    """Five-pointed star polygon (font-independent — none of the bundled
-    display fonts carry U+2605)."""
-    pts = []
-    for i in range(10):
-        ang = -math.pi / 2 + i * math.pi / 5
-        r = r_out if i % 2 == 0 else r_out * 0.42
-        pts.append((cx + r * math.cos(ang), cy + r * math.sin(ang)))
-    d.polygon(pts, fill=fill)
+def _draw_star(d, cx, cy, r_out, fill):
+    """Five-point star polygon (inner = 0.42·outer), drawn directly."""
+    render_core.star(d, cx, cy, r_out, fill, inner_ratio=0.42, composite=False)
 
 
 def _radial_bg(
@@ -1006,18 +998,18 @@ def _radial_bg(
     radii: tuple[float, float],
     stop_outer: float,
 ) -> Image.Image:
-    """Full-canvas RGB background with a CSS-style elliptical radial
-    gradient: `inner_hex` at the centre fading to `outer_hex` at
-    `stop_outer` of the ellipse radius (clamped beyond)."""
-    yy, xx = np.mgrid[0:STORY_H, 0:STORY_W].astype("float32")
-    cx, cy = center[0] * STORY_W, center[1] * STORY_H
-    rx, ry = radii[0] * STORY_W, radii[1] * STORY_H
-    dist = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
-    t = np.clip(dist / stop_outer, 0.0, 1.0)[..., None]
-    inner = np.array(colors._hex_to_rgb(inner_hex), dtype="float32")
-    outer = np.array(colors._hex_to_rgb(outer_hex), dtype="float32")
-    arr = inner * (1 - t) + outer * t
-    return Image.fromarray(arr.astype("uint8"), "RGB")
+    """Full-canvas RGB elliptical radial gradient (story semantics: divide the
+    distance by `stop_outer`, float32). Delegates to `render_core.radial_bg`."""
+    return render_core.radial_bg(
+        (STORY_W, STORY_H),
+        inner_hex,
+        outer_hex,
+        center,
+        radii,
+        stop=stop_outer,
+        dtype="float32",
+        mode="RGB",
+    )
 
 
 def _bg_ink(center=(0.5, 0.0), radii=(1.2, 0.6), stop=0.6) -> Image.Image:

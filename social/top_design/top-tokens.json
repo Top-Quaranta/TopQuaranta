@@ -1,0 +1,88 @@
+{
+  "_provenance": "EXACT values extracted from the Claude Design 'TopQuaranta - TOP' handoff (top-cartell/top-carrusel/top-mosaic.jsx) rendered headless at 1080x1350 (getBoundingClientRect/getComputedStyle, scale 1) on 2026-06-11. Palette/fonts/grain/territory chips are SHARED with feed-tokens.json + render_core; this file holds the TOP-specific geometry only. PPCC is never labelled (variant 'ppcc' → name null, no chip-territory text).",
+  "canvas": { "w": 1080, "h": 1350 },
+  "cartell": {
+    "pad": { "l": 56, "t": 54, "r": 56, "b": 44 },
+    "bar_h": 7,
+    "gradient": { "extent": [1.20, 0.55], "at": [0.5, 0.0], "stop": 0.58 },
+    "grain": 0.08,
+    "ppcc": { "accent": "rgb(250, 204, 21)", "deep": "rgb(47, 90, 47)", "glow": "rgba(66, 124, 66, 0.30)", "name": null },
+    "header": {
+      "logo_h": 44, "logo_x": 56, "logo_y": 54,
+      "setmana": { "font": "anton", "size": 30, "ls": 2, "right": 1024, "y": 54, "pad_x": 18, "pad_y": 7, "h": 44 }
+    },
+    "title": { "font": "anton", "size": 104, "x": 56, "cap_top": 130, "gap": 22, "name_font": "instrument", "name_size": 36 },
+    "rich": {
+      "cols_x": [56, 558], "row_y0": 251.5, "row_pitch": 88, "rows": 5,
+      "numeral": { "font": "anton", "size": 46, "w": 56 },
+      "thumb": { "dx": 70, "size": 54 },
+      "text_dx": 138, "text_right_pad": 44,
+      "title": { "font": "bricolage", "weight": 800, "size": 25, "line_h": 26.5, "dy": -2 },
+      "artist": { "font": "bricolage", "weight": 500, "size": 18, "dy": 30 },
+      "move": { "right": 1024, "size": 24, "variant": "compact" }
+    },
+    "dense": {
+      "cols_x": [56, 560], "col_w": 464, "row_y0": 696.7, "row_pitch": 36.25, "rows": 15,
+      "numeral": { "font": "anton", "size": 26, "w": 36, "color": "rgba(255, 255, 255, 0.55)" },
+      "text_dx": 48, "text_right_pad": 42,
+      "title": { "font": "bricolage", "weight": 700, "size": 22, "dy": 4 },
+      "artist": { "font": "bricolage", "weight": 500, "size": 20, "color": "rgba(255, 255, 255, 0.5)" },
+      "rule": { "color": "rgba(255, 255, 255, 0.07)" },
+      "move": { "size": 20, "variant": "compact" }
+    },
+    "footer": {
+      "rule_y": 1262, "rule_color": "@accent",
+      "url": { "font": "instrument", "size": 30, "x": 56, "y": 1278, "color": "rgba(255, 255, 255, 0.62)" },
+      "tag": { "font": "anton", "size": 22, "ls": 3, "right": 1024, "y": 1281, "text": "EL RÀNQUING DE LA SETMANA", "color": "rgba(255, 255, 255, 0.42)" }
+    }
+  },
+  "mosaic": {
+    "pad": { "l": 70, "t": 60, "r": 70, "b": 54 },
+    "grain": 0.08,
+    "gradient": { "extent": [1.20, 0.50], "at": [0.5, 0.0], "stop": 0.60, "inner": "rgb(20, 18, 16)", "outer": "rgb(10, 10, 10)" },
+    "header": {
+      "nous": { "font": "anton", "size": 68, "x": 70, "y": 60, "color": "rgb(255, 255, 255)" },
+      "albums": { "font": "anton", "size": 68, "x": 70, "y": 100.2, "color": "rgb(250, 204, 21)" },
+      "subtitle": { "font": "instrument", "size": 32, "x": 70, "y": 190.4, "color": "rgba(255, 255, 255, 0.6)" },
+      "logo_h": 42, "logo_right": 1010, "logo_y": 60
+    },
+    "grid": { "cols_x": [152, 420, 688], "cover": 240, "row_pitch": 350.8, "rows": 3, "col_gap": 28,
+      "title": { "font": "bricolage", "weight": 800, "size": 24, "line_h": 25.9, "dy": 11, "max_lines": 2 },
+      "artist": { "font": "bricolage", "weight": 500, "size": 21, "color": "rgba(255, 255, 255, 0.6)" } },
+    "footer": {
+      "rule_y": 1240, "rule_color": "rgb(250, 204, 21)",
+      "url": { "font": "instrument", "size": 30, "x": 70, "y": 1256, "color": "rgba(255, 255, 255, 0.62)" },
+      "tag": { "font": "anton", "size": 22, "ls": 3, "right": 1010, "y": 1259, "text": "CADA DIMARTS", "color": "rgba(255, 255, 255, 0.42)" }
+    }
+  },
+  "top_cover": {
+    "ppcc": { "accent": "rgb(250, 204, 21)", "field_top": "#427c42", "field_bot": "#2f5a2f" },
+    "grain": 0.14,
+    "gradient": { "extent": [1.30, 0.80], "at": [0.5, 0.0], "stop": 1.0 },
+    "logo_h": 48, "logo_y": 88,
+    "subtitle": { "font": "instrument", "size": 48, "y": 166, "text": "el rànquing sencer de la setmana", "color": "rgb(243, 236, 221)" },
+    "el_top": { "font": "anton", "size": 124, "cap_top": 506 },
+    "forty": { "font": "anton", "size": 380, "ls": 1.9, "cap_top": 632 },
+    "star": { "cx": 540, "cy": 1158, "outer": 17, "inner_ratio": 0.42 },
+    "rule": { "y": 1157, "left": [80, 510], "right": [570, 1000], "color": "rgba(255, 255, 255, 0.34)" },
+    "pill": { "font": "anton", "size": 38, "ls": 2, "pad_x": 20, "pad_y": 7, "h": 72, "cy": 1234 },
+    "cadencia": { "font": "instrument", "size": 40, "ppcc_text": "cada dissabte", "color": "rgb(255, 255, 255)" }
+  },
+  "top_list": {
+    "ppcc": { "accent": "rgb(250, 204, 21)", "chip": true },
+    "grain": 0.08,
+    "pad": { "l": 70, "t": 60, "r": 70, "b": 56 },
+    "header": { "el_top": { "font": "anton", "size": 70, "x": 70, "y": 60 },
+      "subtitle": { "font": "instrument", "size": 32, "x": 70, "y": 131, "color": "rgba(255, 255, 255, 0.6)" },
+      "logo_h": 42, "logo_right": 1010, "logo_y": 60 },
+    "rows": { "x": 70, "w": 940, "y0": 199, "pitch": 104.4, "h": 94, "count": 10,
+      "card_bg": "rgba(255, 255, 255, 0.035)",
+      "numeral": { "font": "anton", "x": 70, "w": 70, "size": 46, "one_size": 58 },
+      "chip": { "x": 156, "w": 88 },
+      "thumb": { "x": 260, "size": 68, "dy": 13 },
+      "title": { "x": 344, "font": "bricolage", "weight": 800, "size": 33, "dy": 17, "color": "rgb(255, 255, 255)" },
+      "artist": { "x": 344, "font": "bricolage", "weight": 500, "size": 23, "dy": 51, "color": "rgba(255, 255, 255, 0.64)" },
+      "move": { "right": 990, "size": 24, "variant": "full" } },
+    "footer": { "url": { "font": "instrument", "size": 30, "x": 70, "y": 1251, "color": "rgba(255, 255, 255, 0.55)" } }
+  }
+}

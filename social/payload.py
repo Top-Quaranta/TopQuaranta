@@ -95,6 +95,20 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
             ).values_list("canco_id", "posicio")
         )
 
+    # Re-entry: a track absent last week is RE (not NEW) if it ever charted in
+    # an EARLIER week for this territori. One batched indexed exists-style query
+    # over just the candidate (absent-last-week) cançons.
+    new_ids = [
+        r.canco_id for r in rows if r.canco_id and prev_pos.get(r.canco_id) is None
+    ]
+    reentrades: set[int] = set()
+    if new_ids:
+        reentrades = set(
+            TopSetmanal.objects.filter(
+                territori=territori, canco_id__in=new_ids, setmana__lt=setmana
+            ).values_list("canco_id", flat=True)
+        )
+
     entries: list[dict] = []
     for r in rows:
         canco = r.canco
@@ -122,6 +136,8 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
             {
                 "posicio": r.posicio,
                 "posicio_anterior": prev_pos.get(r.canco_id),
+                # True ⇒ absent last week but charted earlier → "RE" (re-entry).
+                "reentrada": r.canco_id in reentrades,
                 "canco_nom": canco.nom if canco else "—",
                 "canco_slug": canco.slug if canco else None,
                 "artistes_noms": artistes_noms,

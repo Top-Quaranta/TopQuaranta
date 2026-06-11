@@ -149,13 +149,26 @@ class Command(BaseCommand):
             self.stdout.write("  · sense contingut → omès")
             return
 
+        # Per-channel routing (2026-06): Telegram/Mastodon/Bluesky are ONE-IMAGE
+        # channels — the TOP goes out as the single cartell, new albums as the
+        # mosaic, new singles as the grid's first page (overflow titles appended
+        # to the text). Instagram keeps the rich carousel (publicar_social).
+        singles_overflow: list[str] = []
         if slot.tipus in (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL):
-            paths = renderer.render_feed_top(
-                slot.tipus, territori, setmana, data["entries"]
-            )
+            paths = [
+                renderer.render_top_poster(
+                    slot.tipus, territori, setmana, data["entries"]
+                )
+            ]
             entries = data["entries"]
-        else:
-            paths = renderer.render_feed_novetats(slot.tipus, setmana, data["items"])
+        elif slot.tipus == SocialPost.TIPUS_NOUS_ALBUMS:
+            paths = [renderer.render_albums_mosaic(setmana, data["items"])]
+            entries = data["items"]
+        else:  # nous_singles
+            single, singles_overflow = renderer.render_singles_single(
+                setmana, data["items"]
+            )
+            paths = [single]
             entries = data["items"]
 
         cover = paths[0]  # the portada slide
@@ -172,6 +185,10 @@ class Command(BaseCommand):
             channel, slot.tipus, territori, setmana, entries
         )
         text = result["text"]
+        if singles_overflow:
+            # >10 singles, one-image channel: the grid shows the first 10; the
+            # rest are listed in the text so nothing is dropped (Miquel's call).
+            text = text.rstrip() + "\n\nI també: " + ", ".join(singles_overflow)
         phrase_ids = result.get("phrase_ids") or []
 
         if opts["dry_run"]:

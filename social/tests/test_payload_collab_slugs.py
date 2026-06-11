@@ -63,8 +63,8 @@ def test_build_top_adds_parallel_slugs(top_with_collab):
 def test_build_top_no_regression_on_legacy_keys(top_with_collab):
     data = payload.build_top("PPCC", SETMANA)
     entry = data["entries"][0]
-    # The ONLY new key is `artistes_slugs`; everything else is the legacy set.
-    assert set(entry) == LEGACY_ENTRY_KEYS | {"artistes_slugs"}
+    # Added keys: `artistes_slugs` + `reentrada` (TOP movement); rest is legacy.
+    assert set(entry) == LEGACY_ENTRY_KEYS | {"artistes_slugs", "reentrada"}
     # Legacy fields keep their exact values (social engine contract).
     assert entry["artista_nom"] == "Ouineta"
     assert entry["artista_slug"] == "ouineta"

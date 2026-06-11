@@ -459,409 +459,62 @@ def _font_height(font) -> int:
     return max(bbox[3] - bbox[1], 24)
 
 
-def _trend_glyph(
-    draw, x: int, y: int, posicio: int, posicio_anterior, *, size: int = 22
-):
-    """Up arrow / down arrow / NEW badge / nothing if stable.
-    Same vocabulary as the SPA's TrendCue."""
-    if posicio_anterior is None:
-        # NEW badge
-        f = fonts.sans_bold(14)
-        text = "NOU"
-        tw = draw.textlength(text, font=f)
-        pad_x, pad_y = 8, 4
-        draw.rounded_rectangle(
-            (x, y, x + tw + pad_x * 2, y + 16 + pad_y * 2),
-            radius=10,
-            fill=colors.COLOR_YELLOW,
-        )
-        draw.text((x + pad_x, y + pad_y - 2), text, font=f, fill=colors.COLOR_BG)
-        return
-    if posicio_anterior > posicio:
-        # ▲ up
-        col = colors.COLOR_SUCCESS
-        draw.polygon(
-            [(x + size // 2, y), (x, y + size), (x + size, y + size)], fill=col
-        )
-    elif posicio_anterior < posicio:
-        col = colors.COLOR_DANGER
-        draw.polygon([(x, y), (x + size, y), (x + size // 2, y + size)], fill=col)
-    # equal → silent (matches public TopPage policy)
-
-
-# ── FEED ─────────────────────────────────────────────────────────────
-
-
 def _feed_canvas() -> Image.Image:
     return Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
 
 
-def _feed_cover_full(url: str | None) -> Image.Image:
-    """Full-bleed 1080×1350 cover via `ImageOps.fit` — preserves
-    proportions, centre-crops the overflow, no overlay or colour
-    cast on top.
-    """
-    if url:
-        img = fetch_cover(url)
-        if img is not None:
-            return ImageOps.fit(
-                img.convert("RGB"),
-                (FEED_W, FEED_H),
-                method=Image.LANCZOS,
-            )
-    return _feed_canvas()
-
-
-def _feed_portada_ppcc(setmana, featured: list[str], accent) -> Image.Image:
-    """Editorial PPCC feed cover (Step 3): ink background, big
-    "TOP 40 / SETMANA N" kicker, a teaser list of up to 5 featured
-    artist names, and the brand logo. Replaces the ~85 %-empty legacy
-    PPCC cover. Sans-only (Playfair is reserved for the #1 story hero)."""
-    from .captions import _setmana_label
-
-    img = Image.new("RGB", (FEED_W, FEED_H), colors.COLOR_BG)
-    d = ImageDraw.Draw(img)
-
-    # Brand logo, top-left.
-    logo = svg_assets.logo_image(360)
-    if logo is not None:
-        img.paste(logo, (84, 90), logo)
-
-    # "TOP 40" — the big yellow headline.
-    f_top = fonts.sans_bold(210)
-    d.text((84, 300), "TOP 40", font=f_top, fill=colors.COLOR_YELLOW)
-
-    # "SETMANA N" under it.
-    f_wk = fonts.sans_bold(64)
-    d.text(
-        (90, 560),
-        _setmana_label(setmana).upper(),
-        font=f_wk,
-        fill=colors.COLOR_WHITE,
-    )
-
-    # Accent divider.
-    d.rounded_rectangle((90, 680, 90 + 220, 690), radius=5, fill=accent)
-
-    # Featured artists teaser.
-    f_lead = fonts.sans_bold(34)
-    d.text((90, 730), "AQUESTA SETMANA", font=f_lead, fill=accent)
-    f_name = fonts.sans_bold(52)
-    y = 800
-    for nom in featured[:5]:
-        name = _truncate(d, nom, f_name, FEED_W - 90 - 60)
-        # Accent dot + name.
-        d.ellipse((90, y + 22, 90 + 16, y + 38), fill=accent)
-        d.text((124, y), name, font=f_name, fill=colors.COLOR_WHITE)
-        y += 76
-
-    # Footer URL.
-    f_url = fonts.sans_regular(32)
-    d.text(
-        (90, FEED_H - 70), "topquaranta.cat", font=f_url, fill=colors.COLOR_TEXT_MUTED
-    )
-    return img
-
-
-def _feed_portada(
-    territori: str,
-    setmana,
-    hero_cover_url: str | None,
-    *,
-    featured: list[str] | None = None,
-) -> Image.Image:
-    """Cover slide.
-
-    Territorial: full-bleed album cover + territory pill + logo pill +
-    Setmana pill (unchanged).
-
-    PPCC (Step 3, editorial rewrite): the old PPCC cover was ~85 % empty
-    ink. Now an editorial cover on ink — big "TOP 40 / SETMANA N" kicker
-    + a teaser list of `featured` artist names — plus the existing logo
-    + Setmana pill at the bottom.
-    """
-    from .captions import _setmana_label
-
-    accent = colors.terr_color(territori)
-    is_ppcc = (territori or "") == "PPCC"
-
-    if is_ppcc:
-        return _feed_portada_ppcc(setmana, featured or [], accent)
-
-    from .captions import TERRITORI_NOM
-
-    img = _feed_cover_full(hero_cover_url)
-    d = ImageDraw.Draw(img)
-
-    # ── Territory pill, top-right (territorial only) ─────────────
-    # PPCC has no chip — the green background already says "Global".
-    nom = TERRITORI_NOM.get(territori, territori or "")
-    if not is_ppcc:
-        f_nom = fonts.sans_bold(34)
-        chip_w, _ = _measure_pill(
-            text=nom,
-            font=f_nom,
-            pad_x=20,
-            pad_y=12,
-            icon_codi=territori or "PPCC",
-            icon_size=40,
-        )
-        _pill(
-            img,
-            x=int(FEED_W - 30 - chip_w),
-            y=30,
-            text=nom,
-            font=f_nom,
-            fill=accent,
-            text_fill=colors.COLOR_WHITE,
-            pad_x=20,
-            pad_y=12,
-            radius=12,  # mm-design `--mm-radius-lg`
-            icon_codi=territori or "PPCC",
-            icon_size=40,
-            icon_fill=colors.COLOR_WHITE,
-        )
-
-    # ── Logo block, lower band ───────────────────────────────────
-    # Width = 70% of canvas (756). Y shifted up 5% of canvas height
-    # (≈68px) from the legacy 75% mark. Logo and Setmana pill 20%
-    # larger than the earlier spec — logo h 106. Left-aligned to
-    # match the Setmana text below. Container radius
-    # `--mm-radius-lg` (12px).
-    #
-    # On territorial covers the logo sits inside an accent-coloured
-    # pill so it stays legible over the photo. On PPCC the
-    # background is already solid accent, so we drop the pill and
-    # render the original tri-colour logo directly — the brand
-    # marks (yellow/red/blue) pop on green.
-    pill_w = int(FEED_W * 0.70)  # 756
-    # Left margin bumped from 30 → 84 (+54 px = 5% of FEED_W) per the
-    # May-2026 readability pass: same left-aligned stack, more
-    # breathing room from the canvas edge.
-    pill_x = 84
-    pill_y = 944  # 1012 − 5% × 1350 ≈ 68
-    logo_h = 106  # 88 × 1.20
-    logo_w = int(round(logo_h * svg_assets.LOGO_ASPECT))
-    pill_h = logo_h + 28  # 14px breathing each side
-    if is_ppcc:
-        # Original three-colour logo on the solid accent background —
-        # no pill, but kept at the same x/y/size as the territorial
-        # variant so the layout feels identical.
-        logo = svg_assets.logo_image(logo_w)
-    else:
-        d.rounded_rectangle(
-            (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-            radius=12,
-            fill=accent,
-        )
-        logo = svg_assets.logo_image_mono(logo_w, colors.COLOR_WHITE)
-    if logo is not None:
-        img.paste(
-            logo,
-            (
-                pill_x + 20,  # left-aligned
-                pill_y + (pill_h - logo.size[1]) // 2,  # vertical centre
-            ),
-            logo,
-        )
-
-    # ── Setmana pill, 15px below the logo pill ───────────────────
-    # Same width (756) so the two stack with a consistent column.
-    # 20% taller (70 → 84) and the text scales the same.
-    sm_x = 84  # mirrors pill_x — keeps the two-pill stack aligned
-    sm_y = pill_y + pill_h + 15
-    sm_w, sm_h = pill_w, 84  # 756×84
-    d.rounded_rectangle(
-        (sm_x, sm_y, sm_x + sm_w, sm_y + sm_h),
-        radius=12,
-        fill=colors.COLOR_WHITE,
-    )
-    f_sm = fonts.sans_bold(38)  # 32 × 1.20 ≈ 38
-    label = _setmana_label(setmana)
-    bbox = f_sm.getbbox(label)
-    text_h = bbox[3] - bbox[1]
-    d.text(
-        (sm_x + 20, sm_y + (sm_h - text_h) // 2 - bbox[1]),
-        label,
-        font=f_sm,
-        fill=colors.COLOR_BG,
-    )
-    return img
-
-
-def _feed_list_slide(
-    territori: str, entries: list[dict], start_pos: int, page: int, total_pages: int
-) -> Image.Image:
-    """One feed slide listing up to 10 entries from the top.
-
-    Territory accent recolours: position squares, kicker bar, header
-    chip, and the per-row territory icon (singles only — for top
-    lists the territory is the same on every row, so we don't repeat
-    it).
-    """
-    img = _feed_canvas()
-    d = ImageDraw.Draw(img)
-    accent = colors.terr_color(territori)
-    from .captions import TERRITORI_NOM
-
-    # Header — brand logo top-left, territory chip top-right.
-    _logo_block(img, 60, 50, width=270)
-    nom = TERRITORI_NOM.get(territori, territori)
-    f_h = fonts.sans_bold(24)
-    chip_w, _ = _measure_pill(
-        text=nom,
-        font=f_h,
-        pad_x=20,
-        pad_y=10,
-        icon_codi=territori or "PPCC",
-        icon_size=32,
-    )
-    _pill(
-        img,
-        x=int(FEED_W - 60 - chip_w),
-        y=44,
-        text=nom,
-        font=f_h,
-        fill=accent,
-        text_fill=colors.COLOR_WHITE,
-        pad_x=20,
-        pad_y=10,
-        radius=18,
-        icon_codi=territori or "PPCC",
-        icon_size=32,
-        icon_fill=colors.COLOR_WHITE,
-    )
-
-    # Accent rule under the header.
-    d.rounded_rectangle((60, 130, FEED_W - 60, 138), radius=4, fill=accent)
-
-    # Layout — May-2026 readability pass v2. The pills + cards stay
-    # the SAME size as the legacy spec (pos_w=76, LIST_ROW_HEIGHT=105,
-    # LIST_TOP_Y=170 — both shared via social/constants.py with the
-    # singles-novetats slide); the gain in apparent text size comes
-    # from larger fonts + tighter vertical padding inside the cell.
-    f_pos = fonts.display_bold(54)  # was 38 → 48 → 54
-    f_song = fonts.display_bold(40)  # was 28 → 34 → 40
-    f_artist = fonts.sans_regular(22)
-    pos_w = 76
-
-    for i, e in enumerate(entries[:10]):
-        y = LIST_TOP_Y + i * LIST_ROW_HEIGHT
-        pos = e["posicio"]
-
-        # Tinted card behind each row — alternating depth so the eye
-        # has somewhere to land beyond the flat ink background.
-        card_fill = colors.darken(accent, 0.78 if i % 2 == 0 else 0.85)
-        d.rounded_rectangle(
-            (40, y - 6, FEED_W - 40, y + pos_w + 10),
-            radius=18,
-            fill=card_fill,
-        )
-
-        # Position number — territory accent square (yellow only on PPCC).
-        d.rounded_rectangle((60, y, 60 + pos_w, y + pos_w), radius=14, fill=accent)
-        pos_text = str(pos)
-        ptw = d.textlength(pos_text, font=f_pos)
-        # Very tight top padding (y+0) so the 54-pt glyph fills the
-        # 76-pt square almost edge-to-edge.
-        d.text(
-            (60 + (pos_w - ptw) // 2, y),
-            pos_text,
-            font=f_pos,
-            fill=colors.COLOR_WHITE,
-        )
-
-        # Trend indicator just to the right of the position square.
-        _trend_glyph(d, 152, y + 26, pos, e.get("posicio_anterior"))
-
-        # Cover thumbnail right side
-        cover = _cover(
-            e.get("cover_url"), 80, fallback_letter=e.get("canco_nom", "?")[:1]
-        )
-        cover_r = _rounded(cover, 12)
-        img.paste(cover_r, (FEED_W - 60 - 80, y), cover_r)
-
-        # Song + artist text block — leave room for the NOU pill that
-        # `_trend_glyph` may render up to ~60px wide. text_x back to
-        # the legacy 240 since pos_w is back to 76.
-        text_x = 240
-        text_w = (FEED_W - 60 - 80 - 20) - text_x
-        song = _truncate(d, e["canco_nom"], f_song, text_w)
-        # `artistes_noms` is the canonical list (main first +
-        # collabs in insertion order). Fall back to the legacy
-        # `artista_nom` single-string field for payload callers
-        # that still build the old shape — keeps tests using
-        # synthetic fixtures green.
-        names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
-        artist = _join_artists(d, names, f_artist, text_w)
-        # Tight top padding (y+0) for the 40-pt song title; artist
-        # drops to y+54 so it doesn't kiss the title's descenders.
-        d.text((text_x, y), song, font=f_song, fill=colors.COLOR_WHITE)
-        d.text((text_x, y + 54), artist, font=f_artist, fill=colors.COLOR_TEXT_MUTED)
-
-    # Page indicator — back to the legacy y so it doesn't get
-    # squashed into the last row card.
-    if total_pages > 1:
-        f_p = fonts.sans_bold(22)
-        text = f"{page}/{total_pages}"
-        tw = d.textlength(text, font=f_p)
-        d.text(
-            ((FEED_W - tw) // 2, FEED_H - 80),
-            text,
-            font=f_p,
-            fill=colors.COLOR_TEXT_MUTED,
-        )
-
-    _footer(d, FEED_W, FEED_H)
-    return img
+def _top_variant(territori: str) -> str:
+    """Design variant for a top territori: 'ppcc' for the global top, else the
+    DB territory code (its palette + name)."""
+    return "ppcc" if (territori or "").upper() == "PPCC" else territori
 
 
 def render_feed_top(
     tipus: str, territori: str, setmana, entries: list[dict]
 ) -> list[Path]:
-    """Render: portada + N pages of 10 entries.
+    """Instagram TOP carousel (editorial redesign, 2026-06): cover + up to 4
+    list slides of 10, COUNTING DOWN to #1 (40→31, 30→21, 20→11, 10→1) so the
+    climax lands on the last slide. `entries` in chart order (posicio 1..N)."""
+    from . import top_redesign as TR
 
-    `entries[i]` keys: posicio, posicio_anterior, canco_nom,
-    artista_nom, cover_url. Order matches the chart order.
-    Returns the list of generated PNG paths in carousel order.
-    """
+    variant = _top_variant(territori)
     out: list[Path] = []
-    hero_cover = entries[0].get("cover_url") if entries else None
-
-    # Featured artists for the editorial PPCC cover (Step 3): the main
-    # artist of each of the top-5 entries, de-duplicated preserving
-    # chart order, capped at 5. Simple + robust; a scenario-weighted
-    # heuristic is deferred until the story scenario is threaded.
-    featured: list[str] = []
-    for e in entries[:5]:
-        nom = e.get("artista_nom") or ""
-        if nom and nom not in featured:
-            featured.append(nom)
-
     p = _path(tipus, territori, setmana, 0)
-    _feed_portada(territori, setmana, hero_cover, featured=featured).save(
-        p, "JPEG", quality=90
-    )
+    TR.build_top_cover(setmana, variant).save(p, "JPEG", quality=90)
     out.append(p)
 
-    pages = max(1, (len(entries) + 9) // 10)
-    for page in range(1, pages + 1):
-        chunk = entries[(page - 1) * 10 : page * 10]
-        if not chunk:
-            break
-        slide = _feed_list_slide(
-            territori,
-            chunk,
-            start_pos=(page - 1) * 10 + 1,
-            page=page,
-            total_pages=pages,
+    blocks = [(30, 40), (20, 30), (10, 20), (0, 10)]
+    present = [b for b in blocks if entries[b[0] : b[1]]]
+    total = len(present)
+    for i, (lo, hi) in enumerate(present, start=1):
+        rows = list(reversed(entries[lo:hi]))  # countdown within the slide
+        slide = TR.build_top_list(
+            rows, current=i, total=total, setmana=setmana, variant=variant
         )
-        p = _path(tipus, territori, setmana, page)
+        p = _path(tipus, territori, setmana, i)
         slide.save(p, "JPEG", quality=90)
         out.append(p)
-
-    # Instagram carousel cap is 10 — drop trailing slides if needed.
     return out[:10]
+
+
+def render_top_poster(tipus: str, territori: str, setmana, entries: list[dict]) -> Path:
+    """The single-image TOP cartell (Telegram/Mastodon/Bluesky)."""
+    from . import top_redesign as TR
+
+    p = _path(tipus, territori, setmana, 0)
+    TR.build_poster(entries, setmana, _top_variant(territori)).save(
+        p, "JPEG", quality=90
+    )
+    return p
+
+
+def render_albums_mosaic(setmana, items: list[dict]) -> Path:
+    """The single-image new-albums mosaic (Telegram/Mastodon/Bluesky)."""
+    from . import top_redesign as TR
+
+    p = _path("nous_albums", "", setmana, 0)
+    TR.build_albums_mosaic(items, setmana).save(p, "JPEG", quality=90)
+    return p
 
 
 # ── FEED · novetats (album/single carousel) ──────────────────────────
@@ -1808,3 +1461,16 @@ def render_stories_territorial(
         _emit(_story_novetats(setmana, novetats_items[:3], territori=territori))
     _emit(_story_outro_ppcc(setmana))
     return out
+
+
+def render_singles_single(setmana, items: list[dict]) -> tuple[Path, list[str]]:
+    """Single-image new-singles render for one-image channels: the singles GRID
+    (first page, ≤10) as one image, plus the titles of any overflow singles so
+    the caller can append them to the post text. Design has no >10 single-image
+    layout (decision pending) — first page + text, no compression."""
+    from . import feed_redesign as F
+
+    p = _path("nous_singles", "", setmana, 0)
+    F.build_singles(items[:10], 1, 1, setmana=setmana).save(p, "JPEG", quality=90)
+    overflow = [it.get("nom", "") for it in items[10:] if it.get("nom")]
+    return p, overflow

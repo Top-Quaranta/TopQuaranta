@@ -269,8 +269,17 @@ variants), `paste_logo`/`logo_mono`, the territory code resolution (`CODE_TO_KEY
 / `terr_key`, ALT/CAR, CAT=senyera), the `silhouette` mask and the fallback
 `tile`. Each parameter exists so a call site reproduces its previous output
 **pixel-for-pixel** (guarded by the feed + story fidelity pins). Geometry stays
-with each caller — the feed in `feed-tokens.json`, the stories inline (a later
-pass moves the story geometry to its own tokens file).
+with each caller as DATA — the feed in `feed-tokens.json`, the stories in
+`social/story_design/story-tokens.json` (2026-06-12; loaded once via
+`renderer.story_tokens()`). Every hand-stitched constant of the seven `_story_*`
+builders (and their story-only shared helpers: `_header_row`, `_section_header`,
+`_footer_url`, `_header_pill`, `_bg_ink`, `_draw_star`) — positions, sizes,
+trackings, radii, gaps, local mix ratios — lives in that file; the builders carry
+no geometry literal. Unlike feed-tokens (measured from a curated HTML export),
+the story tokens were lifted **verbatim** from the running code, so the values
+match exactly, ugly inconsistencies included (e.g. the podi line-height 62 vs its
+entry-height title component 64). Colours stay in code (palette-driven via
+`colors.*` / `story_palette`); only the slide-local mix ratios are tokenised.
 
 ## TOP family — `social/top_redesign.py` (2026-06)
 

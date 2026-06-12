@@ -336,7 +336,7 @@ def wrap(d, text, font, budget):
     return lines
 
 
-# ── movement indicator (TOP rànquing) ────────────────────────────────
+# ── movement indicator (TOP) ──────────────────────────────────────────
 
 # Semantic, palette-independent movement colours (read at a glance, never
 # recoloured per territory). From the Claude Design top-kit.

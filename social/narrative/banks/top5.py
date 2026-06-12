@@ -59,7 +59,7 @@ COMPLETING_LONG_TEMPLATES: list[str] = [
 WITH_LEADER_SHORT_TEMPLATES: list[str] = [
     "Al cim continua «{leader_canco}», {leader_de}. També al top 5 hi trobem {artistes}.",
     "El 1r segueix sent de «{leader_canco}», {leader_de}. Al top 5 hi trobem també {artistes}.",
-    "Al cap del rànquing, «{leader_canco}», {leader_de}. Al top 5 també hi són {artistes}.",
+    "Al capdamunt del top, «{leader_canco}», {leader_de}. Al top 5 també hi són {artistes}.",
     "Al 1r segueix «{leader_canco}», {leader_de}; al top 5 acompanyen {artistes}.",
     "El primer lloc continua amb «{leader_canco}», {leader_de}. Al top 5 hi tenim també {artistes}.",
     "Al cim, «{leader_canco}» {leader_de}; també al top 5 {artistes}.",
@@ -72,7 +72,7 @@ WITH_LEADER_SHORT_TEMPLATES: list[str] = [
 WITH_LEADER_LONG_TEMPLATES: list[str] = [
     "Al cim continua «{leader_canco}», {leader_de}, al 1r. També al top 5 hi tenim {detalls}.",
     "El 1r segueix sent de «{leader_canco}», {leader_de}. Al top 5 hi trobem també {detalls}.",
-    "Al cap del rànquing, «{leader_canco}», {leader_de}, manté el 1r. Al top 5 també hi són {detalls}.",
+    "Al capdamunt del top, «{leader_canco}», {leader_de}, manté el 1r. Al top 5 també hi són {detalls}.",
     "El primer lloc continua amb «{leader_canco}», {leader_de}. Acompanyen al top 5 {detalls}.",
     "Al podi continua «{leader_canco}», {leader_de}, al cim. Al top 5 hi són també {detalls}.",
     "El cim és per a «{leader_canco}», {leader_de}. Al top 5 trobem també {detalls}.",

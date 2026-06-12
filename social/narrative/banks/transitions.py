@@ -9,11 +9,11 @@ from __future__ import annotations
 import random
 
 NEWSLETTER_TRANSITIONS: list[str] = [
-    "A continuació, el rànquing complet d'aquesta setmana.",
+    "A continuació, el top complet d'aquesta setmana.",
     "Tens el top sencer just a sota.",
-    "Aquí baix, el rànquing detallat de les 40 cançons d'aquesta setmana.",
+    "Aquí baix, el top detallat de les 40 cançons d'aquesta setmana.",
     "I la classificació sencera, just a continuació.",
-    "Repassem el rànquing complet, posició a posició:",
+    "Repassem el top complet, posició a posició:",
     "Per als detalls de tota la setmana, mira la llista que ve a sota.",
     "El top sencer de la setmana, ordenat per posició:",
     "I aquí tens la classificació completa:",

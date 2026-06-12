@@ -28,6 +28,15 @@ project we co-locate). A single Caddy instance fronts all of them.
 |---|---|---|
 | `/etc/caddy/Caddyfile` | TopQuaranta | `bin/tq-sync-infra` (this repo) |
 | `/etc/caddy/conf.d/*.caddy` | the corresponding project | that project's deploy script |
+| `/home/topquaranta/bin/tq-*` (ops scripts) | TopQuaranta | `bin/tq-sync-infra` (since 2026-06-12) |
+
+**Ops scripts (2026-06-12).** The `tq-*` operational scripts live in the repo
+(`bin/`) but RUN from `/home/topquaranta/bin/`. They used to be hand-copied, so
+repo fixes never reached prod — e.g. `tq-recover`'s self-status report (added
+2026-06-07) sat unapplied and the watchdog showed a perennial stale `MISSING`.
+`tq-sync-infra` now diffs `bin/tq-*` against the installed copies and re-installs
+on drift (exec bit preserved, no sudo — `/home/topquaranta/bin` is
+topquaranta-owned). The repo is the source of truth.
 
 The rules are mutual and hard:
 

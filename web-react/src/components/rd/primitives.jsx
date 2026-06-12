@@ -139,6 +139,12 @@ export function TerrChip({ code, size = 18 }) {
    `src` is present we show it; otherwise a branded fallback tile: a tint
    gradient + Anton initial + interior keyline. */
 export function RdCover({ src, alt = '', label = '?', tint = '#2a2740', size = 56, radius = 10, className = '' }) {
+  // A numeric size → fixed square; a string size (e.g. "100%") → full-width
+  // square via aspect-ratio (responsive grid cells).
+  const fluid = typeof size !== 'number'
+  const box = fluid
+    ? { width: '100%', aspectRatio: '1', borderRadius: radius, flexShrink: 0 }
+    : { width: size, height: size, borderRadius: radius, flexShrink: 0 }
   if (src) {
     return (
       <img
@@ -146,7 +152,7 @@ export function RdCover({ src, alt = '', label = '?', tint = '#2a2740', size = 5
         alt={alt}
         className={className}
         loading="lazy"
-        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', display: 'block', flexShrink: 0 }}
+        style={{ ...box, objectFit: 'cover', display: 'block' }}
       />
     )
   }
@@ -156,13 +162,13 @@ export function RdCover({ src, alt = '', label = '?', tint = '#2a2740', size = 5
       className={className}
       aria-hidden={alt ? undefined : 'true'}
       style={{
-        width: size, height: size, borderRadius: radius, flexShrink: 0,
+        ...box,
         display: 'grid', placeItems: 'center',
         background: `linear-gradient(152deg, ${shade(tint, 0.16)} 0%, ${shade(tint, -0.22)} 100%)`,
         boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
       }}
     >
-      <span style={{ fontFamily: 'var(--font-crit)', fontSize: size * 0.46, color: 'rgba(255,255,255,0.9)', lineHeight: 1 }}>
+      <span style={{ fontFamily: 'var(--font-crit)', fontSize: fluid ? '2.4rem' : size * 0.46, color: 'rgba(255,255,255,0.9)', lineHeight: 1 }}>
         {initial}
       </span>
     </div>

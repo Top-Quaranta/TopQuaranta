@@ -270,8 +270,46 @@ variants), `paste_logo`/`logo_mono`, the territory code resolution (`CODE_TO_KEY
 `tile`. Each parameter exists so a call site reproduces its previous output
 **pixel-for-pixel** (guarded by the feed + story fidelity pins). Geometry stays
 with each caller — the feed in `feed-tokens.json`, the stories inline (a later
-pass moves the story geometry to its own tokens file). The legacy top-feed
-(`render_feed_top`) is untouched until its Claude Design handoff arrives.
+pass moves the story geometry to its own tokens file).
+
+## TOP family — `social/top_redesign.py` (2026-06)
+
+The weekly TOP renders, composed over `render_core` + `feed_redesign`, geometry
+in `social/top_design/top-tokens.json` (extracted headless from the Claude
+Design "TOP" handoff). Four builders, all 1080×1350:
+
+- **`build_poster`** — the **cartell**: a single image with the whole top 40
+  (top-10 rich rows with mini-cover + movement, 11-40 dense in two columns).
+  Generated for the global top (variant `ppcc`, **never labelled** — no "PPCC"
+  text/name) AND per territory (its `deep/accent` palette + name).
+- **`build_top_cover`** + **`build_top_list`** — the Instagram **carousel**:
+  green/territory field cover + up to 4 list slides of 10, **counting down to #1**
+  (40→31 … 10→1). PPCC rows carry the territory silhouette chip (CAT=senyera);
+  territorial editions drop the chip (every row is the same territori).
+- **`build_albums_mosaic`** — the new-albums **mosaic** (single image, Tuesday),
+  up to 9 covers (CSS auto-row heights + vertical centring).
+
+**Vocabulary:** the TOP renders never use the word "rànquing" (vetat) — "el top
+sencer de la setmana", "EL TOP DE LA SETMANA", "el top de la setmana N".
+**Fix pins (2026-06-12):** ink-anchored ±8 px against the artboards — EL TOP/40
+gap, list numerals + SETMANA pill ink-centred (`render_core.draw_text(ink_center=)`),
+and no title↔artist overlap (rich = 2-line clamp + artist stacked & centred;
+dense = title ellipsised but artist always kept).
+
+**Movement** is one primitive: `render_core.draw_move` (up/down/new/re/eq;
+semantic colours, palette-independent). `parse_move` derives it from real data;
+re-entry ("RE") needs `posicio_anterior is None` AND a prior chart appearance —
+computed in `payload.build_top` (`reentrada`, one batched indexed query).
+
+**Per-channel routing (2026-06).** Instagram → the rich carousel
+(`render_feed_top`, now the new builders; the legacy `_feed_portada` /
+`_feed_list_slide` were **removed**). Telegram / Mastodon / Bluesky → **one
+image** (`publicar_canal`): TOP → cartell, new albums → mosaic, new singles →
+the grid's first page with overflow titles appended to the post text (>10
+singles single-image is Miquel's pending call). Newsletter unchanged. Routes on
+the existing matrix/config — no new view, idempotency untouched (a channel's
+distinct image keys off the same `_path`). The cartell JPEG stays < 1 MB
+(Bluesky blob limit, pinned).
 
 ## Feed redesign — editorial "Sèrie 7" (the only novetats renderer)
 

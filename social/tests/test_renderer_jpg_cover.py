@@ -47,18 +47,15 @@ def test_feed_top_outputs_jpeg():
 
 @pytest.mark.django_db
 def test_ppcc_cover_is_editorial_not_empty():
-    """The PPCC cover (slide 0) is now the editorial cover. Proxy for
-    'not ~85% empty ink': it carries appreciably more non-background
-    ink than a bare logo+pill would (text fills the canvas)."""
-    img = renderer._feed_portada_ppcc(
-        WK, ["Rosalía", "Max Navarro", "SX3"], renderer.colors.terr_color("PPCC")
-    )
+    """The TOP carousel cover (slide 0) is the new editorial `build_top_cover`.
+    Proxy for 'not ~empty': big EL TOP / 40 headline → plenty of lit pixels."""
+    from social import top_redesign
+
+    img = top_redesign.build_top_cover(WK, "ppcc")
     assert img.size == (renderer.FEED_W, renderer.FEED_H)
-    # Count non-near-black pixels: the editorial cover paints a big
-    # yellow headline + 3 names, so well above a near-empty cover.
     small = img.resize((108, 135)).convert("L")
     lit = sum(1 for px in small.getdata() if px > 40)
-    assert lit > 600, lit  # generously above an ~empty ink canvas
+    assert lit > 600, lit
 
 
 @pytest.mark.django_db

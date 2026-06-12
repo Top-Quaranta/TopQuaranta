@@ -81,6 +81,7 @@ def draw_text(
     tracking=0.0,
     cap_top=None,
     ink_top=False,
+    ink_center=None,
     glyphwise=None,
     composite=True,
 ) -> float:
@@ -88,6 +89,8 @@ def draw_text(
 
     Anchoring of `y`:
       * `cap_top` given → the glyph CAP-TOP ink (capital H) lands at `cap_top`.
+      * `ink_center` given → this text's INK is vertically centred on `ink_center`
+        (the ink bbox midpoint lands there — for numerals/pills inside a box).
       * `ink_top=True` → this text's bbox-top ink lands at `y`.
       * otherwise → `y` is the em-box top ('la').
     `align`: x is the left / centre / right edge. `tracking`: px after each glyph.
@@ -110,6 +113,9 @@ def draw_text(
         left = x
     if cap_top is not None:
         draw_y = cap_top - cap_offset(font)
+    elif ink_center is not None:
+        b = probe.textbbox((0, 0), text, font=font)
+        draw_y = ink_center - (b[1] + b[3]) / 2
     elif ink_top:
         draw_y = y - probe.textbbox((0, 0), text, font=font)[1]
     else:
@@ -328,3 +334,98 @@ def wrap(d, text, font, budget):
     if cur:
         lines.append(cur)
     return lines
+
+
+# ── movement indicator (TOP rànquing) ────────────────────────────────
+
+# Semantic, palette-independent movement colours (read at a glance, never
+# recoloured per territory). From the Claude Design top-kit.
+MOVE_COLORS = {
+    "up": (123, 191, 123, 255),  # green — climbs
+    "down": (221, 120, 130, 255),  # soft red — drops
+    "new": (250, 204, 21, 255),  # yellow — new entry
+    "re": (232, 164, 77, 255),  # amber — re-entry
+    "eq": (255, 255, 255, 102),  # neutral — same position (alpha .40)
+}
+
+
+def parse_move(posicio, posicio_anterior, *, reentry=False):
+    """Classify a chart movement from real data.
+
+    `posicio_anterior is None` ⇒ the track was NOT in last week's top → a new
+    entry ("new") unless the caller proves it's a re-entry (`reentry=True`,
+    derived from older history). Otherwise the delta drives up/down/eq.
+    Returns `(kind, n)` with kind ∈ {up, down, new, re, eq}."""
+    if posicio_anterior is None:
+        return ("re", 0) if reentry else ("new", 0)
+    delta = int(posicio_anterior) - int(posicio)
+    if delta > 0:
+        return ("up", delta)
+    if delta < 0:
+        return ("down", -delta)
+    return ("eq", 0)
+
+
+def draw_move(img, right_x, cy, kind, n, *, size=24, variant="full"):
+    """Draw a movement indicator right-aligned ending at `right_x`, vertically
+    centred on `cy`. `variant`: 'full' shows the delta number after the arrow,
+    'compact' the arrow/symbol only. One primitive for poster + list."""
+    col_ = MOVE_COLORS[kind]
+    d = ImageDraw.Draw(img)
+    if kind in ("up", "down"):
+        tri_h = size * 0.62
+        tri_w = tri_h * 0.86
+        gap = size * 0.26
+        num_fs = size * 0.92
+        num = str(n) if variant == "full" else ""
+        f = fonts.bricolage_xbold(int(round(num_fs))) if num else None
+        num_w = tracked_width(d, num, f, 0) if num else 0.0
+        total = tri_w + (gap + num_w if num else 0)
+        x0 = right_x - total
+        # triangle (apex up for 'up', down for 'down')
+        cxk = x0 + tri_w / 2
+        top, bot = cy - tri_h / 2, cy + tri_h / 2
+        if kind == "up":
+            pts = [(cxk, top), (x0, bot), (x0 + tri_w, bot)]
+        else:
+            pts = [(x0, top), (x0 + tri_w, top), (cxk, bot)]
+        d.polygon(pts, fill=col_)
+        if num:
+            # number ink-centred vertically on cy
+            bbox = f.getbbox(num, anchor="la")
+            draw_text(
+                img,
+                x0 + tri_w + gap,
+                cy - (bbox[3] - bbox[1]) / 2 - bbox[1],
+                num,
+                f,
+                col_,
+                ink_top=False,
+                composite=False,
+            )
+        return
+    if kind in ("new", "re"):
+        txt = "NOU" if kind == "new" else "RE"
+        fs = size * (0.86 if kind == "new" else 0.78)
+        ls = size * (0.04 if kind == "new" else 0.03)
+        f = fonts.anton(int(round(fs)))
+        w = tracked_width(d, txt, f, ls)
+        bbox = f.getbbox(txt, anchor="la")
+        draw_text(
+            img,
+            right_x,
+            cy - (bbox[3] - bbox[1]) / 2 - bbox[1],
+            txt,
+            f,
+            col_,
+            align="right",
+            tracking=ls,
+            glyphwise=True,
+            composite=False,
+        )
+        return
+    # eq — short neutral bar
+    bar_w, bar_h = size * 0.66, max(2, size * 0.12)
+    d.rounded_rectangle(
+        (right_x - bar_w, cy - bar_h / 2, right_x, cy + bar_h / 2), radius=1, fill=col_
+    )

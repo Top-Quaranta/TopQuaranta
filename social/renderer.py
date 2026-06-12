@@ -21,6 +21,8 @@ Layout reference (Sprint I prompt, lightly adapted to mm-design):
 
 from __future__ import annotations
 
+import functools
+import json
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -583,12 +585,32 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
 
 GREEN_PPCC = colors.terr_color("PPCC")  # #427C42
 
-# Content-box padding (top, right, bottom, left).
-_PAD_INTRO = (110, 80, 92, 80)  # usable width 920
-_PAD_STD = (96, 90, 80, 90)  # usable width 900
+# ── story geometry tokens ────────────────────────────────────────────
+# Every hand-stitched geometry constant of the seven `_story_*` builders
+# (and their story-only shared helpers) lives as DATA in
+# `social/story_design/story-tokens.json` — sibling of feed-tokens.json.
+# The builders read from it; no positional/size/tracking/radius/gap/mix
+# literal stays in the builder bodies. See the file's `_provenance`.
+_STORY_DESIGN_DIR = Path(__file__).resolve().parent / "story_design"
+_STORY_TOKENS_PATH = _STORY_DESIGN_DIR / "story-tokens.json"
+
+
+@functools.lru_cache(maxsize=1)
+def story_tokens() -> dict:
+    """The exact extracted story-geometry table, cached."""
+    with open(_STORY_TOKENS_PATH, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+_ST = story_tokens()
+
+# Content-box padding (top, right, bottom, left). intro usable width 920;
+# std usable width 900. (Sourced from the tokens so the literals live once.)
+_PAD_INTRO = tuple(_ST["pad"]["intro"])  # usable width 920
+_PAD_STD = tuple(_ST["pad"]["std"])  # usable width 900
 # Intro locative subtitle: non-PPCC names wider than this (at 100 pt) step
 # down to 84 pt. 680 catches VAL (703) and BAL (816), not CAT (540).
-_SUBTITLE_STEPDOWN_W = 680
+_SUBTITLE_STEPDOWN_W = _ST["subtitle_stepdown_w"]
 
 # Story-intro watermark icon: which `territory_icon` art to draw per
 # territori. CAT has no silhouette asset of its own (territory-cat.svg is
@@ -641,7 +663,15 @@ def _draw_tracked(d, x, y_top, text, font, fill, *, tracking=0.0, center_w=None)
 
 def _draw_star(d, cx, cy, r_out, fill):
     """Five-point star polygon (inner = 0.42·outer), drawn directly."""
-    render_core.star(d, cx, cy, r_out, fill, inner_ratio=0.42, composite=False)
+    render_core.star(
+        d,
+        cx,
+        cy,
+        r_out,
+        fill,
+        inner_ratio=_ST["common"]["star_inner_ratio"],
+        composite=False,
+    )
 
 
 def _radial_bg(
@@ -665,8 +695,15 @@ def _radial_bg(
     )
 
 
-def _bg_ink(center=(0.5, 0.0), radii=(1.2, 0.6), stop=0.6) -> Image.Image:
+def _bg_ink(center=None, radii=None, stop=None) -> Image.Image:
     """Ink slides (2/3/4/6): #141210 centre → #0A0A0A."""
+    t = _ST["common"]["bg_ink"]
+    if center is None:
+        center = tuple(t["center"])
+    if radii is None:
+        radii = tuple(t["radii"])
+    if stop is None:
+        stop = t["stop"]
     return _radial_bg(colors.COLOR_INK_CENTRE, colors.COLOR_BG, center, radii, stop)
 
 
@@ -685,10 +722,11 @@ def _header_pill(
     `fill` and `label` (Anton 26, ls 3) in `ink`. Returns the pill width so
     callers can stack pills horizontally. Distinct from the legacy `_pill`
     used by the old territorial CTA path."""
+    t = _ST["common"]["header_pill"]
     d = ImageDraw.Draw(img)
-    f = fonts.anton(26)
-    tracking = 3
-    pad_x, pad_y = 18, 7
+    f = fonts.anton(t["font"])
+    tracking = t["tracking"]
+    pad_x, pad_y = t["pad_x"], t["pad_y"]
     tw = _tracked_width(d, label, f, tracking)
     bbox = d.textbbox((0, 0), label, font=f)
     th = bbox[3] - bbox[1]
@@ -725,24 +763,29 @@ def _header_row(
     setmana,
     *,
     territori: str = "PPCC",
-    logo_w: int = 217,
-    logo_h: int = 44,
+    logo_w: int | None = None,
+    logo_h: int | None = None,
 ):
     """Slides 2/3/4/6 header: white logo left, SETMANA pill right, row
     height ≈53 vertically centred at the top padding. Territorial slides
     add an accent territory pill left of the SETMANA pill; PPCC has none
     (byte-identical)."""
+    t = _ST["common"]["header_row"]
+    if logo_w is None:
+        logo_w = t["logo_w"]
+    if logo_h is None:
+        logo_h = t["logo_h"]
     left = _PAD_STD[3]
     right = STORY_W - _PAD_STD[1]
     top = _PAD_STD[0]
-    row_h = 53
+    row_h = t["row_h"]
     cy = top + row_h // 2
     logo = _logo_white(logo_w)
     if logo is not None:
         img.paste(logo, (left, cy - logo.size[1] // 2), logo)
     setmana_w = _setmana_pill(img, right, cy, setmana)
     if territori != "PPCC":
-        _territori_pill(img, right - setmana_w - 16, cy, territori)
+        _territori_pill(img, right - setmana_w - t["pill_gap"], cy, territori)
     return top + row_h
 
 
@@ -759,37 +802,59 @@ def _section_header(
     """Optional kicker + Anton-96 title + accent rule. Centred. Returns
     the y just below the rule. `kicker_color` defaults to the PPCC green
     light; territorial builders pass their `story_palette` light tone."""
+    t = _ST["common"]["section_header"]
     d = ImageDraw.Draw(img)
     y = y_title_top
     if kicker:
-        fk = fonts.sans_bold(25)
-        _draw_tracked(d, 0, y, kicker, fk, kicker_color, tracking=7, center_w=STORY_W)
-        y += 25 + 12
-    ft = fonts.anton(96)
-    _draw_tracked(d, 0, y, title, ft, title_color, tracking=0.96, center_w=STORY_W)
-    title_bbox = d.textbbox((0, 0), title, font=ft)
-    y += (title_bbox[3] - title_bbox[1]) + 22
-    rule_w = 130
-    d.rectangle(
-        ((STORY_W - rule_w) // 2, y, (STORY_W + rule_w) // 2, y + 7), fill=rule_color
+        fk = fonts.sans_bold(t["kicker_size"])
+        _draw_tracked(
+            d,
+            0,
+            y,
+            kicker,
+            fk,
+            kicker_color,
+            tracking=t["kicker_tracking"],
+            center_w=STORY_W,
+        )
+        y += t["kicker_size"] + t["kicker_gap"]
+    ft = fonts.anton(t["title_size"])
+    _draw_tracked(
+        d,
+        0,
+        y,
+        title,
+        ft,
+        title_color,
+        tracking=t["title_tracking"],
+        center_w=STORY_W,
     )
-    return y + 7
+    title_bbox = d.textbbox((0, 0), title, font=ft)
+    y += (title_bbox[3] - title_bbox[1]) + t["title_gap"]
+    rule_w = t["rule_w"]
+    rule_h = t["rule_h"]
+    d.rectangle(
+        ((STORY_W - rule_w) // 2, y, (STORY_W + rule_w) // 2, y + rule_h),
+        fill=rule_color,
+    )
+    return y + rule_h
 
 
 def _footer_url(img: Image.Image, *, light: str = colors.COLOR_GREEN_LIGHT) -> None:
     """`topquaranta.cat` — Anton 30, ls 4, centred, near the bottom edge
     (slides 2-6). `light` defaults to the PPCC green light; territorial
     builders pass their `story_palette` light tone."""
+    t = _ST["common"]["footer_url"]
     d = ImageDraw.Draw(img)
-    f = fonts.anton(30)
+    f = fonts.anton(t["font"])
     _draw_tracked(
         d,
         0,
-        STORY_H - 92,
+        STORY_H - t["y_from_bottom"],
         "topquaranta.cat",
         f,
         light,
-        tracking=4,
+        tracking=t["tracking"],
         center_w=STORY_W,
     )
 
@@ -862,8 +927,15 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
     from .captions import _setmana_label
     from .narrative.utils import TERRITORI_DE
 
+    t = _ST["intro"]
     pal = colors.story_palette(territori)
-    img = _radial_bg(pal["accent"], pal["deep"], (0.5, 0.0), (1.3, 0.8), 1.0)
+    img = _radial_bg(
+        pal["accent"],
+        pal["deep"],
+        tuple(t["radial"]["center"]),
+        tuple(t["radial"]["radii"]),
+        t["radial"]["stop"],
+    )
 
     # Territorial intro: a large faint monochrome territory-icon watermark
     # in the lower-half empty band, behind the text. Aspect ratio is
@@ -874,38 +946,60 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
     # is lru_cached and the cached image must not be mutated.
     if territori != "PPCC":
         icon_codi = _STORY_ICON_CODI.get(territori, territori)
-        icon = svg_assets.territory_icon(icon_codi, 540, colors.COLOR_WHITE)
+        wm = t["watermark"]
+        icon = svg_assets.territory_icon(icon_codi, wm["size"], colors.COLOR_WHITE)
         if icon is not None:
             icon = icon.copy()
-            icon.putalpha(icon.getchannel("A").point(lambda v: int(v * 0.16)))
-            iy = 1400 - icon.size[1] // 2
+            _wm_alpha = wm["alpha"]
+            icon.putalpha(icon.getchannel("A").point(lambda v: int(v * _wm_alpha)))
+            iy = wm["cy"] - icon.size[1] // 2
             img.paste(icon, ((STORY_W - icon.size[0]) // 2, iy), icon)
 
     d = ImageDraw.Draw(img)
 
     # Logo white 340×69, centred at the top padding.
-    logo = _logo_white(340)
+    logo = _logo_white(t["logo"]["w"])
     y = _PAD_INTRO[0]
     if logo is not None:
         img.paste(logo, ((STORY_W - logo.size[0]) // 2, y), logo)
         logo_bottom = y + logo.size[1]
     else:
-        logo_bottom = y + 69
+        logo_bottom = y + t["logo"]["fallback_h"]
 
     # "presenta" — Instrument Serif italic 56, cream.
-    fp = fonts.instrument_italic(56)
+    fp = fonts.instrument_italic(t["presenta"]["size"])
     _draw_tracked(
-        d, 0, logo_bottom + 40, "presenta", fp, colors.COLOR_CREAM, center_w=STORY_W
+        d,
+        0,
+        logo_bottom + t["presenta"]["gap_above"],
+        "presenta",
+        fp,
+        colors.COLOR_CREAM,
+        center_w=STORY_W,
     )
 
     # Central headline stack (tight, the 40 overflows its line box).
-    f_top = fonts.anton(150)
+    f_top = fonts.anton(t["el_top"]["size"])
     _draw_tracked(
-        d, 0, 560, "EL TOP", f_top, colors.COLOR_WHITE, tracking=0.75, center_w=STORY_W
+        d,
+        0,
+        t["el_top"]["y"],
+        "EL TOP",
+        f_top,
+        colors.COLOR_WHITE,
+        tracking=t["el_top"]["tracking"],
+        center_w=STORY_W,
     )
-    f_40 = fonts.anton(380)
+    f_40 = fonts.anton(t["forty"]["size"])
     _draw_tracked(
-        d, 0, 632, "40", f_40, colors.COLOR_YELLOW, tracking=-7.6, center_w=STORY_W
+        d,
+        0,
+        t["forty"]["y"],
+        "40",
+        f_40,
+        colors.COLOR_YELLOW,
+        tracking=t["forty"]["tracking"],
+        center_w=STORY_W,
     )
     # PPCC keeps the brand "D'AQUESTA SETMANA" at 100 pt (byte-identical).
     # Territorial stories localise the chart ("DE CATALUNYA" etc., via
@@ -914,38 +1008,42 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
     # margins under the "40", so non-PPCC subtitles step down one notch
     # to 84 pt when they exceed `_SUBTITLE_STEPDOWN_W`. The gate on
     # territori keeps PPCC untouched regardless of its width (780 px).
-    f_setm = fonts.anton(100)
+    f_setm = fonts.anton(t["subtitle"]["size"])
     if territori == "PPCC":
         subtitle = "D'AQUESTA SETMANA"
     else:
         subtitle = (TERRITORI_DE.get(territori) or "d'aquesta setmana").upper()
-        if _tracked_width(d, subtitle, f_setm, 1) > _SUBTITLE_STEPDOWN_W:
-            f_setm = fonts.anton(84)
+        if (
+            _tracked_width(d, subtitle, f_setm, t["subtitle"]["tracking"])
+            > _SUBTITLE_STEPDOWN_W
+        ):
+            f_setm = fonts.anton(t["subtitle"]["size_step"])
     _draw_tracked(
         d,
         0,
-        980,
+        t["subtitle"]["y"],
         subtitle,
         f_setm,
         colors.COLOR_WHITE,
-        tracking=1,
+        tracking=t["subtitle"]["tracking"],
         center_w=STORY_W,
     )
 
     # Footer group anchored to the bottom padding.
     base = STORY_H - _PAD_INTRO[2]
     # Pill row: "SETMANA N" (yellow box) + "CADA DISSABTE" (white).
-    f_pill = fonts.anton(46)
+    pl = t["pill"]
+    f_pill = fonts.anton(pl["size"])
     setm_label = _setmana_label(setmana).upper()
     second = "CADA DISSABTE"
-    pad_x, pad_y = 24, 8
-    tr = 3
+    pad_x, pad_y = pl["pad_x"], pl["pad_y"]
+    tr = pl["tracking"]
     w_setm = _tracked_width(d, setm_label, f_pill, tr)
     bbox = d.textbbox((0, 0), setm_label, font=f_pill)
     th = bbox[3] - bbox[1]
     pill_w = w_setm + 2 * pad_x
     pill_h = th + 2 * pad_y
-    gap = 24
+    gap = pl["gap"]
     w_second = _tracked_width(d, second, f_pill, tr)
     total_w = pill_w + gap + w_second
     row_x = (STORY_W - total_w) / 2
@@ -973,16 +1071,18 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
     )
 
     # Star separator above the pill row.
-    sep_y = pill_y - 37
-    line_col = colors.mix(pal["accent"], colors.COLOR_WHITE, 0.35)
+    st = t["star"]
+    sep_y = pill_y - st["sep_offset"]
+    line_col = colors.mix(pal["accent"], colors.COLOR_WHITE, st["mix"])
     cxc = STORY_W / 2
-    star_r, gap, sep_total = 16, 40, 920
+    star_r, gap, sep_total = st["r"], st["gap"], st["total"]
+    rule_h = st["rule_h"]
     left0 = (STORY_W - sep_total) / 2
-    d.rectangle((left0, sep_y, cxc - star_r - gap, sep_y + 2), fill=line_col)
+    d.rectangle((left0, sep_y, cxc - star_r - gap, sep_y + rule_h), fill=line_col)
     d.rectangle(
-        (cxc + star_r + gap, sep_y, left0 + sep_total, sep_y + 2), fill=line_col
+        (cxc + star_r + gap, sep_y, left0 + sep_total, sep_y + rule_h), fill=line_col
     )
-    _draw_star(d, cxc, sep_y + 1, star_r, colors.COLOR_WHITE)
+    _draw_star(d, cxc, sep_y + st["cy_nudge"], star_r, colors.COLOR_WHITE)
     return img
 
 
@@ -991,26 +1091,29 @@ def _story_top_mosaic(
 ) -> Image.Image:
     """Slide 2 — positions 40→11 as a 5×6 cover mosaic with yellow Anton
     number badges + Bricolage titles + Roboto artist subtitles."""
+    t = _ST["mosaic"]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana, territori=territori)
-    body_top = _section_header(img, "EL TOP", 200)
+    body_top = _section_header(img, "EL TOP", t["section_y"])
 
     d = ImageDraw.Draw(img)
-    cols, gap = 5, 18
+    cols, gap = t["cols"], t["gap"]
     left = _PAD_STD[3]
-    cover = 150
+    cover = t["cover"]
     cell_w = (STORY_W - _PAD_STD[1] - left - (cols - 1) * gap) // cols  # 165.6→165
-    grid_top = body_top + 40
-    f_badge = fonts.anton(33)
-    f_title = fonts.bricolage_xbold(20)
-    f_artist = fonts.sans_regular(17)
+    grid_top = body_top + t["grid_top_gap"]
+    row_block = t["row_block"]
+    bd, ti, ar = t["badge"], t["title"], t["artist"]
+    f_badge = fonts.anton(bd["size"])
+    f_title = fonts.bricolage_xbold(ti["size"])
+    f_artist = fonts.sans_regular(ar["size"])
     # Descending 40→11 so the mosaic ends one rank above the top-10 reveal.
-    items = list(reversed(entries[:30]))
+    items = list(reversed(entries[: t["display_cap"]]))
     for idx, e in enumerate(items):
         r, c = divmod(idx, cols)
         x = left + c * (cell_w + gap)
-        y = grid_top + r * (cell_w + 78)  # cover + title/artist block
+        y = grid_top + r * (cell_w + row_block)  # cover + title/artist block
         _paste_cover(img, e, x, y, cover)
         _number_badge(
             img,
@@ -1018,24 +1121,26 @@ def _story_top_mosaic(
             y,
             str(e.get("posicio") or (40 - idx)),
             font=f_badge,
-            pad_x=15,
-            pad_y=7,
+            pad_x=bd["pad_x"],
+            pad_y=bd["pad_y"],
         )
-        ty = y + cover + 10
+        ty = y + cover + ti["gap_above"]
         for line in _wrap_tracked(
-            d, e.get("canco_nom") or "—", f_title, cell_w, -0.2, 2
+            d, e.get("canco_nom") or "—", f_title, cell_w, ti["tracking"], ti["lines"]
         ):
-            _draw_tracked(d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=-0.2)
-            ty += 21
+            _draw_tracked(
+                d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=ti["tracking"]
+            )
+            ty += ti["lh"]
         names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
         artist = _truncate(d, ", ".join(names), f_artist, cell_w)
         _draw_tracked(
             d,
             x,
-            ty + 4,
+            ty + ar["gap_above"],
             artist,
             f_artist,
-            colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62),
+            colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, ar["mix"]),
         )
     _footer_url(img, light=pal["light"])
     return img
@@ -1051,54 +1156,73 @@ def _story_top_grid(
     of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
     never crowds the cover of the row below. The centred #4 is clamped so
     it can't slide under the footer when several rows run tall."""
+    t = _ST["grid"]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana, territori=territori)
-    body_top = _section_header(img, "ENS ACOSTEM AL CIM", 200)
+    body_top = _section_header(img, "ENS ACOSTEM AL CIM", t["section_y"])
 
     d = ImageDraw.Draw(img)
-    cover = 210
-    col_gap, row_gap = 48, 40
+    cover = t["cover"]
+    col_gap, row_gap = t["col_gap"], t["row_gap"]
     pair_w = 2 * cover + col_gap
     block_left = (STORY_W - pair_w) // 2
     col_x = [block_left, block_left + cover + col_gap]
-    grid_top = body_top + 40
-    title_lh, gap_above_title, gap_above_artist, artist_h = 34, 14, 4, 30
-    f_badge = fonts.anton(46)
-    f_title = fonts.bricolage_xbold(32)
-    f_artist = fonts.sans_regular(25)
-    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.62)
+    grid_top = body_top + t["grid_top_gap"]
+    title_lh = t["title_lh"]
+    gap_above_title, gap_above_artist, artist_h = (
+        t["gap_above_title"],
+        t["gap_above_artist"],
+        t["artist_h"],
+    )
+    bd, ti, ar = t["badge"], t["title"], t["artist"]
+    f_badge = fonts.anton(bd["size"])
+    f_title = fonts.bricolage_xbold(ti["size"])
+    f_artist = fonts.sans_regular(ar["size"])
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, ar["mix"])
 
     def _text_h(n_lines: int) -> int:
         """Height of the text block under a cover for `n_lines` title."""
         return gap_above_title + n_lines * title_lh + gap_above_artist + artist_h
 
     # Descending 10→4: grid holds #10/#9, #8/#7, #6/#5; #4 centred below.
-    items = list(reversed(entries[:7]))
+    items = list(reversed(entries[: t["display_cap"]]))
     # Pre-wrap every title (≤2 lines, ellipsised) so rows can be sized.
     wrapped = [
-        _wrap_tracked(d, e.get("canco_nom") or "—", f_title, cover + 30, -0.32, 2)
+        _wrap_tracked(
+            d,
+            e.get("canco_nom") or "—",
+            f_title,
+            cover + ti["wrap_extra"],
+            ti["tracking"],
+            ti["lines"],
+        )
         for e in items
     ]
 
     def _cell(e, lines, x, y, pos):
         _paste_cover(img, e, x, y, cover)
-        _number_badge(img, x, y, str(pos), font=f_badge, pad_x=21, pad_y=9)
+        _number_badge(
+            img, x, y, str(pos), font=f_badge, pad_x=bd["pad_x"], pad_y=bd["pad_y"]
+        )
         ty = y + cover + gap_above_title
         for line in lines:
-            _draw_tracked(d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=-0.32)
+            _draw_tracked(
+                d, x, ty, line, f_title, colors.COLOR_WHITE, tracking=ti["tracking"]
+            )
             ty += title_lh
         names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
-        artist = _truncate(d, ", ".join(names), f_artist, cover + 30)
+        artist = _truncate(d, ", ".join(names), f_artist, cover + ar["wrap_extra"])
         _draw_tracked(d, x, ty + gap_above_artist, artist, f_artist, subtle)
 
     n = len(items)
+    rows, max_cells = t["rows"], t["max_cells"]
     y = grid_top
-    for r in range(3):
+    for r in range(rows):
         i0, i1 = r * 2, r * 2 + 1
-        if i0 >= n or i0 >= 6:
+        if i0 >= n or i0 >= max_cells:
             break
-        lines1 = wrapped[i1] if (i1 < n and i1 < 6) else None
+        lines1 = wrapped[i1] if (i1 < n and i1 < max_cells) else None
         row_lines = max(len(wrapped[i0]), len(lines1) if lines1 else 1)
         _cell(
             items[i0], wrapped[i0], col_x[0], y, items[i0].get("posicio") or (10 - i0)
@@ -1107,10 +1231,13 @@ def _story_top_grid(
             _cell(items[i1], lines1, col_x[1], y, items[i1].get("posicio") or (10 - i1))
         y += cover + _text_h(row_lines) + row_gap
     # #4 centred below, clamped so its block never reaches the footer.
-    if n >= 7:
+    if n >= t["display_cap"]:
         e = items[6]
         needed = cover + _text_h(len(wrapped[6]))
-        max_y = STORY_H - 92 - 24 - needed  # 92 footer band + 24 margin
+        footer_band = _ST["common"]["footer_url"]["y_from_bottom"]
+        max_y = (
+            STORY_H - footer_band - t["clamp_margin"] - needed
+        )  # 92 band + 24 margin
         _cell(
             e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
         )
@@ -1123,36 +1250,57 @@ def _story_podi(
 ) -> Image.Image:
     """Slide 4 — #3 (top) and #2 (below): centred big covers with a big
     Anton number badge, Bricolage title and Roboto artist."""
+    t = _ST["podi"]
     pal = colors.story_palette(territori)
     img = _radial_bg(
-        colors.COLOR_INK_CENTRE, colors.COLOR_BG, (0.5, 0.04), (1.1, 0.55), 0.58
+        colors.COLOR_INK_CENTRE,
+        colors.COLOR_BG,
+        tuple(t["radial"]["center"]),
+        tuple(t["radial"]["radii"]),
+        t["radial"]["stop"],
     )
     _header_row(img, setmana, territori=territori)
     _section_header(
-        img, "EL PODI", 200, kicker="JA GAIREBÉ HI SOM", kicker_color=pal["light"]
+        img,
+        "EL PODI",
+        t["section_y"],
+        kicker="JA GAIREBÉ HI SOM",
+        kicker_color=pal["light"],
     )
 
     d = ImageDraw.Draw(img)
-    cover = 300
-    f_badge = fonts.anton(66)
-    f_title = fonts.bricolage_xbold(60)
-    f_artist = fonts.sans_regular(38)
-    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.66)
-    entry_h = cover + 20 + 64 + 6 + 46  # cover + title block + artist
-    top0 = 470
-    gap = 120
+    cover = t["cover"]
+    bd, ti, ar = t["badge"], t["title"], t["artist"]
+    f_badge = fonts.anton(bd["size"])
+    f_title = fonts.bricolage_xbold(ti["size"])
+    f_artist = fonts.sans_regular(ar["size"])
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, ar["mix"])
+    entry_h = cover + sum(t["entry_h_add"])  # cover + title block + artist
+    top0 = t["top0"]
+    gap = t["gap"]
     # entries arrive as [#2, #3]; show #3 on top then #2, building toward #1.
-    ordered = list(entries[:2])[::-1]
+    ordered = list(entries[: t["display_cap"]])[::-1]
     for idx, e in enumerate(ordered):
         y = top0 + idx * (entry_h + gap)
         x = (STORY_W - cover) // 2
         _paste_cover(img, e, x, y, cover)
         _number_badge(
-            img, x, y, str(e.get("posicio", 3 - idx)), font=f_badge, pad_x=30, pad_y=13
+            img,
+            x,
+            y,
+            str(e.get("posicio", 3 - idx)),
+            font=f_badge,
+            pad_x=bd["pad_x"],
+            pad_y=bd["pad_y"],
         )
-        ty = y + cover + 20
+        ty = y + cover + ti["gap_above"]
         title_lines = _wrap_tracked(
-            d, e.get("canco_nom") or "—", f_title, STORY_W - 180, -1.2, 2
+            d,
+            e.get("canco_nom") or "—",
+            f_title,
+            STORY_W - ti["wrap_margin"],
+            ti["tracking"],
+            ti["lines"],
         )
         for line in title_lines:
             _draw_tracked(
@@ -1162,13 +1310,15 @@ def _story_podi(
                 line,
                 f_title,
                 colors.COLOR_WHITE,
-                tracking=-1.2,
+                tracking=ti["tracking"],
                 center_w=STORY_W,
             )
-            ty += 62
+            ty += ti["lh"]
         names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
-        artist = _truncate(d, ", ".join(names), f_artist, STORY_W - 180)
-        _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
+        artist = _truncate(d, ", ".join(names), f_artist, STORY_W - ar["wrap_margin"])
+        _draw_tracked(
+            d, 0, ty + ar["gap_above"], artist, f_artist, subtle, center_w=STORY_W
+        )
     _footer_url(img, light=pal["light"])
     return img
 
@@ -1181,72 +1331,101 @@ def _story_hero(
     Display 800 is the primary element. The yellow climax + ink field are
     brand-locked; only the territory pill (non-PPCC) and footer tint are
     territory-aware."""
+    t = _ST["hero"]
     img = _radial_bg(
-        colors.mix(colors.COLOR_BG, colors.COLOR_YELLOW, 0.16),
+        colors.mix(colors.COLOR_BG, colors.COLOR_YELLOW, t["radial"]["mix"]),
         colors.COLOR_BG,
-        (0.5, 0.32),
-        (0.8, 0.5),
-        0.6,
+        tuple(t["radial"]["center"]),
+        tuple(t["radial"]["radii"]),
+        t["radial"]["stop"],
     )
     d = ImageDraw.Draw(img)
 
     # Ghost "1" behind everything (white α0.04), clipped at the right.
+    gh = t["ghost"]
     ghost = Image.new("RGBA", (STORY_W, STORY_H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(ghost)
-    fg = fonts.anton(640)
-    gd.text((842, 40), "1", font=fg, fill=(255, 255, 255, 10))
+    fg = fonts.anton(gh["size"])
+    gd.text((gh["x"], gh["y"]), "1", font=fg, fill=(255, 255, 255, gh["alpha"]))
     img.paste(Image.alpha_composite(img.convert("RGBA"), ghost).convert("RGB"), (0, 0))
     d = ImageDraw.Draw(img)
 
     # Logo white 217×44, top centred.
-    logo = _logo_white(217)
+    logo = _logo_white(t["logo"]["w"])
     if logo is not None:
         img.paste(logo, ((STORY_W - logo.size[0]) // 2, _PAD_STD[0]), logo)
     # Territory pill top-right (territorial only), aligned to the logo row.
     if territori != "PPCC":
-        _territori_pill(img, STORY_W - _PAD_STD[1], _PAD_STD[0] + 22, territori)
+        _territori_pill(
+            img, STORY_W - _PAD_STD[1], _PAD_STD[0] + t["pill_y_offset"], territori
+        )
 
     # Kicker "EL NÚMERO 1".
-    fk = fonts.anton(32)
+    kk = t["kicker"]
+    fk = fonts.anton(kk["size"])
     _draw_tracked(
-        d, 0, 360, "EL NÚMERO 1", fk, colors.COLOR_YELLOW, tracking=10, center_w=STORY_W
+        d,
+        0,
+        kk["y"],
+        "EL NÚMERO 1",
+        fk,
+        colors.COLOR_YELLOW,
+        tracking=kk["tracking"],
+        center_w=STORY_W,
     )
 
     # Cover 400×400 centred, hairline inset.
-    cover = 400
+    cover = t["cover"]["size"]
     cx = (STORY_W - cover) // 2
-    cy = 430
+    cy = t["cover"]["y"]
     _paste_cover(img, entry, cx, cy, cover)
+    hl = t["hairline"]
     d.rectangle(
         (cx, cy, cx + cover - 1, cy + cover - 1),
-        outline=colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.08),
-        width=1,
+        outline=colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, hl["mix"]),
+        width=hl["width"],
     )
 
     # Editorial scenario (subordinate kicker).
+    sc = t["scenario"]
     text = (headline or "AL CIM AQUESTA SETMANA").strip() or "AL CIM AQUESTA SETMANA"
-    fsc = fonts.sans_bold(26)
-    sy = cy + cover + 36
-    sc_lines = _wrap_tracked(d, text, fsc, STORY_W - 180, 5, 2)
+    fsc = fonts.sans_bold(sc["size"])
+    sy = cy + cover + sc["gap_above"]
+    sc_lines = _wrap_tracked(
+        d, text, fsc, STORY_W - sc["wrap_margin"], sc["tracking"], sc["lines"]
+    )
     for line in sc_lines:
         _draw_tracked(
-            d, 0, sy, line, fsc, colors.COLOR_YELLOW, tracking=5, center_w=STORY_W
+            d,
+            0,
+            sy,
+            line,
+            fsc,
+            colors.COLOR_YELLOW,
+            tracking=sc["tracking"],
+            center_w=STORY_W,
         )
-        sy += 34
+        sy += sc["lh"]
 
     # Song title — Playfair Display 800, the PRIMARY element.
-    ft = fonts.display_xbold(108)
-    title_lines = _wrap_two_lines(d, entry.get("canco_nom") or "—", ft, 880)[:2]
-    ty = sy + 16
+    ti = t["title"]
+    ft = fonts.display_xbold(ti["size"])
+    title_lines = _wrap_two_lines(d, entry.get("canco_nom") or "—", ft, ti["wrap_w"])[
+        : ti["lines"]
+    ]
+    ty = sy + ti["gap_above"]
     for line in title_lines:
         _draw_tracked(d, 0, ty, line, ft, colors.COLOR_YELLOW, center_w=STORY_W)
-        ty += 114
+        ty += ti["lh"]
 
     # Artist — Roboto 700, white.
-    fa = fonts.sans_bold(50)
+    ar = t["artist"]
+    fa = fonts.sans_bold(ar["size"])
     names = entry.get("artistes_noms") or [entry.get("artista_nom") or "—"]
-    artist = _truncate(d, ", ".join(names), fa, STORY_W - 180)
-    _draw_tracked(d, 0, ty + 30, artist, fa, colors.COLOR_WHITE, center_w=STORY_W)
+    artist = _truncate(d, ", ".join(names), fa, STORY_W - ar["wrap_margin"])
+    _draw_tracked(
+        d, 0, ty + ar["gap_above"], artist, fa, colors.COLOR_WHITE, center_w=STORY_W
+    )
 
     _footer_url(img, light=colors.story_palette(territori)["light"])
     return img
@@ -1257,13 +1436,14 @@ def _story_novetats(
 ) -> Image.Image:
     """Slide 6 — 2-3 recent releases stacked: centred cover + Bricolage
     title + Roboto artist, no number badge."""
+    t = _ST["novetats"]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana)
     _section_header(
         img,
         "NOVETATS",
-        200,
+        t["section_y"],
         kicker="FORA DEL TOP · ESTRENES",
         title_color=colors.COLOR_YELLOW,
         rule_color=pal["light"],
@@ -1271,22 +1451,28 @@ def _story_novetats(
     )
 
     d = ImageDraw.Draw(img)
-    cover = 210
-    f_title = fonts.bricolage_xbold(50)
-    f_artist = fonts.sans_regular(32)
-    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, 0.66)
-    items = items[:3]
-    entry_h = cover + 16 + 52 + 6 + 32
-    gap = 70
+    cover = t["cover"]
+    ti, ar = t["title"], t["artist"]
+    f_title = fonts.bricolage_xbold(ti["size"])
+    f_artist = fonts.sans_regular(ar["size"])
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, ar["mix"])
+    items = items[: t["display_cap"]]
+    entry_h = cover + sum(t["entry_h_add"])
+    gap = t["gap"]
     block_h = len(items) * entry_h + (len(items) - 1) * gap if items else 0
-    top0 = max(470, (STORY_H - block_h) // 2)
+    top0 = max(t["top0_min"], (STORY_H - block_h) // 2)
     for idx, it in enumerate(items):
         y = top0 + idx * (entry_h + gap)
         x = (STORY_W - cover) // 2
         _paste_cover(img, it, x, y, cover, key="nom")
-        ty = y + cover + 16
+        ty = y + cover + ti["gap_above"]
         for line in _wrap_tracked(
-            d, it.get("nom") or "—", f_title, STORY_W - 180, -1, 2
+            d,
+            it.get("nom") or "—",
+            f_title,
+            STORY_W - ti["wrap_margin"],
+            ti["tracking"],
+            ti["lines"],
         ):
             _draw_tracked(
                 d,
@@ -1295,12 +1481,16 @@ def _story_novetats(
                 line,
                 f_title,
                 colors.COLOR_WHITE,
-                tracking=-1,
+                tracking=ti["tracking"],
                 center_w=STORY_W,
             )
-            ty += 52
-        artist = _truncate(d, it.get("artista_nom") or "—", f_artist, STORY_W - 180)
-        _draw_tracked(d, 0, ty + 6, artist, f_artist, subtle, center_w=STORY_W)
+            ty += ti["lh"]
+        artist = _truncate(
+            d, it.get("artista_nom") or "—", f_artist, STORY_W - ar["wrap_margin"]
+        )
+        _draw_tracked(
+            d, 0, ty + ar["gap_above"], artist, f_artist, subtle, center_w=STORY_W
+        )
     _footer_url(img, light=pal["light"])
     return img
 
@@ -1311,69 +1501,79 @@ def _story_outro_ppcc(setmana) -> Image.Image:
     domain, and a SETMANA footer. No slate card."""
     from .captions import _setmana_label
 
+    t = _ST["outro"]
     img = Image.new("RGB", (STORY_W, STORY_H), colors.COLOR_YELLOW)
     d = ImageDraw.Draw(img)
 
-    logo = _logo_ink(266)
+    logo = _logo_ink(t["logo"]["w"])
     y = _PAD_STD[0]
     if logo is not None:
         img.paste(logo, ((STORY_W - logo.size[0]) // 2, y), logo)
 
     ink = colors.COLOR_BG
     # Serif accent.
-    fa = fonts.instrument_italic(52)
+    se = t["serif"]
+    fa = fonts.instrument_italic(se["size"])
     _draw_tracked(
         d,
         0,
-        560,
+        se["y"],
         "tens el top sencer",
         fa,
-        colors.mix(colors.COLOR_YELLOW, ink, 0.72),
+        colors.mix(colors.COLOR_YELLOW, ink, se["mix"]),
         center_w=STORY_W,
     )
     # "EL TOP 40".
-    ft = fonts.anton(158)
-    _draw_tracked(d, 0, 650, "EL TOP 40", ft, ink, tracking=0.79, center_w=STORY_W)
+    tt = t["title"]
+    ft = fonts.anton(tt["size"])
+    _draw_tracked(
+        d, 0, tt["y"], "EL TOP 40", ft, ink, tracking=tt["tracking"], center_w=STORY_W
+    )
 
     # Star separator.
-    sep_y = 960
-    line_col = colors.mix(colors.COLOR_YELLOW, ink, 0.25)
+    st = t["star"]
+    sep_y = st["sep_y"]
+    line_col = colors.mix(colors.COLOR_YELLOW, ink, st["mix"])
     cxc = STORY_W / 2
-    star_r, gap, sep_total = 15, 30, 520
+    star_r, gap, sep_total = st["r"], st["gap"], st["total"]
+    rule_h = st["rule_h"]
     left0 = (STORY_W - sep_total) / 2
-    d.rectangle((left0, sep_y, cxc - star_r - gap, sep_y + 3), fill=line_col)
+    d.rectangle((left0, sep_y, cxc - star_r - gap, sep_y + rule_h), fill=line_col)
     d.rectangle(
-        (cxc + star_r + gap, sep_y, left0 + sep_total, sep_y + 3), fill=line_col
+        (cxc + star_r + gap, sep_y, left0 + sep_total, sep_y + rule_h), fill=line_col
     )
-    _draw_star(d, cxc, sep_y + 1, star_r, ink)
+    _draw_star(d, cxc, sep_y + st["cy_nudge"], star_r, ink)
 
     # CTA with underlined domain.
-    fc = fonts.sans_bold(42)
+    ct = t["cta"]
+    fc = fonts.sans_bold(ct["size"])
     cta_pre = "Cada dissabte a "
     cta_dom = "topquaranta.cat"
-    tr = 1
+    tr = ct["tracking"]
     w_pre = _tracked_width(d, cta_pre, fc, tr)
     w_dom = _tracked_width(d, cta_dom, fc, tr)
-    cta_y = 1060
+    cta_y = ct["y"]
     x0 = (STORY_W - (w_pre + w_dom)) / 2
     _draw_tracked(d, x0, cta_y, cta_pre, fc, ink, tracking=tr)
     _draw_tracked(d, x0 + w_pre, cta_y, cta_dom, fc, ink, tracking=tr)
     dom_bbox = d.textbbox((0, 0), cta_dom, font=fc)
-    underline_y = cta_y + (dom_bbox[3] - dom_bbox[1]) + 10
+    underline_y = cta_y + (dom_bbox[3] - dom_bbox[1]) + ct["underline_gap"]
     d.rectangle(
-        (x0 + w_pre, underline_y, x0 + w_pre + w_dom, underline_y + 2), fill=ink
+        (x0 + w_pre, underline_y, x0 + w_pre + w_dom, underline_y + ct["underline_h"]),
+        fill=ink,
     )
 
     # SETMANA footer.
-    ff = fonts.anton(40)
+    fo = t["footer"]
+    ff = fonts.anton(fo["size"])
     _draw_tracked(
         d,
         0,
-        STORY_H - _PAD_STD[2] - 40,
+        STORY_H - _PAD_STD[2] - fo["y_from_bottom_extra"],
         _setmana_label(setmana).upper(),
         ff,
         ink,
-        tracking=4,
+        tracking=fo["tracking"],
         center_w=STORY_W,
     )
     return img

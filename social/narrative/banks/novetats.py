@@ -22,21 +22,21 @@ from __future__ import annotations
 N1_DEBUT_ARTIST_KNOWN = {
     "short": [
         "Cara coneguda del top: {artista} estrena «{titol}» 🎧",
-        "{artista}, habitual del rànquing, treu «{titol}» 🆕",
+        "{artista}, habitual de la llista, treu «{titol}» 🆕",
         "Novetat d'un nom del top: «{titol}» {de_artista} ✨",
         "{artista} torna amb «{titol}» 🔊",
         "Del top a la novetat: «{titol}», {de_artista} 🎶",
     ],
     "medium": [
         "Un nom que ja sona al top torna amb material nou: {artista} publica «{titol}», fa {dies_str}. 🎧",
-        "{artista}, presència habitual al rànquing, estrena «{titol}» ({tipus_paraula} de fa {dies_str}). 🆕",
+        "{artista}, presència habitual a la llista, estrena «{titol}» ({tipus_paraula} de fa {dies_str}). 🆕",
         "Novetat d'una cara coneguda del top: «{titol}», {de_artista}, ja és aquí des de fa {dies_str}. ✨",
-        "Del rànquing a la sortida nova: {artista} treu «{titol}», publicat fa {dies_str}. 🔊",
+        "De la llista a la sortida nova: {artista} treu «{titol}», publicat fa {dies_str}. 🔊",
     ],
     "long": [
-        "Un nom que el top ja coneix torna amb material fresc: {artista} publica «{titol}», {tipus_paraula} sortit fa {dies_str}. Quan un artista amb presència recent al rànquing estrena, val la pena seguir-li la pista: el salt de la novetat al top sol ser curt. 🎧",
-        "{artista}, una cara habitual del rànquing, signa una de les novetats de la setmana amb «{titol}» (fa {dies_str}). Les estrenes d'artistes ja consolidats al top són les que tenen més números d'aterrar-hi de nou aviat. ✨",
-        "De les sortides de la setmana, una destaca per la firma: {artista}, que el top ja ha vist, estrena «{titol}» fa {dies_str}. La trajectòria recent al rànquing fa d'aquesta novetat una de les que mirarem de prop. 🔊",
+        "Un nom que el top ja coneix torna amb material fresc: {artista} publica «{titol}», {tipus_paraula} sortit fa {dies_str}. Quan un artista amb presència recent a la llista estrena, val la pena seguir-li la pista: el salt de la novetat al top sol ser curt. 🎧",
+        "{artista}, una cara habitual de la llista, signa una de les novetats de la setmana amb «{titol}» (fa {dies_str}). Les estrenes d'artistes ja consolidats al top són les que tenen més números d'aterrar-hi de nou aviat. ✨",
+        "De les sortides de la setmana, una destaca per la firma: {artista}, que el top ja ha vist, estrena «{titol}» fa {dies_str}. La trajectòria recent a la llista fa d'aquesta novetat una de les que mirarem de prop. 🔊",
     ],
 }
 
@@ -93,11 +93,11 @@ N4_LABEL_RELEASE = {
     "medium": [
         "El segell {segell}, amb presència repetida al top, suma novetat: «{titol}», {de_artista} (fa {dies_str}). 🏷️",
         "Nova sortida de la casa {segell}: «{titol}», {de_artista}, {tipus_paraula} de fa {dies_str}. 💿",
-        "{segell} continua alimentant el rànquing: estrena «{titol}» {de_artista}, fa {dies_str}. 🎚️",
+        "{segell} continua alimentant el top: estrena «{titol}» {de_artista}, fa {dies_str}. 🎚️",
         "Del catàleg de {segell}, un segell habitual del top: «{titol}», {de_artista} (fa {dies_str}). 📀",
     ],
     "long": [
-        "El segell {segell}, que el top coneix bé, suma una nova sortida: «{titol}», {de_artista}, {tipus_paraula} de fa {dies_str}. Quan un segell acumula presència al rànquing, les seves novetats arrosseguen una expectativa que val la pena registrar. 🏷️",
+        "El segell {segell}, que el top coneix bé, suma una nova sortida: «{titol}», {de_artista}, {tipus_paraula} de fa {dies_str}. Quan un segell acumula presència a la llista, les seves novetats arrosseguen una expectativa que val la pena registrar. 🏷️",
         "Una novetat amb segell de garantia: {segell}, casa de més d'un nom del top, publica «{titol}» {de_artista} (fa {dies_str}). El criteri d'un segell consolidat sovint és un bon predictor d'on val la pena fixar-s'hi. 💿",
     ],
 }

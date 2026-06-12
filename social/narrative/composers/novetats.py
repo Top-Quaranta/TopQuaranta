@@ -19,7 +19,7 @@ from social.narrative.banks import connectors as connectors_bank
 from social.narrative.banks.novetats import NOVETATS
 from social.narrative.utils import llista_amb_i, with_preposition
 
-# Novetats CTAs — the top CTAs ("rànquing sencer") don't fit a release
+# Novetats CTAs — the top CTAs ("top sencer") don't fit a release
 # roundup. Channels that don't render a URL in body (IG/newsletter) get
 # the bare site; the rest interpolate the UTM link.
 _CTA_NO_URL = [

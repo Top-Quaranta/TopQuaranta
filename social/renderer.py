@@ -994,7 +994,7 @@ def _story_top_mosaic(
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana, territori=territori)
-    body_top = _section_header(img, "EL RÀNQUING", 200)
+    body_top = _section_header(img, "EL TOP", 200)
 
     d = ImageDraw.Draw(img)
     cols, gap = 5, 18
@@ -1306,7 +1306,7 @@ def _story_novetats(
 
 
 def _story_outro_ppcc(setmana) -> Image.Image:
-    """Slide 7 — yellow outro. Ink logo, "tens el rànquing sencer" serif
+    """Slide 7 — yellow outro. Ink logo, "tens el top sencer" serif
     accent, big "EL TOP 40", star separator, CTA with an underlined
     domain, and a SETMANA footer. No slate card."""
     from .captions import _setmana_label
@@ -1326,7 +1326,7 @@ def _story_outro_ppcc(setmana) -> Image.Image:
         d,
         0,
         560,
-        "tens el rànquing sencer",
+        "tens el top sencer",
         fa,
         colors.mix(colors.COLOR_YELLOW, ink, 0.72),
         center_w=STORY_W,

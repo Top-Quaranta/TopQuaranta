@@ -115,5 +115,5 @@ def bricolage_xbold(size: int) -> ImageFont.FreeTypeFont:
 
 
 def instrument_italic(size: int) -> ImageFont.FreeTypeFont:
-    """Instrument Serif 400 italic — 'presenta' / 'tens el rànquing sencer'."""
+    """Instrument Serif 400 italic — 'presenta' / 'tens el top sencer'."""
     return _load(_resolve("instrument_italic"), size)

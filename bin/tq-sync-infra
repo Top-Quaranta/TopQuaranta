@@ -99,6 +99,24 @@ if [ "$systemd_unit_changed" = 1 ]; then
     sudo systemctl daemon-reload
 fi
 
+# ── operational scripts (/home/topquaranta/bin/) ────────────────────────
+# The `tq-*` ops scripts live in the repo (bin/) but RUN from
+# /home/topquaranta/bin/. They used to be copied by hand, so repo fixes
+# never reached prod — e.g. tq-recover's self-status report (added 2026-06-07)
+# sat unapplied and the watchdog showed a perennial stale `MISSING`. Sync
+# them here from the repo (source of truth) on drift, preserving the exec
+# bit. No sudo: /home/topquaranta/bin is owned by topquaranta. Idempotent.
+OPS_BIN_DIR=/home/topquaranta/bin
+for src in "$APP_DIR"/bin/tq-*; do
+    [ -f "$src" ] || continue
+    dst="$OPS_BIN_DIR/$(basename "$src")"
+    if ! cmp -s "$src" "$dst" 2>/dev/null; then
+        install -o topquaranta -g topquaranta -m 775 "$src" "$dst"
+        echo "  installed ops script $(basename "$src")"
+        anything_changed=1
+    fi
+done
+
 if [ "$anything_changed" = 0 ]; then
     echo "  no infra drift"
 fi

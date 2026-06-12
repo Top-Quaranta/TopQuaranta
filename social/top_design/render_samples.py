@@ -84,6 +84,14 @@ def main():
     ]
     TR.build_albums_mosaic(albums, SET).save(OUT / "09_mosaic_9.png")
     TR.build_albums_mosaic(albums[:3], SET).save(OUT / "10_mosaic_3.png")
+    # long titles: rich (2-line clamp) + dense (reserved inline) — artist always visible
+    el = entries(40)
+    long = "Títol Extremadament Llarg Que No Cap De Cap Manera Possible Avui"
+    for i in (0, 1, 10, 11, 12):
+        el[i]["canco_nom"] = long
+        el[i]["artista_nom"] = f"Artista Visible Amb Nom Llarg {i}"
+    TR.build_poster(el, SET, "ppcc").save(OUT / "12_cartell_titols_llargs.png")
+
     singles = [
         {
             "nom": f"Single {i}",

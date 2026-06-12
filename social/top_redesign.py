@@ -119,12 +119,12 @@ def build_poster(entries: list[dict], setmana, variant: str = "ppcc") -> Image.I
     R.draw_text(
         img,
         px0 + sm["pad_x"],
-        sm["y"] + sm["pad_y"],
+        0,
         label,
         f_sm,
         F._col(F.tokens()["brand"]["ink"]),
         tracking=sm["ls"],
-        cap_top=None,
+        ink_center=sm["y"] + sm["h"] / 2,
         composite=True,
     )
 
@@ -174,24 +174,29 @@ def build_poster(entries: list[dict], setmana, variant: str = "ppcc") -> Image.I
         tw_avail = col_right - tx - 40
         ft = F._font("bricolage", rc["title"]["size"], rc["title"]["weight"])
         fa = F._font("bricolage", rc["artist"]["size"], rc["artist"]["weight"])
-        lines = R.wrap(d, e.get("canco_nom", ""), ft, tw_avail)[:2]
+        lh, art_size = rc["title"]["line_h"], rc["artist"]["size"]
+        # title clamps to 2 lines (ellipsise the 2nd if it overflows); the artist
+        # is ALWAYS its own line below — the title/artist block is vertically
+        # centred on the row centre (thumb centre), so they never overlap.
+        all_lines = R.wrap(d, e.get("canco_nom", ""), ft, tw_avail)
+        lines = all_lines[:2]
+        if len(all_lines) > 2 and lines:
+            lines[-1] = F._ellipsize(img, lines[-1] + " " + all_lines[2], ft, tw_avail)
+        row_center = y - 4 + rc["thumb"]["size"] / 2  # thumb centre
+        block_h = len(lines) * lh + 6 + art_size
+        top = row_center - block_h / 2
         for li, ln in enumerate(lines):
             R.draw_text(
-                img,
-                tx,
-                y + rc["title"]["dy"] + li * rc["title"]["line_h"],
-                ln,
-                ft,
-                white,
-                composite=True,
+                img, tx, top + li * lh, ln, ft, white, ink_top=True, composite=True
             )
         R.draw_text(
             img,
             tx,
-            y + rc["artist"]["dy"],
+            top + len(lines) * lh + 6,
             F._ellipsize(img, e.get("artista_nom", ""), fa, tw_avail),
             fa,
             (255, 255, 255, 153),
+            ink_top=True,
             composite=True,
         )
         k, n = _move_for(e)
@@ -231,20 +236,23 @@ def build_poster(entries: list[dict], setmana, variant: str = "ppcc") -> Image.I
         ft = F._font("bricolage", de["title"]["size"], de["title"]["weight"])
         fa = F._font("bricolage", de["artist"]["size"], de["artist"]["weight"])
         ty = y + de["title"]["dy"]
-        # title, then dimmed artist inline after a thin space (single line run).
-        title = F._ellipsize(img, e.get("canco_nom", ""), ft, tw_avail)
+        gap = 8
+        # Title + dimmed artist inline on one line. RESERVE room for the artist
+        # so a long title ellipsises but the artist STAYS visible (deviates from
+        # the design's whole-run ellipsis, which could drop the artist).
+        artist = e.get("artista_nom", "")
+        art_w = min(d.textlength(artist, font=fa), tw_avail * 0.5)
+        title = F._ellipsize(img, e.get("canco_nom", ""), ft, tw_avail - art_w - gap)
         title_w = R.draw_text(img, tx, ty, title, ft, white, composite=True)
-        rem = tw_avail - title_w - 8
-        if rem > 30 and title == e.get("canco_nom", ""):
-            R.draw_text(
-                img,
-                tx + title_w + 8,
-                ty,
-                F._ellipsize(img, e.get("artista_nom", ""), fa, rem),
-                fa,
-                F._col(de["artist"]["color"]),
-                composite=True,
-            )
+        R.draw_text(
+            img,
+            tx + title_w + gap,
+            ty,
+            F._ellipsize(img, artist, fa, tw_avail - title_w - gap),
+            fa,
+            F._col(de["artist"]["color"]),
+            composite=True,
+        )
         k, n = _move_for(e)
         R.draw_move(
             img,
@@ -520,15 +528,16 @@ def build_top_cover(setmana, variant: str = "ppcc") -> Image.Image:
         f_p,
         F._col(F.tokens()["brand"]["ink"]),
         tracking=pl["ls"],
-        cap_top=pl["cy"] - 14,
+        ink_center=pl["cy"],
     )
     R.draw_text(
         img,
         x0 + pw + gap,
-        pl["cy"] - cad["size"] / 2 - 6,
+        0,
         cad_text,
         f_c,
         F._col(cad["color"]),
+        ink_center=pl["cy"],
     )
     return F._finish(img)
 
@@ -549,7 +558,7 @@ def build_top_list(rows, current, total, setmana, variant: str = "ppcc") -> Imag
     R.draw_text(img, et["x"] + elw, et["y"], rng, f_h, acc)
     sub = H_["subtitle"]
     wk = _wk(setmana)
-    sub_t = f"{name} · setmana {wk}" if name else f"el rànquing de la setmana {wk}"
+    sub_t = f"{name} · setmana {wk}" if name else f"el top de la setmana {wk}"
     R.draw_text(
         img,
         sub["x"],
@@ -581,14 +590,13 @@ def build_top_list(rows, current, total, setmana, variant: str = "ppcc") -> Imag
         R.draw_text(
             img,
             nm["x"] + nm["w"] / 2,
-            y + rw["h"] / 2,
+            0,
             str(e.get("posicio", i + 1)),
             f_n,
             acc if is1 else white,
             align="center",
-            cap_top=None,
+            ink_center=y + rw["h"] / 2,
             composite=True,
-            ink_top=False,
         )
         tx = rw["thumb"]["x"]
         if chip_on:

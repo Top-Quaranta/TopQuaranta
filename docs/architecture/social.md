@@ -289,6 +289,13 @@ Design "TOP" handoff). Four builders, all 1080×1350:
 - **`build_albums_mosaic`** — the new-albums **mosaic** (single image, Tuesday),
   up to 9 covers (CSS auto-row heights + vertical centring).
 
+**Vocabulary:** the TOP renders never use the word "rànquing" (vetat) — "el top
+sencer de la setmana", "EL TOP DE LA SETMANA", "el top de la setmana N".
+**Fix pins (2026-06-12):** ink-anchored ±8 px against the artboards — EL TOP/40
+gap, list numerals + SETMANA pill ink-centred (`render_core.draw_text(ink_center=)`),
+and no title↔artist overlap (rich = 2-line clamp + artist stacked & centred;
+dense = title ellipsised but artist always kept).
+
 **Movement** is one primitive: `render_core.draw_move` (up/down/new/re/eq;
 semantic colours, palette-independent). `parse_move` derives it from real data;
 re-entry ("RE") needs `posicio_anterior is None` AND a prior chart appearance —

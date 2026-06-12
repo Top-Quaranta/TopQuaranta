@@ -33,7 +33,7 @@
     "footer": {
       "rule_y": 1262, "rule_color": "@accent",
       "url": { "font": "instrument", "size": 30, "x": 56, "y": 1278, "color": "rgba(255, 255, 255, 0.62)" },
-      "tag": { "font": "anton", "size": 22, "ls": 3, "right": 1024, "y": 1281, "text": "EL RÀNQUING DE LA SETMANA", "color": "rgba(255, 255, 255, 0.42)" }
+      "tag": { "font": "anton", "size": 22, "ls": 3, "right": 1024, "y": 1281, "text": "EL TOP DE LA SETMANA", "color": "rgba(255, 255, 255, 0.42)" }
     }
   },
   "mosaic": {
@@ -60,9 +60,9 @@
     "grain": 0.14,
     "gradient": { "extent": [1.30, 0.80], "at": [0.5, 0.0], "stop": 1.0 },
     "logo_h": 48, "logo_y": 88,
-    "subtitle": { "font": "instrument", "size": 48, "y": 166, "text": "el rànquing sencer de la setmana", "color": "rgb(243, 236, 221)" },
-    "el_top": { "font": "anton", "size": 124, "cap_top": 506 },
-    "forty": { "font": "anton", "size": 380, "ls": 1.9, "cap_top": 632 },
+    "subtitle": { "font": "instrument", "size": 48, "y": 166, "text": "el top sencer de la setmana", "color": "rgb(243, 236, 221)" },
+    "el_top": { "font": "anton", "size": 124, "cap_top": 488 },
+    "forty": { "font": "anton", "size": 380, "ls": 1.9, "cap_top": 570 },
     "star": { "cx": 540, "cy": 1158, "outer": 17, "inner_ratio": 0.42 },
     "rule": { "y": 1157, "left": [80, 510], "right": [570, 1000], "color": "rgba(255, 255, 255, 0.34)" },
     "pill": { "font": "anton", "size": 38, "ls": 2, "pad_x": 20, "pad_y": 7, "h": 72, "cy": 1234 },

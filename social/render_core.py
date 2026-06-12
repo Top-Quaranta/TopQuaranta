@@ -81,6 +81,7 @@ def draw_text(
     tracking=0.0,
     cap_top=None,
     ink_top=False,
+    ink_center=None,
     glyphwise=None,
     composite=True,
 ) -> float:
@@ -88,6 +89,8 @@ def draw_text(
 
     Anchoring of `y`:
       * `cap_top` given → the glyph CAP-TOP ink (capital H) lands at `cap_top`.
+      * `ink_center` given → this text's INK is vertically centred on `ink_center`
+        (the ink bbox midpoint lands there — for numerals/pills inside a box).
       * `ink_top=True` → this text's bbox-top ink lands at `y`.
       * otherwise → `y` is the em-box top ('la').
     `align`: x is the left / centre / right edge. `tracking`: px after each glyph.
@@ -110,6 +113,9 @@ def draw_text(
         left = x
     if cap_top is not None:
         draw_y = cap_top - cap_offset(font)
+    elif ink_center is not None:
+        b = probe.textbbox((0, 0), text, font=font)
+        draw_y = ink_center - (b[1] + b[3]) / 2
     elif ink_top:
         draw_y = y - probe.textbbox((0, 0), text, font=font)[1]
     else:

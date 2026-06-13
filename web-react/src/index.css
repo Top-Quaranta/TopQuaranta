@@ -577,3 +577,8 @@ body[data-theme="yellow"] {
 .rd-consent { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.72); }
 .rd-consent input { margin-top: 2px; flex-shrink: 0; }
 .rd-consent a { color: #fff; }
+
+/* ── Legal (/legal/*) ── */
+.rd-legal-card { padding: clamp(24px, 3vw, 36px); max-width: 820px; }
+.rd-legal-prose { color: rgba(255,255,255,0.80); font-size: 15px; line-height: 1.7; }
+.rd-legal-prose a:hover { color: #fff; }

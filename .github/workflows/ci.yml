@@ -13,9 +13,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, redisseny-tail]
   pull_request:
-    branches: [main]
+    branches: [main, redisseny-tail]
 
 jobs:
   tests:

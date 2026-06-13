@@ -18,8 +18,10 @@ from music.constants import DIES_CADUCITAT, TERRITORI_NOMS, TERRITORIS_PPCC_SOUR
 from music.models import Canco
 from ranking.algorisme import (
     _age_factor,
+    _apply_soft_cap,
     _compute_weekly_plays,
     _past_top_factor,
+    _soft_cap_knee,
     territoris_amb_top_propi,
 )
 from ranking.models import (
@@ -141,18 +143,55 @@ def _setmanes_al_top(canco, territori, *, limit=5):
     ]
 
 
+def _derive_plays_eff(rp):
+    """Recover the *effective* plays the real calc fed into the score for a
+    persisted TopProvisional row, plus whether the soft cap touched it.
+
+    We do NOT recompute the knee here. The knee is time-dependent (median
+    of the trailing 10 weeks of finalized tops) and drifts after the row is
+    persisted, so recomputing it now would no longer reconcile with the
+    stored score. Instead we invert the stored score:
+
+        score = plays_eff · age · past_top · monopoli      (algorisme.py)
+        ⇒ plays_eff = score / (age · past_top · monopoli)
+
+    All four are persisted on the row, so this reproduces exactly what the
+    real calc used. `soft_cap_aplicat` is True when the effective plays sit
+    meaningfully below the raw `escoltes_setmanals` (a small relative margin
+    absorbs score rounding so uncapped rows are never falsely flagged).
+    """
+    plays_raw = rp.escoltes_setmanals or 0
+    age = float(rp.age_factor) if rp.age_factor is not None else 1.0
+    past_top = float(rp.past_top_factor) if rp.past_top_factor is not None else 1.0
+    monopoli = float(rp.monopoli_factor) if rp.monopoli_factor is not None else 1.0
+    denom = age * past_top * monopoli
+    if plays_raw <= 0 or denom <= 0:
+        return plays_raw, False
+    plays_eff = float(rp.score_setmanal) / denom
+    soft_cap_aplicat = (plays_raw - plays_eff) > max(1.0, 0.005 * plays_raw)
+    return plays_eff, soft_cap_aplicat
+
+
 def _entry_from_provisional(rp):
     """Shape one TopProvisional row for the breakdown payload.
 
     A row in TopProvisional implies the algorithm successfully
     computed `weekly_plays` (>0), so `senyal_disponible` is True by
     construction here.
+
+    `score_final` is the persisted `score_setmanal`, kept as-is. The
+    raw→effective plays split shown to the user is derived from that same
+    score (see `_derive_plays_eff`) so it always reconciles.
     """
+    plays_raw = rp.escoltes_setmanals or 0
+    plays_eff, soft_cap_aplicat = _derive_plays_eff(rp)
     return {
         "territori": rp.territori,
         "nom_territori": _TERRITORI_DISPLAY.get(rp.territori, rp.territori),
         "posicio": rp.posicio,
-        "escoltes_setmanals": rp.escoltes_setmanals or 0,
+        "escoltes_setmanals": plays_raw,
+        "weekly_plays_eff": int(round(plays_eff)),
+        "soft_cap_aplicat": soft_cap_aplicat,
         "senyal_disponible": True,
         "age_factor": rp.age_factor,
         "past_top_penalty_pct": _factor_to_pct(rp.past_top_factor),
@@ -237,12 +276,20 @@ def _theoretical_entry(canco, territori, cfg):
         ).values_list("posicio", flat=True)
     )
     past_top = _past_top_factor(prior, float(cfg.coeficient_penalitzacio_top))
-    base_score = weekly_plays * age * past_top
+    # Apply the SAME per-territori outlier knee + log compression the real
+    # calc uses (ranking/algorisme.py), before the base score. Without this
+    # an outlier's theoretical score reads HIGHER than its real one.
+    knee = _soft_cap_knee(territori, cfg, today)
+    plays_eff = _apply_soft_cap(float(weekly_plays), knee)
+    soft_cap_aplicat = plays_eff < weekly_plays
+    base_score = plays_eff * age * past_top
     return {
         "territori": territori,
         "nom_territori": _TERRITORI_DISPLAY.get(territori, territori),
         "posicio": None,
         "escoltes_setmanals": int(weekly_plays),
+        "weekly_plays_eff": int(round(plays_eff)),
+        "soft_cap_aplicat": soft_cap_aplicat,
         "senyal_disponible": senyal_disponible,
         "metode_calcul": metode_calcul,
         "age_factor": round(age, 4),
@@ -306,6 +353,10 @@ def canco_top_breakdown(request: Request, slug: str) -> Response:
     )
     in_top_territoris = {rp.territori for rp in provisional_rows}
 
+    # Loaded once for the theoretical entries (knee recompute). The
+    # persisted rows derive their effective plays from the stored score.
+    cfg = ConfiguracioGlobal.load()
+
     entries = []
     for rp in provisional_rows:
         e = _entry_from_provisional(rp)
@@ -314,7 +365,6 @@ def canco_top_breakdown(request: Request, slug: str) -> Response:
         entries.append(e)
 
     if elevated:
-        cfg = ConfiguracioGlobal.load()
         for t in _eligible_territoris_for(canco):
             if t in in_top_territoris:
                 continue

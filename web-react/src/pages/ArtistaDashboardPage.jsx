@@ -115,9 +115,9 @@ function IndicatorRow({ ind, onCta }) {
         </Badge>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm">{ind.label}</p>
-          <p className="text-sm text-tq-ink/70 mt-0.5">{ind.message}</p>
+          <p className="text-sm text-white/70 mt-0.5">{ind.message}</p>
           {INDICATOR_HELP[ind.key] && (
-            <p className="text-xs text-tq-ink/50 mt-1 italic">
+            <p className="text-xs text-white/50 mt-1 italic">
               {INDICATOR_HELP[ind.key]}
             </p>
           )}
@@ -170,16 +170,16 @@ function SollicitudResumCard({ slug, refreshKey }) {
             {ESTAT_LABEL_SR[u.estat] || u.estat}
           </Badge>
         </div>
-        <p className="text-xs text-tq-ink/70">
+        <p className="text-xs text-white/70">
           {u.n_pendents} pendent{u.n_pendents === 1 ? '' : 's'} +{' '}
           {u.n_rebutjades} rebutjada{u.n_rebutjades === 1 ? '' : 's'}
           {data.n_total > 1 && ` · ${data.n_total} sol·licituds en total`}
         </p>
         {u.estat === 'resolta' && (
-          <div className="text-xs text-tq-ink/70">
+          <div className="text-xs text-white/70">
             Resolta el {fmt(u.resolt_at)}.
             {u.nota_resolucio && (
-              <span className="block mt-1 italic text-tq-ink/80">
+              <span className="block mt-1 italic text-white/80">
                 «{u.nota_resolucio}»
               </span>
             )}
@@ -243,7 +243,7 @@ function EstatTab({ slug, onSwitchTab, sollicitudRefreshKey }) {
       <Card accent={score === 100 ? 'green' : score >= 60 ? 'yellow' : 'red'}>
         <div className="p-5 flex items-center gap-5">
           <div className="text-5xl font-bold font-display">{score}%</div>
-          <div className="text-sm text-tq-ink/70">
+          <div className="text-sm text-white/70">
             {score === 100 ? (
               <span>Perfil net. Cap incidència detectada.</span>
             ) : (
@@ -300,7 +300,7 @@ function EstatTab({ slug, onSwitchTab, sollicitudRefreshKey }) {
 
 
 const inputClass =
-  'w-full mt-1 px-3 py-2 rounded-md bg-white text-tq-ink text-sm border border-gray-300 ' +
+  'w-full mt-1 px-3 py-2 rounded-md bg-white/[0.07] text-white text-sm border border-white/15 ' +
   'focus:outline-none focus:ring-2 focus:ring-tq-yellow'
 
 function FieldError({ msg }) {
@@ -333,7 +333,7 @@ function ImageUploader({ artistaPk, current, onChange }) {
 
   return (
     <div className="flex items-start gap-4">
-      <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+      <div className="w-24 h-24 rounded-lg overflow-hidden bg-white/[0.06] flex items-center justify-center text-xs text-white/55">
         {current ? (
           <img src={current} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -353,7 +353,7 @@ function ImageUploader({ artistaPk, current, onChange }) {
             className="hidden"
           />
         </label>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-white/55 mt-1">
           Quadrada, mínim 400×400. Es retallarà a 800×800 WebP.
         </p>
         {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
@@ -400,7 +400,7 @@ function DeezerSection({ slug, items, onChange }) {
         {items.map(d => (
           <li
             key={d.pk}
-            className="flex items-center gap-3 text-sm bg-gray-50 px-3 py-2 rounded"
+            className="flex items-center gap-3 text-sm bg-white/[0.04] px-3 py-2 rounded"
           >
             <span className="font-mono">{d.deezer_id}</span>
             {d.principal && <Badge variant="yellow">principal</Badge>}
@@ -436,7 +436,7 @@ function DeezerSection({ slug, items, onChange }) {
               setAdding(false)
               setErr(null)
             }}
-            className="text-sm text-gray-500"
+            className="text-sm text-white/55"
           >
             Cancel·lar
           </button>
@@ -521,7 +521,7 @@ function LastfmAliasSection({ slug, items, onChange }) {
   return (
     <section id="lastfm-aliases" className="space-y-3">
       <h3 className="font-semibold text-sm">Last.fm aliases</h3>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-white/55">
         El <em>prioritari</em> és el nom canònic que apareix al públic;
         la resta d'aliases es continuen sumant al senyal de scrobbles.
       </p>
@@ -529,7 +529,7 @@ function LastfmAliasSection({ slug, items, onChange }) {
         {items.map(al => (
           <li
             key={al.pk}
-            className="flex items-center gap-3 text-sm bg-gray-50 px-3 py-2 rounded"
+            className="flex items-center gap-3 text-sm bg-white/[0.04] px-3 py-2 rounded"
           >
             <span>{al.nom}</span>
             {al.prioritari ? (
@@ -582,7 +582,7 @@ function LastfmAliasSection({ slug, items, onChange }) {
               setAdding(false)
               setErr(null)
             }}
-            className="text-sm text-gray-500"
+            className="text-sm text-white/55"
           >
             Cancel·lar
           </button>
@@ -661,12 +661,12 @@ function LocalitatSection({ slug, items, onChange }) {
         {items.map(loc => (
           <li
             key={loc.pk}
-            className="flex items-center gap-3 text-sm bg-gray-50 px-3 py-2 rounded"
+            className="flex items-center gap-3 text-sm bg-white/[0.04] px-3 py-2 rounded"
           >
             <span>{loc.nom}</span>
             {loc.territori && <Badge variant="default">{loc.territori}</Badge>}
             {loc.comarca && (
-              <span className="text-xs text-gray-500">{loc.comarca}</span>
+              <span className="text-xs text-white/55">{loc.comarca}</span>
             )}
             <button
               type="button"
@@ -687,7 +687,7 @@ function LocalitatSection({ slug, items, onChange }) {
             placeholder="Municipi PK (de la BD)"
             className={inputClass + ' mt-0'}
           />
-          <div className="text-xs text-gray-500">o</div>
+          <div className="text-xs text-white/55">o</div>
           <input
             type="text"
             value={manual}
@@ -708,7 +708,7 @@ function LocalitatSection({ slug, items, onChange }) {
                 setAdding(false)
                 setErr(null)
               }}
-              className="text-sm text-gray-500"
+              className="text-sm text-white/55"
             >
               Cancel·lar
             </button>
@@ -809,8 +809,8 @@ function EditarTab({ slug, data, onReload }) {
   return (
     <div className="space-y-6 mt-6">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <fieldset id="imatge" className="bg-white text-tq-ink rounded-lg p-5 space-y-4">
-          <legend className="font-semibold bg-white px-2">Imatge</legend>
+        <fieldset id="imatge" className="rd-glass p-5 space-y-4">
+          <legend className="font-semibold text-white px-2">Imatge</legend>
           <ImageUploader
             artistaPk={data.pk}
             current={edits.imatge_url}
@@ -819,8 +819,8 @@ function EditarTab({ slug, data, onReload }) {
           <FieldError msg={errors.imatge_url} />
         </fieldset>
 
-        <fieldset className="bg-white text-tq-ink rounded-lg p-5 space-y-4">
-          <legend className="font-semibold bg-white px-2">Sobre l'artista</legend>
+        <fieldset className="rd-glass p-5 space-y-4">
+          <legend className="font-semibold text-white px-2">Sobre l'artista</legend>
 
           <label id="bio" className="block text-xs font-semibold">
             Biografia
@@ -844,7 +844,7 @@ function EditarTab({ slug, data, onReload }) {
               placeholder="ex. pop, indie, hip-hop…"
             />
             <FieldError msg={errors.genere} />
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-white/55 mt-1">
               Camp lliure. Un classificador intern el normalitzarà a un
               gènere canònic en el següent cicle (24&nbsp;h).
             </p>
@@ -868,11 +868,11 @@ function EditarTab({ slug, data, onReload }) {
           </label>
         </fieldset>
 
-        <fieldset id="socials" className="bg-white text-tq-ink rounded-lg p-5">
-          <legend className="font-semibold bg-white px-2">
+        <fieldset id="socials" className="rd-glass p-5">
+          <legend className="font-semibold text-white px-2">
             Xarxes i enllaços
           </legend>
-          <p className="text-xs text-gray-500 mt-1 mb-3">
+          <p className="text-xs text-white/55 mt-1 mb-3">
             URLs completes (https://…). Deixa-ho buit per esborrar.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -907,19 +907,19 @@ function EditarTab({ slug, data, onReload }) {
 
       {/* M2M sections live outside the form so their own POST/DELETE
           calls don't interact with the main PATCH. */}
-      <div className="bg-white text-tq-ink rounded-lg p-5 space-y-6">
+      <div className="rd-glass p-5 space-y-6">
         <DeezerSection
           slug={slug}
           items={data.deezer_ids}
           onChange={onReload}
         />
-        <hr className="border-gray-200" />
+        <hr className="border-white/10" />
         <LastfmAliasSection
           slug={slug}
           items={data.lastfm_aliases}
           onChange={onReload}
         />
-        <hr className="border-gray-200" />
+        <hr className="border-white/10" />
         <LocalitatSection
           slug={slug}
           items={data.localitats}
@@ -1068,7 +1068,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
       <div className="space-y-4 mt-6">
         {feedback && <Alert tone={feedback.tone}>{feedback.msg}</Alert>}
         <Card>
-          <div className="p-6 text-center text-tq-ink/70">
+          <div className="p-6 text-center text-white/70">
             Cap cançó al sistema encara.
           </div>
         </Card>
@@ -1092,7 +1092,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
                   `${selectedRebutjades.size} rebutjada${selectedRebutjades.size === 1 ? '' : 's'}`}
             </p>
             {cooldownActive && (
-              <p className="text-xs text-tq-ink/60 mt-1">
+              <p className="text-xs text-white/60 mt-1">
                 Cooldown actiu fins el {fmtDate(data.cooldown_until)} — pots
                 fer una nova sol·licitud cada 7&nbsp;dies.
               </p>
@@ -1141,7 +1141,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
         </summary>
         <Card>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-tq-ink/60">
+            <thead className="text-left text-xs text-white/60">
               <tr>
                 <th className="p-3 w-8"></th>
                 <th className="p-3">Cançó</th>
@@ -1153,7 +1153,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
             <tbody>
               {pendents.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-center text-tq-ink/60">
+                  <td colSpan={5} className="p-6 text-center text-white/60">
                     Cap cançó pendent.
                   </td>
                 </tr>
@@ -1169,8 +1169,8 @@ function CanconsTab({ slug, onSollicitudCreated }) {
                       />
                     </td>
                     <td className="p-3">{c.nom}</td>
-                    <td className="p-3 text-tq-ink/70">{c.album_nom || '—'}</td>
-                    <td className="p-3 text-tq-ink/70">
+                    <td className="p-3 text-white/70">{c.album_nom || '—'}</td>
+                    <td className="p-3 text-white/70">
                       {fmtDate(c.data_llancament)}
                     </td>
                     <td className="p-3">
@@ -1211,7 +1211,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
         </summary>
         <Card>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-tq-ink/60">
+            <thead className="text-left text-xs text-white/60">
               <tr>
                 <th className="p-3 w-8"></th>
                 <th className="p-3">Cançó</th>
@@ -1223,7 +1223,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
             <tbody>
               {rebutjades.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-center text-tq-ink/60">
+                  <td colSpan={5} className="p-6 text-center text-white/60">
                     Cap rebuig recent.
                   </td>
                 </tr>
@@ -1239,8 +1239,8 @@ function CanconsTab({ slug, onSollicitudCreated }) {
                       />
                     </td>
                     <td className="p-3">{r.canco_nom}</td>
-                    <td className="p-3 text-tq-ink/70">{r.album_nom || '—'}</td>
-                    <td className="p-3 text-tq-ink/70">
+                    <td className="p-3 text-white/70">{r.album_nom || '—'}</td>
+                    <td className="p-3 text-white/70">
                       {fmtDate(r.data_rebuig)}
                     </td>
                     <td className="p-3">
@@ -1277,7 +1277,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
         </summary>
         <Card>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-tq-ink/60">
+            <thead className="text-left text-xs text-white/60">
               <tr>
                 <th className="p-3">Cançó</th>
                 <th className="p-3">Àlbum</th>
@@ -1288,7 +1288,7 @@ function CanconsTab({ slug, onSollicitudCreated }) {
             <tbody>
               {verificades.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-6 text-center text-tq-ink/60">
+                  <td colSpan={4} className="p-6 text-center text-white/60">
                     Cap cançó verificada encara.
                   </td>
                 </tr>
@@ -1296,8 +1296,8 @@ function CanconsTab({ slug, onSollicitudCreated }) {
                 verificades.map(c => (
                   <tr key={c.pk} className="border-t border-gray-100">
                     <td className="p-3">{c.nom}</td>
-                    <td className="p-3 text-tq-ink/70">{c.album_nom || '—'}</td>
-                    <td className="p-3 text-tq-ink/70">
+                    <td className="p-3 text-white/70">{c.album_nom || '—'}</td>
+                    <td className="p-3 text-white/70">
                       {fmtDate(c.data_llancament)}
                     </td>
                     <td className="p-3">

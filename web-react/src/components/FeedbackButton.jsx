@@ -119,7 +119,7 @@ export default function FeedbackButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
           role="dialog"
           aria-modal="true"
           onClick={close}
@@ -174,7 +174,7 @@ export default function FeedbackButton({
                   maxLength={5000}
                   value={missatge}
                   onChange={e => setMissatge(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md bg-white text-tq-ink text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-tq-yellow resize-y"
+                  className="w-full px-3 py-2 rounded-md bg-white/[0.07] text-white text-sm border border-white/15 placeholder-white/40 focus:outline-none focus:border-tq-yellow resize-y"
                   placeholder="Què cal corregir?"
                 />
                 {error && <p className="text-xs text-red-300">{error}</p>}

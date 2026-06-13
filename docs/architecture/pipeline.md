@@ -191,8 +191,8 @@ worst case at ~27 s/track on CPU, finishing well before the 06:00
 signal step). Backfill of the historical ~6.7k catalogue completed
 2026-04-25 — from now on the daily intake is <50 tracks/night.
 
-See `scripts/model_comparison/resultats.md` for the eval numbers
-that justified this integration.
+See ADR-0014 (`docs/decisions/0014-whisper-lid-eval.md`) for the eval
+numbers that justified this integration.
 
 ### 3.6 `obtenir_metadata_musicbrainz` — hourly at minute 30
 ```bash

@@ -96,13 +96,13 @@ export default function ComptePerfilPage() {
         <h1 className="text-2xl font-bold font-display ml-2">Editar perfil</h1>
       </header>
 
-      <form onSubmit={handleSubmit} className="bg-white text-tq-ink rounded-lg p-5 shadow-md space-y-4">
+      <form onSubmit={handleSubmit} className="rd-glass p-5 space-y-4">
         <Field label="Correu electrònic" error={errors.email}>
           <input
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+            className="w-full px-3 py-1.5 border border-white/15 bg-white/[0.07] text-white rounded-md text-sm"
             required
           />
         </Field>
@@ -112,24 +112,24 @@ export default function ComptePerfilPage() {
             type="text"
             value={username}
             onChange={e => setUsername(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+            className="w-full px-3 py-1.5 border border-white/15 bg-white/[0.07] text-white rounded-md text-sm"
             required
           />
-          <p className="text-xs text-gray-500 mt-1">Visible al teu perfil públic quan gestiones un artista.</p>
+          <p className="text-xs text-white/55 mt-1">Visible al teu perfil públic quan gestiones un artista.</p>
         </Field>
 
-        <div className="border-t border-gray-200 pt-4 mt-2">
+        <div className="border-t border-white/10 pt-4 mt-2">
           <p className="text-sm font-semibold mb-2">Newsletter</p>
           <label className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={volNewsletter}
               onChange={e => setVolNewsletter(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-tq-ink focus:ring-tq-yellow"
+              className="mt-0.5 h-4 w-4 rounded border-white/30 focus:ring-tq-yellow"
             />
-            <span className="text-sm text-tq-ink">
+            <span className="text-sm text-white">
               Vull rebre el resum setmanal del Top per correu electrònic.
-              <span className="block text-xs text-gray-500 mt-0.5">
+              <span className="block text-xs text-white/55 mt-0.5">
                 Cada dissabte enviem el Top de la setmana. Pots desactivar-ho aquí mateix
                 en qualsevol moment.
               </span>
@@ -137,16 +137,16 @@ export default function ComptePerfilPage() {
           </label>
         </div>
 
-        <div className="border-t border-gray-200 pt-4 mt-2">
+        <div className="border-t border-white/10 pt-4 mt-2">
           <p className="text-sm font-semibold mb-2">Canviar contrasenya</p>
-          <p className="text-xs text-gray-500 mb-3">Deixa buit si no vols canviar-la.</p>
+          <p className="text-xs text-white/55 mb-3">Deixa buit si no vols canviar-la.</p>
 
           <Field label="Contrasenya actual" error={errors.current_password}>
             <input
               type="password"
               value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-1.5 border border-white/15 bg-white/[0.07] text-white rounded-md text-sm"
               autoComplete="current-password"
             />
           </Field>
@@ -155,7 +155,7 @@ export default function ComptePerfilPage() {
               type="password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
-              className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-1.5 border border-white/15 bg-white/[0.07] text-white rounded-md text-sm"
               autoComplete="new-password"
             />
           </Field>
@@ -164,7 +164,7 @@ export default function ComptePerfilPage() {
               type="password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-1.5 border border-white/15 bg-white/[0.07] text-white rounded-md text-sm"
               autoComplete="new-password"
             />
           </Field>

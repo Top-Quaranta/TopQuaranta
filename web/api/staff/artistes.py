@@ -97,6 +97,14 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(aprovat=True)
     elif aprovat == "0":
         qs = qs.filter(aprovat=False)
+    # Descartat is the terminal state (aprovat=False AND pendent_review=False;
+    # kept only for FK integrity). It must never flood the list when the
+    # "actius" filter is lifted to hunt duplicates — staff needs pendents +
+    # approved, not the ~10k descartats. Exclude it by default; reachable
+    # only via the explicit opt-in `inclou_descartats=1`. Does NOT touch
+    # pendents (pendent_review=True) nor approved.
+    if request.GET.get("inclou_descartats") != "1":
+        qs = qs.exclude(aprovat=False, pendent_review=False)
     deezer = request.GET.get("deezer", "")
     if deezer == "si":
         qs = qs.filter(deezer_ids__isnull=False)

@@ -1,257 +1,209 @@
 /**
- * ArtistaPage — public artist profile.
+ * ArtistaPage — public artist profile (/artista/<slug>), redisseny web.
  *
- * Reads /api/v1/artistes/<slug>/ and renders:
- *   - Header card (name, territories, location, Deezer link)
- *   - Social links row (when any)
- *   - Last 10 weeks in the ranking (grouped by week)
- *   - Verified discography (albums with cover + track count)
+ * Dark hero (territory glow) with the initials/photo tile, Anton name,
+ * territory line, derived KPI badges (songs at top / best position /
+ * albums), streaming links and the "Sóc aquest artista" CTA. Body bands:
+ * weeks in the top, discography, collaborations — glass cards.
  *
- * Unapproved artists ship a minimal "under review" page.
+ * Reads /api/v1/artistes/<slug>/ (shape unchanged). KPIs are DERIVED from
+ * the real historial/discografia, not invented. URLs + ExternalListenLinks
+ * + FeedbackContext + the gestió CTA target are conserved.
  */
 import { Link, useParams } from 'react-router-dom'
 import { SeoHead } from '../lib/seoHead'
-import Alert from '../components/ui/Alert'
 import { albumUrl, cancoUrl } from '../lib/urls'
 import { deezerImg } from '../lib/img'
-import FeedbackButton from '../components/FeedbackButton'
 import { useFeedbackTarget } from '../context/FeedbackContext'
 import ExternalListenLinks from '../components/ExternalListenLinks'
 import { useAuth } from '../context/AuthContext'
 import useApi from '../hooks/useApi'
-import { TERRITORI_NOM } from '../components/editorial'
+import { Band, Glow, Glass, Kicker, Crit, Numeral, TerrLogo, RdCover } from '../components/rd/primitives'
+import { terr, shade } from '../components/rd/terr'
+
+function Kpi({ n, label }) {
+  return (
+    <span className="rd-cc-pos rd-glass">
+      <Numeral n={n} size={24} color="var(--color-tq-yellow)" />
+      <em>{label}</em>
+    </span>
+  )
+}
 
 export default function ArtistaPage() {
   const { slug } = useParams()
   const { profile } = useAuth()
-  const { data, error, loading } = useApi(`/artistes/${slug}/`, {
+  const { data, error, loading, reload } = useApi(`/artistes/${slug}/`, {
     mapError: (e) => (e.status === 404 ? 'Artista no trobat.' : null),
   })
 
-  // Publish the page target so the shared footer "Corregir" button
-  // addresses this artist. Must run unconditionally before any early
-  // returns so the hook call order stays stable across renders.
   useFeedbackTarget(
-    data
-      ? { targetType: 'artista', targetPk: data.pk, targetSlug: data.slug, targetLabel: data.nom }
-      : null,
+    data ? { targetType: 'artista', targetPk: data.pk, targetSlug: data.slug, targetLabel: data.nom } : null,
   )
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div className="h-28 bg-white/5 rounded-lg animate-pulse" />
-        <div className="h-48 bg-white/5 rounded-lg animate-pulse" />
-      </div>
+      <Band tone="top-hero">
+        <div className="rd-cc-hero">
+          <div className="rd-cc-tile" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <div className="flex-1"><div style={{ height: 48, width: '60%', background: 'rgba(255,255,255,0.06)', borderRadius: 8 }} /></div>
+        </div>
+      </Band>
     )
   }
-
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <Alert tone="danger">{error}</Alert>
-        <p className="mt-4">
-          <Link to="/artistes" className="text-tq-yellow">← Torna al directori</Link>
-        </p>
-      </div>
+      <Band tone="ink2">
+        <Glass className="p-6 text-center max-w-xl mx-auto">
+          <p className="text-white/80">{error}</p>
+          <div className="flex gap-3 justify-center mt-4">
+            <button type="button" onClick={reload} className="rd-btn rd-btn--ghost">Reintentar</button>
+            <Link to="/artistes" className="rd-btn rd-btn--hot">← Torna al directori</Link>
+          </div>
+        </Glass>
+      </Band>
     )
   }
-
   if (!data) return null
 
-  const localitatText = (() => {
-    const loc = data.localitats?.[0]
-    if (!loc) return null
-    if (loc.municipi) {
-      return `${loc.municipi.nom}, ${loc.municipi.comarca} (${loc.municipi.territori})`
-    }
-    return loc.manual
-  })()
+  const code = data.territoris?.[0]
+  const t = code ? terr(code) : terr('ALT')
+  const loc = data.localitats?.[0]
+  const localitatText = loc ? (loc.municipi ? `${loc.municipi.nom}, ${loc.municipi.comarca}` : loc.manual) : null
+
+  const hist = data.historial || []
+  const allEntries = hist.flatMap(w => w.entries || [])
+  const bestPos = allEntries.length ? Math.min(...allEntries.map(e => e.posicio)) : null
+  const nTop = new Set(allEntries.map(e => e.canco_slug)).size
+  const nAlbums = (data.discografia || []).length
+
+  const isManager = profile?.verified_artist_pks?.includes(data.pk)
 
   return (
-    <article className="max-w-4xl mx-auto text-white space-y-6">
+    <>
       <SeoHead entity="artista" slug={slug} />
-      {/* Header card */}
-      <header className="bg-white text-tq-ink rounded-lg p-6 shadow-md flex flex-col sm:flex-row gap-6">
-        {data.imatge_url ? (
-          <img
-            src={deezerImg(data.imatge_url, 500)}
-            alt=""
-            className="w-full sm:w-48 h-48 object-cover rounded-md shrink-0"
-          />
-        ) : (
-          <div className="w-full sm:w-48 h-48 bg-gray-100 rounded-md shrink-0 flex items-center justify-center font-display font-bold text-5xl text-gray-400">
-            {data.nom?.[0] || '?'}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-        <h1 className="text-3xl font-bold font-display">{data.nom}</h1>
-        <div className="flex flex-wrap gap-2 mt-2 text-sm text-gray-600">
-          {data.territoris?.length > 0 && (
-            <span>{data.territoris.map(c => TERRITORI_NOM[c] || c).join(' · ')}</span>
-          )}
-          {localitatText && <span>· {localitatText}</span>}
-        </div>
-        {data.genere && (
-          <p className="text-xs text-gray-500 mt-2 uppercase tracking-wide">{data.genere}</p>
-        )}
-        {!data.aprovat && (
-          <p className="mt-3 inline-block px-2 py-0.5 bg-tq-yellow-soft text-tq-yellow-deep text-xs font-semibold rounded">
-            Pendent de revisió
-          </p>
-        )}
 
-        {/* Streaming links (replace the old single Deezer anchor). */}
-        <ExternalListenLinks
-          className="mt-4"
-          kind="artista"
-          artist={data.nom}
-          deezerId={data.deezer_ids?.[0]}
-        />
-
-        {/* Social links + self-claim CTA */}
-        <div className="flex flex-wrap gap-3 mt-3 text-sm">
-          {Object.entries(data.social || {}).map(([key, url]) => (
-            <a
-              key={key}
-              href={url}
-              target="_blank" rel="noopener"
-              className="underline text-tq-ink hover:text-tq-yellow-deep capitalize"
-            >
-              {key.replace(/_url$/, '').replace(/_/g, ' ')}
-            </a>
-          ))}
-          {/* CTA: request to manage this artist. Goes to /compte/artista/gestio
-              pre-filled. Private — still works for anonymous users because
-              AuthRoute on the target page will redirect to login.
-              When the visitor is already a verified manager of this
-              artist (per /api/v1/auth/me/'s `verified_artist_pks`), we
-              swap the request CTA for a direct shortcut to the editor. */}
-          {profile?.verified_artist_pks?.includes(data.pk) ? (
-            <Link
-              to={`/compte/artista/${data.pk}/editar`}
-              className="ml-auto text-xs px-2.5 py-1 rounded-md bg-tq-yellow text-tq-ink font-semibold hover:bg-tq-yellow-deep hover:text-white"
-            >
-              Editar perfil
-            </Link>
+      <Band tone="top-hero">
+        <Glow variant="a" color={t.deep} />
+        <div className="rd-cc-hero">
+          {data.imatge_url ? (
+            <img src={deezerImg(data.imatge_url, 500)} alt="" className="rd-cc-tile" style={{ objectFit: 'cover' }} />
           ) : (
-            <Link
-              to={`/compte/artista/gestio?artista=${data.slug}`}
-              className="ml-auto text-xs px-2.5 py-1 rounded-md bg-tq-ink text-tq-yellow font-semibold hover:bg-tq-ink/90"
-            >
-              Sóc aquest artista
-            </Link>
+            <div className="rd-cc-tile" style={{ background: `linear-gradient(155deg, ${shade(t.deep, 0.14)} 0%, ${shade(t.deep, -0.28)} 100%)` }}>
+              <span className="rd-cc-ini" style={{ color: t.accent }}>{(data.nom?.[0] || '?').toUpperCase()}</span>
+            </div>
           )}
-        </div>
-        </div>
-      </header>
+          <div className="min-w-0 flex-1">
+            <Kicker color="var(--color-tq-yellow)">artista</Kicker>
+            <Crit as="h1" className="rd-cc-title">{data.nom}</Crit>
+            <p className="rd-cc-album">
+              <TerrLogo code={code || 'ALT'} className="h-4 w-4" /> {t.nom}
+              {localitatText && <span style={{ color: 'rgba(255,255,255,0.6)' }}> · {localitatText}</span>}
+              {data.genere && <span style={{ color: 'rgba(255,255,255,0.6)' }}> · {data.genere}</span>}
+            </p>
+            {!data.aprovat && (
+              <p className="mt-2 inline-block px-2 py-0.5 rounded text-xs font-semibold" style={{ background: 'rgba(250,204,21,0.2)', color: 'var(--color-tq-yellow)' }}>
+                Pendent de revisió
+              </p>
+            )}
 
-      {/* Ranking history */}
-      {data.historial?.length > 0 && (
-        <section className="bg-white text-tq-ink rounded-lg p-6 shadow-md">
-          <h2 className="text-xl font-bold font-display mb-3">Últimes setmanes al top</h2>
-          <ul className="space-y-3">
-            {data.historial.map(week => (
-              <li key={week.setmana}>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Setmana del {week.setmana}
-                </p>
-                <ul className="mt-1 flex flex-wrap gap-1.5">
-                  {week.entries.map((e, i) => (
-                    <li key={`${week.setmana}-${e.territori}-${i}`}>
-                      <Link
-                        to={cancoUrl({
-                          cancoSlug: e.canco_slug,
-                          artistaSlug: data.slug,
-                          albumSlug: e.canco_album_slug,
-                        })}
-                        className="inline-flex items-center gap-2 px-2 py-1 bg-tq-yellow-soft text-tq-ink text-xs rounded-sm hover:bg-tq-yellow"
-                        title={e.canco_nom}
-                      >
-                        <span className="font-bold tabular-nums">#{e.posicio}</span>
-                        <span className="text-[10px] text-gray-500">{e.territori}</span>
-                        <span className="truncate max-w-[14rem]">{e.canco_nom}</span>
+            <div className="rd-cc-badges">
+              <Kpi n={nTop} label="al top" />
+              {bestPos != null && <Kpi n={`#${bestPos}`} label="millor posició" />}
+              {nAlbums > 0 && <Kpi n={nAlbums} label={nAlbums === 1 ? 'àlbum' : 'àlbums'} />}
+            </div>
+
+            <ExternalListenLinks className="rd-cc-links" kind="artista" artist={data.nom} deezerId={data.deezer_ids?.[0]} />
+
+            <div className="flex flex-wrap gap-3 mt-3 items-center">
+              {Object.entries(data.social || {}).map(([key, url]) => (
+                <a key={key} href={url} target="_blank" rel="noopener" className="rd-listen-pill capitalize">
+                  {key.replace(/_url$/, '').replace(/_/g, ' ')}
+                </a>
+              ))}
+              {isManager ? (
+                <Link to={`/compte/artista/${data.pk}/editar`} className="rd-btn rd-btn--hot ml-auto" style={{ fontSize: 13, padding: '9px 16px' }}>Editar perfil</Link>
+              ) : (
+                <Link to={`/compte/artista/gestio?artista=${data.slug}`} className="rd-btn rd-btn--ghost ml-auto" style={{ fontSize: 13, padding: '9px 16px' }}>Sóc aquest artista →</Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </Band>
+
+      <Band tone="ink2">
+        <div className="rd-cc-grid">
+          <div className="min-w-0 flex flex-col gap-4">
+            {hist.length > 0 && (
+              <Glass className="rd-cc-card">
+                <Kicker color="var(--color-tq-yellow)">les últimes setmanes</Kicker>
+                <Crit as="h2" className="rd-cc-h2">AL TOP</Crit>
+                <ul className="flex flex-col gap-3 mt-3">
+                  {hist.map(week => (
+                    <li key={week.setmana}>
+                      <p className="text-[11px] uppercase tracking-widest text-white/45">Setmana del {week.setmana}</p>
+                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                        {week.entries.map((e, i) => (
+                          <li key={`${week.setmana}-${e.territori}-${i}`}>
+                            <Link
+                              to={cancoUrl({ cancoSlug: e.canco_slug, artistaSlug: data.slug, albumSlug: e.canco_album_slug })}
+                              className="rd-hist-chip" title={e.canco_nom}
+                            >
+                              <span className="font-extrabold tabular-nums">#{e.posicio}</span>
+                              <span className="text-[10px] text-white/50">{terr(e.territori).short}</span>
+                              <span className="truncate max-w-[14rem]">{e.canco_nom}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </Glass>
+            )}
+
+            {(data.discografia || []).length > 0 && (
+              <Glass className="rd-cc-card">
+                <Kicker color="var(--color-tq-yellow)">discografia</Kicker>
+                <Crit as="h2" className="rd-cc-h2">ÀLBUMS</Crit>
+                <ul className="rd-album-wall" style={{ marginTop: 16 }}>
+                  {data.discografia.map(a => (
+                    <li key={a.slug}>
+                      <Link to={albumUrl({ albumSlug: a.slug, artistaSlug: data.slug })} className="block group">
+                        <RdCover src={a.imatge_url ? deezerImg(a.imatge_url, 500) : null} label={a.nom} alt={a.nom} size="100%" radius={12} className="rd-album-cover" />
+                        <p className="rd-album-title">{a.nom}</p>
+                        <p className="rd-album-artist">{a.data_llancament?.slice(0, 4)} · {a.n_cancons} cançons</p>
                       </Link>
                     </li>
                   ))}
                 </ul>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+              </Glass>
+            )}
+          </div>
 
-      {/* Discography */}
-      {data.discografia?.length > 0 && (
-        <section className="bg-white text-tq-ink rounded-lg p-6 shadow-md">
-          <h2 className="text-xl font-bold font-display mb-3">Discografia</h2>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {data.discografia.map(a => (
-              <li key={a.slug}>
-                <Link
-                  to={albumUrl({ albumSlug: a.slug, artistaSlug: data.slug })}
-                  className="block"
-                >
-                  {a.imatge_url ? (
-                    <img
-                      src={deezerImg(a.imatge_url, 500)}
-                      alt=""
-                      className="aspect-square w-full object-cover rounded-md"
-                    />
-                  ) : (
-                    <div className="aspect-square w-full bg-gray-100 rounded-md" />
-                  )}
-                  <p className="mt-1.5 text-sm font-semibold truncate">{a.nom}</p>
-                  <p className="text-xs text-gray-500">
-                    {a.data_llancament?.slice(0, 4)} · {a.n_cancons} cançons
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Col·laboracions — cançons d'altres artistes amb participació d'aquest. */}
-      {data.colaboracions?.length > 0 && (
-        <section className="bg-white text-tq-ink rounded-lg p-6 shadow-md">
-          <h2 className="text-xl font-bold font-display mb-3">També col·labora a</h2>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {data.colaboracions.map(c => (
-              <li key={c.canco_slug}>
-                <Link
-                  to={cancoUrl({
-                    cancoSlug: c.canco_slug,
-                    artistaSlug: c.artista_principal_slug,
-                    albumSlug: c.album_slug,
-                  })}
-                  className="block"
-                >
-                  {c.imatge_url ? (
-                    <img
-                      src={deezerImg(c.imatge_url, 500)}
-                      alt=""
-                      loading="lazy"
-                      className="aspect-square w-full object-cover rounded-md"
-                    />
-                  ) : (
-                    <div className="aspect-square w-full bg-gray-100 rounded-md" />
-                  )}
-                  <p className="mt-1.5 text-sm font-semibold truncate">{c.canco_nom}</p>
-                  <p className="text-xs text-gray-500 truncate">
-                    amb {c.artista_principal_nom}
-                  </p>
-                  {c.data_llancament && (
-                    <p className="text-[11px] text-gray-600">
-                      {c.data_llancament.slice(0, 4)}
-                    </p>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </article>
+          {(data.colaboracions || []).length > 0 && (
+            <aside className="min-w-0">
+              <Glass className="rd-cc-card">
+                <Kicker color="var(--color-tq-yellow)">també hi col·labora</Kicker>
+                <Crit as="h2" className="rd-cc-h2">COL·LABORACIONS</Crit>
+                <ul className="flex flex-col gap-3 mt-3">
+                  {data.colaboracions.map(c => (
+                    <li key={c.canco_slug}>
+                      <Link to={cancoUrl({ cancoSlug: c.canco_slug, artistaSlug: c.artista_principal_slug, albumSlug: c.album_slug })} className="rd-trow">
+                        <RdCover src={c.imatge_url ? deezerImg(c.imatge_url, 120) : null} label={c.canco_nom} alt={c.canco_nom} size={48} radius={8} />
+                        <div className="min-w-0 flex-1">
+                          <p className="rd-trow-title">{c.canco_nom}</p>
+                          <p className="rd-trow-artist">amb {c.artista_principal_nom}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </Glass>
+            </aside>
+          )}
+        </div>
+      </Band>
+    </>
   )
 }

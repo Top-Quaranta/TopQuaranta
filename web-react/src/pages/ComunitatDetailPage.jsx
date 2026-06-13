@@ -63,7 +63,7 @@ function Comentaris({ pubPk, autorPostUsername }) {
             profile.username === autorPostUsername
           )
           return (
-            <li key={c.pk} className="bg-white text-tq-ink rounded-lg p-3 flex gap-3">
+            <li key={c.pk} className="rd-glass p-3 flex gap-3">
               {c.autor?.imatge_url ? (
                 <img src={c.autor.imatge_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
               ) : (
@@ -75,9 +75,9 @@ function Comentaris({ pubPk, autorPostUsername }) {
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="font-semibold text-sm">
                     {c.autor?.nom_public || c.autor?.username || 'Anònim'}
-                    {c.autor?.is_staff && <span className="ml-1 text-[10px] uppercase text-tq-yellow-deep">staff</span>}
+                    {c.autor?.is_staff && <span className="ml-1 text-[10px] uppercase text-tq-yellow">staff</span>}
                   </span>
-                  <span className="text-[11px] text-tq-ink/50">
+                  <span className="text-[11px] text-white/50">
                     {new Date(c.created_at).toLocaleString('ca', { dateStyle: 'short', timeStyle: 'short' })}
                   </span>
                 </div>
@@ -187,7 +187,7 @@ export default function ComunitatDetailPage() {
         <p className="text-xs text-white/50 mb-4">Publicat {pub.publicat_at.slice(0, 10)}</p>
       )}
 
-      <div className="bg-white text-tq-ink rounded-lg p-6">
+      <div className="rd-glass p-6 rd-legal-prose">
         <Markdown>{pub.cos}</Markdown>
       </div>
 

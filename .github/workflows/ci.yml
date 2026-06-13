@@ -13,12 +13,9 @@ name: CI
 
 on:
   push:
-    # `redisseny-web` is the redisseny integration branch — runs CI on
-    # every slice merge. TEMPORARY: remove at the redisseny flip (the
-    # branch is deleted then). It never deploys (deploy.yml is main-only).
-    branches: [main, redisseny-web]
+    branches: [main]
   pull_request:
-    branches: [main, redisseny-web]
+    branches: [main]
 
 jobs:
   tests:

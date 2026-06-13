@@ -43,3 +43,11 @@ Every API response carries `X-API-Version: 1` (or `2`) so client bugs that ignor
 ## Changelog
 
 - **v1** — 2026. Initial public surface (map + location reference).
+
+## Changelog
+
+- **2026-06 (redisseny):** additive fields on `/api/v1/top/` — each
+  entry's `artista.territori` (primary territori code for the row chip)
+  and the response-level `setmana_numero` (project week number from
+  `music.dates.project_week_number`, the single source the social kit
+  uses). Additive only; no version bump.

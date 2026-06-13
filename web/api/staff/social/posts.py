@@ -452,8 +452,11 @@ def social_publicar_ara(request: Request) -> Response:
 def social_reset(request: Request) -> Response:
     """Clear a SocialPost's local state so the next `Publicar` runs
     fresh (status → pendent, instagram_media_id + error_msg cleared,
-    metadata wiped). Does **not** touch the live IG post — for that
-    use `eliminar-instagram` first.
+    metadata wiped). Does **not** touch the live IG post: our Instagram
+    surface (Instagram Login) can't delete published media via the API,
+    so deletion is manual in the app. Use this to reconcile our record
+    after deleting a post by hand on Instagram, or to retry a publish
+    from a clean slate.
 
     Used during testing when something goes wrong (e.g. wanted IG
     handles weren't filled in) and the operator wants to retry from

@@ -30,7 +30,6 @@ from comptes.newsletter_covers import album_cover_url, ensure_cover_downloaded
 from comptes.newsletter_linkify import linkify_narrative
 from comptes.newsletter_meta import derive_subject, trend_indicator
 from comptes.newsletter_utm import build_newsletter_url
-from music.constants import MAX_POSICIONS_TOP
 from music.dates import project_week_number
 from social.captions import TERRITORI_NOM, _join_artists_text
 
@@ -285,12 +284,9 @@ def _build_top_context(
         else (f"Setmana {week} · Top Global")
     )
 
-    # Enriched top rows. We enrich the FULL top (up to 40) once per run so
-    # the body can carry both the highlighted top 10 (podi 1-3 + 4-10) and
-    # the complete top 40 list below it. The covers are cached/predownloaded
-    # by `_enrich_entry`, so this stays a one-time per-send cost.
+    # Enriched top rows: podi (1-3) + the rest (4-10).
     rows = []
-    for i, e in enumerate(entries[:MAX_POSICIONS_TOP]):
+    for i, e in enumerate(entries[:10]):
         pos = e.get("posicio") or (i + 1)
         if pos <= 3:
             content = f"podi_{pos}"
@@ -307,7 +303,6 @@ def _build_top_context(
         )
     podi = rows[:3]
     resta = rows[3:10]
-    top40 = rows  # complete list (1..N, N<=40) for the full-ranking section
 
     browser_url = build_newsletter_url(f"{SITE}/top", "veure_navegador", week)
     cta_url = build_newsletter_url(f"{SITE}/top", "cta_top", week)
@@ -319,7 +314,6 @@ def _build_top_context(
         "project_week": week,
         "podi": podi,
         "resta": resta,
-        "top40": top40,
         "narrative_html": narrative_html,
         "territorials": _territorial_cards(setmana, week),
         "novetats": _novetats_cards(setmana, publish_date, week),
@@ -523,58 +517,41 @@ def _admin_notice_headers() -> dict:
 
 
 def notify_admins_draft_preview(draft) -> None:
-    """Best-effort: email `settings.ADMINS` a LIGHTWEIGHT notification that a
-    pending draft is ready, with a top-3 glance and a link to the staff
-    editor — where the full, faithful preview (and the edit/cancel controls)
-    already live.
-
-    Deliberately NOT the full HTML body: an A/B test against our own Stalwart
-    spam filter (2026-06-13) showed the ~100 KB top-40 HTML is filed as Junk
-    (`message-ingest.spam`, mailbox 2) while a small notification lands in the
-    Inbox (`message-ingest.ham`, mailbox 0) — identical headers/auth, so the
-    weight of the body is the trigger. The heavy preview stays one click away.
+    """Best-effort: email `settings.ADMINS` the FULL newsletter preview for a
+    pending draft — byte-for-byte the body subscribers will receive, plus the
+    admin-only management block linking to the staff editor. Rendered through
+    the shared `render_newsletter_preview`. Deliverability headers (List-Id,
+    List-Unsubscribe, Auto-Submitted) are attached so the automated message
+    scores low with spam filters.
 
     Never raises: any failure (build, render, mail) logs and is swallowed so
     it cannot block the draft write that triggered it."""
     from django.core.mail import EmailMultiAlternatives
-    from django.utils.html import escape
 
     from social import payload
 
     try:
-        gestio_url = staff_draft_url(draft.setmana)
         data = payload.build_top(draft.territori, draft.setmana)
         entries = (data or {}).get("entries") or []
-        top3 = []
-        for e in entries[:3]:
-            names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
-            top3.append(
-                f"{e.get('posicio')}. {e.get('canco_nom') or '—'} — "
-                f"{', '.join(names)}"
-            )
-        top3_txt = "\n".join(top3)
+        publish_date = draft.setmana + datetime.timedelta(days=5)
+        gestio_url = staff_draft_url(draft.setmana)
+        html = render_newsletter_preview(
+            draft.tipus,
+            draft.territori,
+            draft.setmana,
+            publish_date,
+            entries,
+            subject_override=draft.subject,
+            narrative_html_override=draft.narrative_html,
+            gestio_url=gestio_url,
+        )
         text = (
             "Esborrany de la newsletter setmanal a punt per revisar.\n\n"
             f"Setmana: {draft.setmana}\n"
             f"Assumpte: {draft.subject}\n\n"
-            f"{top3_txt}\n\n"
-            "Preview complet, editar o paralitzar l'enviament:\n"
+            "Preview complet a sota. Editar o paralitzar l'enviament:\n"
             f"{gestio_url}\n\n"
             "S'enviarà diumenge tret que el modifiquis o el cancel·lis.\n"
-        )
-        top3_html = "".join(f"<li>{escape(line)}</li>" for line in top3)
-        html = (
-            '<div style="font-family:Arial,Helvetica,sans-serif;color:#111;'
-            'font-size:15px;line-height:1.5">'
-            "<p>Esborrany de la newsletter setmanal a punt per revisar.</p>"
-            f"<p><strong>Setmana:</strong> {escape(str(draft.setmana))}<br>"
-            f"<strong>Assumpte:</strong> {escape(draft.subject)}</p>"
-            f"<ol>{top3_html}</ol>"
-            f'<p><a href="{escape(gestio_url)}">Preview complet, editar o '
-            "paralitzar l'enviament</a></p>"
-            '<p style="color:#555;font-size:13px">S\'enviarà diumenge tret '
-            "que el modifiquis o el cancel·lis.</p>"
-            "</div>"
         )
         msg = EmailMultiAlternatives(
             subject=f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",

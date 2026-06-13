@@ -352,11 +352,11 @@ def test_post_creates_draft_llm_pendent(client_with_token):
 
 
 @pytest.mark.django_db
-def test_post_llm_sends_admin_notice(client_with_token, mailoutbox):
-    """A successful LLM upsert fires exactly one LIGHTWEIGHT admin notice:
-    the draft subject + a link to the staff editor, deliverability headers,
-    and crucially NOT the heavy full-newsletter body (which our own spam
-    filter files as Junk)."""
+def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
+    """A successful LLM upsert fires exactly one admin mail whose HTML body
+    is the FULL preview (shared render) + the management block + the staff
+    editor link, with deliverability headers. There is no separate full
+    1-40 ranking section."""
     _seed_topN(12, prev=True)
     r = client_with_token.post(
         DRAFT_URL,
@@ -371,10 +371,12 @@ def test_post_llm_sends_admin_notice(client_with_token, mailoutbox):
     gestio = f"/staff/social/esborrany?setmana={_monday().isoformat()}"
     assert gestio in m.body
     html = m.alternatives[0][0]
+    # Full preview body: management block + staff link, highlighted top 10.
+    assert "Còpia de gestió" in html
     assert gestio in html
-    # Lightweight: the heavy full-newsletter body is NOT embedded.
+    assert "Del 4 al 10" in html
+    # No separate full 1-40 ranking section.
     assert "El Top 40 complet" not in html
-    assert len(html) < 4000
     # Deliverability headers present.
     assert m.extra_headers.get("List-Unsubscribe")
     assert m.extra_headers.get("Auto-Submitted") == "auto-generated"
@@ -437,7 +439,7 @@ def test_subscriber_copy_has_no_management_block(
     assert summary == "sent=1 fail=0"
     assert len(mailoutbox) == 1
     html = mailoutbox[0].alternatives[0][0]
-    assert "El Top 40 complet" in html  # same rich layout
+    assert "Del 4 al 10" in html  # same rich layout
     assert "Còpia de gestió" not in html  # but no management block
     assert "/staff/social/esborrany" not in html
 

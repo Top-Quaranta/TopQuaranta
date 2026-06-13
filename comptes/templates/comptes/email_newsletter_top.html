@@ -117,33 +117,12 @@
 </td></tr>
 {% endif %}
 
-{% comment %} 5. TOP 40 COMPLETE (full ranking, compact) {% endcomment %}
-{% if top40 %}
-<tr><td class="px" style="padding:16px 28px 6px;background:#060608;">
-  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:clamp(24px,5vw,34px);color:#ffffff;text-transform:uppercase;letter-spacing:0.5px;line-height:1;">El Top 40 complet</div>
-  <div class="whisper" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;color:#9aa0a6;font-size:15px;margin:4px 0 12px;">Tota la classificació de la setmana</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.10);border-radius:14px;">
-    {% for e in top40 %}
-    <tr style="background:{% cycle 'transparent' 'rgba(255,255,255,0.025)' %};">
-      <td width="34" align="center" valign="middle" style="padding:7px 0 7px 8px;"><span class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:16px;color:{% if e.posicio == 1 %}#facc15{% else %}#7bbf7b{% endif %};">{{ e.posicio }}</span></td>
-      <td width="40" valign="middle" style="padding:5px 8px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="34" alt="Portada de {{ e.canco_nom }}" style="width:34px;border-radius:6px;"></a></td>
-      <td valign="middle" style="padding:7px 6px;">
-        <span class="ink" style="font-size:14px;font-weight:700;color:#ffffff;"><a class="ink" href="{{ e.url }}" style="color:#ffffff;">{{ e.canco_nom }}</a></span>
-        <span class="muted" style="font-size:12px;color:#b7b7be;"> &mdash; {% include "comptes/_nl_artistes.html" with arts=e.artistes_render trunc=e.artistes_truncated %}</span>
-      </td>
-      <td align="right" valign="middle" style="padding:7px 10px 7px 4px;white-space:nowrap;">{% include "comptes/_trend_badge.html" with t=e.trend %}</td>
-    </tr>
-    {% endfor %}
-  </table>
-</td></tr>
-{% endif %}
-
-{% comment %} 6. CTA {% endcomment %}
+{% comment %} 5. CTA {% endcomment %}
 <tr><td align="center" class="px" style="padding:22px 28px;background:#060608;">
   <a href="{{ cta_url }}" class="crit" style="display:inline-block;padding:14px 34px;background:#facc15;color:#0a0a0a;font-family:'Anton','Arial Black',Arial,sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:0.5px;border-radius:999px;">Veure el top complet</a>
 </td></tr>
 
-{% comment %} 7. TERRITORIALS (CAT/VAL/BAL) {% endcomment %}
+{% comment %} 6. TERRITORIALS (CAT/VAL/BAL) {% endcomment %}
 {% if territorials %}
 <tr><td class="px" style="padding:8px 28px;background:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Els tops territorials</div>
@@ -162,7 +141,7 @@
 </td></tr>
 {% endif %}
 
-{% comment %} 8. NOVETATS {% endcomment %}
+{% comment %} 7. NOVETATS {% endcomment %}
 {% if novetats %}
 <tr><td class="px" style="padding:8px 28px;background:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Novetats de la setmana</div>
@@ -180,7 +159,7 @@
 </td></tr>
 {% endif %}
 
-{% comment %} 9. SHARE {% endcomment %}
+{% comment %} 8. SHARE {% endcomment %}
 {% if share_links %}
 <tr><td align="center" class="px" style="padding:18px 28px;background:#060608;">
   <div class="muted" style="font-size:12px;color:#9aa0a6;margin-bottom:10px;">Segueix-nos i comparteix</div>
@@ -188,7 +167,7 @@
 </td></tr>
 {% endif %}
 
-{% comment %} 10. MANAGEMENT BLOCK (admin/preview ONLY — never sent to subscribers) {% endcomment %}
+{% comment %} 9. MANAGEMENT BLOCK (admin/preview ONLY — never sent to subscribers) {% endcomment %}
 {% if gestio_url %}
 <tr><td class="px" style="padding:10px 28px 4px;background:#060608;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#1c1a10;border:1px solid #facc15;border-radius:14px;"><tr><td style="padding:16px 18px;">
@@ -201,7 +180,7 @@
 </td></tr>
 {% endif %}
 
-{% comment %} 11. FOOTER {% endcomment %}
+{% comment %} 10. FOOTER {% endcomment %}
 <tr><td class="px" style="padding:24px 28px;background:#060608;border-top:1px solid rgba(255,255,255,0.07);color:#7c7c84;font-size:11px;line-height:1.7;text-align:center;">
   Reps aquest correu perquè vas activar "Vull rebre la newsletter setmanal" al teu compte de TopQuaranta.<br>
   <a href="{{ unsub_url }}" style="color:#9aa0a6;text-decoration:underline;">Donar-me de baixa</a>

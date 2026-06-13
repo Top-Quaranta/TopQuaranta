@@ -6,7 +6,7 @@
  * typeahead that hits /api/v1/artistes/?q=… (already exists for the
  * public directory).
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import Alert from '../components/ui/Alert'
@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext'
 import useApi from '../hooks/useApi'
 
 const inputClass =
-  'px-3 py-2 rounded-md bg-white text-tq-ink text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-tq-yellow'
+  'px-3 py-2 rounded-md bg-white/[0.07] text-white text-sm border border-white/15 placeholder-white/40 focus:outline-none focus:border-tq-yellow'
 
 function useDebounced(value, ms = 200) {
   const [v, setV] = useState(value)
@@ -25,7 +25,7 @@ function useDebounced(value, ms = 200) {
   return v
 }
 
-function ArtistaSearch({ onPick, initialSlug }) {
+function ArtistaSearch({ onPick }) {
   const [q, setQ] = useState('')
   const dq = useDebounced(q)
   const [open, setOpen] = useState(false)
@@ -52,7 +52,7 @@ function ArtistaSearch({ onPick, initialSlug }) {
         autoFocus
       />
       {open && q.length >= 2 && (
-        <ul className="absolute left-0 right-0 top-full mt-1 bg-white text-tq-ink rounded-md shadow-lg max-h-64 overflow-auto z-10 border border-black/10">
+        <ul className="absolute left-0 right-0 top-full mt-1 bg-[#141319] text-white rounded-md shadow-lg max-h-64 overflow-auto z-10 border border-white/10">
           {loading && <li className="px-3 py-2 text-xs text-gray-500">Cercant…</li>}
           {!loading && results.length === 0 && (
             <li className="px-3 py-2 text-xs text-gray-500">Sense resultats</li>
@@ -149,7 +149,7 @@ export default function SolicitarGestioPage() {
             Artista *
           </label>
           {picked ? (
-            <div className="flex items-center gap-2 p-2 bg-white text-tq-ink rounded-md">
+            <div className="flex items-center gap-2 p-2 bg-white/[0.07] text-white rounded-md">
               <span className="font-semibold">{picked.nom}</span>
               <button
                 type="button"

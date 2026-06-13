@@ -1,43 +1,28 @@
 /**
- * TopPage — /top
+ * TopPage — /top (redisseny web).
  *
- * Editorial redesign (Sprint J): a hero band with the big title +
- * territori + week navigator, a 1–40 list in two columns, and
- * footer credit pointing at /com-funciona for the methodology.
+ * Dark hero with the big Anton title + territory pills + week navigator,
+ * then the 1–40 list in two columns of glass rows. House vocabulary
+ * ("el top", "la llista" — never the R-word).
  *
- * Reads from the URL: ?t=<territori-code>, ?s=<YYYY-MM-DD setmana>.
- * Both default to the latest stored week of PPCC ("Global").
- *
- * Backend gives us `prev_setmana` / `next_setmana` so the navigator
- * can disable the arrows at the boundaries — a visitor never lands
- * on an empty week.
+ * URL contract UNCHANGED: ?t=<territori-code>, ?s=<YYYY-MM-DD setmana>.
+ * Backend gives prev_setmana / next_setmana (navigator boundaries),
+ * fallback_from (small-territory banner), es_provisional, and the
+ * single-source setmana_numero (week badge). Per-row territori comes
+ * from the additive artista.territori field.
  */
 import { useSearchParams, Link } from 'react-router-dom'
-import Alert from '../components/ui/Alert'
 import useApi from '../hooks/useApi'
+import { Band, Glow, Glass, Kicker, Crit, Numeral, Move, TerrLogo, RdCover } from '../components/rd/primitives'
+import { terr } from '../components/rd/terr'
 import { cancoUrl } from '../lib/urls'
 import { deezerImg } from '../lib/img'
-import MmIcon from '../components/MmIcon'
-import { TrendCue, TERRITORI_NOM } from '../components/editorial'
 import { fmtDataLlarga } from '../lib/format'
 import { SeoHead } from '../lib/seoHead'
 
-/* Pill order — alphabetical by user-facing name, "Global" first.
- * "Altres" stays at the end. */
-const TERRITORIS = [
-  { codi: 'PPCC', nom: 'Global' },
-  { codi: 'AND',  nom: 'Andorra' },
-  { codi: 'CAT',  nom: 'Catalunya' },
-  { codi: 'CNO',  nom: 'Catalunya del Nord' },
-  { codi: 'FRA',  nom: 'Franja de Ponent' },
-  { codi: 'BAL',  nom: 'Illes Balears' },
-  { codi: 'ALG',  nom: "L'Alguer" },
-  { codi: 'VAL',  nom: 'País Valencià' },
-  { codi: 'ALT',  nom: 'Altres' },
-]
+/* Pill order — Global first, then by user-facing name, Altres last. */
+const TERRITORIS = ['PPCC', 'AND', 'CAT', 'CNO', 'FRA', 'BAL', 'ALG', 'VAL', 'ALT']
 
-/* Rolling Saturday from a Monday-indexed setmana (the algorithm
- * stores the Monday of the ISO week; the publish day is Saturday). */
 function setmanaToDissabte(iso) {
   if (!iso) return null
   const d = new Date(iso + 'T00:00:00Z')
@@ -45,56 +30,48 @@ function setmanaToDissabte(iso) {
   return d.toISOString().slice(0, 10)
 }
 
-/* ── One row of the top list. Mirrors HomePage's TopRow. */
-function TopRow({ e }) {
-  const credits = [
-    e.artista?.nom,
-    ...(e.artistes_col || []).map(c => c.nom),
-  ].filter(Boolean).join(', ')
+/* ── One row of the 1–40 list. ── */
+function FullRow({ e }) {
+  const first = e.posicio === 1
+  const code = e.artista?.territori
+  const credits = [e.artista?.nom, ...(e.artistes_col || []).map(c => c.nom)].filter(Boolean).join(', ')
   return (
     <li>
       <Link
-        to={cancoUrl({
-          cancoSlug: e.canco?.slug,
-          artistaSlug: e.artista?.slug,
-          albumSlug: e.album?.slug,
-        })}
-        className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-tq-ink/5 transition-colors"
+        to={cancoUrl({ cancoSlug: e.canco?.slug, artistaSlug: e.artista?.slug, albumSlug: e.album?.slug })}
+        className={`rd-frow rd-glass${first ? ' rd-frow-one' : ''}`}
       >
-        <span className="w-8 text-center text-lg font-bold font-display tabular-nums text-tq-ink">
-          {e.posicio}
+        <span className="rd-frow-num">
+          <Numeral n={e.posicio} size={first ? 38 : 30} color={first ? 'var(--color-tq-yellow)' : 'rgba(255,255,255,0.92)'} />
         </span>
-        <span className="w-4 flex justify-center shrink-0">
-          <TrendCue posicio={e.posicio} posicio_anterior={e.posicio_anterior} />
-        </span>
-        {e.album?.imatge_url ? (
-          <img
-            src={deezerImg(e.album.imatge_url, 120)}
-            alt=""
-            loading="lazy"
-            className="w-12 h-12 rounded object-cover shrink-0"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded shrink-0" style={{ background: 'var(--mm-color-gray-200)' }} />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate">{e.canco?.nom}</p>
-          <p className="text-xs text-tq-ink/60 truncate">{credits}</p>
-          {e.album?.nom && (
-            <p className="text-[11px] text-tq-ink/60 truncate">{e.album.nom}</p>
-          )}
+        <span className="rd-frow-mv"><Move posicio={e.posicio} posicio_anterior={e.posicio_anterior} size={20} /></span>
+        <RdCover
+          src={e.album?.imatge_url ? deezerImg(e.album.imatge_url, 120) : null}
+          label={e.canco?.nom || e.artista?.nom || '?'}
+          alt={e.album?.nom ? `Portada de ${e.album.nom}` : ''}
+          size={52} radius={9}
+        />
+        <div className="rd-frow-meta">
+          <p className="rd-frow-title" style={first ? { color: 'var(--color-tq-yellow)' } : undefined}>{e.canco?.nom}</p>
+          <p className="rd-frow-artist">{credits}</p>
+          {e.album?.nom && <p className="rd-frow-album">{e.album.nom}</p>}
         </div>
+        {code && (
+          <span className="rd-frow-terr">
+            <TerrLogo code={code} className="h-4 w-4" />
+            <span className="rd-frow-terrname" style={{ color: terr(code).accent }}>{terr(code).short}</span>
+          </span>
+        )}
       </Link>
     </li>
   )
 }
 
-/* ── Header: hero ink band with title + territori + week navigator. */
+/* ── Hero: title + territory pills + week navigator. ── */
 function TopHero({ data, territori, setParams, setmanaParam }) {
-  const titoli = TERRITORI_NOM[data?.territori || territori] || territori
+  const t = terr(data?.territori || territori)
+  const isPpcc = (data?.territori || territori) === 'PPCC'
   const dissabte = data?.setmana_dissabte || setmanaToDissabte(data?.setmana)
-  const prevDissabte = setmanaToDissabte(data?.prev_setmana)
-  const nextDissabte = setmanaToDissabte(data?.next_setmana)
   const hasPrev = !!data?.prev_setmana
   const hasNext = !!data?.next_setmana
 
@@ -105,7 +82,12 @@ function TopHero({ data, territori, setParams, setmanaParam }) {
     next.set('s', setmana)
     setParams(next)
   }
-
+  function selectTerr(codi) {
+    const next = new URLSearchParams()
+    next.set('t', codi.toLowerCase())
+    if (setmanaParam) next.set('s', setmanaParam)
+    setParams(next)
+  }
   function goLatest() {
     const next = new URLSearchParams()
     next.set('t', territori.toLowerCase())
@@ -113,185 +95,120 @@ function TopHero({ data, territori, setParams, setmanaParam }) {
   }
 
   return (
-    <section className="-mx-6 lg:-mx-12 px-6 lg:px-12 py-10 md:py-12 bg-tq-ink text-white">
-      <div className="max-w-6xl mx-auto">
-        <p className="text-[10px] uppercase tracking-widest text-tq-yellow">
-          El nostre top setmanal
+    <Band tone="top-hero">
+      <Glow variant="a" color={t.deep} />
+      <Kicker className="block mb-2">el nostre top setmanal</Kicker>
+      <Crit as="h1" className="rd-top-h1">
+        TOP <span style={{ color: 'var(--color-tq-yellow)' }}>{isPpcc ? '40' : t.short.toUpperCase()}</span>
+      </Crit>
+
+      {data?.fallback_from && (
+        <p className="text-sm mt-2" style={{ color: 'var(--color-tq-yellow)' }}>
+          {terr(data.fallback_from).nom} encara no té prou dades per a un top
+          propi — ara mateix mostrem el d'«Altres».
         </p>
-        <h1 className="text-3xl md:text-5xl font-bold font-display mt-1.5 leading-tight">
-          Top {titoli}
-        </h1>
-        {data?.fallback_from && (
-          <p className="text-xs text-tq-yellow mt-2">
-            {TERRITORI_NOM[data.fallback_from]} encara no té prou dades
-            per a un top propi — ara mateix mostrem el d'«Altres».
-          </p>
-        )}
+      )}
 
-        {/* Territori selector — pills */}
-        <nav className="flex flex-wrap gap-1.5 mt-5" aria-label="Territoris">
-          {TERRITORIS.map(t => (
+      <nav className="rd-terr-pills" aria-label="Territoris">
+        {TERRITORIS.map(codi => {
+          const on = codi === territori
+          return (
             <button
-              key={t.codi}
+              key={codi}
               type="button"
-              onClick={() => {
-                const next = new URLSearchParams()
-                next.set('t', t.codi.toLowerCase())
-                if (setmanaParam) next.set('s', setmanaParam)
-                setParams(next)
-              }}
-              className={
-                'px-3 py-1 rounded-full text-xs font-semibold transition-colors ' +
-                (t.codi === territori
-                  ? 'bg-tq-yellow text-tq-ink'
-                  : 'bg-white/10 text-white hover:bg-white/20')
-              }
+              onClick={() => selectTerr(codi)}
+              className={`rd-pill${on ? ' rd-pill-on' : ''}`}
+              style={on ? { background: 'var(--color-tq-yellow)', color: '#0a0a0a' } : undefined}
             >
-              {t.nom}
+              {terr(codi).nom}
             </button>
-          ))}
-        </nav>
+          )
+        })}
+      </nav>
 
-        {/* Week navigator — only when we know the dissabte. */}
-        {dissabte && (
-          <div className="mt-6 flex items-center gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={() => go(data?.prev_setmana)}
-              disabled={!hasPrev}
-              title={hasPrev ? `Setmana del ${fmtDataLlarga(prevDissabte)}` : 'No hi ha setmana anterior'}
-              aria-label="Setmana anterior"
-              className={
-                'inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ' +
-                (hasPrev
-                  ? 'bg-white/10 text-white hover:bg-tq-yellow hover:text-tq-ink'
-                  : 'bg-white/5 text-white/30 cursor-not-allowed')
-              }
-            >
-              <MmIcon name="arrow-left" className="h-4 w-4" />
-            </button>
-
-            <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-widest text-white/60">
-                Setmana del
-              </span>
-              <span className="text-base font-semibold tabular-nums">
-                {fmtDataLlarga(dissabte)}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => go(data?.next_setmana)}
-              disabled={!hasNext}
-              title={hasNext ? `Setmana del ${fmtDataLlarga(nextDissabte)}` : 'Aquesta és la més recent'}
-              aria-label="Setmana següent"
-              className={
-                'inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors ' +
-                (hasNext
-                  ? 'bg-white/10 text-white hover:bg-tq-yellow hover:text-tq-ink'
-                  : 'bg-white/5 text-white/30 cursor-not-allowed')
-              }
-            >
-              <MmIcon name="arrow-right" className="h-4 w-4" />
-            </button>
-
-            {/* "Tornar a l'actual" button — only when not viewing the
-                latest week. The shortcut spares the user clicking
-                next a few times after deep-diving into history. */}
-            {hasNext && (
-              <button
-                type="button"
-                onClick={goLatest}
-                className="ml-auto text-xs font-semibold text-white/70 underline hover:text-tq-yellow transition-colors"
-              >
-                Tornar a l'última →
-              </button>
-            )}
-
-            {data?.es_provisional && (
-              <span
-                className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-widest"
-                style={{ backgroundColor: 'rgba(250, 204, 21, 0.2)', color: 'var(--color-tq-yellow)' }}
-              >
-                Provisional
-              </span>
-            )}
+      {dissabte && (
+        <div className="rd-wk-nav">
+          <button
+            type="button" onClick={() => go(data?.prev_setmana)} disabled={!hasPrev}
+            aria-label="Setmana anterior"
+            className={`rd-wk-arrow${hasPrev ? '' : ' rd-wk-off'}`}
+          >‹</button>
+          <div className="rd-wk-label">
+            <Kicker>setmana del</Kicker>
+            <span className="rd-wk-date">{fmtDataLlarga(dissabte)}</span>
           </div>
-        )}
-      </div>
-    </section>
+          <button
+            type="button" onClick={() => go(data?.next_setmana)} disabled={!hasNext}
+            aria-label="Setmana següent"
+            className={`rd-wk-arrow${hasNext ? '' : ' rd-wk-off'}`}
+          >›</button>
+          {hasNext && (
+            <button type="button" onClick={goLatest} className="rd-wk-latest">Tornar a l'última →</button>
+          )}
+          {data?.setmana_numero != null && (
+            <span className="rd-wk-badge" style={{ borderColor: 'var(--color-tq-yellow)', color: 'var(--color-tq-yellow)' }}>
+              SETMANA {data.setmana_numero}
+            </span>
+          )}
+          {data?.es_provisional && (
+            <span className="rd-wk-badge" style={{ borderColor: 'var(--color-tq-yellow)', color: 'var(--color-tq-yellow)' }}>
+              PROVISIONAL
+            </span>
+          )}
+        </div>
+      )}
+    </Band>
   )
 }
 
 /* ── Page ──────────────────────────────────────────────────────────── */
-
 export default function TopPage() {
   const [params, setParams] = useSearchParams()
   const territori = (params.get('t') || 'PPCC').toUpperCase()
   const setmanaParam = params.get('s') || ''
 
-  // Build path so useApi can use it as the cache/dep key. Recomputing
-  // the URLSearchParams here keeps the call deterministic for the
-  // hook's path-based memoisation.
   const _qs = new URLSearchParams()
   _qs.set('territori', territori)
   if (setmanaParam) _qs.set('setmana', setmanaParam)
-  const { data, error, loading } = useApi(`/top/?${_qs}`)
+  const { data, error, loading, reload } = useApi(`/top/?${_qs}`)
 
   const entries = data?.entries || []
-  const left  = entries.slice(0, 20)
-  const right = entries.slice(20, 40)
+  const mid = Math.ceil(entries.length / 2)
+  const left = entries.slice(0, mid)
+  const right = entries.slice(mid)
 
   return (
-    <div className="space-y-0">
+    <>
       <SeoHead entity="top" />
-      <TopHero
-        data={data}
-        territori={territori}
-        setParams={setParams}
-        setmanaParam={setmanaParam}
-      />
+      <TopHero data={data} territori={territori} setParams={setParams} setmanaParam={setmanaParam} />
 
-      {/* List band — white. */}
-      <section className="-mx-6 lg:-mx-12 px-6 lg:px-12 py-10 md:py-12 bg-white text-tq-ink">
-        <div className="max-w-6xl mx-auto">
-          {error && <Alert tone="danger">{error}</Alert>}
+      <Band tone="ink2">
+        {error ? (
+          <Glass className="p-6 text-center">
+            <p className="text-white/70 text-sm">No s'ha pogut carregar el top ara mateix.</p>
+            <button type="button" onClick={reload} className="rd-btn rd-btn--ghost mt-3">Reintentar</button>
+          </Glass>
+        ) : loading ? (
+          <div className="rd-full-grid">
+            <ol className="rd-full-col">{Array.from({ length: 20 }).map((_, i) => <li key={i}><div className="rd-frow rd-glass" style={{ height: 68 }} /></li>)}</ol>
+            <ol className="rd-full-col">{Array.from({ length: 20 }).map((_, i) => <li key={i}><div className="rd-frow rd-glass" style={{ height: 68 }} /></li>)}</ol>
+          </div>
+        ) : entries.length === 0 ? (
+          <p className="rd-empty">Encara no hi ha prou dades per a un top d'aquest territori i setmana.</p>
+        ) : (
+          <div className="rd-full-grid">
+            <ol className="rd-full-col">{left.map(e => <FullRow key={e.posicio} e={e} />)}</ol>
+            <ol className="rd-full-col">{right.map(e => <FullRow key={e.posicio} e={e} />)}</ol>
+          </div>
+        )}
 
-          {loading && (
-            <div className="grid sm:grid-cols-2 gap-x-6">
-              {Array.from({ length: 20 }).map((_, i) => (
-                <div key={i} className="h-12 my-1 bg-tq-ink/5 rounded-md animate-pulse" />
-              ))}
-            </div>
-          )}
-
-          {!loading && !error && entries.length === 0 && (
-            <p className="text-sm text-tq-ink/60 italic">
-              Encara no hi ha top per a aquest territori i setmana.
-            </p>
-          )}
-
-          {!loading && !error && entries.length > 0 && (
-            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1">
-              <ol className="space-y-1">{left.map(e => <TopRow key={e.posicio} e={e} />)}</ol>
-              <ol className="space-y-1">{right.map(e => <TopRow key={e.posicio} e={e} />)}</ol>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Methodology footer band — discreet ink strip. */}
-      <section className="-mx-6 lg:-mx-12 px-6 lg:px-12 py-6 bg-tq-ink text-white">
-        <div className="max-w-6xl mx-auto text-center">
-          <p className="text-xs text-white/60">
-            Calculat a partir d'escoltes reals.{' '}
-            <Link to="/com-funciona" className="underline hover:text-tq-yellow transition-colors">
-              Com es decideix el top →
-            </Link>
-          </p>
-        </div>
-      </section>
-    </div>
+        <p className="rd-method">
+          Calculat a partir d'escoltes reals de Last.fm.{' '}
+          <Link to="/com-funciona" className="rd-method-link" style={{ color: 'var(--color-tq-yellow)' }}>
+            Com es decideix el top →
+          </Link>
+        </p>
+      </Band>
+    </>
   )
 }

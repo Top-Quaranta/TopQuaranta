@@ -135,6 +135,23 @@ this guards against signal D5 self-collab errors when an artist has
 multiple Deezer profiles (autoedit + label, etc.; cron crashed for
 ~12 h on 2026-05-02 with this exact case before the fix).
 
+**Album-alien guard (2026-06).** Deezer's `/artist/{id}/albums` lists every
+album an artist *participates* in, so a single guest feature on someone
+else's album used to drag the whole foreign album in under our artista (the
+"Baya Baye / Pangea" case — see `ingest-album-alie-recon.md`). `_create_track`
+now creates a Canco under `album.artista` only when **`own_album OR
+our_on_track`**: `own_album` is True when the album's Deezer titular
+(`album.artist.id`, resolved once per album via `deezer.get_album_titular_id`
+and reused for every track) is one of the artista's Deezer IDs; `our_on_track`
+is True when any of those IDs appears among the track's **live** contributors
+(`track.contributors`, never the persisted `contributors_raw`, whose role
+labels are unreliable). Otherwise the track is skipped. Own albums (incl.
+guest-led interludes) still enter whole; a track where the main contributor
+resolves to a *different* known artista is created under that artista
+(guard stands down). If the titular call fails the guard is conservative
+(`own_album=True`, nothing dropped) so a transient API error never silences
+real tracks.
+
 ### 3.4 `obtenir_metadata` — on demand
 ```bash
 python manage.py obtenir_metadata [--artista-id N] [--force] [--dry-run] [--limit N]

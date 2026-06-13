@@ -246,9 +246,16 @@ class Command(BaseCommand):
                 tracks = deezer.get_album_tracks(album.deezer_id)
                 if deezer.quota_exhausted():
                     break
+                # Album-alien guard: resolve the album's Deezer titular ONCE
+                # (one /album/{id} call, reused for every track). `own_album`
+                # is True when the titular is one of our artista's Deezer
+                # profiles → the whole album is ours and enters as before.
+                # When the titular can't be resolved (None), stay conservative
+                # (treat as own) so a transient API hiccup never drops tracks.
+                own_album = self._resolve_own_album(album)
                 created = 0
                 for track_data in tracks:
-                    was_new = self._create_track(album, track_data)
+                    was_new = self._create_track(album, track_data, own_album=own_album)
                     if was_new:
                         created += 1
                     calls += 1  # each track = 1 API call in get_album_tracks
@@ -419,8 +426,40 @@ class Command(BaseCommand):
         finally:
             classificar_i_guardar(canco)
 
-    def _create_track(self, album: Album, track_data: dict) -> bool:
-        """Create a Canco from track data, or merge into existing by ISRC. Returns True if new."""
+    def _resolve_own_album(self, album: Album) -> bool:
+        """True when `album`'s Deezer titular is one of the album.artista's
+        Deezer profiles (the album is genuinely ours → ingest the whole
+        album, guests included). False when the titular is a different artist
+        (foreign album → only the tracks our artista actually contributes to
+        enter; enforced in `_create_track`).
+
+        Conservative on failure: if the titular can't be resolved (network /
+        API error, deleted album), return True so we keep the pre-guard
+        behaviour and never drop real tracks because of a transient hiccup.
+        """
+        titular_id = deezer.get_album_titular_id(album.deezer_id)
+        if titular_id is None:
+            logger.warning(
+                "Album %s (%s): could not resolve Deezer titular; keeping "
+                "conservative ingest (treating as own album).",
+                album.deezer_id,
+                album.nom,
+            )
+            return True
+        owner_ids = set(album.artista.deezer_ids.values_list("deezer_id", flat=True))
+        return titular_id in owner_ids
+
+    def _create_track(
+        self, album: Album, track_data: dict, *, own_album: bool = True
+    ) -> bool:
+        """Create a Canco from track data, or merge into existing by ISRC. Returns True if new.
+
+        `own_album` (resolved once per album by `_resolve_own_album`) gates the
+        album-alien guard: when False, a track is only created under
+        `album.artista` if that artista appears among the track's live Deezer
+        contributors. Defaults to True so any caller that doesn't pass it keeps
+        the pre-guard behaviour.
+        """
         dz_id = track_data["id"]
         isrc = track_data.get("isrc", "")
 
@@ -513,6 +552,30 @@ class Command(BaseCommand):
                     artista = resolved
                 else:
                     deferred_main = (main_id, main_name)
+
+        # Album-alien guard: create under `album.artista` only when the album
+        # is genuinely theirs (`own_album`) OR our artista appears among the
+        # track's LIVE contributors. We read `contributors` here, never the
+        # persisted `contributors_raw` (its role labels are unreliable — dedup
+        # is first-write-wins). If the main-resolution above already
+        # reassigned `artista` to the track's real main, the row no longer
+        # belongs to the album's owner, so the guard stands down (the track is
+        # legitimately created under that resolved artista).
+        if not own_album and artista is album.artista:
+            owner_ids = set(
+                album.artista.deezer_ids.values_list("deezer_id", flat=True)
+            )
+            track_contributor_ids = {c.get("id") for c in contributors}
+            if not (owner_ids & track_contributor_ids):
+                logger.info(
+                    "Skipping track «%s» (deezer_id=%s) — foreign album %s "
+                    "and «%s» is not among its contributors.",
+                    track_data.get("title", "?"),
+                    dz_id,
+                    album.deezer_id,
+                    album.artista.nom,
+                )
+                return False
 
         # Fix album date
         album_date_str = track_data.get("album_release_date", "")

@@ -17,9 +17,9 @@ export default function LlicenciesPage() {
         </a>.
       </p>
 
-      <h2>Les dades del rànquing</h2>
+      <h2>Les dades del top</h2>
       <p>
-        Els rànquings setmanals i les mètriques publicades es lliuren
+        Els tops setmanals i les mètriques publicades es lliuren
         sota la llicència{' '}
         <a href="https://creativecommons.org/licenses/by/4.0/deed.ca" target="_blank" rel="noopener">
           Creative Commons Attribution 4.0 International (CC BY 4.0)

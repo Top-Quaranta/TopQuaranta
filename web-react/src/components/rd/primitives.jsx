@@ -7,7 +7,7 @@
  * `.rd-*`; these components are the thin React layer over them.
  *
  * Exports: Band, Glow, Glass, Btn, Kicker, Crit, Numeral, Move,
- * TerrLogo, TerrChip, RdCover.
+ * TerrLogo, RdCover.
  */
 import { createElement } from 'react'
 import MmIcon from '../MmIcon'
@@ -118,19 +118,6 @@ export function TerrLogo({ code, className = 'h-5 w-5', label, color }) {
   return (
     <span style={{ color: color || t.accent, display: 'inline-flex' }}>
       <MmIcon bucket="territories" name={`territory-${t.icon}`} className={className} label={label} />
-    </span>
-  )
-}
-
-/* Silhouette + short name chip in the territory accent (top-list rows). */
-export function TerrChip({ code, size = 18 }) {
-  const t = terr(code)
-  return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3, color: t.accent }}>
-      <TerrLogo code={code} className="" />
-      <span style={{ fontFamily: 'var(--font-crit)', fontSize: size * 0.6, letterSpacing: 1, textTransform: 'uppercase', color: t.accent }}>
-        {t.short}
-      </span>
     </span>
   )
 }

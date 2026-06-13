@@ -139,6 +139,25 @@ def get_artist_info(deezer_id: int) -> dict | None:
     }
 
 
+def get_album_titular_id(album_id: int) -> int | None:
+    """Deezer album's titular artist id (``album.artist.id``), or ``None``
+    when the album can't be resolved (network/API error, deleted album).
+
+    Used by the ingest's album-alien guard to distinguish an artista's OWN
+    album (titular ∈ our deezer_ids → ingest the whole album) from a foreign
+    album they only guest on (ingest only the tracks they actually contribute
+    to). The ``/artist/{id}/albums`` listing does NOT carry the titular, so
+    this is one extra call per album — the caller resolves it once and reuses
+    it for every track. ``None`` means "unresolved": the caller stays
+    conservative (does not skip) so a transient failure never silently drops
+    real tracks.
+    """
+    data = _get(f"{API_BASE}/album/{album_id}")
+    if not data:
+        return None
+    return (data.get("artist") or {}).get("id")
+
+
 def get_artist_albums(deezer_id: int, min_date: date | None = None) -> list[dict]:
     """
     Fetch albums for a Deezer artist, optionally filtered by release date.

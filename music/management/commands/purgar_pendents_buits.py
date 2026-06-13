@@ -60,15 +60,23 @@ _SIGNAL = (
 )
 
 
-def cohort_qs():
-    """The exact casc-buit cohort queryset (re-evaluated each call)."""
-    return (
+def cohort_qs(pks=None):
+    """The exact casc-buit cohort queryset (re-evaluated each call).
+
+    `pks` (optional) restricts to those primary keys — but ALWAYS
+    intersected with the full 0/0/0 cohort rule, so an explicit pk list can
+    never delete anything outside the cohort (a wrong pk is simply ignored).
+    """
+    qs = (
         Artista.objects.filter(aprovat=False, pendent_review=True)
         .annotate(_fk=_HAS_FK, _m2m=_HAS_M2M)
         .filter(_fk=False, _m2m=False)
         .exclude(_ANCHOR)
         .exclude(_SIGNAL)
     )
+    if pks:
+        qs = qs.filter(pk__in=pks)
+    return qs
 
 
 class Command(BaseCommand):
@@ -84,16 +92,25 @@ class Command(BaseCommand):
             "(prints count + sample, deletes nothing).",
         )
         parser.add_argument("--batch", type=int, default=BATCH)
+        parser.add_argument(
+            "--pks",
+            default="",
+            help="Comma-separated pks to restrict the delete to (still "
+            "intersected with the 0/0/0 cohort, so it can never delete "
+            "outside it). Empty = the whole cohort.",
+        )
 
     def handle(self, *args, **opts):
         execute = opts["execute"]
         batch = opts["batch"]
-        total = cohort_qs().count()
-        self.stdout.write(f"Casc-buit cohort: {total} artistes.")
+        pks = [int(x) for x in opts["pks"].split(",") if x.strip()] or None
+        total = cohort_qs(pks).count()
+        scope = f" (restricted to {len(pks)} pks)" if pks else ""
+        self.stdout.write(f"Casc-buit cohort{scope}: {total} artistes.")
 
         if not execute:
             self.stdout.write("DRY-RUN (no --execute) — sample of 20:")
-            for a in cohort_qs().order_by("pk")[:20]:
+            for a in cohort_qs(pks).order_by("pk")[:20]:
                 self.stdout.write(
                     f"  {a.pk:<7} {a.created_at.date()} sim={a.nb_similars_lastfm} {a.nom[:48]}"
                 )
@@ -103,30 +120,34 @@ class Command(BaseCommand):
         # Capture affected approved sources BEFORE deleting, to recompute
         # their nb_similars_lastfm cache afterwards.
         affected_sources = set(
-            ArtistaLastfmSimilar.objects.filter(target__in=cohort_qs()).values_list(
+            ArtistaLastfmSimilar.objects.filter(target__in=cohort_qs(pks)).values_list(
                 "source_id", flat=True
             )
         )
         deleted = 0
         while True:
-            pks = list(cohort_qs().values_list("pk", flat=True)[:batch])
-            if not pks:
+            batch_pks = list(cohort_qs(pks).values_list("pk", flat=True)[:batch])
+            if not batch_pks:
                 break
             # Pre-guard: never delete a user-claimed or user-proposed artist.
-            claimed = UserArtista.objects.filter(artista_id__in=pks).count()
-            proposed = PropostaArtista.objects.filter(artista_creat_id__in=pks).count()
+            claimed = UserArtista.objects.filter(artista_id__in=batch_pks).count()
+            proposed = PropostaArtista.objects.filter(
+                artista_creat_id__in=batch_pks
+            ).count()
             if claimed or proposed:
                 raise RuntimeError(
                     f"ABORT: batch has {claimed} UserArtista / {proposed} "
                     f"PropostaArtista links — cohort definition violated."
                 )
             with transaction.atomic():
-                n, _ = Artista.objects.filter(pk__in=pks).delete()
-            deleted += len(pks)
+                Artista.objects.filter(pk__in=batch_pks).delete()
+            deleted += len(batch_pks)
             logger.info(
-                "purgar_pendents_buits: deleted %d (total %d)", len(pks), deleted
+                "purgar_pendents_buits: deleted %d (total %d)",
+                len(batch_pks),
+                deleted,
             )
-            self.stdout.write(f"  deleted {len(pks)} (total {deleted})")
+            self.stdout.write(f"  deleted {len(batch_pks)} (total {deleted})")
 
         # Recompute nb_similars_lastfm on the approved sources whose targets
         # we removed (cache, not critical, but keep it honest).

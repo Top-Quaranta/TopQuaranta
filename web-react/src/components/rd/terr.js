@@ -11,7 +11,22 @@
  * CAT uses the senyera silhouette (`territory-ppcc.svg`), never the cross —
  * a redisseny brand rule from the handoff.
  */
-import { TERRITORI_NOM } from '../editorial'
+/* User-facing territory label map. Moved here from the retired
+   editorial.jsx (it was the conserved mapping). NOTE: the code stays the
+   legacy `PPCC` for query-param compatibility — only the display string
+   flips to "Global". Never show "PPCC" to a user. */
+export const TERRITORI_NOM = {
+  PPCC: 'Global',
+  CAT: 'Catalunya',
+  VAL: 'País Valencià',
+  BAL: 'Illes Balears',
+  AND: 'Andorra',
+  CNO: 'Catalunya del Nord',
+  FRA: 'Franja de Ponent',
+  ALG: "L'Alguer",
+  ALT: 'Altres',
+  CAR: 'El Carxe',
+}
 
 /* deep/accent per backend code (kit palette). */
 const PAL = {

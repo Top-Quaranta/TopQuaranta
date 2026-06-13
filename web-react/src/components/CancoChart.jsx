@@ -26,7 +26,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { TERRITORI_NOM } from './editorial'
+import { TERRITORI_NOM } from './rd/terr'
 
 // Chart-only territori palette. Frontend palette centralisation
 // (TopQuaranta audit 2026-05-11, item C3 deferred) is tracked

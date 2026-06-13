@@ -352,9 +352,11 @@ def test_post_creates_draft_llm_pendent(client_with_token):
 
 
 @pytest.mark.django_db
-def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
-    """A successful LLM upsert fires exactly one admin mail whose HTML body
-    carries the full top 40 and the staff management link."""
+def test_post_llm_sends_admin_notice(client_with_token, mailoutbox):
+    """A successful LLM upsert fires exactly one LIGHTWEIGHT admin notice:
+    the draft subject + a link to the staff editor, deliverability headers,
+    and crucially NOT the heavy full-newsletter body (which our own spam
+    filter files as Junk)."""
     _seed_topN(12, prev=True)
     r = client_with_token.post(
         DRAFT_URL,
@@ -365,13 +367,17 @@ def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
     assert r.status_code == 201, r.content
     assert len(mailoutbox) == 1
     m = mailoutbox[0]
-    assert "Subj LLM" in m.subject or "Subj LLM" in m.body
-    # The HTML alternative is the full preview body.
-    html = m.alternatives[0][0]
-    assert "El Top 40 complet" in html
+    assert "Subj LLM" in m.body
     gestio = f"/staff/social/esborrany?setmana={_monday().isoformat()}"
+    assert gestio in m.body
+    html = m.alternatives[0][0]
     assert gestio in html
-    assert "Còpia de gestió" in html
+    # Lightweight: the heavy full-newsletter body is NOT embedded.
+    assert "El Top 40 complet" not in html
+    assert len(html) < 4000
+    # Deliverability headers present.
+    assert m.extra_headers.get("List-Unsubscribe")
+    assert m.extra_headers.get("Auto-Submitted") == "auto-generated"
 
 
 @pytest.mark.django_db

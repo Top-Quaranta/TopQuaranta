@@ -509,46 +509,82 @@ def staff_draft_url(setmana: datetime.date) -> str:
     return f"{SITE}/staff/social/esborrany?setmana={setmana.isoformat()}"
 
 
+def _admin_notice_headers() -> dict:
+    """Deliverability headers for the admin notification: marks it as an
+    automated list message so spam filters score it lower and clients never
+    auto-reply."""
+    return {
+        "List-Id": "TopQuaranta newsletter <newsletter.topquaranta.cat>",
+        "List-Unsubscribe": f"<{SITE}/compte/perfil>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        "Auto-Submitted": "auto-generated",
+        "X-Auto-Response-Suppress": "All",
+    }
+
+
 def notify_admins_draft_preview(draft) -> None:
-    """Best-effort: email `settings.ADMINS` the FULL newsletter preview for
-    a pending draft — byte-for-byte the body subscribers will receive, plus
-    the admin-only management block linking to the staff editor. Used by the
-    LLM routine so a pending draft is never left unreviewed in silence.
+    """Best-effort: email `settings.ADMINS` a LIGHTWEIGHT notification that a
+    pending draft is ready, with a top-3 glance and a link to the staff
+    editor — where the full, faithful preview (and the edit/cancel controls)
+    already live.
+
+    Deliberately NOT the full HTML body: an A/B test against our own Stalwart
+    spam filter (2026-06-13) showed the ~100 KB top-40 HTML is filed as Junk
+    (`message-ingest.spam`, mailbox 2) while a small notification lands in the
+    Inbox (`message-ingest.ham`, mailbox 0) — identical headers/auth, so the
+    weight of the body is the trigger. The heavy preview stays one click away.
 
     Never raises: any failure (build, render, mail) logs and is swallowed so
     it cannot block the draft write that triggered it."""
-    from django.core.mail import mail_admins
+    from django.core.mail import EmailMultiAlternatives
+    from django.utils.html import escape
 
     from social import payload
 
     try:
+        gestio_url = staff_draft_url(draft.setmana)
         data = payload.build_top(draft.territori, draft.setmana)
         entries = (data or {}).get("entries") or []
-        publish_date = draft.setmana + datetime.timedelta(days=5)
-        gestio_url = staff_draft_url(draft.setmana)
-        html = render_newsletter_preview(
-            draft.tipus,
-            draft.territori,
-            draft.setmana,
-            publish_date,
-            entries,
-            subject_override=draft.subject,
-            narrative_html_override=draft.narrative_html,
-            gestio_url=gestio_url,
-        )
+        top3 = []
+        for e in entries[:3]:
+            names = e.get("artistes_noms") or [e.get("artista_nom") or "—"]
+            top3.append(
+                f"{e.get('posicio')}. {e.get('canco_nom') or '—'} — "
+                f"{', '.join(names)}"
+            )
+        top3_txt = "\n".join(top3)
         text = (
             "Esborrany de la newsletter setmanal a punt per revisar.\n\n"
             f"Setmana: {draft.setmana}\n"
             f"Assumpte: {draft.subject}\n\n"
-            "S'enviarà diumenge tret que el modifiquis o el cancel·lis:\n"
-            f"{gestio_url}\n"
+            f"{top3_txt}\n\n"
+            "Preview complet, editar o paralitzar l'enviament:\n"
+            f"{gestio_url}\n\n"
+            "S'enviarà diumenge tret que el modifiquis o el cancel·lis.\n"
         )
-        mail_admins(
-            f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",
-            text,
-            fail_silently=False,
-            html_message=html,
+        top3_html = "".join(f"<li>{escape(line)}</li>" for line in top3)
+        html = (
+            '<div style="font-family:Arial,Helvetica,sans-serif;color:#111;'
+            'font-size:15px;line-height:1.5">'
+            "<p>Esborrany de la newsletter setmanal a punt per revisar.</p>"
+            f"<p><strong>Setmana:</strong> {escape(str(draft.setmana))}<br>"
+            f"<strong>Assumpte:</strong> {escape(draft.subject)}</p>"
+            f"<ol>{top3_html}</ol>"
+            f'<p><a href="{escape(gestio_url)}">Preview complet, editar o '
+            "paralitzar l'enviament</a></p>"
+            '<p style="color:#555;font-size:13px">S\'enviarà diumenge tret '
+            "que el modifiquis o el cancel·lis.</p>"
+            "</div>"
         )
+        msg = EmailMultiAlternatives(
+            subject=f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",
+            body=text,
+            from_email=FROM_EMAIL,
+            to=list(settings.ADMINS),
+            headers=_admin_notice_headers(),
+        )
+        msg.attach_alternative(html, "text/html")
+        msg.send(fail_silently=False)
     except Exception:  # noqa: BLE001
         logger.exception(
             "notify_admins_draft_preview failed for setmana %s",

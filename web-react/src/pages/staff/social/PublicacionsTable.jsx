@@ -333,27 +333,27 @@ export default function PublicacionsTable({ params }) {
                       <Btn tone="secondary" disabled={busy} onClick={() => resetPost(p)}>
                         Reconciliar registre
                       </Btn>
-                      {p.instagram_media_id && (
+                      {/* Re-publicar and remote-delete both first delete the
+                          previous media. Our Instagram surface (Instagram API
+                          with Instagram Login) can't delete published media via
+                          the API, so neither can keep its promise — both hidden
+                          for IG. They stay for Mastodon/Bluesky/Telegram, where
+                          the API delete works. For IG: delete by hand in the app,
+                          then "Reconciliar registre" + "Publicar". */}
+                      {p.instagram_media_id && !IS_IG.has(p.platform) && (
                         <>
                           <Btn disabled={busy} onClick={() => republicar(p)}>
                             Re-publicar
                           </Btn>
-                          {/* Remote delete only for networks whose API supports it.
-                              Our Instagram surface (Instagram Login) can't delete
-                              published media via the API — the button can't keep its
-                              promise, so it's hidden for IG. Delete IG posts by hand
-                              in the app, then "Reconciliar registre". */}
-                          {!IS_IG.has(p.platform) && (
-                            <Btn tone="danger" disabled={busy} onClick={() => eliminarRemot(p)}>
-                              {DELETE_LABEL[p.platform] || `Esborrar ${p.platform}`}
-                            </Btn>
-                          )}
+                          <Btn tone="danger" disabled={busy} onClick={() => eliminarRemot(p)}>
+                            {DELETE_LABEL[p.platform] || `Esborrar ${p.platform}`}
+                          </Btn>
                         </>
                       )}
                       {p.instagram_media_id && IS_IG.has(p.platform) && (
                         <span className="text-xs text-tq-ink/55 self-center">
-                          Instagram no permet esborrar per API: fes-ho a mà a l'app i
-                          després «Reconciliar registre».
+                          Instagram no permet esborrar/re-publicar per API: fes-ho
+                          a mà a l'app i després «Reconciliar registre» + «Publicar».
                         </span>
                       )}
                     </div>

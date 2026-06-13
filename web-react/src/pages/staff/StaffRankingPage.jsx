@@ -88,6 +88,16 @@ export default function StaffRankingPage() {
         </Select>
       </div>
 
+      {/* The "Escoltes" column shows RAW weekly plays; the score that
+          ordered this list applies the adaptive outlier soft-cap when
+          active (per /staff/configuracio), so a magnitude outlier can
+          sit lower than its raw escoltes alone would suggest. */}
+      <p className="text-xs opacity-60 mb-3">
+        Escoltes = brutes (rolling 7 dies). El càlcul comprimeix els outliers
+        amb el sostre suau per territori segons la{' '}
+        <Link to="/staff/configuracio" className="underline">configuració</Link>.
+      </p>
+
       {sel.size > 0 && (
         <div className="flex flex-wrap gap-2 mb-3 p-2 bg-tq-yellow/90 text-tq-ink rounded">
           <span className="text-sm font-semibold">{sel.size} seleccionades</span>

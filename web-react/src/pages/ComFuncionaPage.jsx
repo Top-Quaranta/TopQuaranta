@@ -56,14 +56,15 @@ export default function ComFuncionaPage() {
           <CfCard kicker="el mètode" title="COM ES DECIDEIX EL TOP">
             <p>
               Cada nit baixem el nombre d'escoltes recents de cada cançó a Last.fm,
-              els acumulem durant la setmana i el dissabte tanquem el top. Quatre
-              factors decideixen la posició:
+              els acumulem durant la setmana i el dissabte tanquem el top. Cinc
+              coses decideixen la posició:
             </p>
             <ol className="rd-cf-factors">
               <li><span className="rd-cf-fnum">1</span><p><strong>Quantes escoltes té aquesta setmana</strong> — la base. Si una cançó té poques dades, l'extrapolem a partir de la seva mitjana de vida perquè no quedi penalitzada.</p></li>
               <li><span className="rd-cf-fnum">2</span><p><strong>Quants dies fa que es va publicar</strong> — les cançons noves pugen més fàcil; les que ja porten mesos al top van perdent pes lentament.</p></li>
               <li><span className="rd-cf-fnum">3</span><p><strong>Quantes vegades ja ha estat al top</strong> — penalitzem una mica les cançons que ja han ocupat posicions altes per donar oportunitat a les noves.</p></li>
               <li><span className="rd-cf-fnum">4</span><p><strong>Quantes cançons del mateix àlbum o artista</strong> ja apareixen — perquè un sol disc no monopolitzi el top de la setmana.</p></li>
+              <li><span className="rd-cf-fnum">5</span><p><strong>Un sostre suau per als pics</strong> — si una cançó té moltíssimes més escoltes que el que és habitual al seu territori (sovint un artista molt comercial), en comprimim l'excés perquè no aixafe la resta. Cada territori té el seu propi llindar i les cançons amb xifres normals no es toquen.</p></li>
             </ol>
             <p className="rd-cf-fine">
               Els coeficients exactes són públics i tenen historial: la fórmula

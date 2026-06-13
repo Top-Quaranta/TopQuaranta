@@ -257,7 +257,7 @@ function TerritoriSection() {
         {TERR_GRID.map(code => {
           const t = terr(code)
           return (
-            <Link key={code} to={`/top?territori=${code}`} className="rd-terr-card rd-glass">
+            <Link key={code} to={`/top?t=${code.toLowerCase()}`} className="rd-terr-card rd-glass">
               <div className="rd-terr-glow" style={{ background: `radial-gradient(110% 80% at 50% 0%, ${t.deep}, transparent 72%)` }} />
               <TerrLogo code={code} className="h-10 w-10" />
               <span className="rd-terr-name" style={{ color: t.accent }}>{t.nom}</span>

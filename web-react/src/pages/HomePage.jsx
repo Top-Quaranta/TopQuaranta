@@ -1,25 +1,27 @@
 /**
  * HomePage — redisseny web (network-kit language).
  *
- * Five editorial bands, following the design handoff:
- *   1. Hero          — dark band + glows, Anton headline, live countdown
- *                      glass card (4 cells + SETMANA pill).
- *   2. EL TOP 10     — #1 glass card + rows 2–10 (real /top/ PPCC).
- *   3. EXPLORA PER TERRITORI — territory glass grid → /top?territori=…
- *   4. NOUS ÀLBUMS   — cover-forward wall (real /albums/).
- *   5. Banda groga   — big countdown (same logic as before, decision 9).
+ * Bands (handoff + Miquel's amendments):
+ *   1. Hero            — dark band + glows, Anton headline, ONE live
+ *                        countdown glass card (SETMANA pill, week from API).
+ *   2. EL TOP 10       — #1 glass card + rows 2–10, with territory chips.
+ *   3. LA PUJADA       — biggest climber of the week (cançó destacada).
+ *   4. EXPLORA PER TERRITORI — territory glass grid.
+ *   5. NOUS ÀLBUMS     — cover-forward wall.
+ *   6. PER DESCOBRIR   — recently approved artists, never in the top.
+ *   7. CTA band (yellow) — simple call to the top, NO second clock.
  *
- * Real data + real URLs are preserved (cancoUrl/albumUrl, deezerImg,
- * useApi, SeoHead). The global top carries no per-row territori in its
- * payload, so the per-row territory chip from the prototype (sample data)
- * is honestly omitted; the territory language lives in section 3.
+ * Vocabulary: "el top" / "el top complet" / "la llista" — the house words
+ * (the R-word is product-vetoed across the SPA).
+ * Week number + per-row territori come from the API (single source); the
+ * client only paints. Real data/URLs/countdown logic conserved.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import useApi from '../hooks/useApi'
 import { Band, Glow, Glass, Kicker, Crit, Numeral, Move, TerrLogo, RdCover } from '../components/rd/primitives'
 import { terr } from '../components/rd/terr'
-import { cancoUrl, albumUrl } from '../lib/urls'
+import { cancoUrl, albumUrl, artistaUrl } from '../lib/urls'
 import { deezerImg } from '../lib/img'
 import { SeoHead } from '../lib/seoHead'
 
@@ -32,9 +34,6 @@ function nextSaturday9(from = new Date()) {
   if (daysAhead === 0 && from.getTime() >= next.getTime()) daysAhead = 7
   next.setDate(next.getDate() + daysAhead)
   return next
-}
-function topPublishedToday(now = new Date()) {
-  return now.getDay() === 6 && now.getHours() >= 9
 }
 function useNow() {
   const [now, setNow] = useState(() => new Date())
@@ -56,17 +55,6 @@ function useCountdown(now) {
   }
 }
 
-/* Project week number from the Saturday ISO date (anchor: Sat 2026-04-25
-   = week 34, mirroring music.dates.project_week_number). */
-const WEEK_ANCHOR = Date.UTC(2026, 3, 25)
-function projectWeek(dissabteIso) {
-  if (!dissabteIso) return null
-  const d = new Date(dissabteIso)
-  if (Number.isNaN(d.getTime())) return null
-  const days = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - WEEK_ANCHOR) / 86400000)
-  return 34 + Math.round(days / 7)
-}
-
 /* ── Shared section header (kicker + Anton crit title) ──────────────── */
 function SecHead({ kicker, children }) {
   return (
@@ -75,6 +63,19 @@ function SecHead({ kicker, children }) {
       <Crit as="h2" className="rd-sec-title">{children}</Crit>
     </header>
   )
+}
+
+/* Cover props for a top-style entry (real Deezer cover, sized to slot). */
+function coverProps(e, size, radius) {
+  return {
+    src: e.album?.imatge_url ? deezerImg(e.album.imatge_url, size <= 48 ? 120 : size <= 160 ? 250 : 500) : null,
+    label: e.canco?.nom || e.artista?.nom || '?',
+    alt: e.album?.nom ? `Portada de ${e.album.nom}` : '',
+    size, radius,
+  }
+}
+function rowUrl(e) {
+  return cancoUrl({ cancoSlug: e.canco?.slug, artistaSlug: e.artista?.slug, albumSlug: e.album?.slug })
 }
 
 /* ── 1 · Hero ───────────────────────────────────────────────────────── */
@@ -86,16 +87,16 @@ function Hero({ now, week }) {
       <Glow variant="b" />
       <div className="rd-hero-grid">
         <div>
-          <Kicker className="block mb-3.5">el rànquing setmanal de música en català</Kicker>
+          <Kicker className="block mb-3.5">el top setmanal de música en català</Kicker>
           <h1 className="rd-hero-h1">
             LA NOSTRA MÚSICA<br />NO PARA DE <span style={{ color: 'var(--color-tq-yellow)' }}>CRÉIXER</span>
           </h1>
           <p className="rd-hero-sub">
             Cada dissabte mesurem què sona als Països Catalans a partir
-            d'escoltes reals. Deu territoris, un Top 40, dades obertes.
+            d'escoltes reals. Deu territoris, un top de 40, dades obertes.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Link to="/top" className="rd-btn rd-btn--hot">Veure el TOP 40</Link>
+            <Link to="/top" className="rd-btn rd-btn--hot">Veure el top complet</Link>
             <Link to="/com-funciona" className="rd-btn rd-btn--ghost">Com funciona</Link>
           </div>
         </div>
@@ -123,19 +124,8 @@ function Hero({ now, week }) {
 }
 
 /* ── 2 · EL TOP 10 ──────────────────────────────────────────────────── */
-function coverProps(e, size, radius) {
-  return {
-    src: e.album?.imatge_url ? deezerImg(e.album.imatge_url, size <= 48 ? 120 : size <= 160 ? 250 : 500) : null,
-    label: e.canco?.nom || e.artista?.nom || '?',
-    alt: e.album?.nom ? `Portada de ${e.album.nom}` : '',
-    size, radius,
-  }
-}
-function rowUrl(e) {
-  return cancoUrl({ cancoSlug: e.canco?.slug, artistaSlug: e.artista?.slug, albumSlug: e.album?.slug })
-}
-
 function NumberOneCard({ e }) {
+  const code = e.artista?.territori
   return (
     <Link to={rowUrl(e)} className="rd-one-card rd-glass">
       <div className="rd-one-body">
@@ -149,6 +139,12 @@ function NumberOneCard({ e }) {
           </div>
           <h3 className="rd-one-title">{e.canco?.nom}</h3>
           <p className="rd-one-artist">{e.artista?.nom}</p>
+          {code && (
+            <div className="rd-one-terr">
+              <TerrLogo code={code} className="h-[18px] w-[18px]" />
+              <Kicker>{terr(code).nom}</Kicker>
+            </div>
+          )}
         </div>
       </div>
     </Link>
@@ -156,6 +152,7 @@ function NumberOneCard({ e }) {
 }
 
 function TopRow({ e }) {
+  const code = e.artista?.territori
   return (
     <li>
       <Link to={rowUrl(e)} className="rd-trow">
@@ -165,6 +162,7 @@ function TopRow({ e }) {
           <p className="rd-trow-title">{e.canco?.nom}</p>
           <p className="rd-trow-artist">{e.artista?.nom}</p>
         </div>
+        {code && <TerrLogo code={code} className="h-4 w-4 shrink-0" />}
         <span className="rd-trow-mv"><Move posicio={e.posicio} posicio_anterior={e.posicio_anterior} size={20} /></span>
       </Link>
     </li>
@@ -216,18 +214,44 @@ function TopTenSection() {
       )}
 
       <Link to="/top" className="rd-link-more" style={{ color: 'var(--color-tq-yellow)' }}>
-        Veure el rànquing complet (40) →
+        Veure el top complet (40) →
       </Link>
     </Band>
   )
 }
 
-/* ── 3 · EXPLORA PER TERRITORI ──────────────────────────────────────── */
+/* ── 3 · LA PUJADA (cançó destacada — biggest climber) ──────────────── */
+function PujadaSection() {
+  const { data } = useApi('/top/canco-destacada/')
+  const e = data?.entry
+  if (!e) return null
+  const code = e.territori
+  return (
+    <Band tone="ink">
+      <SecHead kicker="el gran salt de la setmana">LA PUJADA</SecHead>
+      <Link to={rowUrl(e)} className="rd-pujada rd-glass">
+        <RdCover {...coverProps(e, 150, 14)} />
+        <div className="min-w-0">
+          <span className="rd-pujada-badge" style={{ background: 'var(--color-tq-yellow)', color: '#0a0a0a' }}>
+            #{e.posicio} · puja {e.delta}
+          </span>
+          <h3 className="rd-one-title" style={{ marginTop: 12 }}>{e.canco?.nom}</h3>
+          <p className="rd-one-artist">{e.artista?.nom}</p>
+          {code && code !== 'PPCC' && (
+            <div className="rd-one-terr"><TerrLogo code={code} className="h-[18px] w-[18px]" /><Kicker>{terr(code).nom}</Kicker></div>
+          )}
+        </div>
+      </Link>
+    </Band>
+  )
+}
+
+/* ── 4 · EXPLORA PER TERRITORI ──────────────────────────────────────── */
 const TERR_GRID = ['CAT', 'VAL', 'BAL', 'AND', 'CNO', 'FRA', 'ALG', 'ALT']
 
 function TerritoriSection() {
   return (
-    <Band tone="ink">
+    <Band tone="ink2">
       <SecHead kicker="deu territoris, una llengua">EXPLORA PER TERRITORI</SecHead>
       <div className="rd-terr-grid">
         {TERR_GRID.map(code => {
@@ -245,13 +269,13 @@ function TerritoriSection() {
   )
 }
 
-/* ── 4 · NOUS ÀLBUMS ────────────────────────────────────────────────── */
+/* ── 5 · NOUS ÀLBUMS ────────────────────────────────────────────────── */
 function AlbumsSection() {
   const { data, loading } = useApi('/albums/?ordering=-data_llancament&amb_verificades=true&limit=10')
   const items = data?.results || []
   if (!loading && items.length === 0) return null
   return (
-    <Band tone="ink2">
+    <Band tone="ink">
       <SecHead kicker="acabats de publicar">NOUS <span style={{ color: 'var(--color-tq-yellow)' }}>ÀLBUMS</span></SecHead>
       {loading ? (
         <ul className="rd-album-wall">
@@ -281,52 +305,75 @@ function AlbumsSection() {
   )
 }
 
-/* ── 5 · Banda groga (countdown) ────────────────────────────────────── */
-function CountdownBand({ now }) {
-  const c = useCountdown(now)
-  const published = topPublishedToday(now)
+/* ── 6 · PER DESCOBRIR (recently approved, never in the top) ────────── */
+function DescobertaSection() {
+  const { data } = useApi('/artistes/descoberta/?limit=4')
+  const items = data?.results || []
+  if (items.length === 0) return null
+  return (
+    <Band tone="ink2">
+      <SecHead kicker="encara no han estat al top">PER DESCOBRIR</SecHead>
+      <ul className="rd-desc-grid">
+        {items.map(a => {
+          const code = a.territoris?.[0]
+          const t = code ? terr(code) : null
+          return (
+            <li key={a.slug}>
+              <Link to={artistaUrl(a.slug)} className="block group">
+                <RdCover
+                  src={a.imatge_url ? deezerImg(a.imatge_url, 500) : null}
+                  label={a.nom} alt={a.nom ? `${a.nom}` : ''}
+                  tint={t ? t.deep : '#33373d'}
+                  size="100%" radius={12}
+                  className="rd-album-cover"
+                />
+                <p className="rd-album-title">{a.nom}</p>
+                {t && (
+                  <span className="rd-desc-terr" style={{ color: t.accent }}>
+                    <TerrLogo code={code} className="h-3.5 w-3.5" /> {t.nom}
+                  </span>
+                )}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </Band>
+  )
+}
+
+/* ── 7 · CTA band (yellow) — single clock rule: NO numbers here ─────── */
+function CtaBand() {
   return (
     <Band tone="yellow" className="text-center">
-      {published ? (
-        <>
-          <Kicker color="rgba(10,10,10,0.66)">avui mateix</Kicker>
-          <p className="rd-cd-published">Top publicat avui</p>
-          <p className="rd-cd-note">torna el proper dissabte a les 9 h · música en català</p>
-        </>
-      ) : (
-        <>
-          <Kicker color="rgba(10,10,10,0.66)">proper top oficial</Kicker>
-          <div className="rd-cd-row">
-            {[['dies', c.dies], ['hores', c.hores], ['minuts', c.minuts], ['segons', c.segons]].map(([l, n]) => (
-              <div key={l} className="text-center">
-                <span className="rd-cd-n">{String(n).padStart(2, '0')}</span>
-                <span className="rd-cd-l">{l}</span>
-              </div>
-            ))}
-          </div>
-          <p className="rd-cd-note">cada dissabte a les 9 h · música en català</p>
-        </>
-      )}
+      <Kicker color="rgba(10,10,10,0.66)">cada dissabte a les 9 h</Kicker>
+      <p className="rd-cd-published">EL TOP, CADA SETMANA</p>
+      <p className="rd-cd-note" style={{ marginBottom: 22 }}>música en català, viva i mesurable</p>
+      <Link to="/top" className="rd-btn" style={{ background: '#0a0a0a', color: 'var(--color-tq-yellow)' }}>
+        Veure el top complet →
+      </Link>
     </Band>
   )
 }
 
 /* ── Page ───────────────────────────────────────────────────────────── */
 export default function HomePage() {
-  // Retire the legacy yellow-body theme if a previous render set it.
   useEffect(() => { document.body.removeAttribute('data-theme') }, [])
   const now = useNow()
+  // Week number comes from the API (single backend source — no client anchor).
   const { data: top } = useApi('/top/?territori=PPCC&oficial=true&limit=1')
-  const week = projectWeek(top?.setmana_dissabte || top?.setmana)
+  const week = top?.setmana_numero ?? null
 
   return (
     <>
       <SeoHead entity="homepage" />
       <Hero now={now} week={week} />
       <TopTenSection />
+      <PujadaSection />
       <TerritoriSection />
       <AlbumsSection />
-      <CountdownBand now={now} />
+      <DescobertaSection />
+      <CtaBand />
     </>
   )
 }

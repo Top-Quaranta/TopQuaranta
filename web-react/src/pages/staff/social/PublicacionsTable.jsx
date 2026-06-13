@@ -47,9 +47,14 @@ const STATUS = {
   omes: { tone: 'gray', label: 'Omès' },
 }
 
+// Platforms whose Graph API can't delete published media on our surface
+// (Instagram API with Instagram Login). The remote-delete button is hidden
+// for these; deletion is manual in the app + "Reconciliar registre" locally.
+const IS_IG = new Set(['instagram_feed', 'instagram_story'])
+
+// Remote-delete labels — only for networks where the API delete works.
+// (No IG entries: the button is not rendered for IG.)
 const DELETE_LABEL = {
-  instagram_feed: 'Esborrar IG',
-  instagram_story: 'Esborrar story IG',
   mastodon: 'Esborrar Mastodon',
   bluesky: 'Esborrar Bluesky',
   telegram: 'Esborrar Telegram',
@@ -159,18 +164,20 @@ export default function PublicacionsTable({ params }) {
   async function resetPost(post) {
     if (
       !confirm(
-        `Reset estat: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'}?\n\n` +
-          `Marca la fila com "pendent" i esborra l'id remota local. ` +
-          `NO toca la publicació remota. Útil per reintentar des de zero.`
+        `Reconciliar registre: ${post.platform} · ${post.tipus} · ${post.territori_label || '—'}?\n\n` +
+          `Marca aquesta fila com a retirada al NOSTRE sistema (status → "pendent", ` +
+          `esborra l'id remota local). NO toca la publicació a la xarxa.\n\n` +
+          `Per a Instagram, que no permet esborrar per API: esborra el post a mà a ` +
+          `l'app i fes servir això per reconciliar el nostre registre. Confirmes?`
       )
     )
       return
     setBusy(true)
-    setOutput('▶ Reset estat…')
+    setOutput('▶ Reconciliant registre…')
     try {
       const res = await api.post('/staff/social/reset/', { pk: post.pk })
       setOutput(
-        `✓ Reset: status era ${res.previous?.status}, id remota era "${res.previous?.instagram_media_id || '(buit)'}"`
+        `✓ Registre reconciliat: status era ${res.previous?.status}, id remota era "${res.previous?.instagram_media_id || '(buit)'}"`
       )
       await reload()
     } catch (e) {
@@ -324,9 +331,16 @@ export default function PublicacionsTable({ params }) {
                         Publicar
                       </Btn>
                       <Btn tone="secondary" disabled={busy} onClick={() => resetPost(p)}>
-                        Reset
+                        Reconciliar registre
                       </Btn>
-                      {p.instagram_media_id && (
+                      {/* Re-publicar and remote-delete both first delete the
+                          previous media. Our Instagram surface (Instagram API
+                          with Instagram Login) can't delete published media via
+                          the API, so neither can keep its promise — both hidden
+                          for IG. They stay for Mastodon/Bluesky/Telegram, where
+                          the API delete works. For IG: delete by hand in the app,
+                          then "Reconciliar registre" + "Publicar". */}
+                      {p.instagram_media_id && !IS_IG.has(p.platform) && (
                         <>
                           <Btn disabled={busy} onClick={() => republicar(p)}>
                             Re-publicar
@@ -335,6 +349,12 @@ export default function PublicacionsTable({ params }) {
                             {DELETE_LABEL[p.platform] || `Esborrar ${p.platform}`}
                           </Btn>
                         </>
+                      )}
+                      {p.instagram_media_id && IS_IG.has(p.platform) && (
+                        <span className="text-xs text-tq-ink/55 self-center">
+                          Instagram no permet esborrar/re-publicar per API: fes-ho
+                          a mà a l'app i després «Reconciliar registre» + «Publicar».
+                        </span>
                       )}
                     </div>
                   </Td>

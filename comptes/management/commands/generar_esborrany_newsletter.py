@@ -15,17 +15,12 @@ Idempotent: if a draft for the week already exists it is left untouched
 from __future__ import annotations
 
 import datetime
-import logging
 
-from django.conf import settings
-from django.core.mail import mail_admins
 from django.core.management.base import BaseCommand
 
 from comptes.models import NewsletterDraft
-from comptes.newsletter import build_draft_text
+from comptes.newsletter import build_draft_text, notify_staff_draft_ready
 from ranking.models import TopSetmanal
-
-logger = logging.getLogger(__name__)
 
 # The public subscriber newsletter is the Global (PPCC) weekly top.
 TIPUS = "top_ppcc"
@@ -102,28 +97,8 @@ class Command(BaseCommand):
             narrative_html=narrative_html,
             font=NewsletterDraft.FONT_MOTOR,
         )
-        self._email_staff(draft)
+        notify_staff_draft_ready(draft)
         self.stdout.write(
             self.style.SUCCESS(f"Esborrany creat (pk={draft.pk}, setmana={setmana}).")
         )
         self.stdout.write("WORK_DONE=1")
-
-    def _email_staff(self, draft: NewsletterDraft) -> None:
-        """Best-effort staff notification with the edit link."""
-        site = settings.SITE_URL.rstrip("/")
-        link = f"{site}/staff/social/esborrany?setmana={draft.setmana.isoformat()}"
-        body = (
-            "S'ha generat l'esborrany de la newsletter setmanal.\n\n"
-            f"Setmana: {draft.setmana}\n"
-            f"Assumpte: {draft.subject}\n\n"
-            "S'enviarà DIUMENGE tret que el cancel·lis o el modifiquis.\n\n"
-            f"Revisa'l i edita'l aquí:\n{link}\n"
-        )
-        try:
-            mail_admins(
-                f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",
-                body,
-                fail_silently=False,
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("generar_esborrany_newsletter: mail_admins failed")

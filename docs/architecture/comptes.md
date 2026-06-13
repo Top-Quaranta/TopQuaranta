@@ -245,12 +245,19 @@ will send), `font`, `editat`.
      draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`
      `estat` rejected; an already `enviat`/`cancellat` week is terminal →
-     409). It reads/leaves only; it never sends.
+     409). It reads/leaves only; it never sends. On a successful upsert it
+     fires the same staff notification as the engine fallback (shared
+     `newsletter.notify_staff_draft_ready`, `mail_admins` → `settings.ADMINS`
+     with the subject + the `/staff/social/esborrany` link + the scheduled
+     Sunday send window), so an LLM-authored draft is no longer left in
+     silence. Best-effort: a mail failure logs and never blocks the write,
+     and none of the parada/error returns above fire it.
 1. **Saturday 16:00 — `generar_esborrany_newsletter` (engine fallback)**:
    composes `subject` + `narrative_html` via `newsletter.build_draft_text`
    (wraps `_build_top_context`, side-effect-free — no `mark_used`),
    persists a `pendent` draft **only if none exists for the week**
-   (idempotent), emails staff a link to `/staff/social/esborrany`. Runs
+   (idempotent), emails staff a link to `/staff/social/esborrany` (shared
+   `notify_staff_draft_ready`, same mail both paths now use). Runs
    LATE (16:00) so the routine has had its turn first; if the routine
    failed, the engine still leaves a draft. An **anti-stale guard**
    refuses to generate unless the TopSetmanal for THIS week

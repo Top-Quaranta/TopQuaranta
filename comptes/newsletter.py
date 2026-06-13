@@ -21,7 +21,7 @@ import logging
 
 from django.conf import settings
 from django.core import signing
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, mail_admins
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
@@ -329,6 +329,44 @@ def _build_top_context(
         "entries": rows,
     }
     return context, subject
+
+
+# Scheduled subscriber send, deduced from the cron entry that invokes
+# `enviar_newsletter` (deploy/cron.topquaranta: `0 10 * * 0`). Kept as a
+# single human-readable constant so the staff notification quotes the real
+# send window; update it here if the cron slot ever moves.
+SCHEDULED_SEND = "diumenge a les 10:00 UTC"
+
+
+def notify_staff_draft_ready(draft) -> None:
+    """Best-effort admin notification that a weekly newsletter draft is
+    pending review. Shared by both creation paths (the Saturday engine
+    fallback and the cloud LLM routine) so an LLM-authored draft is no
+    longer created in silence.
+
+    Sends to `settings.ADMINS` via `mail_admins`. The body carries the
+    draft subject and a link to the staff review view, plus the scheduled
+    send window so staff know the deadline to edit or cancel. Never raises:
+    a mail-server hiccup logs and is swallowed, never blocking the write
+    that triggered it.
+    """
+    site = settings.SITE_URL.rstrip("/")
+    link = f"{site}/staff/social/esborrany?setmana={draft.setmana.isoformat()}"
+    body = (
+        "S'ha generat l'esborrany de la newsletter setmanal.\n\n"
+        f"Setmana: {draft.setmana}\n"
+        f"Assumpte: {draft.subject}\n\n"
+        f"S'enviarà {SCHEDULED_SEND} tret que el cancel·lis o el modifiquis.\n\n"
+        f"Revisa'l i edita'l aquí:\n{link}\n"
+    )
+    try:
+        mail_admins(
+            f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",
+            body,
+            fail_silently=False,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("notify_staff_draft_ready: mail_admins failed")
 
 
 def build_draft_text(

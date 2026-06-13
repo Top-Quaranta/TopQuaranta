@@ -24,6 +24,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import NewsletterDraft
+from comptes.newsletter import notify_staff_draft_ready
 from comptes.newsletter_brief import build_brief, current_monday
 
 TIPUS = "top_ppcc"
@@ -125,6 +126,11 @@ def esborrany(request: Request) -> Response:
             "editat": False,
         },
     )
+    # The routine leaves the draft in silence otherwise; notify staff the
+    # same way the engine fallback does, so a pending LLM draft is visible
+    # and can be reviewed or cancelled before the scheduled send. Only
+    # reached on a successful upsert (every parada/error returns above).
+    notify_staff_draft_ready(draft)
     return Response(
         {
             "status": "ok",

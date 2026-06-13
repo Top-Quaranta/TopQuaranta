@@ -65,9 +65,13 @@ def staff_client(db, django_user_model):
 
 
 @pytest.mark.django_db
-@patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
+@patch(
+    "comptes.management.commands.generar_esborrany_newsletter.notify_staff_draft_ready"
+)
 @patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
-def test_generation_creates_draft_when_current_week_consolidated(mock_build, mock_mail):
+def test_generation_creates_draft_when_current_week_consolidated(
+    mock_build, mock_notify
+):
     monday = _current_monday()
     _seed_top(setmana=monday)  # THIS week's top exists
     mock_build.return_value = ("Subjecte motor", "<p>narrativa</p>")
@@ -77,13 +81,15 @@ def test_generation_creates_draft_when_current_week_consolidated(mock_build, moc
     assert d.font == NewsletterDraft.FONT_MOTOR
     assert d.subject == "Subjecte motor"
     assert d.editat is False
-    assert mock_mail.called
+    assert mock_notify.called
 
 
 @pytest.mark.django_db
-@patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
+@patch(
+    "comptes.management.commands.generar_esborrany_newsletter.notify_staff_draft_ready"
+)
 @patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
-def test_generation_skips_when_current_week_top_missing(mock_build, mock_mail):
+def test_generation_skips_when_current_week_top_missing(mock_build, mock_notify):
     """Anti-stale guard: only a STALE (previous-week) top exists →
     calcular_top hasn't consolidated this week yet → do NOT generate
     (never build the draft from last week's top)."""
@@ -93,13 +99,15 @@ def test_generation_skips_when_current_week_top_missing(mock_build, mock_mail):
     call_command("generar_esborrany_newsletter", stdout=StringIO())
     assert NewsletterDraft.objects.count() == 0
     assert not mock_build.called  # never even composed
-    assert not mock_mail.called
+    assert not mock_notify.called
 
 
 @pytest.mark.django_db
-@patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
+@patch(
+    "comptes.management.commands.generar_esborrany_newsletter.notify_staff_draft_ready"
+)
 @patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
-def test_generation_idempotent_does_not_overwrite(mock_build, mock_mail):
+def test_generation_idempotent_does_not_overwrite(mock_build, mock_notify):
     monday = _current_monday()
     _seed_top(setmana=monday)
     mock_build.return_value = ("Subjecte 1", "<p>1</p>")

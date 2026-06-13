@@ -478,6 +478,11 @@ body[data-theme="yellow"] {
 .rd-cc-fine { font-family: var(--font-whisper); font-style: italic; font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 14px; display: block; }
 .rd-hist-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 8px; background: rgba(255,255,255,0.06); color: #fff; font-size: 12px; text-decoration: none; transition: background .15s; }
 .rd-hist-chip:hover { background: rgba(250,204,21,0.18); }
+.rd-cc-artist { font-weight: 700; color: rgba(255,255,255,0.88); }
+.rd-cc-artist:hover { text-decoration: underline; color: #fff; }
+/* White data panel for the recharts trajectory (the chart is tuned for a
+   light surface; framing it keeps the axes legible on the dark page). */
+.rd-chart-panel { background: #fff; border-radius: 14px; padding: 14px 12px 6px; }
 @media (max-width: 900px) { .rd-cc-grid { grid-template-columns: 1fr; } }
 @media (max-width: 540px) { .rd-cc-hero { flex-direction: column; align-items: flex-start; gap: 22px; } .rd-cc-tile { width: 160px; height: 160px; } .rd-cc-ini { font-size: 58px; } }
 

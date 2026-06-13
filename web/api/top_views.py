@@ -15,10 +15,38 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from music.constants import MAX_POSICIONS_TOP, TERRITORI_NOMS
+from music.constants import (
+    MAX_POSICIONS_TOP,
+    TERRITORI_NOMS,
+    TERRITORIS_PPCC_SOURCES,
+)
+from music.dates import project_week_number
 from ranking.models import TopProvisional, TopSetmanal
 from web.api.serializers import artista_minimal
 from web.api.utils import cache_for_anon
+
+# Canonical preference order for the single territory chip shown next to
+# an artist on the (global) top: real PPCC territories first, then CAR,
+# then the ALT catch-all. An artist in several territoris shows the
+# highest-priority one. (Redisseny: the global top has no per-row
+# territori otherwise — additive field, breaks nothing.)
+_TERR_CHIP_ORDER = (*TERRITORIS_PPCC_SOURCES, "CAR", "ALT")
+
+
+def _primary_territori(artista) -> str | None:
+    """First territori code (chip-priority order) for `artista`, or None.
+    Reads the prefetched `territoris` M2M — keep the queryset's
+    `prefetch_related("canco__artista__territoris")` in sync to avoid N+1."""
+    if artista is None:
+        return None
+    codis = set(artista.territoris.values_list("codi", flat=True))
+    if not codis:
+        return None
+    for code in _TERR_CHIP_ORDER:
+        if code in codis:
+            return code
+    return next(iter(codis))
+
 
 # Territories the public API accepts — the five ranking-eligible plus
 # the smaller ones that fall back to ALT (AND, CNO, FRA, ALG). Caller
@@ -70,6 +98,9 @@ def _serialize_entry(entry, is_provisional: bool, posicio_anterior=None) -> dict
                     else getattr(entry, "artista_nom_snapshot", "")
                 ),
                 "slug": artista.slug if artista else None,
+                # Additive (redisseny): primary territori code for the
+                # row chip. None for snapshot-only rows / no territori.
+                "territori": _primary_territori(artista),
             }
             if artista or getattr(entry, "artista_nom_snapshot", "")
             else None
@@ -261,6 +292,7 @@ def ranking(request: Request) -> Response:
                         "fallback_from": None,
                         "setmana": None,
                         "setmana_dissabte": None,
+                        "setmana_numero": None,
                         "es_provisional": False,
                         "data_calcul": None,
                         "entries": [],
@@ -271,7 +303,7 @@ def ranking(request: Request) -> Response:
                 TopProvisional.objects.select_related(
                     "canco", "canco__artista", "canco__album"
                 )
-                .prefetch_related("canco__artistes_col")
+                .prefetch_related("canco__artistes_col", "canco__artista__territoris")
                 .filter(territori=territori)
                 .order_by("posicio")[:limit]
             )
@@ -282,6 +314,7 @@ def ranking(request: Request) -> Response:
                     "fallback_from": None,
                     "setmana": None,
                     "setmana_dissabte": None,
+                    "setmana_numero": None,
                     "es_provisional": True,
                     "data_calcul": prov[0].data_calcul.isoformat() if prov else None,
                     "entries": [
@@ -297,7 +330,7 @@ def ranking(request: Request) -> Response:
 
     entries = list(
         TopSetmanal.objects.select_related("canco", "canco__artista", "canco__album")
-        .prefetch_related("canco__artistes_col")
+        .prefetch_related("canco__artistes_col", "canco__artista__territoris")
         .filter(territori=actual_territori, setmana=setmana)
         .order_by("posicio")[:limit]
     )
@@ -309,7 +342,7 @@ def ranking(request: Request) -> Response:
             TopSetmanal.objects.select_related(
                 "canco", "canco__artista", "canco__album"
             )
-            .prefetch_related("canco__artistes_col")
+            .prefetch_related("canco__artistes_col", "canco__artista__territoris")
             .filter(territori="ALT", setmana=setmana)
             .order_by("posicio")[:MAX_POSICIONS_TOP]
         )
@@ -351,6 +384,10 @@ def ranking(request: Request) -> Response:
             "setmana_dissabte": (
                 setmana_dissabte.isoformat() if setmana_dissabte else None
             ),
+            # Single source of truth for the project week number lives in
+            # music.dates (also used by the social kit). The SPA only
+            # paints it — no client-side anchor (redisseny amendment 4).
+            "setmana_numero": project_week_number(setmana) if setmana else None,
             "prev_setmana": prev_setmana.isoformat() if prev_setmana else None,
             "next_setmana": next_setmana.isoformat() if next_setmana else None,
             "es_provisional": False,

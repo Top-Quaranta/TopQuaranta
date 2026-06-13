@@ -106,7 +106,7 @@ export default function TermesPage() {
       </p>
       <ul>
         <li>
-          Errors o inexactituds als rànquings causats per dades
+          Errors o inexactituds als tops causats per dades
           incorrectes a Last.fm, Deezer o MusicBrainz (corregibles
           via el botó "Corregir" de cada pàgina).
         </li>

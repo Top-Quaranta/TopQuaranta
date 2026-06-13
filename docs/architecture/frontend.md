@@ -213,9 +213,11 @@ chain — external CSS → `fonts.googleapis.com` CSS → `fonts.gstatic.com`
 woff2 — with no preload, delaying the text LCP on home/top per LCP
 audit Task 1).
 
-- **Families:** Playfair Display (headings) + Roboto (body). Both are
-  **variable** fonts, so one woff2 per family+subset covers all weights
-  via a `font-weight` range (Playfair `400 800`, Roboto `300 700`).
+- **Families:** Playfair Display (headings) + Roboto (body) for the
+  legacy/staff surfaces; **Anton** (crits), **Instrument Serif** italic
+  (whisper) + **Bricolage Grotesque** (body, variable `400 800`) for the
+  redisseny public surface (see "Redisseny web" below). All variable
+  except Anton/Instrument (single weight), one woff2 per family+subset.
 - **Subsets:** `latin` + `latin-ext` only (latin-ext carries Catalan
   edge glyphs such as `ŀ`). No italic axis — italics stay synthetic,
   identical to before. Four files total (~132 kB; latin 38/43 kB,
@@ -233,3 +235,37 @@ audit Task 1).
 - The Django auth templates (`comptes/_base_auth.html`) still use Google
   Fonts — a separate, self-contained surface — so the shared Caddy CSP
   keeps `fonts.googleapis.com` / `fonts.gstatic.com` allowed.
+
+## Redisseny web (network-kit language, 2026-06)
+
+The public site was rebuilt in the visual language of the social kit
+(dark ink + grain, Anton/Instrument Serif/Bricolage, yellow accent,
+territory deep/accent palette, liquid-glass surfaces). Shipped as a
+long-lived integration branch (`redisseny-web`) merged to `main` in one
+flip; never deployed mid-way.
+
+- **Design system** lives in `src/components/rd/`: `terr.js` (territory
+  palette + `shade()`, reusing the conserved `TERRITORI_NOM` so PPCC
+  stays "Global"), `primitives.jsx` (`Band`/`Glow`/`Glass`/`Btn`/
+  `Kicker`/`Crit`/`Numeral`/`Move`/`TerrLogo`/`TerrChip`/`RdCover`),
+  `Header.jsx`, `Footer.jsx`, `CookieBanner.jsx`. Tokens are additive in
+  `index.css @theme` (`--color-tq-ink-2`, the `--color-terr-*` table,
+  `--font-crit`/`--font-whisper`/`--font-body`); the `.rd-*` utility
+  surface (bands, glass, grain, header/footer) is scoped under `.rd-root`.
+- **PERF (hard rule):** glass blur + the fractal-noise grain are layered
+  on **only at `@media (min-width:901px)`**, with a
+  `prefers-reduced-transparency` fallback — phones get flat solid
+  surfaces, no blur, no grain. Never JS sniffing.
+- **Shell split** (`Layout.jsx`): public routes get the dark rd shell
+  (full-bleed `<main>`, bands compose full width); `/staff/*` keeps the
+  **legacy yellow shell, byte-unchanged**. This is the permanent
+  public/staff boundary — the redisseny is public-web only.
+- **Vocabulary veto:** "rànquing" is banned from user-facing copy → "el
+  top" / "el top complet" / "la llista". Repo-wide grep is clean.
+- **Conserved:** all URLs (incl. SEO-nested) + `?t=`/`?s=` params, every
+  `/api/v1/*` contract, AuthContext/2FA, FeedbackContext, CancoChart,
+  ExternalListenLinks, Cover, the countdown logic. Legacy `editorial.jsx`
+  + Playfair/Roboto remain only because `ArtistaDashboardPage` (the
+  verified-manager portal, reskinned post-flip) still uses them.
+- **A11y:** axe (WCAG 2a/2aa/21a/21aa) = 0 violations across all public
+  routes; the pre-redisseny artista/album contrast debt was resolved.

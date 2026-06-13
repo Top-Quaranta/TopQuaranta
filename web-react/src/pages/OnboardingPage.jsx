@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext'
 import LocationCascade from '../components/staff/LocationCascade'
 
 const inputClass =
-  'mt-1 px-3 py-2 rounded-md bg-white text-tq-ink text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-tq-yellow'
+  'mt-1 px-3 py-2 rounded-md bg-white/[0.07] text-white text-sm border border-white/15 placeholder-white/40 focus:outline-none focus:border-tq-yellow'
 
 function Field({ label, hint, error, children }) {
   return (

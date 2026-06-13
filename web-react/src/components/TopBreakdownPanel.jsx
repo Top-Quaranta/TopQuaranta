@@ -76,6 +76,8 @@ function explain(entry) {
   // the user knows when the number is a real 7-day delta vs a
   // lifetime average estimate.
   const escoltes = entry.escoltes_setmanals.toLocaleString('ca')
+  const efectives =
+    entry.weekly_plays_eff != null ? entry.weekly_plays_eff.toLocaleString('ca') : null
   if (entry.senyal_disponible === false) {
     lines.push(
       `Encara no tenim cap senyal de Last.fm per a aquesta cançó. Apareixerà aquí quan el cron diari l'ingereixi (06:00 UTC).`
@@ -95,6 +97,11 @@ function explain(entry) {
   } else {
     lines.push(
       `Aquesta setmana ha acumulat ${escoltes} escoltes a Last.fm.`
+    )
+  }
+  if (entry.soft_cap_aplicat && efectives) {
+    lines.push(
+      `Aquesta cançó té moltíssimes més escoltes que el que és habitual al seu territori, així que apliquem el sostre suau: de ${escoltes} escoltes brutes en compten ${efectives} efectives per al càlcul. No baixa la cançó del top; només evita que un pic aixafe la resta.`
     )
   }
   if (entry.age_factor != null && entry.age_factor < MIN_AGE_FACTOR_TO_MENTION) {
@@ -208,7 +215,17 @@ function NumericTable({ entries }) {
                 <td className="px-2 py-1.5 text-right tabular-nums font-bold">
                   {e.posicio != null ? `#${e.posicio}` : <span className="opacity-30">—</span>}
                 </td>
-                <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(e.escoltes_setmanals)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">
+                  {e.soft_cap_aplicat && e.weekly_plays_eff != null ? (
+                    <span title="Escoltes brutes → efectives (sostre suau)">
+                      <span className="opacity-50 line-through">{fmtNum(e.escoltes_setmanals)}</span>
+                      <span className="mx-0.5 opacity-40">→</span>
+                      <span style={{ color: 'var(--color-tq-yellow-deep)' }}>{fmtNum(e.weekly_plays_eff)}</span>
+                    </span>
+                  ) : (
+                    fmtNum(e.escoltes_setmanals)
+                  )}
+                </td>
                 <td className="px-2 py-1.5 text-right tabular-nums" style={{
                   color: e.age_factor != null && e.age_factor < 0.95
                     ? 'var(--color-tq-yellow-deep)'

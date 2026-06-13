@@ -534,3 +534,22 @@ body[data-theme="yellow"] {
   .rd-pujada { flex-direction: column; align-items: flex-start; }
   .rd-cd-row { gap: 14px; }
 }
+
+/* ── Com funciona (/com-funciona) ── */
+.rd-cf-stack { max-width: 820px; display: flex; flex-direction: column; gap: 18px; }
+.rd-cf-card { padding: clamp(24px, 3vw, 34px); }
+.rd-cf-title { font-family: var(--font-crit); font-size: clamp(22px, 2.6vw, 32px); line-height: 0.92; margin: 8px 0 14px; }
+.rd-prose { font-size: 15px; line-height: 1.65; color: rgba(255,255,255,0.78); }
+.rd-prose p { margin: 0 0 12px; }
+.rd-prose p:last-child { margin-bottom: 0; }
+.rd-prose strong { color: #fff; }
+.rd-prose-link { color: var(--color-tq-yellow); text-decoration: underline; }
+.rd-prose-link:hover { color: #fff; }
+.rd-cf-factors { list-style: none; margin: 18px 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.rd-cf-factors li { display: flex; gap: 16px; align-items: flex-start; }
+.rd-cf-fnum { font-family: var(--font-crit); font-size: 30px; line-height: 1; min-width: 26px; text-align: center; color: var(--color-tq-yellow); }
+.rd-cf-factors p { margin: 2px 0 0; font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.78); }
+.rd-cf-fine { font-size: 13px !important; color: rgba(255,255,255,0.45) !important; }
+.rd-cf-list { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.78); }
+.rd-cf-list li::marker { color: rgba(255,255,255,0.45); }
+.rd-cf-quote { font-family: var(--font-whisper); font-style: italic; text-align: center; font-size: 20px; color: rgba(255,255,255,0.7); margin-top: 10px; }

@@ -352,6 +352,91 @@ def test_post_creates_draft_llm_pendent(client_with_token):
 
 
 @pytest.mark.django_db
+def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
+    """A successful LLM upsert fires exactly one admin mail whose HTML body
+    carries the full top 40 and the staff management link."""
+    _seed_topN(12, prev=True)
+    r = client_with_token.post(
+        DRAFT_URL,
+        {"subject": "Subj LLM", "narrative_html": "<p>n</p>"},
+        format="json",
+        **_auth(),
+    )
+    assert r.status_code == 201, r.content
+    assert len(mailoutbox) == 1
+    m = mailoutbox[0]
+    assert "Subj LLM" in m.subject or "Subj LLM" in m.body
+    # The HTML alternative is the full preview body.
+    html = m.alternatives[0][0]
+    assert "El Top 40 complet" in html
+    gestio = f"/staff/social/esborrany?setmana={_monday().isoformat()}"
+    assert gestio in html
+    assert "Còpia de gestió" in html
+
+
+@pytest.mark.django_db
+def test_post_no_subject_does_not_send(client_with_token, mailoutbox):
+    """A parada (missing subject, 400) creates no draft and sends no mail."""
+    _seed_top()
+    r = client_with_token.post(
+        DRAFT_URL, {"narrative_html": "<p>x</p>"}, format="json", **_auth()
+    )
+    assert r.status_code == 400
+    assert len(mailoutbox) == 0
+
+
+@pytest.mark.django_db
+def test_post_terminal_draft_does_not_send(client_with_token, mailoutbox):
+    """A 409 on a terminal draft sends no mail (no successful upsert)."""
+    _seed_top()
+    NewsletterDraft.objects.create(
+        tipus="top_ppcc",
+        territori="PPCC",
+        setmana=_monday(),
+        subject="s",
+        estat=NewsletterDraft.ESTAT_ENVIAT,
+    )
+    r = client_with_token.post(DRAFT_URL, {"subject": "X"}, format="json", **_auth())
+    assert r.status_code == 409
+    assert len(mailoutbox) == 0
+
+
+@pytest.mark.django_db
+def test_subscriber_copy_has_no_management_block(
+    client_with_token, mailoutbox, django_user_model
+):
+    """The real send to subscribers must NEVER carry the admin management
+    block, even though the admin preview does."""
+    from comptes.models import PerfilUsuari
+    from comptes.newsletter import send_top_newsletter
+    from social import payload
+
+    _seed_topN(12, prev=True)
+    user = django_user_model.objects.create_user(
+        username="sub1", email="sub1@x.cat", password="x"
+    )
+    PerfilUsuari.objects.filter(usuari=user).update(vol_newsletter=True)
+
+    setmana = _monday()
+    data = payload.build_top("PPCC", setmana)
+    summary = send_top_newsletter(
+        "top_ppcc",
+        "PPCC",
+        setmana,
+        setmana + datetime.timedelta(days=5),
+        data["entries"],
+        subject_override="Subj",
+        narrative_html_override="<p>n</p>",
+    )
+    assert summary == "sent=1 fail=0"
+    assert len(mailoutbox) == 1
+    html = mailoutbox[0].alternatives[0][0]
+    assert "El Top 40 complet" in html  # same rich layout
+    assert "Còpia de gestió" not in html  # but no management block
+    assert "/staff/social/esborrany" not in html
+
+
+@pytest.mark.django_db
 def test_post_idempotent_replaces(client_with_token):
     _seed_top()
     client_with_token.post(DRAFT_URL, {"subject": "A"}, format="json", **_auth())

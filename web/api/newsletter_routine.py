@@ -24,6 +24,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import NewsletterDraft
+from comptes.newsletter import notify_admins_draft_preview
 from comptes.newsletter_brief import build_brief, current_monday
 
 TIPUS = "top_ppcc"
@@ -125,6 +126,11 @@ def esborrany(request: Request) -> Response:
             "editat": False,
         },
     )
+    # Notify admins with the FULL preview (the exact body subscribers will
+    # receive) + the management block. Best-effort and ONLY on a successful
+    # upsert: every parada/error (not_ready, 400, 409) returns above, so no
+    # mail fires on those paths.
+    notify_admins_draft_preview(draft)
     return Response(
         {
             "status": "ok",

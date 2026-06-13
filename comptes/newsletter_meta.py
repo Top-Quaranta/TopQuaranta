@@ -11,20 +11,23 @@ from __future__ import annotations
 
 import random
 
-# mm-design palette (mirrors social/colors.py).
-_GREEN = "#427c42"  # pujada
-_RED = "#cf3339"  # baixada
-_GRAY = "#6b7280"  # estable
-_YELLOW = "#facc15"  # debut accent
-_INK = "#0a0a0a"  # torna badge fg
+# Redisseny movement palette (web index.css L163-166): tuned for legibility
+# on the dark newsletter surface (#141319), mirroring the site's top rows.
+_GREEN = "#7bbf7b"  # pujada (up accent)
+_RED = "#dd7882"  # baixada (down accent)
+_GRAY = "#9aa0a6"  # estable (neutral)
+_YELLOW = "#facc15"  # debut (new entry)
+_REENTRY = "#e8a44d"  # torna (re-entry accent)
+_INK = "#0a0a0a"  # badge foreground on the accent fills
 
-# kind → (default text, text colour, badge bg or None)
+# kind → (text colour, badge bg or None). With a bg the partial renders a
+# filled badge (DEBUT/TORNA); without one, coloured text (↑N/↓N/→).
 _TREND_STYLES = {
     "pujada": (_GREEN, None),
     "baixada": (_RED, None),
     "estable": (_GRAY, None),
-    "debut": (_INK, _YELLOW),  # ink text on yellow badge
-    "torna": (_YELLOW, _INK),  # yellow text on ink badge
+    "debut": (_INK, _YELLOW),  # ink text on the yellow "new" fill
+    "torna": (_INK, _REENTRY),  # ink text on the amber "re-entry" fill
 }
 
 

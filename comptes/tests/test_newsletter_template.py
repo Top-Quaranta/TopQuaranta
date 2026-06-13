@@ -143,6 +143,49 @@ def test_dark_mode_and_responsive_present():
     assert "max-width:640px" in html
 
 
+# ── top 40 complete list + management block ──────────────────────────
+
+
+def _context_with_top40(n=40, gestio_url=None):
+    ctx = _context()
+    ctx["top40"] = [
+        _row(p, f"Tema {p}", f"Grup {p}", anterior=p + 1) for p in range(1, n + 1)
+    ]
+    if gestio_url is not None:
+        ctx["gestio_url"] = gestio_url
+    return ctx
+
+
+def test_top40_section_renders_full_list():
+    """The full ranking renders all 40 rows under its own header."""
+    html = render_to_string(
+        "comptes/email_newsletter_top.html", _context_with_top40(40)
+    )
+    assert "El Top 40 complet" in html
+    # First, a middle and the last position all present.
+    assert "Tema 1" in html and "Tema 25" in html and "Tema 40" in html
+
+
+def test_management_block_absent_without_gestio_url():
+    """The subscriber copy (no gestio_url) must NOT carry the admin block."""
+    html = render_to_string(
+        "comptes/email_newsletter_top.html", _context_with_top40(12)
+    )
+    assert "Còpia de gestió" not in html
+    assert "/staff/social/esborrany" not in html
+
+
+def test_management_block_present_with_gestio_url():
+    """The admin/preview copy carries the block + the staff editor link."""
+    link = "https://www.topquaranta.cat/staff/social/esborrany?setmana=2026-06-08"
+    html = render_to_string(
+        "comptes/email_newsletter_top.html",
+        _context_with_top40(12, gestio_url=link),
+    )
+    assert "Còpia de gestió" in html
+    assert link in html
+
+
 # ── UTM helper ───────────────────────────────────────────────────────
 
 

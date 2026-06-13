@@ -82,6 +82,10 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
     rows = list(
         TopSetmanal.objects.filter(territori=territori, setmana=setmana)
         .select_related("canco", "canco__artista", "canco__album")
+        # The redesigned top-list slide paints a per-row territory
+        # silhouette from `artista_territori`; prefetch the M2M so we
+        # populate it without an N+1 (mirrors `build_novetats`).
+        .prefetch_related("canco__artista__territoris")
         .order_by("posicio")[:40]
     )
     if not rows:
@@ -132,6 +136,16 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
         else:
             artistes_noms = ["—"]
             artistes_slugs = [None]
+        # Primary territori for the row's silhouette. Prefer a
+        # non-aggregate code (icon variety); fall back to PPCC if the
+        # artist is only tagged global. Without this the renderer's
+        # `terr_key(None)` falls back to "pri" (the senyera) for every
+        # row, so the whole top wrongly shows the Catalunya icon.
+        artista_territori = ""
+        if artista is not None:
+            codis = list(artista.territoris.values_list("codi", flat=True))
+            non_ppcc = [c for c in codis if c != "PPCC"]
+            artista_territori = (non_ppcc or codis or ["PPCC"])[0]
         entries.append(
             {
                 "posicio": r.posicio,
@@ -144,6 +158,7 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 "artistes_slugs": artistes_slugs,
                 "artista_nom": artista.nom if artista else "—",  # DEPRECATED
                 "artista_slug": artista.slug if artista else None,
+                "artista_territori": artista_territori,
                 # Principal-only URL kept for backward compatibility
                 # (renderer + caption code still reads this single field).
                 "artista_instagram_url": _instagram_url(artista),

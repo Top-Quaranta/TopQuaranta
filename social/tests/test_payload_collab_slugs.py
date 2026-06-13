@@ -11,7 +11,7 @@ import datetime
 
 import pytest
 
-from music.models import Album, Artista, Canco
+from music.models import Album, Artista, Canco, Territori
 from ranking.models import TopSetmanal
 from social import payload
 
@@ -60,11 +60,30 @@ def test_build_top_adds_parallel_slugs(top_with_collab):
 
 
 @pytest.mark.django_db
+def test_build_top_surfaces_artist_territori(top_with_collab):
+    """Regression: every top row must carry the artist's primary territori
+    so the renderer paints the right silhouette. Missing it made the whole
+    top fall back to "pri" (the Catalunya senyera) on every row."""
+    canco = top_with_collab
+    val, _ = Territori.objects.get_or_create(
+        codi="VAL", defaults={"nom": "País Valencià"}
+    )
+    canco.artista.territoris.add(val)
+    entry = payload.build_top("PPCC", SETMANA)["entries"][0]
+    assert entry["artista_territori"] == "VAL"
+
+
+@pytest.mark.django_db
 def test_build_top_no_regression_on_legacy_keys(top_with_collab):
     data = payload.build_top("PPCC", SETMANA)
     entry = data["entries"][0]
-    # Added keys: `artistes_slugs` + `reentrada` (TOP movement); rest is legacy.
-    assert set(entry) == LEGACY_ENTRY_KEYS | {"artistes_slugs", "reentrada"}
+    # Added keys: `artistes_slugs` + `reentrada` (TOP movement) +
+    # `artista_territori` (per-row silhouette); rest is legacy.
+    assert set(entry) == LEGACY_ENTRY_KEYS | {
+        "artistes_slugs",
+        "reentrada",
+        "artista_territori",
+    }
     # Legacy fields keep their exact values (social engine contract).
     assert entry["artista_nom"] == "Ouineta"
     assert entry["artista_slug"] == "ouineta"

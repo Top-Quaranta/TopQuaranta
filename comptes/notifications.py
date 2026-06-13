@@ -18,8 +18,10 @@ Design:
 - Every function is best-effort: it logs and swallows exceptions so a
   mail-server hiccup never blocks the business action that triggered
   it. The audit row still records what happened.
-- Templates are placeholders for now. Fase 1.5.C will replace them
-  with the full walkthrough + FAQ content.
+- Templates carry the full walkthrough + FAQ content (filled in by
+  Fase 1.5.C, 2026-05-18); the approval/rejection mails are split into
+  per-outcome files (`email_user_solicitud_aprovada.html` /
+  `_rebutjada.html`, and the `proposta_*` pair).
 - Staff recipients = `Usuari.objects.filter(is_staff=True)` excluding
   users without an email or with `is_active=False`. Same query used
   for every admin-side notification — kept local so future changes

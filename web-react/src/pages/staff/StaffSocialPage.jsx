@@ -403,9 +403,10 @@ export default function StaffSocialPage() {
             o a la mateixa app d'Instagram (Profile → Insights).
           </p>
           <p className="text-tq-ink/75 mt-1">
-            Sprint K integrarà el subset rellevant directament al panell
-            (Insights API + comptadors interns ètics). De moment, mira-les cada
-            dilluns per calibrar quins slots i dies actives a la matriu.
+            El panell d'analítica ja recull seguidors i mètriques agregades
+            per plataforma. Les Insights per-post d'Instagram encara es
+            consulten a mà (a l'app o Meta Business Suite); mira-les per
+            calibrar quins slots i dies actives a la matriu.
           </p>
         </div>
 

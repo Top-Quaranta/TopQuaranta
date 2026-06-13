@@ -563,3 +563,17 @@ body[data-theme="yellow"] {
 .rd-com-post { display: block; padding: 16px 18px; color: inherit; text-decoration: none; transition: transform .12s, background .15s; }
 .rd-com-post:hover { transform: translateY(-1px); }
 @media (max-width: 900px) { .rd-com-grid { grid-template-columns: 1fr; } }
+
+/* ── Auth / Compte (/compte/accedir, /compte) ── */
+.rd-auth-band { min-height: 70vh; display: grid; place-items: center; }
+.rd-auth-card { width: 100%; max-width: 460px; padding: clamp(26px, 3vw, 38px); position: relative; z-index: 2; }
+.rd-auth-title { font-family: var(--font-crit); font-size: clamp(30px, 4vw, 44px); line-height: 0.9; margin: 0 0 14px; }
+.rd-auth-tabs { display: flex; gap: 8px; }
+.rd-fld { display: flex; flex-direction: column; gap: 7px; }
+.rd-fld > span { font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(255,255,255,0.60); font-weight: 700; }
+.rd-fld input { font-family: inherit; font-size: 15px; color: #fff; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; padding: 13px 16px; outline: none; }
+.rd-fld input:focus { border-color: rgba(255,255,255,0.32); }
+.rd-fld-err { font-size: 12px; color: #fca5a5; margin: 0; }
+.rd-consent { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.72); }
+.rd-consent input { margin-top: 2px; flex-shrink: 0; }
+.rd-consent a { color: #fff; }

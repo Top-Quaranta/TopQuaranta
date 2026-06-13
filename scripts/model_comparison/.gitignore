@@ -1,8 +1,0 @@
-# Large regenerable artefacts — fetch via fetch_clips.py.
-clips/*.wav
-clips/*.mp3
-
-# Per-runner venvs (dependencies conflict — Spleeter needs TF 2.x,
-# Demucs needs recent PyTorch, MusicNN needs TF 2.3, etc).
-runners/*_venv/
-runners/*.log

@@ -182,7 +182,7 @@ UTC). `whisper_all_probs` is the full 99-language distribution —
 richer than the top-1 shortcut (`whisper_lang` + `whisper_p`) and fed
 into the RF classifier as 4 features (`whisper_p_ca`, `whisper_p_es`,
 `whisper_p_en`, `whisper_margin_ca`). Eval on a 48-clip ground-truth
-set (`scripts/model_comparison/resultats.md`): precision(ca) = 100 %,
+set (ADR-0014, `docs/decisions/0014-whisper-lid-eval.md`): precision(ca) = 100 %,
 recall(ca) = 81 %, specificity = 100 %.
 
 ### External-anchor invariant (2026-04-22, relaxed)

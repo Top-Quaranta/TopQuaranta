@@ -1,0 +1,84 @@
+{
+  "home": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "top": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "artistes": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "artista": {
+    "violations": 1,
+    "nodes": 14,
+    "byImpact": {
+      "serious": 14
+    },
+    "rules": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "n": 14
+      }
+    ]
+  },
+  "canco": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "album": {
+    "violations": 1,
+    "nodes": 1,
+    "byImpact": {
+      "serious": 1
+    },
+    "rules": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "n": 1
+      }
+    ]
+  },
+  "mapa": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "comunitat": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "com-funciona": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "accedir": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  },
+  "legal": {
+    "violations": 0,
+    "nodes": 0,
+    "byImpact": {},
+    "rules": []
+  }
+}

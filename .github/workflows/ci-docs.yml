@@ -67,7 +67,6 @@ jobs:
             --exclude-path .venv
             --exclude-path web-react/node_modules
             --exclude-path vendor
-            --exclude-path scripts/model_comparison
             './**/*.md'
           fail: true
 

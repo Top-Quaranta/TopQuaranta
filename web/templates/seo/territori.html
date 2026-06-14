@@ -9,6 +9,8 @@
   Tota la música en català produïda a {{ nom }}.
 </p>
 
+{% if prosa %}<div class="prosa">{{ prosa|linebreaks }}</div>{% endif %}
+
 {% if top_entries %}
 <h2>Top setmanal de {{ nom }}</h2>
 <table>

@@ -8,6 +8,8 @@
   Cançons publicades entre {{ year_start }} i {{ year_end }}. {{ cancons|length }} cançons verificades.
 </p>
 
+{% if prosa %}<div class="prosa">{{ prosa|linebreaks }}</div>{% endif %}
+
 <ul class="bare">
   {% for c in cancons %}
   <li>

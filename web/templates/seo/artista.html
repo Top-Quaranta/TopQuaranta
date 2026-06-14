@@ -52,6 +52,15 @@
 </ul>
 {% endif %}
 
+{% if editorial_links %}
+<h2>Explora</h2>
+<ul class="bare">
+  {% for label, url in editorial_links %}
+  <li><a href="{{ url }}">{{ label }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 <h2>Enllaços externs</h2>
 <ul class="bare">
   {% if artista.spotify_url %}<li><a href="{{ artista.spotify_url }}" rel="nofollow">Spotify</a></li>{% endif %}

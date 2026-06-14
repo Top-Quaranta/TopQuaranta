@@ -42,6 +42,7 @@ def _vary_ua(view_func):
 
 from music.models import Album, Artista, Canco
 from ranking.models import TopProvisional, TopSetmanal
+from web.models import LandingProsa
 
 from . import jsonld, meta
 
@@ -234,6 +235,53 @@ def _artista_has_indexable(a: Artista) -> bool:
     return Canco.objects.filter(artista=a, verificada=True, activa=True).exists()
 
 
+def _decada_link(release_date) -> tuple[str, str] | None:
+    """Editorial decade link, emitted ONLY when that decade page would
+    actually resolve (`decada_seo` 404s under 5 verified cançons), so we
+    never link into a 404."""
+    if not release_date:
+        return None
+    decada = (release_date.year // 10) * 10
+    n = Canco.objects.filter(
+        verificada=True,
+        activa=True,
+        data_llancament__year__gte=decada,
+        data_llancament__year__lte=decada + 9,
+    ).count()
+    if n < 5:
+        return None
+    return (f"Música en català dels {decada}", f"/decada/{decada}")
+
+
+def _editorial_links(artista: Artista, release_date=None) -> list[tuple[str, str]]:
+    """(label, url) links from an entity page INTO the editorial landings
+    it belongs to: its territori(s), canonical genre and (when a release
+    date is given) its decade.
+
+    De-orphans the editorial pages by linking into them from the
+    high-traffic entity pages — the probable cause of their ~zero search
+    impressions (investigation 2026-06, WS1)."""
+    links: list[tuple[str, str]] = []
+    seen: list[str] = []
+    for loc in artista.localitats.all():
+        muni = getattr(loc, "municipi", None)
+        codi = getattr(muni, "territori_id", None) if muni else None
+        if codi and codi in meta.TERRITORI_NOMS and codi != "ALT" and codi not in seen:
+            seen.append(codi)
+    for codi in seen[:2]:
+        links.append(
+            (f"Música en català de {meta.TERRITORI_NOMS[codi]}", f"/territori/{codi}")
+        )
+    genere = getattr(artista, "genere_canonical", "") or ""
+    if genere in {k for k, _ in Artista.GENERE_CANONICAL_CHOICES}:
+        label = dict(Artista.GENERE_CANONICAL_CHOICES)[genere]
+        links.append((f"{label} en català", f"/genere/{genere}"))
+    decada_link = _decada_link(release_date)
+    if decada_link:
+        links.append(decada_link)
+    return links
+
+
 def _render_artista_thin(request: HttpRequest, a: Artista) -> HttpResponse:
     """200 + noindex thin page for an approved artiste with no
     indexable cançó. Minimal JSON-LD (no discography) and a generated,
@@ -251,6 +299,7 @@ def _render_artista_thin(request: HttpRequest, a: Artista) -> HttpResponse:
             "meta": meta.for_artista(a, thin=True),
             "jsonld_blocks": blocks,
             "artista": a,
+            "editorial_links": _editorial_links(a),
         },
     )
 
@@ -316,6 +365,7 @@ def artista_seo(request: HttpRequest, slug: str) -> HttpResponse:
             "albums": albums,
             "cancons": cancons,
             "similars": similars,
+            "editorial_links": _editorial_links(a),
         },
     )
 
@@ -356,6 +406,7 @@ def album_seo(request: HttpRequest, slug: str) -> HttpResponse:
             "jsonld_blocks": blocks,
             "album": al,
             "tracks": tracks,
+            "editorial_links": _editorial_links(al.artista, al.data_llancament),
         },
     )
 
@@ -395,6 +446,7 @@ def canco_seo(request: HttpRequest, slug: str) -> HttpResponse:
             "jsonld_blocks": blocks,
             "canco": c,
             "posicions_actuals": posicions_actuals,
+            "editorial_links": _editorial_links(c.artista, c.data_llancament),
         },
     )
 
@@ -547,6 +599,12 @@ def territori_seo(request: HttpRequest, codi: str) -> HttpResponse:
         ],
     )
     blocks = [
+        jsonld.collection_jsonld(
+            f"Música en català de {nom}",
+            f"/territori/{codi}",
+            [(a.nom, f"/artista/{a.slug}") for a in artistes],
+            description=page_meta.description,
+        ),
         jsonld.breadcrumbs_jsonld(
             [
                 ("Inici", "/"),
@@ -565,6 +623,7 @@ def territori_seo(request: HttpRequest, codi: str) -> HttpResponse:
             "nom": nom,
             "artistes": artistes,
             "top_entries": top_entries,
+            "prosa": LandingProsa.text_for(LandingProsa.KIND_TERRITORI, codi),
         },
     )
 
@@ -678,7 +737,7 @@ def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
 
         raise _H()
 
-    title = f"Música en català dels {decada} · TopQuaranta"
+    title = f"Grups i cançons en català dels {decada} · TopQuaranta"
     desc = meta._trim(
         f"Cançons en català publicades entre {year_start} i {year_end}. "
         f"{len(cancons)} cançons verificades al sistema TopQuaranta — "
@@ -697,6 +756,12 @@ def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
         ],
     )
     blocks = [
+        jsonld.collection_jsonld(
+            f"Música en català dels {decada}",
+            f"/decada/{decada}",
+            [(c.nom, f"/canco/{c.slug}") for c in cancons],
+            description=desc,
+        ),
         jsonld.breadcrumbs_jsonld(
             [("Inici", "/"), (f"Dècada {decada}", f"/decada/{decada}")]
         ),
@@ -711,6 +776,7 @@ def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
             "year_start": year_start,
             "year_end": year_end,
             "cancons": cancons,
+            "prosa": LandingProsa.text_for(LandingProsa.KIND_DECADA, decada),
         },
     )
 
@@ -749,7 +815,7 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
         raise _H()
 
     page_meta = meta.Meta(
-        title=f"{label} en català · TopQuaranta",
+        title=f"{label} en català: grups i artistes · TopQuaranta",
         description=meta._trim(
             f"Artistes de {label.lower()} en català. {len(artistes)} bandes "
             "i cantants verificats al sistema TopQuaranta."
@@ -764,6 +830,12 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
         ],
     )
     blocks = [
+        jsonld.collection_jsonld(
+            f"{label} en català",
+            f"/genere/{slug}",
+            [(a.nom, f"/artista/{a.slug}") for a in artistes],
+            description=page_meta.description,
+        ),
         jsonld.breadcrumbs_jsonld(
             [
                 ("Inici", "/"),
@@ -781,6 +853,7 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
             "slug": slug,
             "label": label,
             "artistes": artistes,
+            "prosa": LandingProsa.text_for(LandingProsa.KIND_GENERE, slug),
         },
     )
 

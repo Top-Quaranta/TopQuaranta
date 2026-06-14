@@ -14,13 +14,16 @@ What we measure:
 
 What we deliberately don't capture:
   * IP address (neither stored nor hashed).
-  * User-Agent string (could fingerprint).
+  * User-Agent string (could fingerprint). The UA is read transiently
+    to classify a pageview as "bot" | "human" (`dimensio_2`), but the
+    string itself is never persisted. See `analytics/bots.py`.
   * Referer (could leak inbound URLs that contain tokens).
   * `request.user.pk` (no per-user paths).
 """
 
 from __future__ import annotations
 
+from analytics.bots import classify_ua
 from analytics.events import register
 
 # Path prefixes we never count. The SPA serves /staff/* internally
@@ -83,7 +86,13 @@ class AnalyticsMiddleware:
             # above 80 is almost certainly a tracker URL or attack
             # noise; the truncation merges them into one bucket which
             # is fine for trend lines.
-            register("pageview", dim1=(request.path or "/")[:80])
+            #
+            # `dimensio_2` carries the bot/human classification derived
+            # from the User-Agent (the UA itself is NOT stored). Rows
+            # written before this slice have an empty dim2 and stay
+            # "unclassified" — that's correct, not reclassifiable.
+            kind = classify_ua(request.META.get("HTTP_USER_AGENT", ""))
+            register("pageview", dim1=(request.path or "/")[:80], dim2=kind)
 
         # UTM landing — captured even on auth/staff URLs because
         # what we care about is "where did the click come from",

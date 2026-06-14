@@ -131,7 +131,16 @@ export default function ArtistaPage() {
               {isManager ? (
                 <Link to={`/compte/artista/${data.pk}/editar`} className="rd-btn rd-btn--hot ml-auto" style={{ fontSize: 13, padding: '9px 16px' }}>Editar perfil</Link>
               ) : (
-                <Link to={`/compte/artista/gestio?artista=${data.slug}`} className="rd-btn rd-btn--ghost ml-auto" style={{ fontSize: 13, padding: '9px 16px' }}>Sóc aquest artista →</Link>
+                // Claim CTA: links the request-management flow
+                // (/compte/artista/gestio -> UserArtista -> staff verifies).
+                // More prominent (--hot) when the artist is newly at the top.
+                <Link
+                  to={`/compte/artista/gestio?artista=${data.slug}`}
+                  className={`rd-btn ${data.entrat_al_top ? 'rd-btn--hot' : 'rd-btn--ghost'} ml-auto`}
+                  style={{ fontSize: 13, padding: '9px 16px' }}
+                >
+                  Ets {data.nom}? Reclama el teu perfil →
+                </Link>
               )}
             </div>
           </div>

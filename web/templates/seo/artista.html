@@ -17,6 +17,11 @@
 
 {% if artista.genere %}<p><strong>Gènere:</strong> {{ artista.genere }}</p>{% endif %}
 
+<p class="claim-cta">
+  Ets {{ artista.nom }}?
+  <a href="/compte/artista/gestio?artista={{ artista.slug }}">Reclama el teu perfil</a>.
+</p>
+
 {% if albums %}
 <h2>Discografia</h2>
 <div class="albums-grid">

@@ -73,6 +73,28 @@ def perfil_usuari(request: Request) -> Response:
             else:
                 perfil.rol_musical = v
 
+        # Matching fields (Slice B): busca/generes accept a list or a
+        # comma string, stored as normalised comma-joined tokens.
+        def _tokens(value):
+            if isinstance(value, (list, tuple)):
+                items = [str(x).strip() for x in value]
+            else:
+                items = [t.strip() for t in str(value or "").split(",")]
+            return [t for t in items if t]
+
+        if "busca" in data:
+            valid = {k for k, _ in PerfilUsuari.BUSCA_CHOICES}
+            toks = [t for t in _tokens(data.get("busca")) if t in valid]
+            perfil.busca = ",".join(toks)[:255]
+        if "generes" in data:
+            perfil.generes = ",".join(_tokens(data.get("generes"))[:20])[:255]
+        if "nivell" in data:
+            v = (data.get("nivell") or "").strip()
+            if v and v not in {k for k, _ in PerfilUsuari.NIVELL_CHOICES}:
+                errors["nivell"] = "Valor no vàlid."
+            else:
+                perfil.nivell = v
+
         for flag in (
             "visible_directori",
             "obert_colaboracions",
@@ -145,6 +167,21 @@ def directori(request: Request) -> Response:
     territori = request.GET.get("territori", "")
     if territori:
         qs = qs.filter(localitat__territori_id=territori)
+    # Matching filters (Slice B): comma-separated token lists, so an
+    # `icontains` of one token is a membership test. Objectiu d'ús:
+    # "guitarristes a València de rock que busquen grup".
+    instrument = (request.GET.get("instrument") or "").strip()
+    if instrument:
+        qs = qs.filter(instruments__icontains=instrument)
+    genere = (request.GET.get("genere") or "").strip()
+    if genere:
+        qs = qs.filter(generes__icontains=genere)
+    busca = (request.GET.get("busca") or "").strip()
+    if busca:
+        qs = qs.filter(busca__icontains=busca)
+    nivell = (request.GET.get("nivell") or "").strip()
+    if nivell in {k for k, _ in PerfilUsuari.NIVELL_CHOICES}:
+        qs = qs.filter(nivell=nivell)
 
     qs = qs.order_by("nom_public", "usuari__username")
 
@@ -165,6 +202,9 @@ def directori(request: Request) -> Response:
                 "nom_public": p.nom_public or p.usuari.username,
                 "rol_musical": p.rol_musical,
                 "instruments": p.instruments or "",
+                "busca": p.busca or "",
+                "generes": p.generes or "",
+                "nivell": p.nivell or "",
                 "obert_colaboracions": p.obert_colaboracions,
                 "imatge_url": p.imatge_url or "",
                 "localitat": (
@@ -180,7 +220,13 @@ def directori(request: Request) -> Response:
         )
 
     return Response(
-        {"results": rows, **meta, "rol_choices": list(PerfilUsuari.ROL_CHOICES)}
+        {
+            "results": rows,
+            **meta,
+            "rol_choices": list(PerfilUsuari.ROL_CHOICES),
+            "busca_choices": list(PerfilUsuari.BUSCA_CHOICES),
+            "nivell_choices": list(PerfilUsuari.NIVELL_CHOICES),
+        }
     )
 
 

@@ -283,6 +283,27 @@ class PerfilUsuari(models.Model):
         (ROL_ALTRE, "Altre"),
     ]
 
+    # "Què busques?" (Slice B). Stored comma-separated on `busca`.
+    BUSCA_CHOICES = [
+        ("grup", "Grup o banda"),
+        ("colaboradors", "Col·laboradors"),
+        ("cantant", "Cantant"),
+        ("instrumentista", "Instrumentista"),
+        ("productor", "Productor/a"),
+    ]
+
+    # Level, incl. "vull ser músic" (aspirant). Stored on `nivell`.
+    NIVELL_ASPIRANT = "aspirant"
+    NIVELL_AMATEUR = "amateur"
+    NIVELL_SEMIPRO = "semipro"
+    NIVELL_PRO = "professional"
+    NIVELL_CHOICES = [
+        (NIVELL_ASPIRANT, "Vull ser músic"),
+        (NIVELL_AMATEUR, "Amateur"),
+        (NIVELL_SEMIPRO, "Semiprofessional"),
+        (NIVELL_PRO, "Professional"),
+    ]
+
     usuari = models.OneToOneField(
         Usuari, on_delete=models.CASCADE, related_name="perfil"
     )
@@ -316,6 +337,14 @@ class PerfilUsuari(models.Model):
         max_length=20, choices=ROL_CHOICES, default=ROL_ESCOLTADOR
     )
     instruments = models.CharField(max_length=255, blank=True)
+
+    # Matching fields (Slice B). `busca` + `generes` are comma-separated
+    # token lists (vocab: BUSCA_CHOICES / Artista.GENERE_CANONICAL_CHOICES)
+    # so the directory can filter with `__icontains`. `nivell` is a single
+    # choice incl. "aspirant" (vull ser músic).
+    busca = models.CharField(max_length=255, blank=True)
+    generes = models.CharField(max_length=255, blank=True)
+    nivell = models.CharField(max_length=20, choices=NIVELL_CHOICES, blank=True)
 
     visible_directori = models.BooleanField(default=False, db_index=True)
     obert_colaboracions = models.BooleanField(default=False)

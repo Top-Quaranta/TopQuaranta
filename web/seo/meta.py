@@ -324,3 +324,23 @@ def for_mapa() -> Meta:
         og_type="website",
         keywords=["mapa música català", "geografia música catalana", "Països Catalans"],
     )
+
+
+def for_estat_musica() -> Meta:
+    return Meta(
+        title="L'estat de la música en català · Dades · TopQuaranta",
+        description=_trim(
+            "Quantes cançons i artistes en català hi ha? Dades obertes "
+            "sobre l'estat de la música en català: catàleg verificat, "
+            "artistes per territori i cobertura, actualitzat setmanalment."
+        ),
+        canonical_url=f"{CANONICAL_HOST}/estat-musica-catala",
+        og_image=f"{CANONICAL_HOST}/og/default.png",
+        og_type="article",
+        keywords=[
+            "música en català dades",
+            "quantes cançons en català",
+            "estat música catalana",
+            "música en català 2026",
+        ],
+    )

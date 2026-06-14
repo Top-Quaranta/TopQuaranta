@@ -46,6 +46,7 @@ class StaticSitemap(Sitemap):
         ("/artistes", 0.8, "weekly"),
         ("/mapa", 0.6, "weekly"),
         ("/com-funciona", 0.5, "monthly"),
+        ("/estat-musica-catala", 0.6, "weekly"),
         ("/legal/privacitat", 0.3, "yearly"),
         ("/legal/termes", 0.3, "yearly"),
         ("/legal/cookies", 0.3, "yearly"),

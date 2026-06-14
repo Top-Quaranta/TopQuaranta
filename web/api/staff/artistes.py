@@ -148,6 +148,44 @@ def artistes_list(request: Request) -> Response:
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
 
+    # "Al top" workflow (Fase 2 D2): artistes appearing in the latest
+    # weekly PPCC top, for the social tagging flow. `te_gestor_email` in
+    # the payload tells staff whether the artist has a reachable
+    # verified-manager email (the D1 alert audience).
+    al_top = request.GET.get("al_top", "")
+    want_gestor_email = al_top == "1" or request.GET.get("include_gestor_email") == "1"
+    if al_top == "1":
+        from ranking.models import TopSetmanal as _TS
+
+        latest_setmana = (
+            _TS.objects.filter(territori="PPCC")
+            .order_by("-setmana")
+            .values_list("setmana", flat=True)
+            .first()
+        )
+        if latest_setmana is None:
+            qs = qs.none()
+        else:
+            qs = qs.filter(
+                cancons__rankings__territori="PPCC",
+                cancons__rankings__setmana=latest_setmana,
+            )
+    if want_gestor_email:
+        from django.db.models import Exists
+
+        from comptes.models import UserArtista
+
+        qs = qs.annotate(
+            _te_gestor_email=Exists(
+                UserArtista.objects.filter(
+                    artista=OuterRef("pk"),
+                    verificat=True,
+                    estat="aprovat",
+                    usuari__is_active=True,
+                ).exclude(usuari__email="")
+            )
+        )
+
     # Last.fm alias state — surfaces the 35 candidates the detector
     # produced (or any future runs). `pendents` = ≥1 candidate
     # awaiting staff review; `confirmats` = ≥1 alias actively summing
@@ -240,9 +278,13 @@ def artistes_list(request: Request) -> Response:
 
     page, meta = _paginate(qs, request)
     homset = noms_amb_homonims()
-    return Response(
-        {"results": [_artista_card(a, homset) for a in page.object_list], **meta}
-    )
+    cards = []
+    for a in page.object_list:
+        card = _artista_card(a, homset)
+        if want_gestor_email:
+            card["te_gestor_email"] = bool(getattr(a, "_te_gestor_email", False))
+        cards.append(card)
+    return Response({"results": cards, **meta})
 
 
 @api_view(["GET"])

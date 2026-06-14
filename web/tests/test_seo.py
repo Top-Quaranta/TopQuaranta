@@ -495,3 +495,39 @@ def test_thin_artista_minimal_jsonld_has_sameas_no_discography(client, db):
     assert "https://open.spotify.com/artist/xyz" in mg.get("sameAs", [])
     # Minimal contract preserved: no discography on the thin page.
     assert "album" not in mg and "track" not in mg
+
+
+# ── Fase 2 Slice D: estat-musica-catala data page (D3) ─────────────
+
+
+@pytest.mark.django_db
+def test_estat_musica_page_renders_with_dataset_and_byline(client, db):
+    import datetime as _dt
+
+    from analytics.models import MetricaPipeline
+
+    d = _dt.date(2026, 6, 14)
+    MetricaPipeline.objects.create(data=d, clau="cancons_verificades", valor_int=3559)
+    MetricaPipeline.objects.create(data=d, clau="artistes_aprovats", valor_int=2203)
+    MetricaPipeline.objects.create(
+        data=d, clau="cancons_per_territori", dimensio_1="CAT", valor_int=1200
+    )
+    r = client.get("/estat-musica-catala")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "3559" in body and "2203" in body
+    assert "Josep Quaranta" in body  # byline
+    ds = next(b for b in _jsonld_blocks(body) if b.get("@type") == "Dataset")
+    assert ds["creator"]["name"] == "Josep Quaranta"
+    assert "creativecommons.org/licenses/by/4.0" in ds["license"]
+
+
+@pytest.mark.django_db
+def test_estat_musica_degrades_without_data(client, db):
+    r = client.get("/estat-musica-catala")
+    assert r.status_code == 200
+    # Dataset block still present (citation anchor), data section degrades.
+    ds = next(
+        b for b in _jsonld_blocks(r.content.decode()) if b.get("@type") == "Dataset"
+    )
+    assert ds["@type"] == "Dataset"

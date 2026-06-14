@@ -12,7 +12,12 @@ from . import gestor_artista
 from .dashboard import dashboard, perfil
 from .feedback import feedback_crear
 from .propostes import gestor_artista_editar, proposta_crear, solicitud_crear
-from .rgpd import baixa_newsletter, compte_esborrar_sollicitar, exportar_dades
+from .rgpd import (
+    baixa_avis_top,
+    baixa_newsletter,
+    compte_esborrar_sollicitar,
+    exportar_dades,
+)
 
 __all__ = [
     "dashboard",
@@ -25,4 +30,5 @@ __all__ = [
     "compte_esborrar_sollicitar",
     "exportar_dades",
     "baixa_newsletter",
+    "baixa_avis_top",
 ]

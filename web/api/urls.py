@@ -157,6 +157,11 @@ urlpatterns = [
         compte_views.baixa_newsletter,
         name="compte_baixa_newsletter",
     ),
+    path(
+        "compte/baixa-avis-top/",
+        compte_views.baixa_avis_top,
+        name="compte_baixa_avis_top",
+    ),
     # ── Staff (is_staff required) ──
     path("staff/dashboard/", staff_views.dashboard, name="staff_dashboard"),
     path("staff/estat/", staff_views.estat, name="staff_estat"),

@@ -106,6 +106,26 @@ def analytics_summary(request: Request) -> Response:
         {"path": r["dimensio_1"] or "/", "total": r["total"]} for r in pageviews
     ]
 
+    # ── pageview bot/human split (Fase 2 Slice A) ─────────────────
+    # `pageview` rows now carry dim2 = "bot" | "human" (UA classified
+    # at write time; the UA itself is never stored — see
+    # analytics/bots.py). Rows written before this slice have an empty
+    # dim2 and are reported as "unclassified" (not reclassifiable).
+    pv_by_class = {
+        (r["dimensio_2"] or "unclassified"): r["total"]
+        for r in (
+            MetricaEsdeveniment.objects.filter(data__gte=since, clau="pageview")
+            .values("dimensio_2")
+            .annotate(total=Sum("comptador"))
+        )
+    }
+    pageviews_classified = {
+        "human": pv_by_class.get("human", 0),
+        "bot": pv_by_class.get("bot", 0),
+        "unclassified": pv_by_class.get("unclassified", 0),
+        "total": sum(pv_by_class.values()),
+    }
+
     # ── UTM landings (source × campaign) ──────────────────────────
     utm = list(
         MetricaEsdeveniment.objects.filter(data__gte=since, clau="utm_landing")
@@ -311,6 +331,7 @@ def analytics_summary(request: Request) -> Response:
             "pipeline": dict(pipeline),
             "events": dict(events),
             "pageviews": pageviews,
+            "pageviews_classified": pageviews_classified,
             "utm": utm,
             "social": social,
             "social_omes": social_omes,

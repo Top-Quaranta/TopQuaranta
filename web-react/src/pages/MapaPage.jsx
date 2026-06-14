@@ -201,6 +201,10 @@ export default function MapaPage() {
     if (level === 'territori') setSelTerritori(props.codi)
     else if (level === 'comarca') setSelComarca(props.comarca)
     else setSelMunicipi({ codi: props.codi, comarca: props.comarca, municipi: props.municipi })
+    // Analytics: a drill-down is a zoom. dim1 = the level zoomed from
+    // (territori/comarca/municipi). Event key is in the ingest allowlist
+    // (web/api/analytics_ingest.py). Fire-and-forget, never blocks UI.
+    import('../lib/analytics').then(({ trackEvent }) => trackEvent('mapa_zoom', level))
   }
   function goUp() {
     if (selMunicipi) setSelMunicipi(null)

@@ -12,7 +12,9 @@ don't measure.
 The hard rules every component below respects:
 
 1. **No personal identifiers** — never `request.user.pk`, never IP,
-   never User-Agent, never Referer, never session keys.
+   never Referer, never session keys. The User-Agent string is never
+   *stored*; it is read transiently to classify a pageview as
+   bot/human (a single low-cardinality label), then discarded.
 2. **Aggregates only** — every row is a counter or a daily snapshot
    keyed by `(data, clau, dim*)`. Resolution is one row per day per
    bucket; we don't keep timestamps below day-granularity.
@@ -40,7 +42,7 @@ Atomic event counter.
 | `data`       | DateField; one row per day per bucket. |
 | `clau`       | Event name, e.g. `pageview`, `registre_complet`. |
 | `dimensio_1` | Optional bucket. For `pageview` it's the URL path; for `utm_landing` the UTM source; for `social_publicat` the channel. |
-| `dimensio_2` | Optional second bucket (e.g. UTM campaign, slot tipus). |
+| `dimensio_2` | Optional second bucket. For `pageview` it's the bot/human class (`bot`/`human`, empty on rows written before Fase 2); for `utm_landing` the UTM campaign; for `social_publicat` the slot tipus. |
 | `comptador`  | `PositiveIntegerField`, atomically incremented via `F("comptador") + 1`. |
 
 Increments happen via `analytics.events.register(clau, dim1, dim2, n)`.
@@ -102,7 +104,16 @@ new KPIs ship without a migration.
 
 `analytics.middleware.AnalyticsMiddleware` records:
 
-* `pageview` for every 2xx/3xx GET on a public Django path.
+* `pageview` for every 2xx/3xx GET on a public Django path, with
+  `dim2` = `bot`/`human`. The class comes from `analytics.bots.classify_ua`,
+  which matches the request User-Agent against `BOT_UA_MARKERS` — the
+  Python mirror of the Caddy `@bot` matcher in `deploy/Caddyfile`. The
+  UA is read transiently and never stored. A parity test
+  (`analytics/tests/test_bots.py`) keeps the Python list equivalent to
+  the Caddyfile regex so the bot/human split matches how Caddy actually
+  routes crawlers. Historic rows (pre-Fase 2) carry an empty `dim2` and
+  are surfaced as "unclassified" — not reclassifiable, since the UA was
+  never persisted.
 * `utm_landing` whenever the request URL carries `?utm_source=…`.
 
 Skips `/api/`, `/static/`, `/media/`, `/favicon`, `/robots.txt`,
@@ -186,7 +197,9 @@ the entire payload; five tabs derive client-side from that one call.
   platform (using `PLATFORM_COLORS`), publicacions per canal bar,
   top 10 posts table with CSV export.
 * **Web** — daily pageviews bar, top 20 paths + UTM source/campaign
-  tables, both with CSV export.
+  tables, both with CSV export. The summary payload also exposes
+  `pageviews_classified` (`human`/`bot`/`unclassified`/`total`) so the
+  human-net pageview count sits next to the crawler-inflated total.
 * **Cohorts** — five-line activity chart (registres, propostes,
   sol·licituds, feedback, publicacions); feedback distribution pie;
   raw counter audit table.
@@ -212,7 +225,9 @@ so it's actionable even when nobody opens the dashboard.
   logs handles the rare cases where IP-level analysis is needed
   for ops/security; that data lives in `/var/log/caddy/` (perms
   0600) and never enters the Django DB.
-* **No User-Agent.** Could fingerprint.
+* **No User-Agent stored.** Could fingerprint. It is read transiently
+  to derive the `pageview` bot/human class and then discarded; the raw
+  string never reaches the DB.
 * **No Referer.** Could leak inbound URLs containing tokens.
 * **No session-keyed deduplication.** "How many unique users"
   is a question we deliberately can't answer with this stack;

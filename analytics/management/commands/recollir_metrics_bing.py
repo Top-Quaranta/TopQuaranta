@@ -117,11 +117,13 @@ class Command(BaseCommand):
             return None
 
     def _resolve_site(self, key: str, configured: str) -> str:
-        """Validate the configured site against GetSites. STOP if it is
-        not a verified property (don't invent data)."""
-        sites = self._call("GetSites", key, configured)
+        """Validate the configured site against GetUserSites. STOP if it
+        is not a verified property (don't invent data). The live API
+        exposes the property list under `GetUserSites` (not `GetSites`,
+        which 404s); confirmed against the real endpoint 2026-06-14."""
+        sites = self._call("GetUserSites", key, configured)
         if sites is None:
-            raise CommandError("Bing GetSites failed; no es pot validar el lloc.")
+            raise CommandError("Bing GetUserSites failed; no es pot validar el lloc.")
 
         def _norm(u: str) -> str:
             return (u or "").rstrip("/").lower()
@@ -267,9 +269,12 @@ class Command(BaseCommand):
         return ok
 
     def _links(self, key, site_url, day) -> int:
-        """Inbound-link count (authority). `GetUrlLinks` returns link
-        rows for the site; we store the count + distinct linking hosts."""
-        rows = self._call("GetUrlLinks", key, site_url)
+        """Inbound-link count (authority). `GetUrlLinks` REQUIRES a
+        `link` param (the URL whose inbound links we want; we pass the
+        site root) and returns `{"d": {"Details": [...], "TotalPages":
+        N}}` — `_envelope` unwraps `Details`. Without `link` the API
+        400s (confirmed live 2026-06-14)."""
+        rows = self._call("GetUrlLinks", key, site_url, link=site_url)
         if rows is None:
             return 0
         domains = set()

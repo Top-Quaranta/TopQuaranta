@@ -252,8 +252,9 @@ credential is absent so CI/local stay green):
   thin JSON REST API (`https://ssl.bing.com/webmaster/api.svc/json/<Method>`)
   has three quirks the parser handles: payload under the `"d"` envelope,
   `/Date(ms)/` date strings, and `Avg*Position` returned ×10 (divided by
-  10). `GetSites` validates the configured site is a VERIFIED property
-  first; if not, the command STOPS (no invented data). Methods pulled:
+  10). `GetUserSites` validates the configured site is a VERIFIED
+  property first; if not, the command STOPS (no invented data). Methods
+  pulled:
   `GetRankAndTrafficStats` (`MetricaBingTraffic`), `GetQueryStats`
   (`MetricaBingQuery`), `GetPageStats` (`MetricaBingPage`),
   `GetCrawlStats` (`MetricaBingCrawl`), `GetUrlLinks`

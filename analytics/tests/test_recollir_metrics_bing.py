@@ -24,7 +24,9 @@ from analytics.models import (
 # One crafted envelope per Bing method. `/Date(1700000000000)/` is
 # 2023-11-14 UTC; positions are ×10 (63 -> 6.3).
 _RESPONSES = {
-    "GetSites": {"d": [{"Url": "https://www.topquaranta.cat/", "IsVerified": True}]},
+    "GetUserSites": {
+        "d": [{"Url": "https://www.topquaranta.cat/", "IsVerified": True}]
+    },
     "GetRankAndTrafficStats": {
         "d": [{"Date": "/Date(1700000000000)/", "Clicks": 5, "Impressions": 100}]
     },
@@ -61,12 +63,18 @@ _RESPONSES = {
             }
         ]
     },
+    # Real shape: dict with a nested Details list (+ TotalPages).
+    # `_envelope` unwraps the Details list.
     "GetUrlLinks": {
-        "d": [
-            {"Url": "https://example.com/a"},
-            {"Url": "https://example.com/b"},
-            {"Url": "https://other.org/c"},
-        ]
+        "d": {
+            "__type": "LinkDetails:#Microsoft.Bing.Webmaster.Api",
+            "Details": [
+                {"Url": "https://example.com/a"},
+                {"Url": "https://example.com/b"},
+                {"Url": "https://other.org/c"},
+            ],
+            "TotalPages": 1,
+        }
     },
 }
 
@@ -137,7 +145,7 @@ def test_unverified_site_stops():
     """A site that is not a verified property must STOP with an error,
     not invent data."""
     responses = dict(_RESPONSES)
-    responses["GetSites"] = {
+    responses["GetUserSites"] = {
         "d": [{"Url": "https://www.topquaranta.cat/", "IsVerified": False}]
     }
     with patch(

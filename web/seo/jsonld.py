@@ -301,6 +301,44 @@ def top_jsonld(territori: str, setmana: datetime.date, entries: list) -> dict[st
     }
 
 
+def collection_jsonld(
+    name: str,
+    url_path: str,
+    items: list[tuple[str, str]],
+    description: str = "",
+) -> dict[str, Any]:
+    """`CollectionPage` whose `mainEntity` is an `ItemList` of the
+    artistes/cançons featured on an editorial landing (territori,
+    genere, decada). `items` is a list of (name, url_path) pairs in
+    display order. Gives crawlers an explicit, ordered entity list so
+    these aggregation pages read as collections, not thin stubs."""
+    payload: dict[str, Any] = {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "@id": f"{_abs(url_path)}#collection",
+        "name": name,
+        "url": _abs(url_path),
+        "isPartOf": {"@type": "WebSite", "url": CANONICAL_HOST, "name": SITE_NAME},
+        "inLanguage": "ca",
+        "mainEntity": {
+            "@type": "ItemList",
+            "numberOfItems": len(items),
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": i + 1,
+                    "name": name_i,
+                    "url": _abs(url_i),
+                }
+                for i, (name_i, url_i) in enumerate(items)
+            ],
+        },
+    }
+    if description:
+        payload["description"] = description
+    return payload
+
+
 def breadcrumbs_jsonld(items: list[tuple[str, str]]) -> dict[str, Any]:
     """`items` is a list of (name, url_path) pairs from root to
     current page. URLs may be paths or absolute — both work."""

@@ -40,4 +40,13 @@
   {% if canco.isrc %}<li><a href="https://music.apple.com/search?term={{ canco.nom }}" rel="nofollow">Apple Music</a></li>{% endif %}
   <li><a href="https://music.youtube.com/search?q={{ canco.artista.nom }} {{ canco.nom }}" rel="nofollow">YouTube Music</a></li>
 </ul>
+
+{% if editorial_links %}
+<h2>Explora</h2>
+<ul class="bare">
+  {% for label, url in editorial_links %}
+  <li><a href="{{ url }}">{{ label }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
 {% endblock %}

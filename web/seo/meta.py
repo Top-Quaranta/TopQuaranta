@@ -126,7 +126,7 @@ def for_top(territori: str | None = None) -> Meta:
     territori = (territori or "PPCC").upper()
     nom = TERRITORI_NOMS.get(territori, territori)
     return Meta(
-        title=f"Top {nom} — Música en català · TopQuaranta",
+        title=f"Top 40 i millors cançons en català de {nom} · TopQuaranta",
         description=_trim(
             f"Les 40 cançons en català més escoltades de {nom} aquesta setmana, "
             "actualitzat cada dissabte. Top setmanal mesurat amb dades reals "

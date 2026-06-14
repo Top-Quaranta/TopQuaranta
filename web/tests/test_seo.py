@@ -362,3 +362,82 @@ def test_no_template_comment_leaks_in_seo_pages(client, artista):
         assert "#}" not in body, f"{url}: leaked '#}}'"
         assert "Minimal inline CSS" not in body, f"{url}: leaked _base comment"
         assert "Thin page for" not in body, f"{url}: leaked artista_thin comment"
+
+
+# ── Fase 2 Slice B: editorial layer (internal links, schema, prose) ──
+
+
+@pytest.mark.django_db
+def test_editorial_genre_link_on_artista_page(client, artista):
+    """An artista with a canonical genre links INTO its /genere/ landing
+    (de-orphaning the editorial pages)."""
+    slug = Artista.GENERE_CANONICAL_CHOICES[0][0]
+    artista.genere_canonical = slug
+    artista.save(update_fields=["genere_canonical"])
+    body = client.get(f"/artista/{artista.slug}").content.decode()
+    assert f"/genere/{slug}" in body
+
+
+@pytest.mark.django_db
+def test_artista_page_degrades_without_editorial_links(client, artista):
+    """No territori/genere/decade → page still renders 200, no Explora
+    block (clean degradation, thin gate untouched)."""
+    resp = client.get(f"/artista/{artista.slug}")
+    assert resp.status_code == 200
+    assert "<h2>Explora</h2>" not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_territori_has_collection_jsonld(client):
+    """/territori/<codi> emits a CollectionPage whose mainEntity is an
+    ItemList (richer than the prior breadcrumbs-only schema)."""
+    blocks = _jsonld_blocks(client.get("/territori/CAT").content.decode())
+    types = [b.get("@type") for b in blocks]
+    assert "CollectionPage" in types
+    coll = next(b for b in blocks if b.get("@type") == "CollectionPage")
+    assert coll["mainEntity"]["@type"] == "ItemList"
+
+
+@pytest.mark.django_db
+def test_landing_prose_renders_when_present_and_degrades_when_absent(client):
+    from web.models import LandingProsa
+
+    assert "MARCADOR_PROSA" not in client.get("/territori/CAT").content.decode()
+    LandingProsa.objects.create(
+        kind=LandingProsa.KIND_TERRITORI, clau="CAT", prosa="MARCADOR_PROSA editorial."
+    )
+    assert "MARCADOR_PROSA" in client.get("/territori/CAT").content.decode()
+
+
+@pytest.mark.django_db
+def test_landing_routine_requires_token(client):
+    # Token is blank in test settings → every request denied.
+    assert client.get("/api/v1/landing-routine/brief/").status_code == 401
+    assert client.post("/api/v1/landing-routine/prosa/", {}).status_code == 401
+
+
+@pytest.mark.django_db
+def test_landing_routine_stores_prose_with_token(client, settings):
+    from web.models import LandingProsa
+
+    settings.NEWSLETTER_ROUTINE_TOKEN = "tok"
+    auth = {"HTTP_AUTHORIZATION": "Bearer tok"}
+    # brief is reachable + well-shaped.
+    brief = client.get("/api/v1/landing-routine/brief/", **auth)
+    assert brief.status_code == 200
+    assert "editorial_veu" in brief.json() and "landings" in brief.json()
+    # valid upsert
+    ok = client.post(
+        "/api/v1/landing-routine/prosa/",
+        {"kind": "territori", "clau": "CAT", "prosa": "Text editorial."},
+        **auth,
+    )
+    assert ok.status_code == 201
+    assert LandingProsa.objects.filter(kind="territori", clau="CAT").exists()
+    # invalid kind rejected
+    bad = client.post(
+        "/api/v1/landing-routine/prosa/",
+        {"kind": "nope", "clau": "CAT", "prosa": "x"},
+        **auth,
+    )
+    assert bad.status_code == 400

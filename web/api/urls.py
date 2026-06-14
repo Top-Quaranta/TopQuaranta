@@ -10,6 +10,7 @@ from . import (
     compte_views,
     comunitat_views,
     home_views,
+    landing_routine,
     mapa_views,
     newsletter_routine,
     social_public,
@@ -43,6 +44,17 @@ urlpatterns = [
         "newsletter-routine/esborrany/",
         newsletter_routine.esborrany,
         name="newsletter_routine_esborrany",
+    ),
+    # ── Landing (SEO) cloud routine (token-authed, NOT staff session) ──
+    path(
+        "landing-routine/brief/",
+        landing_routine.brief,
+        name="landing_routine_brief",
+    ),
+    path(
+        "landing-routine/prosa/",
+        landing_routine.prosa,
+        name="landing_routine_prosa",
     ),
     # Authenticated user area
     path("compte/dashboard/", compte_views.dashboard, name="compte_dashboard"),

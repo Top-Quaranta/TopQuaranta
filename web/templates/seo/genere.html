@@ -8,6 +8,8 @@
   {{ artistes|length }} artistes de {{ label|lower }} verificats al sistema TopQuaranta.
 </p>
 
+{% if prosa %}<div class="prosa">{{ prosa|linebreaks }}</div>{% endif %}
+
 <ul class="bare">
   {% for a in artistes %}
   <li>

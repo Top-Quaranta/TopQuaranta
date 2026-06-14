@@ -56,7 +56,7 @@ with a tenth of the work.
 | Module | Purpose |
 |---|---|
 | `web/seo/meta.py`     | Single source of truth for `<head>` metadata. Used by SSR templates AND by the SPA Helmet hook. |
-| `web/seo/jsonld.py`   | Schema.org JSON-LD builders: WebSite, Organization, MusicGroup, MusicAlbum, MusicRecording, MusicPlaylist, BreadcrumbList. |
+| `web/seo/jsonld.py`   | Schema.org JSON-LD builders: WebSite, Organization, MusicGroup, MusicAlbum, MusicRecording, MusicPlaylist, BreadcrumbList, CollectionPage (ItemList on editorial landings). |
 | `web/seo/views.py`    | 10 SSR views (homepage, top, artistes-list, artista, album, canco, mapa, top-historic, territori, comarca, decada). All `@condition`-decorated for HTTP 304, `Vary: User-Agent` stamped, with strict indexability filters. |
 | `web/seo/ogimage.py`  | Dynamic 1200×630 Open Graph cards generated from the entity data + brand fonts; cached on disk under `/var/cache/topquaranta/og/`. |
 | `web/seo/indexnow.py` | IndexNow protocol pusher for Bing/Yandex/consortium real-time indexing on staff approval. |
@@ -64,6 +64,36 @@ with a tenth of the work.
 | `web/templatetags/seo_tags.py` | `safe_json` + `rel_url` template filters. |
 | `web/templates/seo/`  | Self-contained HTML templates (no mm-design dependency, inline CSS, JS-disabled friendly). |
 | `web-react/src/lib/seoHead.jsx` | `<SeoHead entity slug>` component that fetches the same `Meta` payload and injects via react-helmet-async on the SPA path. |
+| `web/models.py` (`LandingProsa`) | Editorial prose for one landing, keyed by `(kind, clau)`. Empty by default; rendered as plain text (`linebreaks`, never `safe`). |
+| `web/api/landing_routine.py` | Token-authed brief/prose endpoints for the SEO landing cloud routine (mirrors `newsletter_routine.py`, same bearer-token gate). |
+
+## Editorial layer (Fase 2, 2026-06)
+
+Three additive moves so the editorial landings stop being orphan/thin
+and start ranking:
+
+1. **Internal links INTO the landings.** The high-traffic entity pages
+   (`artista`, `album`, `canco`) now emit an "Explora" block linking to
+   the territori(s), canonical genre and (for album/canço) decade the
+   entity belongs to (`web/seo/views.py::_editorial_links`). The decade
+   link is emitted only when that decade page would actually resolve
+   (≥5 verified cançons), so we never link into a 404. This de-orphans
+   the editorial pages, whose ~zero search impressions (investigation
+   2026-06) were attributed to having no inbound internal links.
+2. **Richer structured data.** Territori / genere / decada pages now
+   carry a `CollectionPage` whose `mainEntity` is an ordered `ItemList`
+   of the featured artistes/cançons (`jsonld.collection_jsonld`), on top
+   of breadcrumbs. Titles lean informational ("Top 40 i millors cançons
+   en català de …", "Grups i cançons en català dels …").
+3. **Editorial prose, filled asynchronously.** `LandingProsa` stores
+   optional prose per landing. It is NEVER generated server-side: a
+   cloud routine reads `GET /api/v1/landing-routine/brief/` (pending
+   landings + `ConfiguracioGlobal.editorial_veu` + grounding samples)
+   and writes back via `POST /api/v1/landing-routine/prosa/`, exactly
+   like the newsletter routine. Empty prose degrades cleanly — the
+   landing renders its structured content and the thin/noindex gate is
+   untouched. Prose is plain text, rendered with `linebreaks` (never
+   `safe`) so a compromised routine token cannot inject markup.
 
 ## Indexability rules
 

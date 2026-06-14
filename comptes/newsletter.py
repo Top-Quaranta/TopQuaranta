@@ -351,7 +351,7 @@ def build_draft_text(
     return subject, context.get("narrative_html", "")
 
 
-def send_top_newsletter(
+def build_newsletter_context(
     tipus: str,
     territori: str,
     setmana: datetime.date,
@@ -360,18 +360,17 @@ def send_top_newsletter(
     *,
     subject_override: str | None = None,
     narrative_html_override: str | None = None,
-) -> str:
-    """Send the weekly newsletter to every opted-in user. Returns
-    a summary string (e.g. "sent=42 fail=1") that the calling
-    command stores in the SocialPost.metadata for traceability.
+) -> tuple[dict, str]:
+    """Assemble the recipient-independent body context + subject, applying
+    the draft-review overrides. Shared by the real send and the admin
+    preview so both render byte-for-byte the same body (only `unsub_url`
+    and the optional management block vary per render).
 
-    `subject_override` / `narrative_html_override` (the draft-review flow,
-    2026-06-07): when given, the editorial text shipped is the
-    (possibly human-edited) draft, while the rest of the context — podi,
-    entries, covers — is still rebuilt fresh from `entries` (the FINAL
-    top at send time). Pass `narrative_html_override=""` to ship an empty
-    editorial block intentionally.
-    """
+    `subject_override` / `narrative_html_override` (the draft-review flow):
+    when given, the editorial text shipped is the (possibly human-edited)
+    draft, while the rest of the context — podi, top 40, covers — is still
+    rebuilt fresh from `entries` (the FINAL top at send time). Pass
+    `narrative_html_override=""` to ship an empty editorial block."""
     base_context, subject = _build_top_context(
         tipus, territori, setmana, publish_date, entries
     )
@@ -382,6 +381,51 @@ def send_top_newsletter(
         base_context["narrative_html"] = linkify_narrative(
             narrative_html_override, base_context.get("name_map") or []
         )
+    return base_context, subject
+
+
+def render_newsletter_html(
+    base_context: dict,
+    *,
+    unsub_url: str,
+    gestio_url: str | None = None,
+) -> str:
+    """Render the full email HTML from a prebuilt context. `unsub_url` is
+    the per-recipient unsubscribe link; `gestio_url`, when set, adds the
+    admin-only management block (link to edit/cancel the draft) that the
+    subscriber copy MUST never carry."""
+    return render_to_string(
+        "comptes/email_newsletter_top.html",
+        {**base_context, "unsub_url": unsub_url, "gestio_url": gestio_url},
+    )
+
+
+def send_top_newsletter(
+    tipus: str,
+    territori: str,
+    setmana: datetime.date,
+    publish_date: datetime.date,
+    entries: list[dict],
+    *,
+    subject_override: str | None = None,
+    narrative_html_override: str | None = None,
+) -> str:
+    """Send the weekly newsletter to every opted-in user. Returns a summary
+    string (e.g. "sent=42 fail=1") that the calling command stores in the
+    SocialPost.metadata for traceability.
+
+    The body context is built ONCE; only `unsub_url` varies per recipient.
+    The subscriber copy never carries the management block (`gestio_url`
+    stays None)."""
+    base_context, subject = build_newsletter_context(
+        tipus,
+        territori,
+        setmana,
+        publish_date,
+        entries,
+        subject_override=subject_override,
+        narrative_html_override=narrative_html_override,
+    )
 
     qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")
     sent = 0
@@ -390,10 +434,8 @@ def send_top_newsletter(
         if not user.email:
             continue
         try:
-            html = render_to_string(
-                "comptes/email_newsletter_top.html",
-                {**base_context, "unsub_url": _unsub_url(user)},
-            )
+            unsub = _unsub_url(user)
+            html = render_newsletter_html(base_context, unsub_url=unsub)
             text_body = strip_tags(html)
             msg = EmailMultiAlternatives(
                 subject=subject,
@@ -404,7 +446,7 @@ def send_top_newsletter(
             msg.attach_alternative(html, "text/html")
             # List-Unsubscribe header lets Gmail/Apple Mail surface
             # a one-click unsubscribe button — RFC 8058.
-            msg.extra_headers["List-Unsubscribe"] = f"<{_unsub_url(user)}>"
+            msg.extra_headers["List-Unsubscribe"] = f"<{unsub}>"
             msg.extra_headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
             msg.send(fail_silently=False)
             sent += 1
@@ -424,30 +466,104 @@ def render_newsletter_preview(
     *,
     subject_override: str | None = None,
     narrative_html_override: str | None = None,
+    unsub_url: str | None = None,
+    gestio_url: str | None = None,
 ) -> str:
     """Render the FULL newsletter HTML exactly as it would be sent, for a
-    staff preview. Same path as `send_top_newsletter`: `_build_top_context`
-    + the same subject/narrative overrides + the same email template
-    (`comptes/email_newsletter_top.html`). Returns the complete HTML.
+    staff preview or the admin notification. Same path as
+    `send_top_newsletter` (shared `build_newsletter_context` +
+    `render_newsletter_html` + the same template), so the preview is
+    byte-for-byte the body subscribers receive.
 
     Pure render: no `mark_used`, no send, no DB write (it never iterates
-    recipients). The list + covers are rebuilt from the consolidated top
-    via `_build_top_context`, identical to the live send. The unsubscribe
-    link is a non-functional placeholder (no recipient in a preview).
-
-    Keep the override block in sync with `send_top_newsletter`."""
-    base_context, subject = _build_top_context(
-        tipus, territori, setmana, publish_date, entries
+    recipients). `unsub_url` defaults to a non-functional `/compte/perfil`
+    placeholder (no recipient in a preview); pass a real one to mirror a
+    single subscriber. `gestio_url`, when set, adds the admin-only
+    management block."""
+    base_context, _subject = build_newsletter_context(
+        tipus,
+        territori,
+        setmana,
+        publish_date,
+        entries,
+        subject_override=subject_override,
+        narrative_html_override=narrative_html_override,
     )
-    if subject_override:
-        subject = subject_override
-        base_context["subject"] = subject_override
-    if narrative_html_override is not None:
-        base_context["narrative_html"] = linkify_narrative(
-            narrative_html_override, base_context.get("name_map") or []
+    return render_newsletter_html(
+        base_context,
+        unsub_url=unsub_url or f"{SITE}/compte/perfil",
+        gestio_url=gestio_url,
+    )
+
+
+def staff_draft_url(setmana: datetime.date) -> str:
+    """Staff editor link for a draft week (edit subject/narrative or cancel
+    the send). The admin notification points here; no token, no public
+    endpoint — it is the IsStaff-gated SPA view."""
+    return f"{SITE}/staff/social/esborrany?setmana={setmana.isoformat()}"
+
+
+def _admin_notice_headers() -> dict:
+    """Deliverability headers for the admin notification: marks it as an
+    automated list message so spam filters score it lower and clients never
+    auto-reply."""
+    return {
+        "List-Id": "TopQuaranta newsletter <newsletter.topquaranta.cat>",
+        "List-Unsubscribe": f"<{SITE}/compte/perfil>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        "Auto-Submitted": "auto-generated",
+        "X-Auto-Response-Suppress": "All",
+    }
+
+
+def notify_admins_draft_preview(draft) -> None:
+    """Best-effort: email `settings.ADMINS` the FULL newsletter preview for a
+    pending draft — byte-for-byte the body subscribers will receive, plus the
+    admin-only management block linking to the staff editor. Rendered through
+    the shared `render_newsletter_preview`. Deliverability headers (List-Id,
+    List-Unsubscribe, Auto-Submitted) are attached so the automated message
+    scores low with spam filters.
+
+    Never raises: any failure (build, render, mail) logs and is swallowed so
+    it cannot block the draft write that triggered it."""
+    from django.core.mail import EmailMultiAlternatives
+
+    from social import payload
+
+    try:
+        data = payload.build_top(draft.territori, draft.setmana)
+        entries = (data or {}).get("entries") or []
+        publish_date = draft.setmana + datetime.timedelta(days=5)
+        gestio_url = staff_draft_url(draft.setmana)
+        html = render_newsletter_preview(
+            draft.tipus,
+            draft.territori,
+            draft.setmana,
+            publish_date,
+            entries,
+            subject_override=draft.subject,
+            narrative_html_override=draft.narrative_html,
+            gestio_url=gestio_url,
         )
-
-    return render_to_string(
-        "comptes/email_newsletter_top.html",
-        {**base_context, "unsub_url": f"{SITE}/compte/perfil"},
-    )
+        text = (
+            "Esborrany de la newsletter setmanal a punt per revisar.\n\n"
+            f"Setmana: {draft.setmana}\n"
+            f"Assumpte: {draft.subject}\n\n"
+            "Preview complet a sota. Editar o paralitzar l'enviament:\n"
+            f"{gestio_url}\n\n"
+            "S'enviarà diumenge tret que el modifiquis o el cancel·lis.\n"
+        )
+        msg = EmailMultiAlternatives(
+            subject=f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",
+            body=text,
+            from_email=FROM_EMAIL,
+            to=list(settings.ADMINS),
+            headers=_admin_notice_headers(),
+        )
+        msg.attach_alternative(html, "text/html")
+        msg.send(fail_silently=False)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "notify_admins_draft_preview failed for setmana %s",
+            getattr(draft, "setmana", "?"),
+        )

@@ -143,6 +143,33 @@ def test_dark_mode_and_responsive_present():
     assert "max-width:640px" in html
 
 
+# ── no top 1-40 section + management block ───────────────────────────
+
+
+def test_no_full_ranking_section():
+    """The email carries the highlighted top 10 only; there is no separate
+    full 1-40 ranking section."""
+    html = _render()
+    assert "El Top 40 complet" not in html
+
+
+def test_management_block_absent_without_gestio_url():
+    """The subscriber copy (no gestio_url) must NOT carry the admin block."""
+    html = _render()
+    assert "Còpia de gestió" not in html
+    assert "/staff/social/esborrany" not in html
+
+
+def test_management_block_present_with_gestio_url():
+    """The admin/preview copy carries the block + the staff editor link."""
+    link = "https://www.topquaranta.cat/staff/social/esborrany?setmana=2026-06-08"
+    ctx = _context()
+    ctx["gestio_url"] = link
+    html = render_to_string("comptes/email_newsletter_top.html", ctx)
+    assert "Còpia de gestió" in html
+    assert link in html
+
+
 # ── UTM helper ───────────────────────────────────────────────────────
 
 

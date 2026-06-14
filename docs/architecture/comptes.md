@@ -245,7 +245,16 @@ will send), `font`, `editat`.
      draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
      Idempotent; **can never** set approved/sent (any non-`pendent`
      `estat` rejected; an already `enviat`/`cancellat` week is terminal →
-     409). It reads/leaves only; it never sends.
+     409). It reads/leaves only; it never sends. On a successful upsert it
+     emails `settings.ADMINS` (`newsletter.notify_admins_draft_preview`,
+     best-effort) the **full newsletter preview** rendered through the
+     shared `render_newsletter_preview`, plus an admin-only management
+     block (link to `/staff/social/esborrany` to edit or cancel). The
+     management block is added only when `gestio_url` is set, so the
+     subscriber copy never carries it. Deliverability headers (`List-Id`,
+     `List-Unsubscribe`, `Auto-Submitted`) keep the automated mail out of
+     spam. Every parada/error (not_ready, 400, 409) returns before the
+     notify, so no mail fires on those paths.
 1. **Saturday 16:00 — `generar_esborrany_newsletter` (engine fallback)**:
    composes `subject` + `narrative_html` via `newsletter.build_draft_text`
    (wraps `_build_top_context`, side-effect-free — no `mark_used`),

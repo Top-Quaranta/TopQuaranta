@@ -311,9 +311,31 @@ def artista_detail(request: Request, slug: str) -> Response:
         for c in colaboracions_qs
     ]
 
+    # "Newly entered the top" signal for the public badge (Slice F3):
+    # a cançó of this artist sits in the latest PPCC (Global) week whose
+    # canco_id was absent the previous week. Same derivation as the top
+    # arrows (reuses web.api.top_views._prev_week_positions); read-only,
+    # never touches scoring.
+    from web.api.top_views import _prev_week_positions
+
+    entrat_al_top = False
+    latest_ppcc = (
+        TopSetmanal.objects.filter(territori="PPCC")
+        .order_by("-setmana")
+        .values_list("setmana", flat=True)
+        .first()
+    )
+    if latest_ppcc:
+        prev = _prev_week_positions("PPCC", latest_ppcc)
+        cur_ids = TopSetmanal.objects.filter(
+            territori="PPCC", setmana=latest_ppcc, canco__artista=artista
+        ).values_list("canco_id", flat=True)
+        entrat_al_top = any(cid not in prev for cid in cur_ids)
+
     return Response(
         {
             **base,
+            "entrat_al_top": entrat_al_top,
             "historial": historial_out,
             "discografia": disco_out,
             "colaboracions": colaboracions_out,

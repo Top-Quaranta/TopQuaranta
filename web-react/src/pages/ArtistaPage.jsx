@@ -106,6 +106,13 @@ export default function ArtistaPage() {
                 Pendent de revisió
               </p>
             )}
+            {data.entrat_al_top && (
+              // Slice F3: shareable "newly entered the top" badge. Fed by
+              // the same new-entry signal as the manager alert.
+              <p className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold" style={{ background: 'var(--color-tq-yellow)', color: 'var(--color-tq-ink)' }}>
+                🎉 Nou al Top aquesta setmana
+              </p>
+            )}
 
             <div className="rd-cc-badges">
               <Kpi n={nTop} label="al top" />

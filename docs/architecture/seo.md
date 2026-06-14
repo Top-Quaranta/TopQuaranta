@@ -88,9 +88,14 @@ and start ranking:
 3. **Editorial prose, filled asynchronously.** `LandingProsa` stores
    optional prose per landing. It is NEVER generated server-side: a
    cloud routine reads `GET /api/v1/landing-routine/brief/` (pending
-   landings + `ConfiguracioGlobal.editorial_veu` + grounding samples)
-   and writes back via `POST /api/v1/landing-routine/prosa/`, exactly
-   like the newsletter routine. Empty prose degrades cleanly — the
+   landings + the landing voice + grounding samples) and writes back via
+   `POST /api/v1/landing-routine/prosa/`, exactly like the newsletter
+   routine. The brief serves `ConfiguracioGlobal.landing_editorial_veu`
+   — a DEDICATED voice field, separate from the newsletter's
+   `editorial_veu` so the two tones never collide (editable from
+   Configuració). It ships **empty**, so prose generation is a clean
+   STOP until staff sets the landing voice; no page is ever forced into
+   thin/noindex by missing prose. Empty prose degrades cleanly — the
    landing renders its structured content and the thin/noindex gate is
    untouched. Prose is plain text, rendered with `linebreaks` (never
    `safe`) so a compromised routine token cannot inject markup.

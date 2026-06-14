@@ -324,6 +324,11 @@ class PerfilUsuari(models.Model):
     notificar_missatges_email = models.BooleanField(default=True)
     notificar_comentaris_email = models.BooleanField(default=True)
 
+    # DM reception preference (Slice A): True = anyone can DM me
+    # ("tothom"), False = nobody ("ningú"). Default True keeps the
+    # current behaviour. The admin support inbox bypasses this.
+    accepta_dm = models.BooleanField(default=True)
+
     # Onboarding completion flag. Set when the user either fills the form
     # or explicitly dismisses it; used by the React AuthContext to know
     # whether to auto-route to /onboarding on first session.
@@ -465,6 +470,10 @@ class Missatge(models.Model):
 
     llegit_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    # Moderation hide flag (Slice A): a hidden message is not served to
+    # anyone (sender or recipient). Set by staff resolving a report.
+    ocult = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -722,3 +731,94 @@ class AvisTopEnviat(models.Model):
 
     def __str__(self) -> str:
         return f"AvisTopEnviat {self.artista_id} {self.setmana}"
+
+
+class BloqueigUsuari(models.Model):
+    """One user blocking another (Slice A). Directional: `blocker` blocks
+    `blocked`. A block in either direction stops DMs between the pair.
+    """
+
+    blocker = models.ForeignKey(
+        Usuari, on_delete=models.CASCADE, related_name="bloqueigs_fets"
+    )
+    blocked = models.ForeignKey(
+        Usuari, on_delete=models.CASCADE, related_name="bloqueigs_rebuts"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["blocker", "blocked"], name="bloqueigusuari_uniq"
+            )
+        ]
+        indexes = [models.Index(fields=["blocker", "blocked"])]
+
+    def __str__(self) -> str:
+        return f"{self.blocker_id} blocks {self.blocked_id}"
+
+
+class DenunciaUsuari(models.Model):
+    """A user report against another user, publication, comment or DM
+    (Slice A). The target is one of four nullable FKs; `tipus` records
+    which, so the staff queue can group and act."""
+
+    TIPUS_USUARI = "usuari"
+    TIPUS_PUBLICACIO = "publicacio"
+    TIPUS_COMENTARI = "comentari"
+    TIPUS_MISSATGE = "missatge"
+    TIPUS_CHOICES = [
+        (TIPUS_USUARI, "Usuari"),
+        (TIPUS_PUBLICACIO, "Publicació"),
+        (TIPUS_COMENTARI, "Comentari"),
+        (TIPUS_MISSATGE, "Missatge"),
+    ]
+
+    ESTAT_PENDENT = "pendent"
+    ESTAT_REVISADA = "revisada"
+    ESTAT_DESESTIMADA = "desestimada"
+    ESTAT_CHOICES = [
+        (ESTAT_PENDENT, "Pendent"),
+        (ESTAT_REVISADA, "Revisada"),
+        (ESTAT_DESESTIMADA, "Desestimada"),
+    ]
+
+    reporter = models.ForeignKey(
+        Usuari, on_delete=models.CASCADE, related_name="denuncies_fetes"
+    )
+    tipus = models.CharField(max_length=20, choices=TIPUS_CHOICES, db_index=True)
+    usuari_denunciat = models.ForeignKey(
+        Usuari,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="denuncies_rebudes",
+    )
+    publicacio = models.ForeignKey(
+        "Publicacio", on_delete=models.CASCADE, null=True, blank=True
+    )
+    comentari = models.ForeignKey(
+        "Comentari", on_delete=models.CASCADE, null=True, blank=True
+    )
+    missatge = models.ForeignKey(
+        "Missatge", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    motiu = models.TextField(max_length=2000, blank=True)
+    estat = models.CharField(
+        max_length=20, choices=ESTAT_CHOICES, default=ESTAT_PENDENT, db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    resolt_at = models.DateTimeField(null=True, blank=True)
+    resolt_per = models.ForeignKey(
+        Usuari,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="denuncies_resoltes",
+    )
+
+    class Meta:
+        indexes = [models.Index(fields=["estat", "-created_at"])]
+
+    def __str__(self) -> str:
+        return f"Denuncia {self.tipus} per {self.reporter_id} ({self.estat})"

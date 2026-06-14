@@ -41,6 +41,7 @@ def _serialize_perfil(p: PerfilUsuari, *, include_private: bool = False) -> dict
         "obert_colaboracions": p.obert_colaboracions,
         "notificar_missatges_email": p.notificar_missatges_email,
         "notificar_comentaris_email": p.notificar_comentaris_email,
+        "accepta_dm": p.accepta_dm,
         "social": {f: getattr(p, f) or "" for f, _ in PerfilUsuari.SOCIAL_FIELDS},
         "localitat": (
             {

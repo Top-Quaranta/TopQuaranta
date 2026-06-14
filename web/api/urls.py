@@ -744,4 +744,18 @@ urlpatterns = [
         comunitat_views.staff_directori_toggle_visible,
         name="staff_directori_toggle_visible",
     ),
+    # Community safety (Slice A)
+    path("comunitat/bloquejar/", comunitat_views.bloquejar, name="comunitat_bloquejar"),
+    path(
+        "comunitat/desbloquejar/",
+        comunitat_views.desbloquejar,
+        name="comunitat_desbloquejar",
+    ),
+    path("comunitat/denunciar/", comunitat_views.denunciar, name="comunitat_denunciar"),
+    path("staff/denuncies/", comunitat_views.staff_denuncies, name="staff_denuncies"),
+    path(
+        "staff/denuncies/<int:pk>/resoldre/",
+        comunitat_views.staff_denuncia_resoldre,
+        name="staff_denuncia_resoldre",
+    ),
 ]

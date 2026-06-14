@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings as _settings
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -14,11 +15,28 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import Missatge
+from comptes.models import BloqueigUsuari, Missatge
 from comptes.models import Usuari as _U
 from web.api.compte_views._common import _DMSendThrottle
 
 from ._common import _enviar_notificacio_missatge, _serialize_missatge
+
+
+def _dm_block_reason(viewer, dest) -> str | None:
+    """Return a Catalan reason string if `viewer` may NOT DM `dest`, else
+    None. The admin support inbox is always reachable. A block in either
+    direction, or the recipient's `accepta_dm=False`, denies the DM."""
+    admin_username = getattr(_settings, "ADMIN_INBOX_USERNAME", "admin")
+    if dest.username == admin_username:
+        return None
+    if BloqueigUsuari.objects.filter(
+        Q(blocker=viewer, blocked=dest) | Q(blocker=dest, blocked=viewer)
+    ).exists():
+        return "No pots enviar missatges a aquest usuari."
+    perfil = getattr(dest, "perfil", None)
+    if perfil is not None and not perfil.accepta_dm:
+        return "Aquest usuari no accepta missatges nous."
+    return None
 
 
 @api_view(["GET"])
@@ -28,9 +46,11 @@ def missatges_inbox(request: Request) -> Response:
     viewer = request.user
 
     # Aggregate per "altre usuari": most recent message timestamp + unread count.
-    qs = Missatge.objects.filter(
-        Q(remitent=viewer) | Q(destinatari=viewer)
-    ).select_related("remitent__perfil", "destinatari__perfil")
+    qs = (
+        Missatge.objects.filter(Q(remitent=viewer) | Q(destinatari=viewer))
+        .filter(ocult=False)  # hidden-by-moderation messages are never served
+        .select_related("remitent__perfil", "destinatari__perfil")
+    )
 
     per_altre: dict[int, dict] = {}
     for m in qs.order_by("-created_at"):
@@ -89,6 +109,7 @@ def missatges_amb_usuari(request: Request, altre_pk: int) -> Response:
             (Q(remitent=viewer) & Q(destinatari=altre))
             | (Q(remitent=altre) & Q(destinatari=viewer))
         )
+        .filter(ocult=False)  # hidden-by-moderation messages are never served
         .select_related("remitent__perfil", "destinatari__perfil")
         .order_by("created_at")
     )
@@ -126,6 +147,9 @@ def missatge_crear(request: Request) -> Response:
             {"error": "No pots enviar-te un missatge a tu mateix."}, status=400
         )
     destinatari = get_object_or_404(_U, pk=dest_pk)
+    block_reason = _dm_block_reason(viewer, destinatari)
+    if block_reason:
+        return Response({"error": block_reason}, status=403)
     cos = (data.get("cos") or "").strip()
     if not cos:
         return Response({"error": "El missatge no pot estar buit."}, status=400)

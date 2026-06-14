@@ -79,6 +79,7 @@ def perfil_usuari(request: Request) -> Response:
             "onboarding_complet",
             "notificar_missatges_email",
             "notificar_comentaris_email",
+            "accepta_dm",
         ):
             if flag in data:
                 setattr(perfil, flag, bool(data.get(flag)))

@@ -346,6 +346,31 @@ touches ranking).
   verified-manager email today, so this reaches a tiny audience until
   more managers verify.
 
+## Community safety (Slice A, 2026-06)
+
+Trust-and-safety prerequisites before opening the community to public
+traffic. All additive.
+
+- **Models** (`comptes/models.py`): `BloqueigUsuari` (blocker, blocked,
+  unique pair), `DenunciaUsuari` (reporter + one of four nullable target
+  FKs usuari/publicacio/comentari/missatge + `tipus` + `estat`
+  pendent/revisada/desestimada), and a new `Missatge.ocult` flag
+  (hidden-by-moderation messages are never served). `PerfilUsuari` gains
+  `accepta_dm` (True = anyone can DM, False = nobody; the admin support
+  inbox bypasses it).
+- **Member endpoints** (`web/api/comunitat_views/seguretat.py`):
+  `POST /comunitat/bloquejar/`, `/comunitat/desbloquejar/` (idempotent),
+  `POST /comunitat/denunciar/` ({tipus, target_pk, motiu}).
+- **DM gate** (`web/api/comunitat_views/missatgeria.py::_dm_block_reason`):
+  `missatge_crear` returns 403 when a block exists in EITHER direction or
+  the recipient has `accepta_dm=False`. The inbox + thread queries
+  filter `ocult=False`, so a hidden DM disappears for both parties.
+- **Staff moderation** (`web/api/comunitat_views/staff_moderacio.py`):
+  `GET /staff/denuncies/` (report queue) + `POST /staff/denuncies/<pk>/
+  resoldre/` ({action: revisar|desestimar, ocultar?}). With
+  `ocultar=true` a reported DM gets `ocult=True` and a reported
+  publication is unpublished.
+
 ## Related
 
 - ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`

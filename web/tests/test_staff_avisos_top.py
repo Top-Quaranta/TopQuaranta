@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 from rest_framework.test import APIClient
-
-import datetime
 
 from comptes.models import AvisTopEnviat
 from music.models import Album, Artista, Canco

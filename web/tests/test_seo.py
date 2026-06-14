@@ -426,6 +426,15 @@ def test_landing_routine_stores_prose_with_token(client, settings):
     brief = client.get("/api/v1/landing-routine/brief/", **auth)
     assert brief.status_code == 200
     assert "editorial_veu" in brief.json() and "landings" in brief.json()
+    # The brief serves the DEDICATED landing voice (not the newsletter's).
+    from ranking.models import ConfiguracioGlobal
+
+    cfg = ConfiguracioGlobal.load()
+    cfg.landing_editorial_veu = "VEU_LANDING_DEDICADA"
+    cfg.editorial_veu = "veu newsletter (no s'ha de filtrar)"
+    cfg.save()
+    brief2 = client.get("/api/v1/landing-routine/brief/", **auth).json()
+    assert brief2["editorial_veu"] == "VEU_LANDING_DEDICADA"
     # valid upsert
     ok = client.post(
         "/api/v1/landing-routine/prosa/",

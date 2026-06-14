@@ -257,6 +257,20 @@ class ConfiguracioGlobal(models.Model):
             "Buit = la rutina no genera res."
         ),
     )
+    # Dedicated voice for the SEO landing prose routine. Kept SEPARATE
+    # from `editorial_veu` (newsletter) so the two tones don't collide:
+    # a landing answer-paragraph reads nothing like a weekly newsletter.
+    # Empty = the landing routine generates nothing (clean STOP).
+    landing_editorial_veu = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Prompt de veu editorial per a la rutina de prosa de landings "
+            "SEO (territoris, generes, decades). Independent de la veu del "
+            "newsletter. Servit dins el brief de landing-routine; editable "
+            "des de Configuració. Buit = la rutina no genera res."
+        ),
+    )
 
     # Channel arg → its per-channel `*_actiu` field. Single source of
     # truth for the set of distribution channels the master gates.

@@ -164,9 +164,12 @@ def brief(request: Request) -> Response:
     only the gaps, plus a small sample of entity names for grounding."""
     cfg = ConfiguracioGlobal.load()
     landings = _territori_landings() + _genere_landings() + _decada_landings()
+    # Dedicated landing voice (NOT the newsletter's editorial_veu) so the
+    # two tones never collide. Empty => the routine generates nothing
+    # (clean STOP until staff sets it in Configuració).
     return Response(
         {
-            "editorial_veu": cfg.editorial_veu or "",
+            "editorial_veu": cfg.landing_editorial_veu or "",
             "landings": landings,
         }
     )

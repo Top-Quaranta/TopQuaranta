@@ -359,6 +359,41 @@ def collection_jsonld(
     return payload
 
 
+def dataset_jsonld(
+    name: str,
+    url_path: str,
+    description: str,
+    author: str,
+    keywords: list[str] | None = None,
+    date_modified: str = "",
+) -> dict[str, Any]:
+    """`Dataset` for the "Estat de la música en català" report — a
+    citation magnet for AI crawlers and data journalists. Carries an
+    attributed `creator` (Person) + `publisher` (Organization) and the
+    CC BY 4.0 licence the dataset already ships under."""
+    payload: dict[str, Any] = {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "@id": f"{_abs(url_path)}#dataset",
+        "name": name,
+        "url": _abs(url_path),
+        "description": description,
+        "inLanguage": "ca",
+        "license": "https://creativecommons.org/licenses/by/4.0/",
+        "creator": {"@type": "Person", "name": author},
+        "publisher": {
+            "@type": "Organization",
+            "name": SITE_NAME,
+            "url": CANONICAL_HOST,
+        },
+    }
+    if keywords:
+        payload["keywords"] = keywords
+    if date_modified:
+        payload["dateModified"] = date_modified
+    return payload
+
+
 def breadcrumbs_jsonld(items: list[tuple[str, str]]) -> dict[str, Any]:
     """`items` is a list of (name, url_path) pairs from root to
     current page. URLs may be paths or absolute — both work."""

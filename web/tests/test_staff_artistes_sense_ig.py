@@ -154,3 +154,40 @@ def test_n_top_no_double_counting_when_principal_and_collab(staff_client):
     by_nom = {row["nom"]: row for row in r.json()["results"]}
     # 1 principal chart row + 1 collab chart row = 2. No Cartesian.
     assert by_nom["EXEMPLE Both"]["n_top"] == 2
+
+
+@pytest.mark.django_db
+def test_al_top_filter_and_gestor_email_flag(staff_client, django_user_model):
+    """Fase 2 D2: ?al_top=1 lists artistes in the latest PPCC week and
+    flags whether they have a reachable verified-manager email."""
+    from comptes.models import PerfilUsuari, UserArtista
+
+    Artista.objects.all().delete()
+    setmana = date(2026, 6, 8)
+    setmana -= __import__("datetime").timedelta(days=setmana.weekday())
+
+    charting = Artista.objects.create(nom="EXEMPLE Charting", aprovat=True)
+    offchart = Artista.objects.create(nom="EXEMPLE OffChart", aprovat=True)
+    al = Album.objects.create(artista=charting, nom="EXEMPLE Al")
+    c = Canco.objects.create(
+        artista=charting, album=al, nom="EXEMPLE C", verificada=True, activa=True
+    )
+    TopSetmanal.objects.create(
+        canco=c, territori="PPCC", setmana=setmana, posicio=1, score_setmanal=1.0
+    )
+
+    # Give the charting artist a verified manager with an email.
+    u = django_user_model.objects.create_user(
+        username="mgr", email="mgr@example.com", password="x"
+    )
+    PerfilUsuari.objects.update_or_create(usuari=u, defaults={"vol_avis_top": True})
+    UserArtista.objects.create(
+        usuari=u, artista=charting, verificat=True, estat="aprovat"
+    )
+
+    r = staff_client.get("/api/v1/staff/artistes/?al_top=1")
+    assert r.status_code == 200, r.content
+    noms = {row["nom"]: row for row in r.json()["results"]}
+    assert "EXEMPLE Charting" in noms
+    assert "EXEMPLE OffChart" not in noms
+    assert noms["EXEMPLE Charting"]["te_gestor_email"] is True

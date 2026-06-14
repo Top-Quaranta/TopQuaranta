@@ -323,6 +323,29 @@ off by default**, gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`
   relative links absolutised to `PUBLIC_SITE_BASE`, blank-line runs collapsed;
   the result contains no raw HTML.
 
+## "Has entrat al top" manager alert (Fase 2 D1, 2026-06)
+
+A SEPARATE notification path from scoring: the `enviar_avisos_top`
+management command READS the already-computed weekly PPCC (`Global`)
+`TopSetmanal` and emails the verified managers of any artist that NEWLY
+enters the top. "New" = a cançó in this week's top whose `canco_id` was
+absent last week (reuses `web.api.top_views._prev_week_positions`; never
+touches ranking).
+
+- **Audience:** `UserArtista` rows with `verificat=True`, `estat=aprovat`,
+  an active user with an email, and `PerfilUsuari.vol_avis_top=True`
+  (default True, opt-OUT — it's a relevant service alert, not marketing).
+- **Idempotency:** one `AvisTopEnviat(artista, setmana)` row gates each
+  artist+week (unique constraint), so re-runs never double-send.
+- **Safety:** DRY-RUN BY DEFAULT; `--send` actually emails. `--setmana`
+  targets a specific Monday (defaults to the latest PPCC week).
+- **Opt-out:** signed-token unsubscribe at
+  `/api/v1/compte/baixa-avis-top/` (salt `avis-top-baixa`, 1-year token,
+  RFC 8058 one-click), mirroring the newsletter unsubscribe.
+- Make-or-break (investigation 2026-06): only ~3 artists have a reachable
+  verified-manager email today, so this reaches a tiny audience until
+  more managers verify.
+
 ## Related
 
 - ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`

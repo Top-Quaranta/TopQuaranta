@@ -1,0 +1,48 @@
+{% extends "seo/_base.html" %}
+{% block content %}
+<nav class="breadcrumbs">
+  <a href="/">Inici</a> › Estat de la música en català
+</nav>
+<h1>L'estat de la música en català</h1>
+<p class="byline">Per {{ byline }}{% if snapshot_data %} · dades a {{ snapshot_data|date:"d/m/Y" }}{% endif %}</p>
+
+{% if gauges %}
+<p>
+  A TopQuaranta hi ha <strong>{{ gauges.cancons_verificades|default:"—" }}</strong>
+  cançons en català verificades de
+  <strong>{{ gauges.artistes_aprovats|default:"—" }}</strong> artistes aprovats.
+  Aquestes dades s'actualitzen cada setmana a partir del senyal de Last.fm
+  i la metadada de Deezer i MusicBrainz.
+</p>
+
+<h2>Quantes cançons i artistes en català hi ha?</h2>
+<ul class="bare">
+  <li><strong>Cançons verificades:</strong> {{ gauges.cancons_verificades|default:"—" }}</li>
+  <li><strong>Artistes aprovats:</strong> {{ gauges.artistes_aprovats|default:"—" }}</li>
+  {% if gauges.cobertura_mb %}<li><strong>Cobertura MusicBrainz:</strong> {{ gauges.cobertura_mb|floatformat:1 }}%</li>{% endif %}
+</ul>
+
+{% if per_territori %}
+<h2>Música en català per territori</h2>
+<table>
+  <thead><tr><th>Territori</th><th>Cançons verificades</th></tr></thead>
+  <tbody>
+    {% for nom, n in per_territori %}
+    <tr><td>{{ nom }}</td><td>{{ n }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% else %}
+<p>Les dades s'estan recollint. Torna més tard.</p>
+{% endif %}
+
+<h2>Metodologia i font</h2>
+<p>
+  El senyal de popularitat prové de Last.fm (reproduccions i oients); la
+  metadada, de Deezer i MusicBrainz. Cada artista descobert passa per
+  aprovació humana. El conjunt de dades es publica sota llicència
+  <a href="https://creativecommons.org/licenses/by/4.0/" rel="nofollow">CC BY 4.0</a>.
+</p>
+<p><a href="/com-funciona">Com funciona TopQuaranta →</a></p>
+{% endblock %}

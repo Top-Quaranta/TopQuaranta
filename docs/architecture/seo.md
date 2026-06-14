@@ -115,6 +115,19 @@ on the thin-artiste minimal MusicGroup — it aids entity disambiguation
 and never points at internal (possibly non-existent) discography, so the
 minimal "no discography" contract is preserved.
 
+## Data report page (Fase 2 D3)
+
+`/estat-musica-catala` (`estat_musica_catala_seo`) is a citation magnet
+for AI crawlers and data journalists. It reads the latest
+`MetricaPipeline` gauges (cançons verificades, artistes aprovats,
+cobertura MB, cançons per territori) and renders them as short
+direct-answer paragraphs + a per-territori table, with an attributed
+byline (`EDITORIAL_BYLINE`). Structured data is a `Dataset`
+(`jsonld.dataset_jsonld`) carrying `creator` (Person), `publisher`
+(Organization) and the CC BY 4.0 `license`. Degrades cleanly with no
+snapshot (the Dataset anchor stays; the data section shows a placeholder).
+Registered as an SSR page (urls + `@bot` path + `StaticSitemap` entry).
+
 ## Indexability rules
 
 Hard rules, mirrored across SSR views, sitemaps, and IndexNow notify:

@@ -352,6 +352,12 @@ class PerfilUsuari(models.Model):
     vol_newsletter = models.BooleanField(default=False, db_index=True)
     consent_newsletter_at = models.DateTimeField(null=True, blank=True)
 
+    # "Has entrat al top" alert to verified managers (Fase 2 D1).
+    # Default True (opt-OUT): it's a low-frequency, high-relevance
+    # service notification to a manager about their own artist, not a
+    # marketing blast. Opt-out via the signed-token unsubscribe link.
+    vol_avis_top = models.BooleanField(default=True, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -688,3 +694,31 @@ class NewsletterDraft(models.Model):
 
     def __str__(self) -> str:
         return f"NewsletterDraft {self.tipus}/{self.territori} {self.setmana} ({self.estat})"
+
+
+class AvisTopEnviat(models.Model):
+    """Idempotency ledger for the "has entrat al top" manager alert
+    (Fase 2 D1). One row per (artista, setmana): the `enviar_avisos_top`
+    command sends an alert only if no row exists, then writes one. This
+    guarantees a manager is never emailed twice for the same week's
+    entry, even if the command is re-run.
+    """
+
+    artista = models.ForeignKey(
+        "music.Artista",
+        on_delete=models.CASCADE,
+        related_name="avisos_top",
+    )
+    setmana = models.DateField(help_text="ISO Monday of the top week.")
+    enviat_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["artista", "setmana"],
+                name="avistopenviat_unique_artista_setmana",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"AvisTopEnviat {self.artista_id} {self.setmana}"

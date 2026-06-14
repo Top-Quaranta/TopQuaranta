@@ -932,6 +932,65 @@ def mapa_seo(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_safe
+@_vary_ua
+def estat_musica_catala_seo(request: HttpRequest) -> HttpResponse:
+    """`/estat-musica-catala` — data report on the state of Catalan-
+    language music (Fase 2 D3). Reads the latest `MetricaPipeline`
+    gauges (catalog totals, coverage, per-territori distribution) and
+    presents them as an attributed, CC BY 4.0 Dataset — a citation
+    magnet for AI crawlers and data journalists. Degrades cleanly when
+    no snapshot exists yet."""
+    from analytics.models import MetricaPipeline
+
+    latest = (
+        MetricaPipeline.objects.order_by("-data").values_list("data", flat=True).first()
+    )
+    gauges: dict[str, object] = {}
+    per_territori: list[tuple[str, int]] = []
+    if latest:
+        for r in MetricaPipeline.objects.filter(data=latest):
+            val = r.valor_int if r.valor_int is not None else r.valor_float
+            if r.clau == "cancons_per_territori":
+                if val:
+                    per_territori.append((r.dimensio_1, val))
+            else:
+                gauges[r.clau] = val
+    per_territori_named = sorted(
+        ((meta.TERRITORI_NOMS.get(c, c), v) for c, v in per_territori),
+        key=lambda x: -x[1],
+    )
+    page_meta = meta.for_estat_musica()
+    blocks = [
+        jsonld.dataset_jsonld(
+            "L'estat de la música en català",
+            "/estat-musica-catala",
+            page_meta.description,
+            meta.EDITORIAL_BYLINE,
+            keywords=page_meta.keywords,
+            date_modified=latest.isoformat() if latest else "",
+        ),
+        jsonld.breadcrumbs_jsonld(
+            [
+                ("Inici", "/"),
+                ("Estat de la música en català", "/estat-musica-catala"),
+            ]
+        ),
+    ]
+    return render(
+        request,
+        "seo/estat_musica.html",
+        {
+            "meta": page_meta,
+            "jsonld_blocks": blocks,
+            "gauges": gauges,
+            "per_territori": per_territori_named,
+            "snapshot_data": latest,
+            "byline": meta.EDITORIAL_BYLINE,
+        },
+    )
+
+
 # ── /api/v1/seo/<entity>/<slug>/ — for the SPA Helmet hooks ─────────
 
 

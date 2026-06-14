@@ -77,6 +77,11 @@ urlpatterns = [
     path("canco/<slug:slug>/", seo_views.canco_seo),
     path("mapa", seo_views.mapa_seo, name="seo_mapa"),
     path("com-funciona", seo_views.com_funciona_seo, name="seo_com_funciona"),
+    path(
+        "estat-musica-catala",
+        seo_views.estat_musica_catala_seo,
+        name="seo_estat_musica",
+    ),
     # Long-tail SEO surfaces (Sprint S Block C).
     path(
         "top/<str:territori>/setmana/<str:year_week>",

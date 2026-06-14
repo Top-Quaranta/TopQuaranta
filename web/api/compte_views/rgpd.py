@@ -338,3 +338,43 @@ def baixa_newsletter(request: Request) -> Response:
         perfil.vol_newsletter = False
         perfil.save(update_fields=["vol_newsletter"])
     return Response({"ok": True, "email": u.email})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([])
+@throttle_classes([_NewsletterUnsubThrottle])
+def baixa_avis_top(request: Request) -> Response:
+    """Token-based opt-out from the "has entrat al top" manager alert
+    (Fase 2 D1). Same RFC 8058 one-click contract + 1-year token as the
+    newsletter unsubscribe, but salt `avis-top-baixa` and it flips
+    `PerfilUsuari.vol_avis_top` to False."""
+    from django.core import signing
+
+    from comptes.models import Usuari
+
+    token = (
+        request.GET.get("token")
+        or (request.data.get("token") if hasattr(request, "data") else None)
+        or ""
+    ).strip()
+    if not token:
+        return Response({"error": "Falta el token."}, status=400)
+    try:
+        data = signing.loads(token, salt="avis-top-baixa", max_age=60 * 60 * 24 * 365)
+        user_pk = int(data["u"])
+    except signing.SignatureExpired:
+        return Response(
+            {"error": "Aquest enllaç ha caducat. Gestiona-ho des de /compte/perfil."},
+            status=400,
+        )
+    except (signing.BadSignature, KeyError, ValueError, TypeError):
+        return Response({"error": "Token invàlid."}, status=400)
+    try:
+        u = Usuari.objects.get(pk=user_pk)
+    except Usuari.DoesNotExist:
+        return Response({"error": "Usuari inexistent."}, status=404)
+    perfil = getattr(u, "perfil", None)
+    if perfil is not None and perfil.vol_avis_top:
+        perfil.vol_avis_top = False
+        perfil.save(update_fields=["vol_avis_top"])
+    return Response({"ok": True, "email": u.email})

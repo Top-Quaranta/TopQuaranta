@@ -32,7 +32,10 @@ from .publicacions import (
     publicacions,
     publicacions_publiques,
 )
+from .seguretat import bloquejar, denunciar, desbloquejar
 from .staff_moderacio import (
+    staff_denuncia_resoldre,
+    staff_denuncies,
     staff_directori_toggle_visible,
     staff_directori_usuaris,
     staff_publicacio_decidir,
@@ -49,10 +52,15 @@ __all__ = [
     "staff_publicacio_decidir",
     "staff_directori_usuaris",
     "staff_directori_toggle_visible",
+    "staff_denuncies",
+    "staff_denuncia_resoldre",
     "upload_imatge",
     "missatges_inbox",
     "missatges_amb_usuari",
     "missatge_crear",
     "publicacio_comentaris",
     "comentari_esborrar",
+    "bloquejar",
+    "desbloquejar",
+    "denunciar",
 ]

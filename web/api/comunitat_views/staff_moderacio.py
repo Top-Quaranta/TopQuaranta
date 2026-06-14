@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import PerfilUsuari, Publicacio
+from comptes.models import DenunciaUsuari, Missatge, PerfilUsuari, Publicacio
 from web.api.search_utils import normalize_search_term, unaccent_field
 from web.api.staff_views import IsStaff
 from web.api.utils import paginate
@@ -139,3 +139,68 @@ def staff_directori_toggle_visible(request: Request, usuari_id: int) -> Response
     p.visible_directori = not p.visible_directori
     p.save(update_fields=["visible_directori", "updated_at"])
     return Response({"usuari_id": usuari_id, "visible_directori": p.visible_directori})
+
+
+def _serialize_denuncia(d: DenunciaUsuari) -> dict:
+    return {
+        "id": d.pk,
+        "tipus": d.tipus,
+        "estat": d.estat,
+        "motiu": d.motiu,
+        "reporter": d.reporter.username if d.reporter_id else None,
+        "usuari_denunciat_id": d.usuari_denunciat_id,
+        "publicacio_id": d.publicacio_id,
+        "comentari_id": d.comentari_id,
+        "missatge_id": d.missatge_id,
+        "created_at": d.created_at.isoformat(),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def staff_denuncies(request: Request) -> Response:
+    """Report queue. Defaults to pending reports, newest first."""
+    qs = DenunciaUsuari.objects.select_related("reporter").order_by("-created_at")
+    estat = request.GET.get("estat", "pendent")
+    if estat in {k for k, _ in DenunciaUsuari.ESTAT_CHOICES}:
+        qs = qs.filter(estat=estat)
+    page, meta = paginate(qs, request, default=30, cap=100)
+    return Response(
+        {
+            "results": [_serialize_denuncia(d) for d in page.object_list],
+            **meta,
+            "estat_choices": list(DenunciaUsuari.ESTAT_CHOICES),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsStaff])
+def staff_denuncia_resoldre(request: Request, pk: int) -> Response:
+    """Resolve a report. Body: {action: "revisar"|"desestimar",
+    ocultar?: bool}. With `ocultar=true` the reported target is hidden:
+    a DM gets `ocult=True`; a publication is unpublished. Comments are
+    hidden via the existing delete endpoint."""
+    d = get_object_or_404(DenunciaUsuari, pk=pk)
+    data = request.data or {}
+    action = (data.get("action") or "").strip()
+    if action not in ("revisar", "desestimar"):
+        return Response({"error": "Acció no vàlida."}, status=400)
+
+    if action == "revisar" and bool(data.get("ocultar")):
+        if d.tipus == DenunciaUsuari.TIPUS_MISSATGE and d.missatge_id:
+            Missatge.objects.filter(pk=d.missatge_id).update(ocult=True)
+        elif d.tipus == DenunciaUsuari.TIPUS_PUBLICACIO and d.publicacio_id:
+            Publicacio.objects.filter(pk=d.publicacio_id).update(
+                estat=Publicacio.ESTAT_ESBORRANY, publicat_at=None
+            )
+
+    d.estat = (
+        DenunciaUsuari.ESTAT_REVISADA
+        if action == "revisar"
+        else DenunciaUsuari.ESTAT_DESESTIMADA
+    )
+    d.resolt_at = timezone.now()
+    d.resolt_per = request.user
+    d.save(update_fields=["estat", "resolt_at", "resolt_per"])
+    return Response(_serialize_denuncia(d))

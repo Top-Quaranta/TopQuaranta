@@ -94,6 +94,26 @@ and start ranking:
    landing renders its structured content and the thin/noindex gate is
    untouched. Prose is plain text, rendered with `linebreaks` (never
    `safe`) so a compromised routine token cannot inject markup.
+4. **E-E-A-T attribution.** When a landing carries editorial prose it
+   also shows a visible byline (`meta.EDITORIAL_BYLINE` = "Josep
+   Quaranta") + the prose's last-updated date, and the `CollectionPage`
+   JSON-LD gains an `author` (Person) on top of the always-present
+   `publisher` (Organization). Byline + author appear ONLY with prose,
+   so attribution never claims authorship of a bare auto-generated list.
+
+## Search-engine verification
+
+- **IndexNow** key file at `/<key>.txt` (Bing/Yandex/consortium
+  real-time push, `web/seo/indexnow.py`).
+- **Bing Webmaster Tools** ownership file at `/BingSiteAuth.xml`
+  (`seo/bingsiteauth.xml` template, routed via `topquaranta/urls.py` +
+  the `@django` matcher in `deploy/Caddyfile`). Same serving pattern as
+  the IndexNow key file.
+
+`sameAs` (external profile links) is emitted on the full MusicGroup AND
+on the thin-artiste minimal MusicGroup — it aids entity disambiguation
+and never points at internal (possibly non-existent) discography, so the
+minimal "no discography" contract is preserved.
 
 ## Indexability rules
 

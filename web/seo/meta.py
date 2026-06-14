@@ -20,6 +20,11 @@ from music.models import Album, Artista, Canco
 
 CANONICAL_HOST = settings.SITE_URL  # → "https://www.topquaranta.cat"
 SITE_NAME = "TopQuaranta"
+
+# Editorial byline for the human-written landing prose + the "Estat de
+# la música en català" report. A consistent named author is an E-E-A-T
+# signal (Google + AI crawlers favour attributed editorial content).
+EDITORIAL_BYLINE = "Josep Quaranta"
 DEFAULT_OG_IMAGE = f"{CANONICAL_HOST}/og/default.png"
 LOCALE = "ca_ES"
 

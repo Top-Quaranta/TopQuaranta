@@ -116,7 +116,7 @@ def artista_jsonld(a: Artista, *, minimal: bool = False) -> dict[str, Any]:
     structured data doesn't point Google at non-existent discography.
     """
     if minimal:
-        return {
+        thin: dict[str, Any] = {
             "@context": "https://schema.org",
             "@type": "MusicGroup",
             "@id": f"{CANONICAL_HOST}/artista/{a.slug}#group",
@@ -124,6 +124,14 @@ def artista_jsonld(a: Artista, *, minimal: bool = False) -> dict[str, Any]:
             "url": f"{CANONICAL_HOST}/artista/{a.slug}",
             "inLanguage": "ca",
         }
+        # `sameAs` is safe even on the thin page: external profile links
+        # help entity disambiguation and point at no internal (possibly
+        # non-existent) discography. No album/track keys are added, so
+        # the minimal contract (no discography) is preserved.
+        sameas = _social_links(a)
+        if sameas:
+            thin["sameAs"] = sameas
+        return thin
 
     territori_nom = ""
     locs = a.localitats.select_related("municipi__territori").all()
@@ -306,12 +314,17 @@ def collection_jsonld(
     url_path: str,
     items: list[tuple[str, str]],
     description: str = "",
+    author: str | None = None,
 ) -> dict[str, Any]:
     """`CollectionPage` whose `mainEntity` is an `ItemList` of the
     artistes/cançons featured on an editorial landing (territori,
     genere, decada). `items` is a list of (name, url_path) pairs in
     display order. Gives crawlers an explicit, ordered entity list so
-    these aggregation pages read as collections, not thin stubs."""
+    these aggregation pages read as collections, not thin stubs.
+
+    `publisher` (the site Organization) is always emitted; `author` (a
+    named Person) only when editorial prose with a byline is present —
+    both are E-E-A-T signals."""
     payload: dict[str, Any] = {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
@@ -320,6 +333,11 @@ def collection_jsonld(
         "url": _abs(url_path),
         "isPartOf": {"@type": "WebSite", "url": CANONICAL_HOST, "name": SITE_NAME},
         "inLanguage": "ca",
+        "publisher": {
+            "@type": "Organization",
+            "name": SITE_NAME,
+            "url": CANONICAL_HOST,
+        },
         "mainEntity": {
             "@type": "ItemList",
             "numberOfItems": len(items),
@@ -336,6 +354,8 @@ def collection_jsonld(
     }
     if description:
         payload["description"] = description
+    if author:
+        payload["author"] = {"@type": "Person", "name": author}
     return payload
 
 

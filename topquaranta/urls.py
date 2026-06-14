@@ -47,6 +47,15 @@ urlpatterns = [
             content_type="text/plain",
         ),
     ),
+    # Bing Webmaster Tools ownership verification. Bing GETs
+    # `https://<host>/BingSiteAuth.xml` and checks the <user> code.
+    path(
+        "BingSiteAuth.xml",
+        TemplateView.as_view(
+            template_name="seo/bingsiteauth.xml",
+            content_type="application/xml",
+        ),
+    ),
     # Atom feeds. Caddy passes /rss/* through to Django (see
     # deploy/Caddyfile).
     path("rss/top.xml", top_feed, name="rss_top"),

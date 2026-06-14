@@ -230,6 +230,9 @@ PATH=/usr/local/bin:/usr/bin:/bin
 #  - PSI: 12 PageSpeed Insights calls (6 URLs × mobile+desktop).
 0 21 * * *  topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_gsc >> /var/log/topquaranta/seo.log 2>&1
 30 21 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_psi >> /var/log/topquaranta/seo.log 2>&1
+# 21:15 → Bing Webmaster snapshot (traffic, queries, pages, crawl,
+# inbound links). Skips cleanly without BING_WEBMASTER_API_KEY.
+15 21 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_bing >> /var/log/topquaranta/seo.log 2>&1
 
 # 23:00 → Daily snapshot of pipeline-state gauges into MetricaPipeline
 # (cançons verificades / pendents / rebutjades, cobertura whisper+MB,

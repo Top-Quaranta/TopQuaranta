@@ -169,6 +169,11 @@
     "max_age_hours": 26,
     "skip_concern": 1
   },
+  "recollir_metrics_bing": {
+    "frequency_label": "Cada nit 21:15",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
   "inferir_genere": {
     "frequency_label": "Cada nit 02:00",
     "max_age_hours": 26,

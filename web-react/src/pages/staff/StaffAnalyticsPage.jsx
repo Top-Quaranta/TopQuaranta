@@ -1475,6 +1475,127 @@ function SeoTab() {
           ))}
         </div>
       </Card>
+
+      {/* ── Bing Webmaster (mirror of the GSC panel) ───────────── */}
+      <div className="pt-2 border-t border-tq-ink/10">
+        <p className="text-[11px] uppercase tracking-widest text-tq-ink/60 mb-2">
+          Bing Webmaster{" "}
+          {data.last_updated.bing ? `· ${data.last_updated.bing}` : "· pendent"}
+        </p>
+        {!data.last_updated.bing && (
+          <Card title="Bing Webmaster pendent">
+            <p className="text-xs text-tq-ink/70">
+              Encara no hi ha dades de Bing. El cron diari les recollirà quan{" "}
+              <code className="bg-tq-ink/5 px-1 rounded">
+                BING_WEBMASTER_API_KEY
+              </code>{" "}
+              estigui configurada i el lloc verificat a Bing Webmaster Tools.
+            </p>
+          </Card>
+        )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <Kpi
+            label="Enllaços entrants"
+            value={data.bing?.links?.inbound_links ?? null}
+            hint="autoritat (Bing)"
+          />
+          <Kpi
+            label="Dominis enllaçants"
+            value={data.bing?.links?.linking_domains ?? null}
+          />
+          <Kpi
+            label="Impressions Bing (28d)"
+            value={(data.bing?.daily_kpis || []).reduce(
+              (s, r) => s + (r.impressions || 0),
+              0,
+            )}
+          />
+          <Kpi
+            label="Clicks Bing (28d)"
+            value={(data.bing?.daily_kpis || []).reduce(
+              (s, r) => s + (r.clicks || 0),
+              0,
+            )}
+          />
+        </div>
+        <Card
+          title="Cerca a Bing · 28 dies"
+          hint="Impressions i clicks via Bing Webmaster"
+        >
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={data.bing?.daily_kpis || []}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="data" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11 }}
+                allowDecimals={false}
+              />
+              <Tooltip />
+              <Legend />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="impressions"
+                name="Impressions"
+                stroke="#0ea5e9"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="clicks"
+                name="Clicks"
+                stroke="#0a0a0a"
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card title="Top queries Bing" hint="Per clicks · darrer snapshot">
+          <table className="w-full text-xs">
+            <thead className="text-tq-ink/60">
+              <tr>
+                <th className="text-left">Query</th>
+                <th className="text-right">Impr.</th>
+                <th className="text-right">Clicks</th>
+                <th className="text-right">Pos.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.bing?.top_queries || []).length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-3 text-center text-tq-ink/60">
+                    Sense dades.
+                  </td>
+                </tr>
+              )}
+              {(data.bing?.top_queries || []).map((r, i) => (
+                <tr key={i} className="border-t border-tq-ink/5">
+                  <td className="py-1 truncate max-w-[250px]" title={r.query}>
+                    {r.query}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {(r.impressions || 0).toLocaleString("ca-ES")}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {(r.clicks || 0).toLocaleString("ca-ES")}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {r.avg_click_position
+                      ? r.avg_click_position.toFixed(1)
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
     </div>
   );
 }

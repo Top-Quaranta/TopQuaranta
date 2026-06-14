@@ -307,3 +307,126 @@ class MetricaCWV(models.Model):
 
     def __str__(self) -> str:
         return f"{self.data} {self.category} {self.url} score={self.score}"
+
+
+# ── Bing Webmaster (mirror of the GSC slice; Fase 2 outreach 2026-06) ──
+# Bing surfaces signals GSC does not, above all INBOUND LINK COUNTS
+# (authority). Populated by the `recollir_metrics_bing` cron. All thin
+# slices, idempotent on their natural key, additive (no backfill).
+
+
+class MetricaBingTraffic(models.Model):
+    """Daily rank & traffic (Bing `GetRankAndTrafficStats`). One row
+    per day."""
+
+    data = models.DateField(db_index=True)
+    clicks = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Mètrica Bing tràfic"
+        verbose_name_plural = "Mètriques Bing tràfic"
+        constraints = [
+            models.UniqueConstraint(fields=["data"], name="metricabingtraffic_uniq"),
+        ]
+        indexes = [models.Index(fields=["-data"])]
+
+    def __str__(self) -> str:
+        return f"{self.data} bing {self.clicks}/{self.impressions}"
+
+
+class MetricaBingQuery(models.Model):
+    """Per-query stats (Bing `GetQueryStats`). Stamped with the snapshot
+    date (Bing returns a period aggregate per query, not per day).
+    Positions are already de-scaled (Bing returns them ×10)."""
+
+    data = models.DateField(db_index=True)
+    query = models.CharField(max_length=200)
+    clicks = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    avg_click_position = models.FloatField(default=0.0)
+    avg_impression_position = models.FloatField(default=0.0)
+
+    class Meta:
+        verbose_name = "Mètrica Bing per query"
+        verbose_name_plural = "Mètriques Bing per query"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["data", "query"], name="metricabingquery_uniq"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["-data", "-clicks"]),
+            models.Index(fields=["query", "-data"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.data} bing '{self.query}' ({self.clicks}/{self.impressions})"
+
+
+class MetricaBingPage(models.Model):
+    """Per-page stats (Bing `GetPageStats`). Snapshot-dated like
+    `MetricaBingQuery`."""
+
+    data = models.DateField(db_index=True)
+    page = models.CharField(max_length=400)
+    clicks = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    avg_click_position = models.FloatField(default=0.0)
+    avg_impression_position = models.FloatField(default=0.0)
+
+    class Meta:
+        verbose_name = "Mètrica Bing per pàgina"
+        verbose_name_plural = "Mètriques Bing per pàgina"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["data", "page"], name="metricabingpage_uniq"
+            ),
+        ]
+        indexes = [models.Index(fields=["-data", "-clicks"])]
+
+    def __str__(self) -> str:
+        return f"{self.data} bing {self.page} ({self.clicks}/{self.impressions})"
+
+
+class MetricaBingCrawl(models.Model):
+    """Daily crawl stats (Bing `GetCrawlStats`). One row per day."""
+
+    data = models.DateField(db_index=True)
+    crawled_pages = models.PositiveIntegerField(default=0)
+    in_links = models.PositiveIntegerField(default=0)
+    crawl_errors = models.PositiveIntegerField(default=0)
+    blocked_by_robots = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Mètrica Bing crawl"
+        verbose_name_plural = "Mètriques Bing crawl"
+        constraints = [
+            models.UniqueConstraint(fields=["data"], name="metricabingcrawl_uniq"),
+        ]
+        indexes = [models.Index(fields=["-data"])]
+
+    def __str__(self) -> str:
+        return f"{self.data} bing crawl {self.crawled_pages}p {self.in_links}links"
+
+
+class MetricaBingLinks(models.Model):
+    """Inbound-link counts (Bing `GetUrlLinks`). The authority signal
+    GSC does not expose. Snapshot-dated. `inbound_links` is the count of
+    link rows Bing returned for the site; `linking_domains` the distinct
+    referring hosts among them when derivable."""
+
+    data = models.DateField(db_index=True)
+    inbound_links = models.PositiveIntegerField(default=0)
+    linking_domains = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Mètrica Bing enllaços entrants"
+        verbose_name_plural = "Mètriques Bing enllaços entrants"
+        constraints = [
+            models.UniqueConstraint(fields=["data"], name="metricabinglinks_uniq"),
+        ]
+        indexes = [models.Index(fields=["-data"])]
+
+    def __str__(self) -> str:
+        return f"{self.data} bing inbound={self.inbound_links}"

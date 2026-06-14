@@ -37,6 +37,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from analytics.models import (
+    MetricaBingCrawl,
+    MetricaBingLinks,
+    MetricaBingQuery,
+    MetricaBingTraffic,
     MetricaCWV,
     MetricaEsdeveniment,
     MetricaPipeline,
@@ -506,9 +510,52 @@ def analytics_seo(request: Request) -> Response:
     for r in cwv:
         r["data"] = r["data"].isoformat()
 
+    # ── Bing Webmaster (mirror of the GSC panel) ────────────────────
+    bing_daily = list(
+        MetricaBingTraffic.objects.filter(data__gte=since)
+        .values("data", "clicks", "impressions")
+        .order_by("data")
+    )
+    for row in bing_daily:
+        row["data"] = row["data"].isoformat()
+    bing_last_day = MetricaBingQuery.objects.aggregate(m=Max("data"))["m"]
+    bing_top_queries = (
+        list(
+            MetricaBingQuery.objects.filter(data=bing_last_day)
+            .values(
+                "query",
+                "clicks",
+                "impressions",
+                "avg_click_position",
+                "avg_impression_position",
+            )
+            .order_by("-clicks", "-impressions")[:30]
+        )
+        if bing_last_day
+        else []
+    )
+    # Headline authority signal: latest inbound-link count.
+    bing_links_row = (
+        MetricaBingLinks.objects.order_by("-data")
+        .values("data", "inbound_links", "linking_domains")
+        .first()
+    )
+    bing_links = None
+    if bing_links_row:
+        bing_links_row["data"] = bing_links_row["data"].isoformat()
+        bing_links = bing_links_row
+    bing_crawl_row = (
+        MetricaBingCrawl.objects.order_by("-data")
+        .values("data", "crawled_pages", "in_links", "crawl_errors")
+        .first()
+    )
+    if bing_crawl_row:
+        bing_crawl_row["data"] = bing_crawl_row["data"].isoformat()
+
     # ── Last update timestamp per source ───────────────────────────
     last_gsc = MetricaSEOQuery.objects.aggregate(m=Max("data"))["m"]
     last_psi = MetricaCWV.objects.aggregate(m=Max("data"))["m"]
+    last_bing = MetricaBingTraffic.objects.aggregate(m=Max("data"))["m"]
 
     return Response(
         {
@@ -521,10 +568,17 @@ def analytics_seo(request: Request) -> Response:
                 "now": timezone.now().isoformat(),
                 "gsc": last_gsc.isoformat() if last_gsc else None,
                 "psi": last_psi.isoformat() if last_psi else None,
+                "bing": last_bing.isoformat() if last_bing else None,
             },
             "daily_kpis": daily,
             "top_queries": top_queries,
             "top_pages": top_pages,
             "cwv": cwv,
+            "bing": {
+                "daily_kpis": bing_daily,
+                "top_queries": bing_top_queries,
+                "links": bing_links,
+                "crawl": bing_crawl_row,
+            },
         }
     )

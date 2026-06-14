@@ -237,6 +237,37 @@ so it's actionable even when nobody opens the dashboard.
   calls the SPA makes for telemetry are POSTs to our own
   `/api/v1/analytics/*` endpoints.
 
+## SEO surfaces: GSC + Bing + PSI
+
+Three nightly crons poll external SEO APIs and persist thin daily slices
+(all idempotent on their natural key, fail-open, skip cleanly when their
+credential is absent so CI/local stay green):
+
+- **GSC** (`recollir_metrics_gsc`, 21:00) -> `MetricaSEOQuery`
+  (per query×page clicks/impressions/CTR/position). Credential:
+  `GSC_OAUTH_*` / `GSC_SERVICE_ACCOUNT_FILE`.
+- **Bing Webmaster** (`recollir_metrics_bing`, 21:15) -> `MetricaBing*`.
+  Credential: `BING_WEBMASTER_API_KEY` + `BING_WEBMASTER_SITE_URL`
+  (read from settings exactly like the GSC creds; never logged). The
+  thin JSON REST API (`https://ssl.bing.com/webmaster/api.svc/json/<Method>`)
+  has three quirks the parser handles: payload under the `"d"` envelope,
+  `/Date(ms)/` date strings, and `Avg*Position` returned ×10 (divided by
+  10). `GetSites` validates the configured site is a VERIFIED property
+  first; if not, the command STOPS (no invented data). Methods pulled:
+  `GetRankAndTrafficStats` (`MetricaBingTraffic`), `GetQueryStats`
+  (`MetricaBingQuery`), `GetPageStats` (`MetricaBingPage`),
+  `GetCrawlStats` (`MetricaBingCrawl`), `GetUrlLinks`
+  (`MetricaBingLinks` - INBOUND LINK COUNTS, the authority signal GSC
+  does not expose). Only the method name is ever logged, never the
+  apikey or the request URL. No URL submission (IndexNow already covers
+  Bing; `--submit-sitemap` is a dry-run stub only).
+- **PSI** (`recollir_metrics_psi`, 21:30) -> `MetricaCWV` (Core Web
+  Vitals per URL × form factor).
+
+Both GSC and Bing feed the staff dashboard **SEO** tab
+(`/api/v1/staff/analytics/seo/`): GSC panel + a parallel Bing panel
+headlined by the inbound-link count.
+
 ## Operational details
 
 ### Cron lines

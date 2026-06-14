@@ -375,6 +375,16 @@ IG/Telegram slots failed with 9004 / `WEBPAGE_MEDIA_EMPTY` while the
 byte-upload channels (Mastodon, Bluesky) — which never fetch a URL —
 published fine. Guarded by `test_public_url_for_uses_caddy_static_not_django_fallback`.
 
+## Ambassador share caption (Fase 2 E)
+
+`social/ambassador.py::ambassador_top_caption(nom, slug, posicio=None)`
+returns a ready-to-share "has entrat al top" caption (artist + canonical
+URL + the position when known), cohesive with the press kit. It is
+DECOUPLED from publishing: no gating, never auto-posted — it's text for
+an artist/team to share, the move behind our best organic reach. No
+positional `#<digit>` (same audience-leak discipline as the weekly
+captions). The live post + campaign strategy stay manual (Miquel).
+
 ## Related
 
 - Narrative engine detail: [`social-narrative.md`](social-narrative.md).

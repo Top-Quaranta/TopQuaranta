@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom'
 import { useEffect } from 'react'
 import { api } from '../../lib/api'
 import {
+  Btn,
   EmptyState,
   PageHeader,
   Pagination,
@@ -25,6 +26,53 @@ import {
   THead,
   Tr,
 } from '../../components/staff/StaffTable'
+
+function AvisosPanel() {
+  const [busy, setBusy] = useState(false)
+  const [out, setOut] = useState('')
+  const [err, setErr] = useState('')
+
+  async function run(send) {
+    if (send && !window.confirm(
+      'Enviar de debò els avisos "has entrat al top" als gestors verificats? ' +
+      'Aquesta acció envia emails reals.'
+    )) {
+      return
+    }
+    setBusy(true)
+    setErr('')
+    setOut('')
+    try {
+      const r = await api.post('/staff/avisos-top/enviar/', { send })
+      setOut(r.stdout || '(sense sortida)')
+    } catch (e) {
+      setErr(e.message || 'Error')
+      if (e.stdout) setOut(e.stdout)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-lg border border-white/10 p-3">
+      <p className="text-sm font-semibold mb-2">Avisos "has entrat al top"</p>
+      <div className="flex flex-wrap gap-2">
+        <Btn onClick={() => run(false)} disabled={busy}>
+          Previsualitza (dry-run)
+        </Btn>
+        <Btn onClick={() => run(true)} disabled={busy} tone="danger">
+          Enviar avisos (real)
+        </Btn>
+      </div>
+      {err && <p className="text-[11px] text-red-400 mt-2">{err}</p>}
+      {out && (
+        <pre className="mt-2 text-[11px] whitespace-pre-wrap text-white/70 bg-black/30 rounded p-2 max-h-48 overflow-auto">
+          {out}
+        </pre>
+      )}
+    </div>
+  )
+}
 
 function Row({ a }) {
   const nTop = a.n_top || 0
@@ -99,6 +147,7 @@ export default function StaffArtistesAlTopPage() {
   return (
     <section>
       <PageHeader title="Artistes al top" subtitle={subtitle} />
+      <AvisosPanel />
       {error && <p className="text-sm text-red-300 mb-4">{error}</p>}
       <TableCard>
         <Table>

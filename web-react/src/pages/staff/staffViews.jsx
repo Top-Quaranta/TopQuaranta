@@ -96,6 +96,12 @@ export const STAFF_GROUPS = [
         desc: "Artistes aprovats sense instagram_url, per presència al top.",
       },
       {
+        to: "/staff/artistes/al-top",
+        label: "Artistes al top",
+        title: "Artistes al top",
+        desc: "Artistes al top global d'aquesta setmana i si tenen gestor amb email (flux de tagging social).",
+      },
+      {
         to: "/staff/cancons",
         label: "Cançons",
         title: "Cançons",

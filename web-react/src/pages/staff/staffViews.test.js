@@ -61,6 +61,7 @@ describe("STAFF_VIEWS registry", () => {
       "/staff/feedback",
       "/staff/artistes",
       "/staff/artistes/sense-instagram",
+      "/staff/artistes/al-top",
       "/staff/cancons",
       "/staff/albums",
       "/staff/top",

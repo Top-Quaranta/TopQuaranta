@@ -410,6 +410,38 @@ def test_landing_prose_renders_when_present_and_degrades_when_absent(client):
 
 
 @pytest.mark.django_db
+def test_top_and_mapa_prose_render_and_degrade(client, db):
+    """Slice I: /top and /mapa accept LandingProsa (kind top/mapa,
+    clau ''). Renders prose + byline when present, degrades cleanly when
+    absent. Neither page is thin-gated, so no noindex risk."""
+    from web.models import LandingProsa
+
+    assert "MARCADOR_TOP" not in client.get("/top").content.decode()
+    LandingProsa.objects.create(
+        kind=LandingProsa.KIND_TOP, clau="", prosa="MARCADOR_TOP rànquing."
+    )
+    LandingProsa.objects.create(
+        kind=LandingProsa.KIND_MAPA, clau="", prosa="MARCADOR_MAPA territoris."
+    )
+    top_body = client.get("/top").content.decode()
+    assert "MARCADOR_TOP" in top_body and "Josep Quaranta" in top_body
+    assert client.get("/top").status_code == 200
+    mapa_body = client.get("/mapa").content.decode()
+    assert "MARCADOR_MAPA" in mapa_body and "Josep Quaranta" in mapa_body
+
+
+@pytest.mark.django_db
+def test_landing_routine_accepts_top_mapa_clau(db):
+    from web.api.landing_routine import _clau_valida
+    from web.models import LandingProsa
+
+    assert _clau_valida(LandingProsa.KIND_TOP, "") is True
+    assert _clau_valida(LandingProsa.KIND_MAPA, "") is True
+    # A non-empty clau for a singleton landing is rejected.
+    assert _clau_valida(LandingProsa.KIND_TOP, "PPCC") is False
+
+
+@pytest.mark.django_db
 def test_landing_routine_requires_token(client):
     # Token is blank in test settings → every request denied.
     assert client.get("/api/v1/landing-routine/brief/").status_code == 401

@@ -9,6 +9,13 @@
   explorar l'activitat musical en català per regió.
 </p>
 
+{% if prosa %}
+<div class="prosa">
+  {% if prosa_byline %}<p class="byline">Per {{ prosa_byline }}{% if prosa_actualitzat %} · actualitzat el {{ prosa_actualitzat|date:"d/m/Y" }}{% endif %}</p>{% endif %}
+  {{ prosa|linebreaks }}
+</div>
+{% endif %}
+
 <table>
   <thead>
     <tr><th>Territori</th><th>Artistes</th><th>Top</th></tr>

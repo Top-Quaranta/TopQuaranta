@@ -8,6 +8,13 @@
   Setmana del {{ monday|date:"d/m/Y" }}. {% if is_provisional %}<strong>Rànquing provisional</strong> — es tanca cada dissabte.{% else %}Rànquing oficial setmanal.{% endif %}
 </p>
 
+{% if prosa %}
+<div class="prosa">
+  {% if prosa_byline %}<p class="byline">Per {{ prosa_byline }}{% if prosa_actualitzat %} · actualitzat el {{ prosa_actualitzat|date:"d/m/Y" }}{% endif %}</p>{% endif %}
+  {{ prosa|linebreaks }}
+</div>
+{% endif %}
+
 <table>
   <thead>
     <tr><th class="pos">#</th><th>Cançó</th><th>Artista</th><th>Àlbum</th></tr>

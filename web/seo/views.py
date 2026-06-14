@@ -180,6 +180,8 @@ def top_seo(request: HttpRequest) -> HttpResponse:
     blocks = [jsonld.top_jsonld(territori, monday, entries_for_jsonld)]
     blocks.append(jsonld.breadcrumbs_jsonld([("Inici", "/"), ("Top", "/top")]))
 
+    _top_pr = LandingProsa.objects.filter(kind=LandingProsa.KIND_TOP, clau="").first()
+    _top_prosa = _top_pr.prosa if _top_pr else ""
     return render(
         request,
         "seo/top.html",
@@ -191,6 +193,9 @@ def top_seo(request: HttpRequest) -> HttpResponse:
             "entries": entries,
             "is_provisional": is_provisional,
             "monday": monday,
+            "prosa": _top_prosa,
+            "prosa_byline": meta.EDITORIAL_BYLINE if _top_prosa else "",
+            "prosa_actualitzat": _top_pr.updated_at if _top_prosa else None,
         },
     )
 
@@ -919,6 +924,8 @@ def mapa_seo(request: HttpRequest) -> HttpResponse:
             .count()
         )
         territoris.append({"codi": codi, "nom": nom, "n_artistes": n})
+    _mapa_pr = LandingProsa.objects.filter(kind=LandingProsa.KIND_MAPA, clau="").first()
+    _mapa_prosa = _mapa_pr.prosa if _mapa_pr else ""
     return render(
         request,
         "seo/mapa.html",
@@ -928,6 +935,9 @@ def mapa_seo(request: HttpRequest) -> HttpResponse:
                 jsonld.breadcrumbs_jsonld([("Inici", "/"), ("Mapa", "/mapa")]),
             ],
             "territoris": territoris,
+            "prosa": _mapa_prosa,
+            "prosa_byline": meta.EDITORIAL_BYLINE if _mapa_prosa else "",
+            "prosa_actualitzat": _mapa_pr.updated_at if _mapa_prosa else None,
         },
     )
 

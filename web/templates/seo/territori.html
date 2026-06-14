@@ -9,7 +9,12 @@
   Tota la música en català produïda a {{ nom }}.
 </p>
 
-{% if prosa %}<div class="prosa">{{ prosa|linebreaks }}</div>{% endif %}
+{% if prosa %}
+<div class="prosa">
+  {% if prosa_byline %}<p class="byline">Per {{ prosa_byline }}{% if prosa_actualitzat %} · actualitzat el {{ prosa_actualitzat|date:"d/m/Y" }}{% endif %}</p>{% endif %}
+  {{ prosa|linebreaks }}
+</div>
+{% endif %}
 
 {% if top_entries %}
 <h2>Top setmanal de {{ nom }}</h2>

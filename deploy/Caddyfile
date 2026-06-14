@@ -112,6 +112,8 @@ www.topquaranta.cat {
 		path /robots.txt
 		# IndexNow key file. Bing/Yandex verification.
 		path /8f4c2e5b3a9d7c1f6e0b8a5d4c2e9f7b.txt
+		# Bing Webmaster Tools site verification.
+		path /BingSiteAuth.xml
 		path /rss/*
 		path /og/*
 		path /compte/2fa/*

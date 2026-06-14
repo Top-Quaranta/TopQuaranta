@@ -598,12 +598,17 @@ def territori_seo(request: HttpRequest, codi: str) -> HttpResponse:
             f"top {nom}",
         ],
     )
+    pr = LandingProsa.objects.filter(
+        kind=LandingProsa.KIND_TERRITORI, clau=codi
+    ).first()
+    prosa_text = pr.prosa if pr else ""
     blocks = [
         jsonld.collection_jsonld(
             f"Música en català de {nom}",
             f"/territori/{codi}",
             [(a.nom, f"/artista/{a.slug}") for a in artistes],
             description=page_meta.description,
+            author=meta.EDITORIAL_BYLINE if prosa_text else None,
         ),
         jsonld.breadcrumbs_jsonld(
             [
@@ -623,7 +628,9 @@ def territori_seo(request: HttpRequest, codi: str) -> HttpResponse:
             "nom": nom,
             "artistes": artistes,
             "top_entries": top_entries,
-            "prosa": LandingProsa.text_for(LandingProsa.KIND_TERRITORI, codi),
+            "prosa": prosa_text,
+            "prosa_byline": meta.EDITORIAL_BYLINE if prosa_text else "",
+            "prosa_actualitzat": pr.updated_at if prosa_text else None,
         },
     )
 
@@ -755,12 +762,15 @@ def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
             f"cançons {year_end}",
         ],
     )
+    pr = LandingProsa.objects.filter(kind=LandingProsa.KIND_DECADA, clau=decada).first()
+    prosa_text = pr.prosa if pr else ""
     blocks = [
         jsonld.collection_jsonld(
             f"Música en català dels {decada}",
             f"/decada/{decada}",
             [(c.nom, f"/canco/{c.slug}") for c in cancons],
             description=desc,
+            author=meta.EDITORIAL_BYLINE if prosa_text else None,
         ),
         jsonld.breadcrumbs_jsonld(
             [("Inici", "/"), (f"Dècada {decada}", f"/decada/{decada}")]
@@ -776,7 +786,9 @@ def decada_seo(request: HttpRequest, decada: str) -> HttpResponse:
             "year_start": year_start,
             "year_end": year_end,
             "cancons": cancons,
-            "prosa": LandingProsa.text_for(LandingProsa.KIND_DECADA, decada),
+            "prosa": prosa_text,
+            "prosa_byline": meta.EDITORIAL_BYLINE if prosa_text else "",
+            "prosa_actualitzat": pr.updated_at if prosa_text else None,
         },
     )
 
@@ -829,12 +841,15 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
             "música en català",
         ],
     )
+    pr = LandingProsa.objects.filter(kind=LandingProsa.KIND_GENERE, clau=slug).first()
+    prosa_text = pr.prosa if pr else ""
     blocks = [
         jsonld.collection_jsonld(
             f"{label} en català",
             f"/genere/{slug}",
             [(a.nom, f"/artista/{a.slug}") for a in artistes],
             description=page_meta.description,
+            author=meta.EDITORIAL_BYLINE if prosa_text else None,
         ),
         jsonld.breadcrumbs_jsonld(
             [
@@ -853,7 +868,9 @@ def genere_seo(request: HttpRequest, slug: str) -> HttpResponse:
             "slug": slug,
             "label": label,
             "artistes": artistes,
-            "prosa": LandingProsa.text_for(LandingProsa.KIND_GENERE, slug),
+            "prosa": prosa_text,
+            "prosa_byline": meta.EDITORIAL_BYLINE if prosa_text else "",
+            "prosa_actualitzat": pr.updated_at if prosa_text else None,
         },
     )
 

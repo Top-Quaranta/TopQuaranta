@@ -441,3 +441,57 @@ def test_landing_routine_stores_prose_with_token(client, settings):
         **auth,
     )
     assert bad.status_code == 400
+
+
+# ── Fase 2 Slice C: GEO (BingSiteAuth, E-E-A-T byline, sameAs) ──────
+
+
+@pytest.mark.django_db
+def test_bingsiteauth_xml_served(client):
+    r = client.get("/BingSiteAuth.xml")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "A78E91EF0C51198850E147ED177F6129" in body
+    assert "<users>" in body and "<user>" in body
+
+
+@pytest.mark.django_db
+def test_editorial_byline_and_author_when_prose_present(client):
+    from web.models import LandingProsa
+
+    LandingProsa.objects.create(
+        kind=LandingProsa.KIND_TERRITORI,
+        clau="CAT",
+        prosa="Resposta directa sobre la música del territori.",
+    )
+    body = client.get("/territori/CAT").content.decode()
+    assert "Josep Quaranta" in body  # visible byline
+    coll = next(b for b in _jsonld_blocks(body) if b.get("@type") == "CollectionPage")
+    assert coll["author"]["name"] == "Josep Quaranta"
+    assert coll["publisher"]["@type"] == "Organization"
+
+
+@pytest.mark.django_db
+def test_no_byline_without_prose(client):
+    body = client.get("/territori/CAT").content.decode()
+    assert "Josep Quaranta" not in body
+    coll = next(b for b in _jsonld_blocks(body) if b.get("@type") == "CollectionPage")
+    assert "author" not in coll  # author only with editorial prose
+
+
+@pytest.mark.django_db
+def test_thin_artista_minimal_jsonld_has_sameas_no_discography(client, db):
+    a = Artista.objects.create(
+        nom="Thin SameAs",
+        slug="thin-sameas",
+        aprovat=True,
+        spotify_url="https://open.spotify.com/artist/xyz",
+    )
+    mg = next(
+        b
+        for b in _jsonld_blocks(client.get(f"/artista/{a.slug}").content.decode())
+        if b.get("@type") == "MusicGroup"
+    )
+    assert "https://open.spotify.com/artist/xyz" in mg.get("sameAs", [])
+    # Minimal contract preserved: no discography on the thin page.
+    assert "album" not in mg and "track" not in mg

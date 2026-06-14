@@ -371,6 +371,18 @@ traffic. All additive.
   `ocultar=true` a reported DM gets `ocult=True` and a reported
   publication is unpublished.
 
+## Directory matching (Slice B, 2026-06)
+
+`PerfilUsuari` gains matching fields (additive): `busca` (comma-separated
+tokens from `BUSCA_CHOICES`: grup/colaboradors/cantant/instrumentista/
+productor), `generes` (comma-separated style tags) and `nivell`
+(`NIVELL_CHOICES` incl. `aspirant` = "vull ser músic"). The directory
+(`web/api/comunitat_views/perfil.py::directori`) filters by `q`, `rol`,
+`obert`, `territori`, `instrument`, `genere`, `busca`, `nivell` so staff
+and members can resolve queries like "guitarristes a València de rock que
+busquen grup". Tokens are stored comma-joined and matched with
+`__icontains`.
+
 ## Related
 
 - ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`

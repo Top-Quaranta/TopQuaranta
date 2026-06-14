@@ -93,3 +93,13 @@ PSI_API_KEY = config("PSI_API_KEY", default="")
 GSC_OAUTH_CLIENT_ID = config("GSC_OAUTH_CLIENT_ID", default="")
 GSC_OAUTH_CLIENT_SECRET = config("GSC_OAUTH_CLIENT_SECRET", default="")
 GSC_OAUTH_REFRESH_TOKEN = config("GSC_OAUTH_REFRESH_TOKEN", default="")
+
+# ── Bing Webmaster (mirror of GSC; outreach 2026-06) ────────────────────
+# Single API key from the Bing Webmaster Tools account. Empty = feature
+# disabled (the `recollir_metrics_bing` cron logs a warning + exits
+# cleanly). Loaded from the environment exactly like the GSC creds; never
+# hardcoded, never committed.
+BING_WEBMASTER_API_KEY = config("BING_WEBMASTER_API_KEY", default="")
+BING_WEBMASTER_SITE_URL = config(
+    "BING_WEBMASTER_SITE_URL", default="https://www.topquaranta.cat"
+)

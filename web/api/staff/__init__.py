@@ -33,6 +33,9 @@ from web.api.staff.artistes import (  # noqa: F401
     artistes_search,
 )
 from web.api.staff.audit import auditlog  # noqa: F401
+from web.api.staff.avisos_top import (  # noqa: F401
+    enviar_avisos_top as avisos_top_enviar,
+)
 from web.api.staff.cancons import (  # noqa: F401
     _canco_row,
     canco_detail,

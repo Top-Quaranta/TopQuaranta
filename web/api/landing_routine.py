@@ -153,7 +153,49 @@ def _clau_valida(kind: str, clau: str) -> bool:
         return clau in {k for k, _ in Artista.GENERE_CANONICAL_CHOICES}
     if kind == LandingProsa.KIND_DECADA:
         return clau.isdigit() and len(clau) == 4 and clau.endswith("0")
+    if kind in (LandingProsa.KIND_TOP, LandingProsa.KIND_MAPA):
+        # Singleton landings: the canonical /top and /mapa pages. One
+        # row each, keyed by the empty clau.
+        return clau == ""
     return False
+
+
+def _singleton_landings() -> list[dict]:
+    """The /top and /mapa landings (one each). Grounding: the current
+    PPCC top song names for /top, the territori names for /mapa."""
+    from music.constants import TERRITORIS_VALIDS
+
+    TopProvisional = __import__(
+        "ranking.models", fromlist=["TopProvisional"]
+    ).TopProvisional
+    existing = dict(
+        LandingProsa.objects.filter(
+            kind__in=[LandingProsa.KIND_TOP, LandingProsa.KIND_MAPA]
+        ).values_list("kind", "prosa")
+    )
+    top_items = list(
+        TopProvisional.objects.filter(territori="PPCC")
+        .select_related("canco")
+        .order_by("posicio")
+        .values_list("canco__nom", flat=True)[:_SAMPLE]
+    )
+    mapa_items = [meta.TERRITORI_NOMS.get(c, c) for c in TERRITORIS_VALIDS]
+    return [
+        {
+            "kind": LandingProsa.KIND_TOP,
+            "clau": "",
+            "nom": "Top setmanal (Global)",
+            "te_prosa": bool(existing.get(LandingProsa.KIND_TOP)),
+            "items": [t for t in top_items if t],
+        },
+        {
+            "kind": LandingProsa.KIND_MAPA,
+            "clau": "",
+            "nom": "Mapa de la música en català",
+            "te_prosa": bool(existing.get(LandingProsa.KIND_MAPA)),
+            "items": mapa_items,
+        },
+    ]
 
 
 @api_view(["GET"])
@@ -163,7 +205,12 @@ def brief(request: Request) -> Response:
     resolvable landing with a `te_prosa` flag so the routine can fill
     only the gaps, plus a small sample of entity names for grounding."""
     cfg = ConfiguracioGlobal.load()
-    landings = _territori_landings() + _genere_landings() + _decada_landings()
+    landings = (
+        _territori_landings()
+        + _genere_landings()
+        + _decada_landings()
+        + _singleton_landings()
+    )
     # Dedicated landing voice (NOT the newsletter's editorial_veu) so the
     # two tones never collide. Empty => the routine generates nothing
     # (clean STOP until staff sets it in Configuració).

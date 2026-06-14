@@ -64,7 +64,7 @@ with a tenth of the work.
 | `web/templatetags/seo_tags.py` | `safe_json` + `rel_url` template filters. |
 | `web/templates/seo/`  | Self-contained HTML templates (no mm-design dependency, inline CSS, JS-disabled friendly). |
 | `web-react/src/lib/seoHead.jsx` | `<SeoHead entity slug>` component that fetches the same `Meta` payload and injects via react-helmet-async on the SPA path. |
-| `web/models.py` (`LandingProsa`) | Editorial prose for one landing, keyed by `(kind, clau)`. Empty by default; rendered as plain text (`linebreaks`, never `safe`). |
+| `web/models.py` (`LandingProsa`) | Editorial prose for one landing, keyed by `(kind, clau)`. Kinds: `territori`/`genere`/`decada` (clau = codi/slug/decade) and the singletons `top`/`mapa` (clau = `""`). Empty by default; rendered as plain text (`linebreaks`, never `safe`). |
 | `web/api/landing_routine.py` | Token-authed brief/prose endpoints for the SEO landing cloud routine (mirrors `newsletter_routine.py`, same bearer-token gate). |
 
 ## Editorial layer (Fase 2, 2026-06)

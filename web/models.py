@@ -27,10 +27,14 @@ class LandingProsa(models.Model):
     KIND_TERRITORI = "territori"
     KIND_GENERE = "genere"
     KIND_DECADA = "decada"
+    KIND_TOP = "top"
+    KIND_MAPA = "mapa"
     KIND_CHOICES = [
         (KIND_TERRITORI, "Territori"),
         (KIND_GENERE, "Gènere"),
         (KIND_DECADA, "Dècada"),
+        (KIND_TOP, "Top"),
+        (KIND_MAPA, "Mapa"),
     ]
 
     FONT_LLM = "llm"

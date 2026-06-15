@@ -91,6 +91,18 @@ per channel:
 | Telegram | `social.TelegramAuth` row | `@topquaranta_bot` |
 | Newsletter | `.env::EMAIL_HOST_PASSWORD` (Brevo SMTP) | `admin@topquaranta.cat` |
 
+The Instagram token is minted by `autoritzar_instagram` via the
+Instagram Login flow. As of 2026-06-15 it requests, beyond the two
+publishing scopes, the read scopes
+`instagram_business_manage_comments`,
+`instagram_business_manage_messages` and
+`instagram_business_manage_insights`. These let us read comments,
+mentions and DM conversations on the owned account; a token minted
+without them returns empty `data` (HTTP 200) on those edges instead
+of an error, so the absence is silent. Re-run `autoritzar_instagram`
+after any scope change — existing tokens do not gain scopes
+retroactively.
+
 ## Distribution gate — master + per-channel (2026-06-07)
 
 Every publisher gates on the shared predicate

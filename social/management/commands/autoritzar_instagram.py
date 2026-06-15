@@ -15,9 +15,17 @@ Walks you through the steps:
 Prerequisites:
   - INSTAGRAM_APP_ID + INSTAGRAM_APP_SECRET set in .env (used to
     perform the exchange).
-  - The Instagram Business / Creator account is linked to a
-    Facebook Page and the App is approved for `instagram_basic` +
-    `instagram_content_publish`.
+  - The Instagram Business / Creator account authorises the app via
+    the Instagram Login flow with these scopes:
+      * instagram_business_basic
+      * instagram_business_content_publish
+      * instagram_business_manage_comments  (read comments + mentions)
+      * instagram_business_manage_messages  (read DM conversations)
+      * instagram_business_manage_insights  (per-media metrics)
+    The read scopes (comments/messages) are what let us pull
+    interactions, not just publish; a token minted without them
+    returns empty data (HTTP 200) on the protected edges rather
+    than an error.
 """
 
 from __future__ import annotations
@@ -49,7 +57,9 @@ class Command(BaseCommand):
         self.stdout.write(
             f"https://www.instagram.com/oauth/authorize?client_id={app_id}"
             f"&redirect_uri={redirect}"
-            f"&scope=instagram_business_basic,instagram_business_content_publish"
+            f"&scope=instagram_business_basic,instagram_business_content_publish,"
+            f"instagram_business_manage_comments,instagram_business_manage_messages,"
+            f"instagram_business_manage_insights"
             f"&response_type=code"
         )
         self.stdout.write(

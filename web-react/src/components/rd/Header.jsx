@@ -28,9 +28,17 @@ const activeStyle = ({ isActive }) =>
 export default function Header() {
   const { profile } = useAuth()
   const [open, setOpen] = useState(false)
+  const authed = !!profile?.is_authenticated
+  // Anonymous visitors get the public community landing (the authed
+  // /comunitat zone bounces them to login); registered users go straight in.
+  const base = NAV.map(n =>
+    n.to === '/comunitat'
+      ? { ...n, to: authed ? '/comunitat' : '/comunitat-musics' }
+      : n,
+  )
   const nav = profile?.is_staff
-    ? [...NAV, { to: '/staff', label: 'Staff' }]
-    : NAV
+    ? [...base, { to: '/staff', label: 'Staff' }]
+    : base
 
   return (
     <header className="rd-hdr">

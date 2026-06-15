@@ -78,6 +78,11 @@ urlpatterns = [
     path("mapa", seo_views.mapa_seo, name="seo_mapa"),
     path("com-funciona", seo_views.com_funciona_seo, name="seo_com_funciona"),
     path(
+        "comunitat-musics",
+        seo_views.comunitat_seo,
+        name="seo_comunitat_musics",
+    ),
+    path(
         "estat-musica-catala",
         seo_views.estat_musica_catala_seo,
         name="seo_estat_musica",

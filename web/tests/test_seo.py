@@ -410,6 +410,22 @@ def test_landing_prose_renders_when_present_and_degrades_when_absent(client):
 
 
 @pytest.mark.django_db
+def test_comunitat_musics_public_page(client, db):
+    """Slice D: /comunitat-musics is public, indexable, unique title,
+    CollectionPage JSON-LD, no noindex, sells the community."""
+    r = client.get("/comunitat-musics")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "Comunitat de músics en català" in body
+    assert "busca grup" in body.lower()
+    assert "noindex" not in body
+    title = re.search(r"<title>(.+?)</title>", body).group(1)
+    assert "Comunitat de músics" in title
+    coll = next(b for b in _jsonld_blocks(body) if b.get("@type") == "CollectionPage")
+    assert coll["mainEntity"]["@type"] == "ItemList"
+
+
+@pytest.mark.django_db
 def test_top_and_mapa_prose_render_and_degrade(client, db):
     """Slice I: /top and /mapa accept LandingProsa (kind top/mapa,
     clau ''). Renders prose + byline when present, degrades cleanly when

@@ -133,6 +133,21 @@ byline (`EDITORIAL_BYLINE`). Structured data is a `Dataset`
 snapshot (the Dataset anchor stays; the data section shows a placeholder).
 Registered as an SSR page (urls + `@bot` path + `StaticSitemap` entry).
 
+## Public community bridge (Slice D)
+
+`/comunitat-musics` (`comunitat_seo`) is a public, indexable landing that
+sells the musician community to anonymous visitors ("busca grup, troba
+col·laboradors en català"). Target queries: "busco grup música català",
+"músics en català busquen banda". It does NOT list profiles (the
+directory is registered-only, so no private data leaks); it pitches the
+concept + how to join, with `CollectionPage` JSON-LD + breadcrumbs.
+Registered end-to-end: SSR for bots, a React `ComunitatMusicsPage` for
+humans, plus `@bot` path + sitemap entry. A "Fas música en català?
+Uneix-te i busca grup" CTA on the `/top` and `/artista` SSR surfaces
+points here (distinct from the artist-claim CTA). The global nav routes
+anonymous visitors here and registered users to `/comunitat`. Gated
+behind the Slice A safety layer (block/report/DM controls) being live.
+
 ## Indexability rules
 
 Hard rules, mirrored across SSR views, sitemaps, and IndexNow notify:

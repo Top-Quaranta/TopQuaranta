@@ -73,6 +73,7 @@ export default function PerfilUsuariPage() {
         instruments: perfil.instruments || '',
         visible_directori: !!perfil.visible_directori,
         obert_colaboracions: !!perfil.obert_colaboracions,
+        accepta_dm: perfil.accepta_dm !== false,
         imatge_url: perfil.imatge_url || '',
         localitat_pk: loc.municipi_id || null,
         ...(perfil.social || {}),
@@ -162,6 +163,23 @@ export default function PerfilUsuariPage() {
             <input type="checkbox" checked={!!perfil.obert_colaboracions} onChange={e => patch({ obert_colaboracions: e.target.checked })} />
             Obert a <strong>col·laboracions</strong>.
           </label>
+        </fieldset>
+
+        <fieldset className="bg-white/5 rounded-md p-4">
+          <legend className="text-xs font-semibold uppercase tracking-wide text-white/80 px-1">Missatges</legend>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={perfil.accepta_dm !== false}
+              onChange={e => patch({ accepta_dm: e.target.checked })}
+            />
+            Accepto <strong>missatges directes</strong> de qualsevol usuari.
+          </label>
+          <p className="text-[11px] text-white/55 mt-1">
+            Si ho desactives, ningú no et podrà escriure (tret de l'equip de
+            TopQuaranta). Sempre pots bloquejar usuaris concrets des d'una
+            conversa.
+          </p>
         </fieldset>
 
         <fieldset className="bg-white/5 rounded-md p-4">

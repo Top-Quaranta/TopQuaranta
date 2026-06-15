@@ -118,6 +118,7 @@ def missatges_amb_usuari(request: Request, altre_pk: int) -> Response:
         remitent=altre, destinatari=viewer, llegit_at__isnull=True
     ).update(llegit_at=timezone.now())
 
+    bloquejat = BloqueigUsuari.objects.filter(blocker=viewer, blocked=altre).exists()
     return Response(
         {
             "altre": {
@@ -125,6 +126,7 @@ def missatges_amb_usuari(request: Request, altre_pk: int) -> Response:
                 "username": altre.username,
                 "nom_public": getattr(getattr(altre, "perfil", None), "nom_public", ""),
                 "imatge_url": getattr(getattr(altre, "perfil", None), "imatge_url", ""),
+                "bloquejat": bloquejat,
             },
             "missatges": [_serialize_missatge(m, viewer) for m in msgs],
         }

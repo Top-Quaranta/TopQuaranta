@@ -84,6 +84,18 @@ def test_denunciar_creates_report(django_user_model):
 
 
 @pytest.mark.django_db
+def test_thread_exposes_block_state(django_user_model):
+    a = _user(django_user_model, "tb1")
+    b = _user(django_user_model, "tb2")
+    Missatge.objects.create(remitent=a, destinatari=b, cos="hola")
+    body = _client(a).get(f"/api/v1/missatges/amb/{b.pk}/").json()
+    assert body["altre"]["bloquejat"] is False
+    BloqueigUsuari.objects.create(blocker=a, blocked=b)
+    body2 = _client(a).get(f"/api/v1/missatges/amb/{b.pk}/").json()
+    assert body2["altre"]["bloquejat"] is True
+
+
+@pytest.mark.django_db
 def test_dm_and_block_events_registered(django_user_model):
     a = _user(django_user_model, "ev1")
     b = _user(django_user_model, "ev2")

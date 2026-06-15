@@ -73,3 +73,12 @@ music/ml_*.pre_whisper.joblib
 music/ml_directions*.joblib
 .secrets/
 *.bak
+
+# Instagram DYI ("Download Your Information") export + recon artifacts.
+# These contain private DMs of thousands of third parties — personal data
+# (RGPD) and very large (hundreds of MB). They MUST never be tracked, by
+# weight or by privacy. Kept on disk outside git, intact.
+instagram-*/
+instagram-*.zip
+_EXTRET/
+_TIERS/

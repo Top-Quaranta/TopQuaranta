@@ -66,6 +66,22 @@ function Thread({ altrePk, onSent }) {
   const [busy, setBusy] = useState(false)
   const [sendErr, setSendErr] = useState('')
 
+  async function toggleBlock() {
+    const blocked = data?.altre?.bloquejat
+    const url = blocked ? '/comunitat/desbloquejar/' : '/comunitat/bloquejar/'
+    if (!blocked && !window.confirm('Bloquejar aquest usuari? No us podreu enviar missatges.')) return
+    try { await api.post(url, { usuari_pk: altrePk }); reload() }
+    catch (e) { setSendErr(e.payload?.error || e.message) }
+  }
+  async function denunciar() {
+    const motiu = window.prompt('Motiu de la denúncia (opcional):')
+    if (motiu === null) return
+    try {
+      await api.post('/comunitat/denunciar/', { tipus: 'usuari', target_pk: altrePk, motiu })
+      window.alert('Denúncia enviada. L\'staff la revisarà.')
+    } catch (e) { setSendErr(e.payload?.error || e.message) }
+  }
+
   async function enviar(e) {
     e.preventDefault()
     if (!cos.trim()) return
@@ -100,6 +116,27 @@ function Thread({ altrePk, onSent }) {
         )}
         <div className="font-semibold">
           {data.altre.nom_public || data.altre.username}
+        </div>
+        <div className="ml-auto flex gap-2">
+          <button
+            type="button"
+            onClick={denunciar}
+            className="text-xs text-white/60 hover:text-white underline"
+          >
+            Denunciar
+          </button>
+          <button
+            type="button"
+            onClick={toggleBlock}
+            className={
+              'text-xs underline ' +
+              (data.altre.bloquejat
+                ? 'text-tq-yellow hover:text-tq-yellow-deep'
+                : 'text-red-300 hover:text-red-200')
+            }
+          >
+            {data.altre.bloquejat ? 'Desbloquejar' : 'Bloquejar'}
+          </button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">

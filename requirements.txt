@@ -40,4 +40,4 @@ google-auth-httplib2>=0.4.0
 # Newsletter → Community bridge (2026-06-10): convert NewsletterDraft
 # narrative_html to markdown for the public Publicacio body (option b).
 # Pulls beautifulsoup4. The feed renders cos with react-markdown + remark-gfm.
-markdownify>=0.13,<1.0
+markdownify>=1.2.2,<2.0

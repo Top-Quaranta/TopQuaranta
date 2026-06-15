@@ -53,6 +53,15 @@ export default function OnboardingPage() {
   function patch(p) { setPerfil(prev => ({ ...prev, ...p })) }
   function patchSocial(k, v) { setPerfil(prev => ({ ...prev, social: { ...prev.social, [k]: v } })) }
 
+  // `busca` is a comma-joined token list; toggle one token on/off.
+  function toggleBusca(token) {
+    const set = new Set((perfil.busca || '').split(',').map(t => t.trim()).filter(Boolean))
+    if (set.has(token)) set.delete(token)
+    else set.add(token)
+    patch({ busca: Array.from(set).join(',') })
+  }
+  const buscaSet = new Set((perfil.busca || '').split(',').map(t => t.trim()).filter(Boolean))
+
   async function saveAndContinue(onboardingDone) {
     setBusy(true)
     setErrors({})
@@ -62,6 +71,9 @@ export default function OnboardingPage() {
         bio: perfil.bio || '',
         rol_musical: perfil.rol_musical || 'escoltador',
         instruments: perfil.instruments || '',
+        busca: perfil.busca || '',
+        generes: perfil.generes || '',
+        nivell: perfil.nivell || '',
         visible_directori: !!perfil.visible_directori,
         obert_colaboracions: !!perfil.obert_colaboracions,
         imatge_url: perfil.imatge_url || '',
@@ -93,36 +105,36 @@ export default function OnboardingPage() {
   return (
     <section className="max-w-2xl mx-auto py-12 text-white">
       <p className="text-[10px] uppercase tracking-widest text-tq-yellow mb-2">
-        Benvingut · TopQuaranta
+        Comunitat · TopQuaranta
       </p>
-      <h1 className="text-3xl font-bold mb-2">Completa el teu perfil</h1>
+      <h1 className="text-3xl font-bold mb-2">
+        Busques grup o gent per fer música en català?
+      </h1>
       <p className="text-sm text-white/70 mb-4">
-        Digues qui ets a la comunitat. Aquesta informació només apareix al{' '}
-        <strong>directori intern</strong> si tu ho decideixes; pots canviar-ho
-        en qualsevol moment des de <code>/compte</code>.
+        Digues que fas música i què busques: et trobaran altres músics dels
+        Països Catalans. Pots canviar-ho en qualsevol moment des de{' '}
+        <code>/compte</code>.
       </p>
 
-      {/* Sprint H — què pots fer aquí, en tres punts. Discret, dins
-          una targeta neutra perquè no competeixi amb el formulari. */}
       <div className="bg-white/5 border border-white/10 rounded-md p-4 mb-6 text-sm text-white/80">
         <p className="text-[10px] uppercase tracking-widest text-white/60 mb-2">
-          Què pots fer com a usuari registrat
+          La comunitat de músics en català
         </p>
         <ul className="space-y-1.5 leading-relaxed">
           <li className="flex gap-2">
             <span className="text-tq-yellow shrink-0">·</span>
-            <span><strong>Proposar i gestionar artistes</strong> per fer-los
-            aparèixer al top i al mapa.</span>
+            <span><strong>Troba grup o col·laboradors</strong>: cantants,
+            instrumentistes, productors que fan música en català.</span>
           </li>
           <li className="flex gap-2">
             <span className="text-tq-yellow shrink-0">·</span>
-            <span><strong>Activar el teu perfil al directori</strong> per
-            connectar amb altres músics dels Països Catalans.</span>
+            <span><strong>Fes-te trobadís al directori</strong> i filtra per
+            instrument, gènere, territori i què busca cadascú.</span>
           </li>
           <li className="flex gap-2">
             <span className="text-tq-yellow shrink-0">·</span>
-            <span><strong>Publicar a la comunitat</strong>: comparteix
-            projectes, demana col·laboradors, anuncia novetats.</span>
+            <span><strong>Connecta i publica</strong>: missatges directes i
+            anuncis a la comunitat.</span>
           </li>
         </ul>
       </div>
@@ -164,6 +176,52 @@ export default function OnboardingPage() {
           />
         </Field>
 
+        <Field label="Nivell" hint="Tant si ja en vius com si tot just comences." error={errors.nivell}>
+          <select
+            value={perfil.nivell || ''}
+            onChange={e => patch({ nivell: e.target.value })}
+            className={inputClass}
+          >
+            <option value="">(sense especificar)</option>
+            {(perfil.nivell_choices || []).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Què busques?" hint="Tria'n les que vulguis.">
+          <div className="mt-1 flex flex-wrap gap-2">
+            {(perfil.busca_choices || []).map(([v, l]) => (
+              <button
+                type="button"
+                key={v}
+                onClick={() => toggleBusca(v)}
+                className={
+                  'px-3 py-1 rounded-full text-xs border ' +
+                  (buscaSet.has(v)
+                    ? 'bg-tq-yellow text-tq-ink border-tq-yellow font-semibold'
+                    : 'bg-transparent text-white border-white/25 hover:bg-white/10')
+                }
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field
+          label="Gèneres / estils"
+          hint="Separa'ls per comes. Ex: rock, folk, electrònica."
+          error={errors.generes}
+        >
+          <input
+            value={perfil.generes || ''}
+            onChange={e => patch({ generes: e.target.value })}
+            className={inputClass}
+            placeholder="rock, pop, folk…"
+          />
+        </Field>
+
         <Field label="Localitat" error={errors.localitat_pk}>
           <div className="mt-1">
             <LocationCascade value={loc} onChange={setLoc} />
@@ -183,13 +241,17 @@ export default function OnboardingPage() {
           <legend className="text-xs font-semibold uppercase tracking-wide text-white/80 px-1">
             Visibilitat
           </legend>
+          <p className="text-[11px] text-white/60 mb-2">
+            Si no et fas visible, ningú no et trobarà al directori. La teva
+            informació no surt enlloc fins que ho actives (RGPD).
+          </p>
           <label className="flex items-center gap-2 text-sm mb-2">
             <input
               type="checkbox"
               checked={!!perfil.visible_directori}
               onChange={e => patch({ visible_directori: e.target.checked })}
             />
-            Vull aparèixer al <strong>directori intern</strong> (altres usuaris registrats).
+            <span>Fes-me <strong>visible al directori</strong> perquè altres músics em trobin.</span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input

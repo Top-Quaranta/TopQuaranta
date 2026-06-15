@@ -58,6 +58,8 @@ def _serialize_perfil(p: PerfilUsuari, *, include_private: bool = False) -> dict
         ),
         "social_fields": list(PerfilUsuari.SOCIAL_FIELDS),
         "rol_choices": list(PerfilUsuari.ROL_CHOICES),
+        "busca_choices": list(PerfilUsuari.BUSCA_CHOICES),
+        "nivell_choices": list(PerfilUsuari.NIVELL_CHOICES),
     }
     if include_private:
         row["email"] = p.usuari.email

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from rest_framework.test import APIClient
 
+from analytics.models import MetricaEsdeveniment
 from comptes.models import BloqueigUsuari, DenunciaUsuari, Missatge, PerfilUsuari
 
 
@@ -76,6 +77,22 @@ def test_denunciar_creates_report(django_user_model):
     assert (
         d.tipus == "usuari" and d.usuari_denunciat_id == b.pk and d.estat == "pendent"
     )
+    # Slice E: server-side instrumentation fired.
+    assert MetricaEsdeveniment.objects.filter(
+        clau="denuncia_creada", dimensio_1="usuari"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_dm_and_block_events_registered(django_user_model):
+    a = _user(django_user_model, "ev1")
+    b = _user(django_user_model, "ev2")
+    _client(a).post(
+        "/api/v1/missatges/nou/", {"destinatari_pk": b.pk, "cos": "hi"}, format="json"
+    )
+    _client(a).post("/api/v1/comunitat/bloquejar/", {"usuari_pk": b.pk}, format="json")
+    assert MetricaEsdeveniment.objects.filter(clau="dm_enviat").exists()
+    assert MetricaEsdeveniment.objects.filter(clau="bloqueig_creat").exists()
 
 
 @pytest.mark.django_db

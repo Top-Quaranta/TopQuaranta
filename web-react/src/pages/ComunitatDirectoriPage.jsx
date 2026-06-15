@@ -6,7 +6,7 @@
  * Endpoint + logic conserved. (Drops the last editorial.jsx import on
  * the public surface — territory names now come from rd/terr.)
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import useApi from '../hooks/useApi'
@@ -26,6 +26,14 @@ export default function ComunitatDirectoriPage() {
   const [territori, setTerritori] = useState('')
   const [obert, setObert] = useState(false)
   const [page, setPage] = useState(1)
+
+  // Slice E: directory funnel instrumentation.
+  function fire(clau, dim1 = '') {
+    import('../lib/analytics').then(({ trackEvent }) => trackEvent(clau, dim1))
+  }
+  useEffect(() => {
+    fire('comunitat_directori_vista')
+  }, [])
 
   const _p = new URLSearchParams({ page })
   if (q) _p.set('q', q)
@@ -55,16 +63,16 @@ export default function ComunitatDirectoriPage() {
         <input id="dir-q" value={q} onChange={e => { setPage(1); setQ(e.target.value) }}
           placeholder="Cerca nom, instrument, bio…" className={selCls + ' placeholder-white/40'} />
         <label htmlFor="dir-rol" className="sr-only">Rol musical</label>
-        <select id="dir-rol" value={rol} onChange={e => { setPage(1); setRol(e.target.value) }} className={selCls}>
+        <select id="dir-rol" value={rol} onChange={e => { setPage(1); setRol(e.target.value); fire('comunitat_directori_filtre', 'rol') }} className={selCls}>
           <option value="" className="text-tq-ink">Rol: tots</option>
           {(data?.rol_choices || []).map(([v, l]) => <option key={v} value={v} className="text-tq-ink">{l}</option>)}
         </select>
         <label htmlFor="dir-terr" className="sr-only">Territori</label>
-        <select id="dir-terr" value={territori} onChange={e => { setPage(1); setTerritori(e.target.value) }} className={selCls}>
+        <select id="dir-terr" value={territori} onChange={e => { setPage(1); setTerritori(e.target.value); fire('comunitat_directori_filtre', 'territori') }} className={selCls}>
           {TERRITORIS.map(([c, l]) => <option key={c} value={c} className="text-tq-ink">{l}</option>)}
         </select>
         <label className="flex items-center gap-2 text-sm text-white/80">
-          <input type="checkbox" checked={obert} onChange={e => { setPage(1); setObert(e.target.checked) }} />
+          <input type="checkbox" checked={obert} onChange={e => { setPage(1); setObert(e.target.checked); fire('comunitat_directori_filtre', 'obert') }} />
           Obert a col·laboracions
         </label>
       </div>

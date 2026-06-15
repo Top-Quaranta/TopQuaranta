@@ -43,7 +43,7 @@ _TERRITORI_DISPLAY = {**TERRITORI_NOMS, "PPCC": "Global"}
 @permission_classes([AllowAny])
 def canco_detail(request: Request, slug: str) -> Response:
     canco = get_object_or_404(
-        Canco.objects.select_related("artista", "album").prefetch_related(
+        Canco.objects.select_related("artista", "album", "spotify").prefetch_related(
             "artistes_col"
         ),
         slug=slug,
@@ -90,6 +90,11 @@ def canco_detail(request: Request, slug: str) -> Response:
             ),
             "artista": artista_minimal(canco.artista) if canco.artista else None,
             "album": ({**album_card(canco.album)} if canco.album else None),
+            # Exact Spotify track id (Process B enrichment) for a direct
+            # link + embed; null when not yet enriched.
+            "spotify_id": (
+                getattr(getattr(canco, "spotify", None), "spotify_id", "") or None
+            ),
             "ml_classe": canco.ml_classe or None,
             "whisper_lang": canco.whisper_lang or None,
             "whisper_p": canco.whisper_p,

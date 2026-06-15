@@ -124,6 +124,7 @@ export default function CancoPage() {
             <ExternalListenLinks
               className="rd-cc-links" kind="canco" title={data.nom}
               artist={data.artista?.nom} deezerId={data.deezer_id} isrc={data.isrc}
+              spotifyId={data.spotify_id}
             />
           </div>
         </div>

@@ -11,7 +11,7 @@
  * from `/comunitat/perfil` later; on "Desar" we also flip
  * onboarding_complet=true and bounce them to /compte.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -38,11 +38,17 @@ export default function OnboardingPage() {
   const [loc, setLoc] = useState({ territori: '', comarca: '', municipi_id: null, manual: '' })
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
+  const pasFired = useRef(false)
 
   useEffect(() => {
     if (loading || !profile) return
     api.get('/comunitat/perfil/').then(setPerfil).catch(() => {})
   }, [loading, profile])
+
+  // Slice E: funnel instrumentation. Fire "inici" once on mount.
+  useEffect(() => {
+    import('../lib/analytics').then(({ trackEvent }) => trackEvent('onboarding_inici'))
+  }, [])
 
   if (loading) return null
   if (!profile) return <Navigate to="/compte/accedir?next=/onboarding" replace />
@@ -50,7 +56,13 @@ export default function OnboardingPage() {
     <section className="max-w-2xl mx-auto py-12 text-white/70 text-sm">Carregant…</section>
   )
 
-  function patch(p) { setPerfil(prev => ({ ...prev, ...p })) }
+  function fire(clau, dim1 = '') {
+    import('../lib/analytics').then(({ trackEvent }) => trackEvent(clau, dim1))
+  }
+  function patch(p) {
+    if (!pasFired.current) { pasFired.current = true; fire('onboarding_pas') }
+    setPerfil(prev => ({ ...prev, ...p }))
+  }
   function patchSocial(k, v) { setPerfil(prev => ({ ...prev, social: { ...prev.social, [k]: v } })) }
 
   // `busca` is a comma-joined token list; toggle one token on/off.
@@ -82,6 +94,7 @@ export default function OnboardingPage() {
         ...(perfil.social || {}),
       }
       await api.patch('/comunitat/perfil/', body)
+      if (onboardingDone) fire('onboarding_complet')
       if (refresh) await refresh()
       navigate('/compte')
     } catch (err) {
@@ -95,6 +108,7 @@ export default function OnboardingPage() {
     setBusy(true)
     try {
       await api.patch('/comunitat/perfil/', { onboarding_complet: true })
+      fire('onboarding_saltat')
       if (refresh) await refresh()
       navigate('/compte')
     } finally {

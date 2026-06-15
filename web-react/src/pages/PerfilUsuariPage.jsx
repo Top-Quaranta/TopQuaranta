@@ -155,7 +155,7 @@ export default function PerfilUsuariPage() {
         <fieldset className="bg-white/5 rounded-md p-4">
           <legend className="text-xs font-semibold uppercase tracking-wide text-white/80 px-1">Visibilitat</legend>
           <label className="flex items-center gap-2 text-sm mb-2">
-            <input type="checkbox" checked={!!perfil.visible_directori} onChange={e => patch({ visible_directori: e.target.checked })} />
+            <input type="checkbox" checked={!!perfil.visible_directori} onChange={e => { patch({ visible_directori: e.target.checked }); import('../lib/analytics').then(({ trackEvent }) => trackEvent('perfil_visible_toggle', e.target.checked ? 'on' : 'off')) }} />
             Aparèixer al <strong>directori intern</strong>.
           </label>
           <label className="flex items-center gap-2 text-sm">

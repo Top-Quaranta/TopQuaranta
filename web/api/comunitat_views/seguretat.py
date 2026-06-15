@@ -37,7 +37,11 @@ def bloquejar(request: Request) -> Response:
     target = get_object_or_404(_U, pk=pk)
     if target.username == getattr(settings, "ADMIN_INBOX_USERNAME", "admin"):
         return Response({"error": "No pots bloquejar el compte oficial."}, status=400)
-    BloqueigUsuari.objects.get_or_create(blocker=viewer, blocked=target)
+    _, created = BloqueigUsuari.objects.get_or_create(blocker=viewer, blocked=target)
+    if created:
+        from analytics.events import register
+
+        register("bloqueig_creat")  # Slice E (no PII)
     return Response({"ok": True, "blocked": pk}, status=201)
 
 
@@ -86,4 +90,7 @@ def denunciar(request: Request) -> Response:
         motiu=motiu,
         **{fk_field: target},
     )
+    from analytics.events import register
+
+    register("denuncia_creada", dim1=tipus)  # Slice E (no PII)
     return Response({"ok": True, "denuncia_id": denuncia.pk}, status=201)

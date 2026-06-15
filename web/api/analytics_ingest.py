@@ -38,6 +38,15 @@ _PUBLIC_EVENT_KEYS = frozenset(
         "newsletter_signup",  # form-side counter (cf. registre with dim1=newsletter)
         "directori_filter",  # dim1 = filter type
         "mapa_zoom",  # dim1 = level (territori/comarca/municipi)
+        # Community funnel (Slice E). dm_enviat / denuncia_creada /
+        # bloqueig_creat are fired server-side via register(), not here.
+        "onboarding_inici",  # onboarding page mounted
+        "onboarding_pas",  # first meaningful field interaction
+        "onboarding_complet",  # saved with onboarding_complet=true
+        "onboarding_saltat",  # skipped via "Saltar"
+        "comunitat_directori_vista",  # directory page viewed
+        "comunitat_directori_filtre",  # dim1 = filter key
+        "perfil_visible_toggle",  # dim1 = "on"|"off"
     }
 )
 

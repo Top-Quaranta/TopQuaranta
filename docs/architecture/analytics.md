@@ -134,6 +134,14 @@ Both return 204. Throttled per-IP at 60/min via the project default.
 *(SPA wiring of these beacons happens in K3+ as the React pages add
 share-click / escolta-click hooks.)*
 
+Community funnel events (Slice E, 2026-06) added to the allowlist +
+fired from the SPA: `onboarding_{inici,pas,complet,saltat}`,
+`comunitat_directori_vista`, `comunitat_directori_filtre` (dim1=filter
+key), `perfil_visible_toggle` (dim1=on/off). The connection events
+`dm_enviat`, `denuncia_creada` (dim1=tipus) and `bloqueig_creat` are
+fired SERVER-side via `register()` in the community endpoints (not via
+the public ingest, so they're not in the allowlist).
+
 ### 3. Backend `register()` calls
 
 The flows that already write to the DB also bump a counter:

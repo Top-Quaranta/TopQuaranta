@@ -164,4 +164,7 @@ def missatge_crear(request: Request) -> Response:
         cos=cos,
     )
     _enviar_notificacio_missatge(request, m)
+    from analytics.events import register
+
+    register("dm_enviat")  # Slice E: connection-funnel counter (no PII)
     return Response(_serialize_missatge(m, viewer), status=201)

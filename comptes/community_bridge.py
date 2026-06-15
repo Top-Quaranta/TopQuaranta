@@ -18,10 +18,11 @@ Body (Miquel's decision, option b): the draft's `narrative_html` is converted
 to **markdown** (via `markdownify`) and stored in `Publicacio.cos`. The public
 feed renders `cos` with `react-markdown` (+ remark-gfm; never emits raw HTML)
 and previews it via `stripMarkdown`, so markdown is the right shape. The
-service cleans the ugly cases before storing: images are dropped (decorative /
-tracked URLs have no place in a text post), relative links are absolutised to
-the public site, and runs of blank lines are collapsed. The result contains no
-raw HTML, so it is safe and renders cleanly in both surfaces.
+service PRESERVES images (`![alt](url)`) and links (`[text](url)`),
+absolutises relative URLs (both links and images) to the public site, and
+collapses blank-line runs. The result contains no raw HTML. The render layer
+(`Markdown.jsx`) sanitizes URL schemes (http/https/mailto only, never
+javascript:) + lazy-loads images, so keeping both is safe and renders cleanly.
 """
 
 from __future__ import annotations
@@ -67,28 +68,30 @@ def _admin_user():
         raise AdminInaccessible(f"admin pseudo-user {username!r} not found") from exc
 
 
-# `[text](/relative)` → absolute (skips already-absolute http(s)/mailto/anchors).
+# `[text](/relative)` and `![alt](/relative)` → absolute. The `](` anchor
+# matches both link and image markdown, skipping already-absolute URLs.
 _REL_LINK_RE = re.compile(r"(\]\()(/[^)]*)(\))")
-# Defensive: any leftover markdown image (markdownify already strips <img>).
-_IMG_MD_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _html_to_markdown(raw: str) -> str:
     """Convert newsletter `narrative_html` to clean markdown for the feed.
 
-    Uses `markdownify` (so no raw HTML survives), then cleans the ugly cases:
-    images dropped, relative links absolutised to the public site, blank-line
-    runs collapsed. Never returns raw HTML tags."""
+    Uses `markdownify` (so no raw HTML survives), PRESERVING images
+    (`![alt](url)`) and links (`[text](url)`). Then cleans the ugly cases:
+    relative links AND images are absolutised to the public site, blank-line
+    runs collapsed. Never returns raw HTML tags. The render layer
+    (`Markdown.jsx`) sanitizes URL schemes + lazy-loads images, so it's safe
+    to keep both here."""
     if not raw:
         return ""
-    md = _markdownify(raw, heading_style="ATX", strip=["img"])
-    md = _IMG_MD_RE.sub("", md)
+    md = _markdownify(raw, heading_style="ATX")
     md = _REL_LINK_RE.sub(
         lambda m: m.group(1) + _PUBLIC_BASE + m.group(2) + m.group(3), md
     )
     md = re.sub(r"\n{3,}", "\n\n", md)
     # Belt-and-braces: strip any stray tag markdownify may have passed through.
+    # Markdown image/link syntax has no angle brackets, so it survives.
     md = _HTML_TAG_RE.sub("", md)
     return md.strip()
 

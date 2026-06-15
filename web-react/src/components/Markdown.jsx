@@ -1,6 +1,22 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+/** Allow only safe URL schemes on links + images. Relative URLs and
+ *  fragments are kept; http/https/mailto are kept; everything else
+ *  (javascript:, data:, vbscript:, …) is dropped to an empty string so
+ *  it never renders as an executable href/src. Belt-and-braces on top of
+ *  react-markdown's own default sanitization. Exported for unit testing. */
+export function safeUrl(url) {
+  const u = (url || '').trim()
+  if (!u) return ''
+  // Relative or anchor: safe.
+  if (u.startsWith('/') || u.startsWith('#') || u.startsWith('.')) return u
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(u)
+  if (!m) return u // no scheme -> relative-ish, safe
+  const scheme = m[1].toLowerCase()
+  return ['http', 'https', 'mailto'].includes(scheme) ? u : ''
+}
+
 /** Renders user-supplied markdown. react-markdown never emits raw HTML,
  *  so this is XSS-safe without extra sanitization.
  *
@@ -36,6 +52,7 @@ export default function Markdown({ children, className = '' }) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={safeUrl}
         components={{
           // Shift every heading down one level. `#` (h1 in md) renders
           // as h2 in the DOM, `##` as h3, … `######` stays at h6.

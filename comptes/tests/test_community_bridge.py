@@ -120,6 +120,7 @@ def test_html_to_markdown_cleans_ugly_cases():
         '<p>Lidera <strong><a href="/artista/x">X</a></strong> i '
         '<em><a href="https://topquaranta.cat/t">el top</a></em>.</p>'
         '<img src="https://brevo.cdn/c.png" alt="cover">'
+        '<img src="/static/portada.png" alt="portada">'
         "<table><tr><th>P</th></tr><tr><td>1</td></tr></table>"
     )
     out = community_bridge._html_to_markdown(html)
@@ -128,8 +129,10 @@ def test_html_to_markdown_cleans_ugly_cases():
     # Markdown link/emphasis preserved; relative link absolutised.
     assert "[X](https://www.topquaranta.cat/artista/x)" in out
     assert "https://topquaranta.cat/t" in out  # already-absolute kept
-    # Images dropped (no markdown image syntax).
-    assert "![" not in out
+    # Images PRESERVED now (Slice newsletter-imatges); absolute kept,
+    # relative image absolutised to the public site.
+    assert "![cover](https://brevo.cdn/c.png)" in out
+    assert "![portada](https://www.topquaranta.cat/static/portada.png)" in out
     # GFM table survives as markdown (react-markdown has remark-gfm).
     assert "| P |" in out or "|P|" in out.replace(" ", "")
 

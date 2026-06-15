@@ -319,9 +319,13 @@ off by default**, gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`
   (`community_bridge._html_to_markdown`, via the `markdownify` dependency) and
   stored in `Publicacio.cos`. The feed renders `cos` with `react-markdown` +
   `remark-gfm` (never raw HTML) and previews via `stripMarkdown`, so markdown
-  is the right shape. The service cleans the ugly cases first: images dropped,
-  relative links absolutised to `PUBLIC_SITE_BASE`, blank-line runs collapsed;
-  the result contains no raw HTML.
+  is the right shape. The service PRESERVES images (`![alt](url)`) and links
+  (`[text](url)`), absolutises relative URLs (links AND images) to
+  `PUBLIC_SITE_BASE`, and collapses blank-line runs; the result contains no
+  raw HTML. The shared render (`web-react/src/components/Markdown.jsx`)
+  sanitizes URL schemes (`safeUrl`: http/https/mailto only, never
+  javascript:/data:) + lazy-loads images, so this widened render is safe for
+  EVERY `Publicacio` (non-staff public posts still pass the moderation queue).
 
 ## "Has entrat al top" manager alert (Fase 2 D1, 2026-06)
 

@@ -114,6 +114,7 @@ def album_detail(request: Request, slug: str) -> Response:
         {
             **album_card(album),
             "deezer_id": album.deezer_id,
+            "spotify_id": album.spotify_id or None,
             "artista": artista_minimal(album.artista) if album.artista else None,
             "cancons": [canco_card(c, ranked_ids=ranked_ids) for c in cancons],
         }

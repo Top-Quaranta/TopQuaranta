@@ -226,6 +226,7 @@ def artista_detail(request: Request, slug: str) -> Response:
             for loc in artista.localitats.select_related("municipi").all()
         ],
         "deezer_ids": list(artista.deezer_ids.values_list("deezer_id", flat=True)),
+        "spotify_id": artista.spotify_id or None,
         "deezer_nb_fan": artista.deezer_nb_fan,
         "deezer_nb_album": artista.deezer_nb_album,
         "social": {

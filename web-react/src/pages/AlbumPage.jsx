@@ -93,6 +93,7 @@ export default function AlbumPage() {
             <ExternalListenLinks
               className="rd-cc-links" kind="album" title={data.nom}
               artist={data.artista?.nom} deezerId={data.deezer_id}
+              spotifyId={data.spotify_id}
             />
           </div>
         </div>

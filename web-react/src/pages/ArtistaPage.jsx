@@ -120,7 +120,7 @@ export default function ArtistaPage() {
               {nAlbums > 0 && <Kpi n={nAlbums} label={nAlbums === 1 ? 'àlbum' : 'àlbums'} />}
             </div>
 
-            <ExternalListenLinks className="rd-cc-links" kind="artista" artist={data.nom} deezerId={data.deezer_ids?.[0]} />
+            <ExternalListenLinks className="rd-cc-links" kind="artista" artist={data.nom} deezerId={data.deezer_ids?.[0]} spotifyId={data.spotify_id} />
 
             <div className="flex flex-wrap gap-3 mt-3 items-center">
               {Object.entries(data.social || {}).map(([key, url]) => (

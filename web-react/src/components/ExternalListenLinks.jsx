@@ -16,11 +16,15 @@
  * populate their IDs.
  */
 
+import { useState } from 'react'
 import { trackEvent } from '../lib/analytics'
 
 function encode(q) {
   return encodeURIComponent((q || '').trim())
 }
+
+// kind -> Spotify entity path segment for direct links + embeds.
+const SPOTIFY_TYPE = { canco: 'track', album: 'album', artista: 'artist' }
 
 // Map the link's display name to the analytics dim1 — short, stable
 // slugs the dashboard charts on. We don't bake them into the link
@@ -32,7 +36,7 @@ const DSP_SLUG = {
   'Apple Music': 'apple',
 }
 
-function buildLinks({ kind, title, artist, deezerId, isrc }) {
+export function buildLinks({ kind, title, artist, deezerId, isrc, spotifyId }) {
   // Top-line search string — "artista titol" is the ordering DSPs
   // match best in our testing. For artist pages it's just the name.
   const q =
@@ -51,13 +55,15 @@ function buildLinks({ kind, title, artist, deezerId, isrc }) {
     artista: 'artists',
   }[kind]
 
-  // Spotify: for tracks with an ISRC, use its "isrc:" search filter —
-  // it returns exactly the matched track, so the effective behaviour
-  // is a deep link even though the URL is technically a /search/. We
-  // don't have album UPCs or artist MBIDs, so album/artist searches
-  // stay text-based.
+  // Spotify: when we hold the exact entity id (Process B enrichment for
+  // tracks, Album/Artista.spotify_id) link the REAL entity. Otherwise
+  // fall back: ISRC search for tracks (deep-link-equivalent), text
+  // search for album/artist (no UPC/artist-id without the exact id).
+  const spotifyType = SPOTIFY_TYPE[kind]
   const spotifyHref =
-    kind === 'canco' && isrc
+    spotifyId && spotifyType
+      ? `https://open.spotify.com/${spotifyType}/${spotifyId}`
+      : kind === 'canco' && isrc
       ? `https://open.spotify.com/search/isrc%3A${encode(isrc)}`
       : `https://open.spotify.com/search/${enc}${
           spotifyPath ? `/${spotifyPath}` : ''
@@ -107,32 +113,71 @@ export default function ExternalListenLinks({
   artist,
   deezerId = null,
   isrc = null,
+  spotifyId = null,
   className = '',
 }) {
-  const links = buildLinks({ kind, title, artist, deezerId, isrc })
+  const links = buildLinks({ kind, title, artist, deezerId, isrc, spotifyId })
+  // Embed only when we hold the exact id. Facade (click-to-load): the
+  // iframe is NOT mounted until the user clicks, so no Spotify cookies
+  // load on page view (RGPD) and there's no perf hit for visitors who
+  // never play. The same escolta_click event fires on activation.
+  const spotifyType = SPOTIFY_TYPE[kind]
+  const canEmbed = !!(spotifyId && spotifyType)
+  const [embedOn, setEmbedOn] = useState(false)
+  const embedHeight = kind === 'canco' ? 152 : 352
 
   return (
-    <div className={'flex flex-wrap items-center gap-2 ' + className}>
-      <span className="text-[11px] uppercase tracking-wide text-gray-500">
-        Escolta-ho a
-      </span>
-      {links.map(l => (
-        <a
-          key={l.name}
-          href={l.href}
-          target="_blank"
-          rel="noopener"
-          // Beacon fires before the browser hands the navigation
-          // off — `sendBeacon` survives the unload, so we don't
-          // delay the user's click while waiting for the POST.
-          // dim1 = DSP slug, dim2 = surface (canco/album/artista).
-          onClick={() => trackEvent('escolta_click', DSP_SLUG[l.name] || l.name.toLowerCase(), kind || '')}
-          className="inline-flex items-center gap-1 px-2.5 py-1 bg-tq-ink text-tq-yellow text-xs font-semibold rounded-full hover:bg-tq-ink/90 transition-colors"
-        >
-          {PLAY_ICON}
-          {l.name}
-        </a>
-      ))}
+    <div className={className}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-gray-500">
+          Escolta-ho a
+        </span>
+        {links.map(l => (
+          <a
+            key={l.name}
+            href={l.href}
+            target="_blank"
+            rel="noopener"
+            // Beacon fires before the browser hands the navigation
+            // off — `sendBeacon` survives the unload, so we don't
+            // delay the user's click while waiting for the POST.
+            // dim1 = DSP slug, dim2 = surface (canco/album/artista).
+            onClick={() => trackEvent('escolta_click', DSP_SLUG[l.name] || l.name.toLowerCase(), kind || '')}
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-tq-ink text-tq-yellow text-xs font-semibold rounded-full hover:bg-tq-ink/90 transition-colors"
+          >
+            {PLAY_ICON}
+            {l.name}
+          </a>
+        ))}
+      </div>
+
+      {canEmbed && (
+        <div className="mt-3">
+          {embedOn ? (
+            <iframe
+              title="Reproductor de Spotify"
+              src={`https://open.spotify.com/embed/${spotifyType}/${spotifyId}`}
+              width="100%"
+              height={embedHeight}
+              style={{ borderRadius: 12, border: 0 }}
+              loading="lazy"
+              allow="encrypted-media"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setEmbedOn(true)
+                trackEvent('escolta_click', 'spotify_embed', kind || '')
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-[#1DB954] text-black text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity"
+            >
+              {PLAY_ICON}
+              Reproductor de Spotify
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

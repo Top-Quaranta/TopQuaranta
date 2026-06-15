@@ -22,6 +22,7 @@ import SolicitarGestioPage from './pages/SolicitarGestioPage'
 import GestioArtistaRedirect from './pages/GestioArtistaRedirect'
 import ArtistaDashboardPage from './pages/ArtistaDashboardPage'
 import ComFuncionaPage from './pages/ComFuncionaPage'
+import ComunitatMusicsPage from './pages/ComunitatMusicsPage'
 import { LegalIndex } from './pages/legal/LegalLayout'
 import AvisLegalPage from './pages/legal/AvisLegalPage'
 import PrivacitatPage from './pages/legal/PrivacitatPage'
@@ -154,6 +155,7 @@ function AppContent() {
         <Route path="/artista/:artistaSlug/:albumSlug" element={<AlbumPage />} />
         <Route path="/mapa" element={<MapaPage />} />
         <Route path="/com-funciona" element={<ComFuncionaPage />} />
+        <Route path="/comunitat-musics" element={<ComunitatMusicsPage />} />
         {/* Sprint J — legal corpus. Each subpage is independently
             citable; /legal is the index. */}
         <Route path="/legal" element={<LegalIndex />} />

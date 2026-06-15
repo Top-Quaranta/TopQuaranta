@@ -906,6 +906,40 @@ def com_funciona_seo(request: HttpRequest) -> HttpResponse:
 
 @require_safe
 @_vary_ua
+def comunitat_seo(request: HttpRequest) -> HttpResponse:
+    """`/comunitat-musics` — public, indexable landing for the musician
+    community (Slice D). Sells "find a band and collaborators in Catalan".
+    It does NOT list individual profiles (the directory is for registered
+    users only); it sells the concept + how it works + a CTA to join, so
+    no private data is ever exposed publicly."""
+    page_meta = meta.for_comunitat()
+    categories = [
+        ("Grup o banda", "/comunitat-musics"),
+        ("Cantants", "/comunitat-musics"),
+        ("Instrumentistes", "/comunitat-musics"),
+        ("Productors", "/comunitat-musics"),
+        ("Col·laboradors", "/comunitat-musics"),
+    ]
+    blocks = [
+        jsonld.collection_jsonld(
+            "Comunitat de músics en català",
+            "/comunitat-musics",
+            categories,
+            description=page_meta.description,
+        ),
+        jsonld.breadcrumbs_jsonld(
+            [("Inici", "/"), ("Comunitat de músics", "/comunitat-musics")]
+        ),
+    ]
+    return render(
+        request,
+        "seo/comunitat.html",
+        {"meta": page_meta, "jsonld_blocks": blocks},
+    )
+
+
+@require_safe
+@_vary_ua
 def mapa_seo(request: HttpRequest) -> HttpResponse:
     """`/mapa` — basic SSR fallback. Doesn't render the SVG (heavy);
     instead lists territoris with their KPIs + links to the per-territori

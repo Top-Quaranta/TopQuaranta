@@ -311,6 +311,26 @@ def for_com_funciona() -> Meta:
     )
 
 
+def for_comunitat() -> Meta:
+    return Meta(
+        title="Comunitat de músics en català: busca grup i col·laboradors",
+        description=_trim(
+            "Fas música en català? Troba grup, busca col·laboradors i "
+            "connecta amb cantants, instrumentistes i productors de tots "
+            "els territoris. La comunitat de músics en català de TopQuaranta."
+        ),
+        canonical_url=f"{CANONICAL_HOST}/comunitat-musics",
+        og_image=f"{CANONICAL_HOST}/og/home.png",
+        og_type="website",
+        keywords=[
+            "busco grup música català",
+            "músics en català busquen banda",
+            "col·laboradors música catalana",
+            "comunitat músics català",
+        ],
+    )
+
+
 def for_mapa() -> Meta:
     return Meta(
         title="Mapa de la música en català · TopQuaranta",

@@ -255,8 +255,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # drops the tuple form (RemovedInDjango70Warning). Use plain
 # strings now so the future bump is a no-op.
 ADMINS = ["admin@topquaranta.cat"]
-DEFAULT_FROM_EMAIL = "noreply@topquaranta.cat"
-SERVER_EMAIL = "noreply@topquaranta.cat"
+# Display name on every outbound mail from the noreply mailbox. The
+# bare address still authenticates / forms the envelope (EMAIL_HOST_USER
+# in production); this only sets the human-facing "From" name.
+DEFAULT_FROM_EMAIL = "Josep Quaranta <noreply@topquaranta.cat>"
+SERVER_EMAIL = "Josep Quaranta <noreply@topquaranta.cat>"
 
 _LOG_DIR = Path("/var/log/topquaranta")
 

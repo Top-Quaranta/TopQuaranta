@@ -68,7 +68,9 @@ if EMAIL_HOST_PASSWORD:
     EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="noreply@topquaranta.cat")
     # Brevo's SMTP login (a97491001@smtp-brevo.com) is NOT the
     # sender — that's noreply@topquaranta.cat. Keep them apart.
-    DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@topquaranta.cat")
+    DEFAULT_FROM_EMAIL = config(
+        "DEFAULT_FROM_EMAIL", default="Josep Quaranta <noreply@topquaranta.cat>"
+    )
     SERVER_EMAIL = DEFAULT_FROM_EMAIL
     EMAIL_TIMEOUT = 20
 else:

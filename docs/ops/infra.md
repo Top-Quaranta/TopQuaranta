@@ -137,6 +137,11 @@ SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET / SPOTIFY_REDIRECT_URI
 Plus optional service keys for Brevo, Resend, Hetzner Cloud, CDMON
 DNS, Google Search Console, etc. (see `CLAUDE.md §8`).
 
+Outbound mail from the `noreply@` mailbox carries the display name
+**`Josep Quaranta`** (`DEFAULT_FROM_EMAIL` / `SERVER_EMAIL` in
+`settings/base.py`, overridable via the `DEFAULT_FROM_EMAIL` env var in
+production). Full email architecture: `docs/EMAIL.md`.
+
 Optional, **`NEWSLETTER_ROUTINE_TOKEN`** (2026-06-07): static bearer
 token the newsletter cloud routine presents to
 `/api/v1/newsletter-routine/{brief,esborrany}/`. Read in

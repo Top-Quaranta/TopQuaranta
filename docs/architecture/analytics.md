@@ -115,17 +115,15 @@ new KPIs ship without a migration.
   are surfaced as "unclassified" — not reclassifiable, since the UA was
   never persisted.
 * `utm_landing` whenever the request URL carries `?utm_source=…`.
-* `referrer` for every **human** public pageview, with `dim1` = the
-  acquisition bucket (`directe` / `cerca_organica` / `social` /
-  `referral`) and `dim2` = the bare referring host. The bucket comes
-  from `analytics.referrers.classify_referrer`, which matches the
-  Referer host by DNS label (so `google.es`, `news.google.com`, etc.
-  all resolve without enumeration, and `client.com` is never mistaken
-  for the `t.co` shortener). Only the bucket + host are stored — the
-  Referer **path and query are dropped** (tokens could live there) and
-  in-site (`intern`) referrers are not recorded, since same-site
-  navigation isn't an acquisition source. Answers "where do humans come
-  from?" for traffic that arrives without a UTM tag.
+* `referrer` for every **human** public pageview: `dim1` = acquisition
+  bucket (`directe` / `cerca_organica` / `social` / `referral`), `dim2`
+  = bare referring host. `analytics.referrers.classify_referrer` matches
+  the host by DNS label (so `google.es`, `news.google.com` resolve
+  without enumeration, and `client.com` isn't mistaken for the `t.co`
+  shortener). Only bucket + host are stored — the Referer **path/query
+  are dropped** (tokens could live there) and in-site (`intern`)
+  referrers aren't recorded. Answers "where do humans come from?" for
+  non-UTM traffic.
 
 Skips `/api/`, `/static/`, `/media/`, `/favicon`, `/robots.txt`,
 `/sitemap.xml`, `/staff/`, `/compte/2fa/`, `/health` — these would
@@ -244,11 +242,8 @@ alert; (4) **Ranking per territori** — `TopSetmanal` entries per
 territory; (5) **SEO i enllaços externs** — GSC impressions/clicks/
 position, Bing inbound links, Core Web Vitals; (6) **Distribució
 social** — publications, followers + deltas, top post. A "frescor de
-dades" line flags a stale snapshot (stuck-cron warning). `--dry-run`
-prints text; `--html-out PATH` renders the HTML for local preview. Data
-builder: `build_context`; the `milers` filter
-(`analytics/templatetags/digest_extras.py`) keeps the template
-branch-free.
+dades" line flags a stale snapshot. `--dry-run` prints text;
+`--html-out PATH` renders the HTML for local preview without sending.
 
 ## What we deliberately don't measure
 

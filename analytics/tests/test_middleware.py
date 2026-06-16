@@ -105,3 +105,55 @@ def test_pageview_path_truncated_to_80_chars():
     _mw()(rf.get(long_path))
     row = MetricaEsdeveniment.objects.get(clau="pageview")
     assert len(row.dimensio_1) == 80
+
+
+@pytest.mark.django_db
+def test_referrer_recorded_for_human_pageview():
+    rf = RequestFactory()
+    _mw()(
+        rf.get(
+            "/top",
+            HTTP_USER_AGENT=_HUMAN_UA,
+            HTTP_REFERER="https://www.google.com/search?q=x",
+        )
+    )
+    row = MetricaEsdeveniment.objects.get(clau="referrer")
+    assert row.dimensio_1 == "cerca_organica"
+    assert row.dimensio_2 == "google.com"
+
+
+@pytest.mark.django_db
+def test_referrer_directe_when_no_header():
+    rf = RequestFactory()
+    _mw()(rf.get("/top", HTTP_USER_AGENT=_HUMAN_UA))
+    assert MetricaEsdeveniment.objects.filter(
+        clau="referrer", dimensio_1="directe"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_referrer_not_recorded_for_bots():
+    rf = RequestFactory()
+    _mw()(
+        rf.get(
+            "/top",
+            HTTP_USER_AGENT=_BOT_UA,
+            HTTP_REFERER="https://www.google.com/search?q=x",
+        )
+    )
+    assert not MetricaEsdeveniment.objects.filter(clau="referrer").exists()
+
+
+@pytest.mark.django_db
+def test_referrer_intern_navigation_dropped():
+    rf = RequestFactory()
+    # RequestFactory's default host is "testserver"; an in-site referer
+    # from the same host must not be recorded as an acquisition source.
+    _mw()(
+        rf.get(
+            "/top",
+            HTTP_USER_AGENT=_HUMAN_UA,
+            HTTP_REFERER="http://testserver/artista/x",
+        )
+    )
+    assert not MetricaEsdeveniment.objects.filter(clau="referrer").exists()

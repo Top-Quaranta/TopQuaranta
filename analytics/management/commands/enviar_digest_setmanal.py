@@ -401,6 +401,9 @@ def build_context(today: datetime.date) -> dict:
         "social": social,
         "frescor": frescor,
         "dashboard_url": DASHBOARD_URL,
+        "site_url": getattr(settings, "SITE_URL", "https://www.topquaranta.cat").rstrip(
+            "/"
+        ),
     }
 
 

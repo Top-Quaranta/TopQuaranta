@@ -11,20 +11,29 @@ What we measure:
     once per campaign per session for our purposes; we count every
     landing because the alternative (set a cookie) is too close to
     individual tracking for the privacy posture.
+  * `referrer` for every *human* public pageview — `dim1` is the
+    acquisition bucket (directe / cerca_organica / social / referral),
+    `dim2` is the bare referring host. Answers "where do humans come
+    from?" without UTM tags. See `analytics/referrers.py`.
 
 What we deliberately don't capture:
   * IP address (neither stored nor hashed).
   * User-Agent string (could fingerprint). The UA is read transiently
     to classify a pageview as "bot" | "human" (`dimensio_2`), but the
     string itself is never persisted. See `analytics/bots.py`.
-  * Referer (could leak inbound URLs that contain tokens).
+  * Referer path or query. The Referer header is read transiently to
+    classify the acquisition source; only the coarse bucket + bare host
+    are stored. The path/query (where tokens could leak) are dropped,
+    and in-site (`intern`) referrers are not recorded at all. See
+    `analytics/referrers.py`.
   * `request.user.pk` (no per-user paths).
 """
 
 from __future__ import annotations
 
-from analytics.bots import classify_ua
+from analytics.bots import CLASS_HUMAN, classify_ua
 from analytics.events import register
+from analytics.referrers import classify_referrer
 
 # Path prefixes we never count. The SPA serves /staff/* internally
 # but it's a tiny audience and the data would skew the public
@@ -93,6 +102,16 @@ class AnalyticsMiddleware:
             # "unclassified" — that's correct, not reclassifiable.
             kind = classify_ua(request.META.get("HTTP_USER_AGENT", ""))
             register("pageview", dim1=(request.path or "/")[:80], dim2=kind)
+
+            # Acquisition source — humans only (bots carry preview-fetch
+            # referers that aren't real visits). `intern` (in-site
+            # navigation) is not an acquisition source, so it's dropped.
+            if kind == CLASS_HUMAN:
+                bucket, host = classify_referrer(
+                    request.META.get("HTTP_REFERER"), request.get_host()
+                )
+                if bucket != "intern":
+                    register("referrer", dim1=bucket, dim2=host[:80])
 
         # UTM landing — captured even on auth/staff URLs because
         # what we care about is "where did the click come from",

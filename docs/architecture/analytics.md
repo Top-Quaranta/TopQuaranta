@@ -218,36 +218,25 @@ needed, downloads in the browser without a server round-trip.
 
 ### Weekly admin digest — "Setmanari" *(K4, redesigned 2026-06)*
 
-Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the
-`ADMINS` recipients a **brand-coherent HTML** summary (yellow-on-ink,
-Playfair/Roboto — the template extends `comptes/email_base.html`) of
-the prior 7 days vs the 7 before, with a plain-text fallback. Sent via
+Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the `ADMINS`
+recipients a **brand-coherent HTML** summary (yellow-on-ink,
+Playfair/Roboto; template extends `comptes/email_base.html`) of the
+prior 7 days vs the 7 before, with a text fallback. Sent via
 `EmailMultiAlternatives` from `SERVER_EMAIL` (the "Josep Quaranta"
-display name) through the same Brevo SMTP path.
-
-Sections are chosen for *this* project, not generic web vanity:
-
-1. **Audiència humana** — human pageviews as the headline (bots split
-   out via the `pageview.dim2` class), bot share as context, registres,
-   newsletter, top human pages.
-2. **D'on venen** — acquisition buckets from the `referrer` event.
-3. **Pipeline del catàleg** — catalog gauges + W-o-W deltas, moderation
-   decisions grouped from `StaffAuditLog`, Whisper/MB coverage, and a
-   backlog-growing alert.
-4. **Ranking per territori** — `TopSetmanal` entries generated per
-   territory for the latest week.
-5. **SEO i enllaços externs** — GSC impressions/clicks/position deltas,
-   top queries, Bing inbound links (the authority/"external links"
-   signal), Core Web Vitals.
-6. **Distribució social** — publications, followers per platform with
-   deltas, top post by engagement.
-
-A "frescor de dades" line flags a stale pipeline snapshot (stuck-cron
-early warning). `--dry-run` prints the text body; `--html-out PATH`
-writes the rendered HTML for local preview without sending. The
-per-section data builder lives in `build_context`; presentation
-helpers (`_kpi.html`, the `milers` filter in
-`analytics/templatetags/digest_extras.py`) keep the template
+name). Sections, chosen for *this* project not generic web vanity:
+(1) **Audiència humana** — human pageviews as the headline (bots split
+via `pageview.dim2`), registres, newsletter, top human pages;
+(2) **D'on venen** — acquisition buckets from the `referrer` event;
+(3) **Pipeline del catàleg** — gauges + W-o-W deltas, moderation
+decisions grouped from `StaffAuditLog`, Whisper/MB coverage, backlog
+alert; (4) **Ranking per territori** — `TopSetmanal` entries per
+territory; (5) **SEO i enllaços externs** — GSC impressions/clicks/
+position, Bing inbound links, Core Web Vitals; (6) **Distribució
+social** — publications, followers + deltas, top post. A "frescor de
+dades" line flags a stale snapshot (stuck-cron warning). `--dry-run`
+prints text; `--html-out PATH` renders the HTML for local preview. Data
+builder: `build_context`; the `milers` filter
+(`analytics/templatetags/digest_extras.py`) keeps the template
 branch-free.
 
 ## What we deliberately don't measure

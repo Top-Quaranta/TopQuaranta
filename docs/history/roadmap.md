@@ -7,6 +7,27 @@
 
 ---
 
+## Sprint 2026-06-16 — Setmanari (digest setmanal redissenyat) + remitent
+
+Tres PRs encadenats per millorar el correu setmanal d'admin:
+
+1. **Remitent "Josep Quaranta"** (#277). `DEFAULT_FROM_EMAIL` +
+   `SERVER_EMAIL` amb nom mostrat a tot el correu de `noreply@`. El
+   `.env` de producció (que sobreescrivia el codi) corregit + servei
+   recarregat → ja viu a prod.
+2. **Tracking d'adquisició** (#278). Nou event `referrer` per pageview
+   humà: bucket (directe/cerca_organica/social/referral) + host nu.
+   RGPD-safe (path/query descartats, interns no registrats), matching
+   per etiqueta DNS. Sense migració.
+3. **Setmanari HTML** (#279). Digest de text pla → email HTML amb la
+   marca (groc sobre tinta, Playfair). Seccions pròpies del projecte:
+   audiència **humana** (bots separats del còmput), d'on venen,
+   pipeline del catàleg + decisions de moderació, ranking per territori,
+   SEO + enllaços entrants (Bing), distribució social, frescor de dades.
+   Flags `--dry-run` / `--html-out` per previsualitzar en local.
+
+---
+
 ## Sprint 2026-06-09 — gate Deezer, throughput Spotify, matriu dia+actiu
 
 Macro autònom de 5 ítems (PRs #185-190, tots mergejats):

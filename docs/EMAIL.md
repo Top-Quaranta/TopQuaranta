@@ -253,8 +253,16 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "<brevo SMTP login>"
 EMAIL_HOST_PASSWORD = "<brevo SMTP key>"
-DEFAULT_FROM_EMAIL = "noreply@topquaranta.cat"
+DEFAULT_FROM_EMAIL = "Josep Quaranta <noreply@topquaranta.cat>"
 ```
+
+El nom mostrat («Josep Quaranta») s'aplica a **tot** el correu sortint
+de la bústia `noreply@` — es fixa a `DEFAULT_FROM_EMAIL` i `SERVER_EMAIL`
+(aquest últim és el remitent de `mail_admins`, p.ex. el digest setmanal).
+L'adreça nua segueix autenticant i formant l'envelope via
+`EMAIL_HOST_USER`; el nom només afecta la capçalera `From` visible. Si
+`.env` defineix `DEFAULT_FROM_EMAIL`, ha d'incloure el nom o sobreescriu
+el default.
 
 Valors a `.env`. Comanda: `publicar_canal --channel newsletter`.
 Plantilla: `comptes/templates/comptes/email_newsletter_top.html`.

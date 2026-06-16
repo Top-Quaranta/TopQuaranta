@@ -115,17 +115,15 @@ new KPIs ship without a migration.
   are surfaced as "unclassified" — not reclassifiable, since the UA was
   never persisted.
 * `utm_landing` whenever the request URL carries `?utm_source=…`.
-* `referrer` for every **human** public pageview, with `dim1` = the
-  acquisition bucket (`directe` / `cerca_organica` / `social` /
-  `referral`) and `dim2` = the bare referring host. The bucket comes
-  from `analytics.referrers.classify_referrer`, which matches the
-  Referer host by DNS label (so `google.es`, `news.google.com`, etc.
-  all resolve without enumeration, and `client.com` is never mistaken
-  for the `t.co` shortener). Only the bucket + host are stored — the
-  Referer **path and query are dropped** (tokens could live there) and
-  in-site (`intern`) referrers are not recorded, since same-site
-  navigation isn't an acquisition source. Answers "where do humans come
-  from?" for traffic that arrives without a UTM tag.
+* `referrer` for every **human** public pageview: `dim1` = acquisition
+  bucket (`directe` / `cerca_organica` / `social` / `referral`), `dim2`
+  = bare referring host. `analytics.referrers.classify_referrer` matches
+  the host by DNS label (so `google.es`, `news.google.com` resolve
+  without enumeration, and `client.com` isn't mistaken for the `t.co`
+  shortener). Only bucket + host are stored — the Referer **path/query
+  are dropped** (tokens could live there) and in-site (`intern`)
+  referrers aren't recorded. Answers "where do humans come from?" for
+  non-UTM traffic.
 
 Skips `/api/`, `/static/`, `/media/`, `/favicon`, `/robots.txt`,
 `/sitemap.xml`, `/staff/`, `/compte/2fa/`, `/health` — these would
@@ -227,13 +225,25 @@ Window selector: 7d / 30d / 90d / 1a — re-fetches on change. CSV
 export uses semicolons (Excel ca-ES default), quotes only when
 needed, downloads in the browser without a server round-trip.
 
-### Weekly admin digest *(K4)*
+### Weekly admin digest — "Setmanari" *(K4, redesigned 2026-06)*
 
-Every Monday morning at 08:00 UTC, `enviar_digest_setmanal` emails
-`admin@topquaranta.cat` a one-page text summary of the prior week:
-top KPIs with W-o-W deltas, top 5 pages, top 5 UTM sources, top 3
-social posts. Same data the dashboard shows; pushed via Brevo SMTP
-so it's actionable even when nobody opens the dashboard.
+Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the `ADMINS`
+recipients a **brand-coherent HTML** summary (yellow-on-ink,
+Playfair/Roboto; template extends `comptes/email_base.html`) of the
+prior 7 days vs the 7 before, with a text fallback. Sent via
+`EmailMultiAlternatives` from `SERVER_EMAIL` (the "Josep Quaranta"
+name). Sections, chosen for *this* project not generic web vanity:
+(1) **Audiència humana** — human pageviews as the headline (bots split
+via `pageview.dim2`), registres, newsletter, top human pages;
+(2) **D'on venen** — acquisition buckets from the `referrer` event;
+(3) **Pipeline del catàleg** — gauges + W-o-W deltas, moderation
+decisions grouped from `StaffAuditLog`, Whisper/MB coverage, backlog
+alert; (4) **Ranking per territori** — `TopSetmanal` entries per
+territory; (5) **SEO i enllaços externs** — GSC impressions/clicks/
+position, Bing inbound links, Core Web Vitals; (6) **Distribució
+social** — publications, followers + deltas, top post. A "frescor de
+dades" line flags a stale snapshot. `--dry-run` prints text;
+`--html-out PATH` renders the HTML for local preview without sending.
 
 ## What we deliberately don't measure
 

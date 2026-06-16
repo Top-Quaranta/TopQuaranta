@@ -228,9 +228,10 @@ needed, downloads in the browser without a server round-trip.
 ### Weekly admin digest — "Setmanari" *(K4, redesigned 2026-06)*
 
 Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the `ADMINS`
-recipients a **brand-coherent HTML** summary (yellow-on-ink,
-Playfair/Roboto; template extends `comptes/email_base.html`) of the
-prior 7 days vs the 7 before, with a text fallback. Sent via
+recipients a **brand-coherent HTML** summary in the "redisseny" email
+language (dark `#060608`, 640px, Anton/Bricolage/Instrument Serif —
+mirrors `email_newsletter_top.html`) of the prior 7 days vs the 7
+before, with a text fallback. Sent via
 `EmailMultiAlternatives` from `SERVER_EMAIL` (the "Josep Quaranta"
 name). Sections, chosen for *this* project not generic web vanity:
 (1) **Audiència humana** — human pageviews as the headline (bots split

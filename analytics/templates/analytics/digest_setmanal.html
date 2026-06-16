@@ -1,0 +1,157 @@
+{% extends "comptes/email_base.html" %}
+{% load digest_extras %}
+
+{% block pretitle %}Setmanari · Setmana {{ week_number }}{% endblock %}
+
+{% block content %}
+<div style="font-size:13px;color:#a8a29e;margin:-8px 0 20px;">
+  {{ period.since|date:"d/m/Y" }} – {{ period.until|date:"d/m/Y" }}
+  <span style="color:#57534e;">·</span> comparat amb la setmana anterior
+</div>
+
+{% if frescor.stale %}
+<div style="background:#422006;border:1px solid #854d0e;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:13px;color:#fbbf24;">
+  ⚠ Dades possiblement estancades — l'últim snapshot és del {{ frescor.last_snapshot|date:"d/m/Y" }}. Revisa els crons a /staff/estat.
+</div>
+{% endif %}
+
+{# ── A. Audiència humana ── #}
+<div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;color:#facc15;margin:0 0 8px;">Audiència humana</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:6px;">
+  <tr>
+    {% include "analytics/_kpi.html" with label="Visites humanes" value=audiencia.humans.now delta=audiencia.humans suffix=None %}
+    {% include "analytics/_kpi.html" with label="Bots filtrats del còmput" value=audiencia.bot_share suffix="%" delta=None %}
+  </tr>
+  <tr>
+    {% include "analytics/_kpi.html" with label="Registres nous" value=audiencia.registres.now delta=audiencia.registres suffix=None %}
+    {% include "analytics/_kpi.html" with label="Subscriptors newsletter" value=audiencia.newsletter.now delta=audiencia.newsletter suffix=None %}
+  </tr>
+</table>
+{% if audiencia.top_pages %}
+<div style="font-size:12px;color:#a8a29e;margin:8px 5px 4px;">Top pàgines (humanes)</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#d6d3d1;">
+  {% for p in audiencia.top_pages %}
+  <tr>
+    <td style="padding:3px 5px;">{{ p.path }}</td>
+    <td align="right" style="padding:3px 5px;color:#fafaf9;">{{ p.total|milers }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{# ── B. D'on venen ── #}
+{% if referrer.buckets %}
+<div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;color:#facc15;margin:24px 0 8px;">D'on venen</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#d6d3d1;">
+  {% for b in referrer.buckets %}
+  <tr>
+    <td width="120" style="padding:4px 5px;color:#a8a29e;">{{ b.label }}</td>
+    <td style="padding:4px 5px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#292524;border-radius:3px;">
+        <tr><td style="background:#facc15;height:8px;width:{{ b.pct }}%;border-radius:3px;font-size:0;line-height:0;">&nbsp;</td></tr>
+      </table>
+    </td>
+    <td width="48" align="right" style="padding:4px 5px;color:#fafaf9;">{{ b.pct }}%</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{# ── C. Pipeline del catàleg ── #}
+<div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;color:#facc15;margin:24px 0 8px;">Pipeline del catàleg</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    {% include "analytics/_kpi.html" with label="Cançons verificades" value=pipeline.verificades.now delta=pipeline.verificades suffix=None %}
+    {% include "analytics/_kpi.html" with label="Artistes aprovats" value=pipeline.aprovats.now delta=pipeline.aprovats suffix=None %}
+  </tr>
+  <tr>
+    {% include "analytics/_kpi.html" with label="Cançons pendents" value=pipeline.pendents.now delta=pipeline.pendents suffix=None %}
+    {% include "analytics/_kpi.html" with label="Decisions de moderació" value=pipeline.decisions.total delta=None suffix=None %}
+  </tr>
+</table>
+<div style="font-size:13px;color:#d6d3d1;margin:8px 5px 0;">
+  Decisions: <span style="color:#fafaf9;">{{ pipeline.decisions.cancons }}</span> cançons ·
+  <span style="color:#fafaf9;">{{ pipeline.decisions.artistes }}</span> artistes ·
+  <span style="color:#fafaf9;">{{ pipeline.decisions.propostes }}</span> propostes ·
+  <span style="color:#fafaf9;">{{ pipeline.decisions.sollicituds }}</span> sol·licituds
+</div>
+<div style="font-size:13px;color:#a8a29e;margin:6px 5px 0;">
+  Cobertura Whisper {% if pipeline.whisper != None %}<span style="color:#fafaf9;">{{ pipeline.whisper|floatformat:1 }}%</span>{% else %}—{% endif %} ·
+  MusicBrainz {% if pipeline.mb != None %}<span style="color:#fafaf9;">{{ pipeline.mb|floatformat:1 }}%</span>{% else %}—{% endif %}
+  {% if pipeline.backlog_alert %}<span style="color:#fbbf24;">· ⚠ backlog creixent</span>{% endif %}
+</div>
+
+{# ── D. Ranking per territori ── #}
+{% if ranking.territoris %}
+<div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;color:#facc15;margin:24px 0 8px;">Ranking per territori</div>
+<div style="font-size:12px;color:#a8a29e;margin:0 5px 6px;">{{ ranking.total }} entrades generades · setmana {{ ranking.setmana|date:"d/m/Y" }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#d6d3d1;">
+  {% for t in ranking.territoris %}
+  <tr>
+    <td width="56" style="padding:3px 5px;color:#facc15;font-weight:500;">{{ t.codi }}</td>
+    <td style="padding:3px 5px;color:#a8a29e;">{{ t.nom }}</td>
+    <td width="40" align="right" style="padding:3px 5px;color:#fafaf9;">{{ t.count }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{# ── E. SEO i enllaços externs ── #}
+{% if seo.has_data or seo.bing_links or seo.cwv %}
+<div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;color:#facc15;margin:24px 0 8px;">SEO i enllaços externs</div>
+{% if seo.has_data %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    {% include "analytics/_kpi.html" with label="Impressions (Google)" value=seo.impressions.now delta=seo.impressions suffix=None %}
+    {% include "analytics/_kpi.html" with label="Clics orgànics" value=seo.clicks.now delta=seo.clicks suffix=None %}
+  </tr>
+  <tr>
+    {% include "analytics/_kpi.html" with label="Posició mitjana" value=seo.position.now delta=seo.position suffix=None %}
+    {% if seo.bing_links %}{% include "analytics/_kpi.html" with label="Enllaços entrants (Bing)" value=seo.bing_links.inbound delta=None suffix=None %}{% else %}<td width="50%"></td>{% endif %}
+  </tr>
+</table>
+{% elif seo.bing_links %}
+<div style="font-size:13px;color:#d6d3d1;margin:0 5px;">Enllaços entrants (Bing): <span style="color:#fafaf9;">{{ seo.bing_links.inbound }}</span> de {{ seo.bing_links.domains }} dominis</div>
+{% endif %}
+{% if seo.top_queries %}
+<div style="font-size:12px;color:#a8a29e;margin:8px 5px 4px;">Top cerques</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#d6d3d1;">
+  {% for q in seo.top_queries %}
+  <tr><td style="padding:3px 5px;">{{ q.query }}</td><td width="60" align="right" style="padding:3px 5px;color:#fafaf9;">{{ q.clicks }} clics</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if seo.cwv %}
+<div style="font-size:13px;color:#a8a29e;margin:8px 5px 0;">
+  Core Web Vitals (mòbil): score <span style="color:#fafaf9;">{{ seo.cwv.score|default:"—" }}</span> ·
+  LCP {{ seo.cwv.lcp|default:"—" }}ms · INP {{ seo.cwv.inp|default:"—" }}ms · CLS {{ seo.cwv.cls|default:"—" }}
+</div>
+{% endif %}
+{% endif %}
+
+{# ── F. Distribució social ── #}
+<div style="font-family:'Playfair Display',Georgia,serif;font-size:17px;color:#facc15;margin:24px 0 8px;">Distribució social</div>
+<div style="font-size:13px;color:#d6d3d1;margin:0 5px 8px;">Publicacions aquesta setmana: <span style="color:#fafaf9;">{{ social.publicacions }}</span></div>
+{% if social.followers %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#d6d3d1;">
+  {% for f in social.followers %}
+  <tr>
+    <td style="padding:3px 5px;text-transform:capitalize;color:#a8a29e;">{{ f.platform }}</td>
+    <td width="120" align="right" style="padding:3px 5px;color:#fafaf9;">{{ f.valor|milers }}{% if f.delta != None %} <span style="color:{% if f.delta >= 0 %}#4ade80{% else %}#f87171{% endif %};font-size:12px;">{% if f.delta >= 0 %}+{% endif %}{{ f.delta }}</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if social.top_post %}
+<div style="font-size:12px;color:#a8a29e;margin:8px 5px 0;">Post amb més engagement: <span style="color:#d6d3d1;">{{ social.top_post.label }}</span> · {{ social.top_post.likes }}♥ {{ social.top_post.replies }}↩ {{ social.top_post.shares }}↗</div>
+{% endif %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+  <tr><td align="center">
+    <a href="{{ dashboard_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:500;font-size:14px;text-decoration:none;padding:10px 20px;border-radius:8px;">Obre el dashboard complet</a>
+  </td></tr>
+</table>
+<div style="font-size:11px;color:#78716c;margin-top:16px;text-align:center;">
+  Aggregate-only (RGPD): cap dada personal, cap IP, cap fingerprint.
+</div>
+{% endblock %}

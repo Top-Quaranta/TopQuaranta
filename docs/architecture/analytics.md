@@ -216,13 +216,39 @@ Window selector: 7d / 30d / 90d / 1a — re-fetches on change. CSV
 export uses semicolons (Excel ca-ES default), quotes only when
 needed, downloads in the browser without a server round-trip.
 
-### Weekly admin digest *(K4)*
+### Weekly admin digest — "Setmanari" *(K4, redesigned 2026-06)*
 
-Every Monday morning at 08:00 UTC, `enviar_digest_setmanal` emails
-`admin@topquaranta.cat` a one-page text summary of the prior week:
-top KPIs with W-o-W deltas, top 5 pages, top 5 UTM sources, top 3
-social posts. Same data the dashboard shows; pushed via Brevo SMTP
-so it's actionable even when nobody opens the dashboard.
+Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the
+`ADMINS` recipients a **brand-coherent HTML** summary (yellow-on-ink,
+Playfair/Roboto — the template extends `comptes/email_base.html`) of
+the prior 7 days vs the 7 before, with a plain-text fallback. Sent via
+`EmailMultiAlternatives` from `SERVER_EMAIL` (the "Josep Quaranta"
+display name) through the same Brevo SMTP path.
+
+Sections are chosen for *this* project, not generic web vanity:
+
+1. **Audiència humana** — human pageviews as the headline (bots split
+   out via the `pageview.dim2` class), bot share as context, registres,
+   newsletter, top human pages.
+2. **D'on venen** — acquisition buckets from the `referrer` event.
+3. **Pipeline del catàleg** — catalog gauges + W-o-W deltas, moderation
+   decisions grouped from `StaffAuditLog`, Whisper/MB coverage, and a
+   backlog-growing alert.
+4. **Ranking per territori** — `TopSetmanal` entries generated per
+   territory for the latest week.
+5. **SEO i enllaços externs** — GSC impressions/clicks/position deltas,
+   top queries, Bing inbound links (the authority/"external links"
+   signal), Core Web Vitals.
+6. **Distribució social** — publications, followers per platform with
+   deltas, top post by engagement.
+
+A "frescor de dades" line flags a stale pipeline snapshot (stuck-cron
+early warning). `--dry-run` prints the text body; `--html-out PATH`
+writes the rendered HTML for local preview without sending. The
+per-section data builder lives in `build_context`; presentation
+helpers (`_kpi.html`, the `milers` filter in
+`analytics/templatetags/digest_extras.py`) keep the template
+branch-free.
 
 ## What we deliberately don't measure
 

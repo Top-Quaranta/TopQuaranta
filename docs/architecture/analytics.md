@@ -41,8 +41,8 @@ Atomic event counter.
 |---           |---|
 | `data`       | DateField; one row per day per bucket. |
 | `clau`       | Event name, e.g. `pageview`, `registre_complet`. |
-| `dimensio_1` | Optional bucket. For `pageview` it's the URL path; for `utm_landing` the UTM source; for `social_publicat` the channel. |
-| `dimensio_2` | Optional second bucket. For `pageview` it's the bot/human class (`bot`/`human`, empty on rows written before Fase 2); for `utm_landing` the UTM campaign; for `social_publicat` the slot tipus. |
+| `dimensio_1` | Optional bucket. For `pageview` it's the URL path; for `utm_landing` the UTM source; for `referrer` the acquisition bucket; for `social_publicat` the channel. |
+| `dimensio_2` | Optional second bucket. For `pageview` it's the bot/human class (`bot`/`human`, empty on rows written before Fase 2); for `utm_landing` the UTM campaign; for `referrer` the referring host; for `social_publicat` the slot tipus. |
 | `comptador`  | `PositiveIntegerField`, atomically incremented via `F("comptador") + 1`. |
 
 Increments happen via `analytics.events.register(clau, dim1, dim2, n)`.
@@ -115,6 +115,17 @@ new KPIs ship without a migration.
   are surfaced as "unclassified" — not reclassifiable, since the UA was
   never persisted.
 * `utm_landing` whenever the request URL carries `?utm_source=…`.
+* `referrer` for every **human** public pageview, with `dim1` = the
+  acquisition bucket (`directe` / `cerca_organica` / `social` /
+  `referral`) and `dim2` = the bare referring host. The bucket comes
+  from `analytics.referrers.classify_referrer`, which matches the
+  Referer host by DNS label (so `google.es`, `news.google.com`, etc.
+  all resolve without enumeration, and `client.com` is never mistaken
+  for the `t.co` shortener). Only the bucket + host are stored — the
+  Referer **path and query are dropped** (tokens could live there) and
+  in-site (`intern`) referrers are not recorded, since same-site
+  navigation isn't an acquisition source. Answers "where do humans come
+  from?" for traffic that arrives without a UTM tag.
 
 Skips `/api/`, `/static/`, `/media/`, `/favicon`, `/robots.txt`,
 `/sitemap.xml`, `/staff/`, `/compte/2fa/`, `/health` — these would

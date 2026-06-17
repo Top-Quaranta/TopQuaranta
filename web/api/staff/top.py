@@ -78,6 +78,13 @@ from web.api.search_utils import normalize_search_term as _normalize_search_term
 from web.api.search_utils import unaccent_field as _unaccent_field
 
 Usuari = get_user_model()
+# Effective (post soft-cap) plays are derived from the persisted score the
+# SAME way the per-cançó transparency panel does. Reuse that exact function
+# so the staff list reconciles to the byte with `TopBreakdownPanel`
+# (web/api/canco_views.py::canco_top_breakdown). No re-implementation of the
+# adaptive knee, no gate touch, no write.
+from web.api.canco_views import _derive_plays_eff
+
 # Shared helpers from the staff package.
 from web.api.staff._common import IsStaff, _paginate
 from web.api.staff.cancons import _canco_row
@@ -141,32 +148,41 @@ def top_list(request: Request) -> Response:
         .select_related("canco", "canco__artista")
         .order_by("posicio")
     )
+    entries = []
+    for rp in qs:
+        # Derived from the persisted score (score / age·past_top·monopoli),
+        # NOT recomputed — so it matches the breakdown panel exactly and is
+        # read-only. Equals `escoltes_setmanals` when the soft-cap left the
+        # row uncompressed.
+        plays_eff, soft_cap_aplicat = _derive_plays_eff(rp)
+        entries.append(
+            {
+                "pk": rp.pk,
+                "posicio": rp.posicio,
+                "canco_pk": rp.canco_id,
+                "canco_nom": rp.canco.nom if rp.canco else "",
+                "canco_slug": rp.canco.slug if rp.canco else None,
+                "artista_nom": (
+                    rp.canco.artista.nom if rp.canco and rp.canco.artista else ""
+                ),
+                "artista_pk": (
+                    rp.canco.artista_id if rp.canco and rp.canco.artista else None
+                ),
+                "escoltes_setmanals": rp.escoltes_setmanals,
+                "escoltes_efectives": int(round(plays_eff)),
+                "soft_cap_aplicat": soft_cap_aplicat,
+                "age_factor": rp.age_factor,
+                "past_top_factor": rp.past_top_factor,
+                "monopoli_factor": rp.monopoli_factor,
+                "score_final": rp.score_setmanal,
+            }
+        )
     return Response(
         {
             "territori": territori,
             "territoris": [{"codi": c, "nom": n} for c, n in TOP_TERRITORIS],
             "motius": list(MOTIUS_REBUIG),
-            "entries": [
-                {
-                    "pk": rp.pk,
-                    "posicio": rp.posicio,
-                    "canco_pk": rp.canco_id,
-                    "canco_nom": rp.canco.nom if rp.canco else "",
-                    "canco_slug": rp.canco.slug if rp.canco else None,
-                    "artista_nom": (
-                        rp.canco.artista.nom if rp.canco and rp.canco.artista else ""
-                    ),
-                    "artista_pk": (
-                        rp.canco.artista_id if rp.canco and rp.canco.artista else None
-                    ),
-                    "escoltes_setmanals": rp.escoltes_setmanals,
-                    "age_factor": rp.age_factor,
-                    "past_top_factor": rp.past_top_factor,
-                    "monopoli_factor": rp.monopoli_factor,
-                    "score_final": rp.score_setmanal,
-                }
-                for rp in qs
-            ],
+            "entries": entries,
         }
     )
 

@@ -129,6 +129,106 @@ def test_staff_top_list_responds(staff_client):
     assert data["territori"] == "CAT"
 
 
+@pytest.fixture
+def top_with_softcap(db):
+    """Two CAT TopProvisional rows: one the soft-cap compressed (the
+    persisted score implies plays_eff < raw), one it left untouched.
+
+    Factors are all 1.0 so `_derive_plays_eff` recovers plays_eff =
+    score_setmanal exactly — making the expected effective value explicit
+    in the test without coupling to the live knee.
+    """
+    from datetime import date
+
+    from music.models import Album, Artista, Canco, Territori
+    from ranking.models import TopProvisional
+
+    Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Catalunya"})
+    artista = Artista.objects.create(nom="Cap Outlier", lastfm_nom="Cap Outlier")
+    album = Album.objects.create(artista=artista, nom="Album")
+    capped = Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="Outlier",
+        slug="outlier-track",
+        data_llancament=date(2026, 1, 1),
+        verificada=True,
+    )
+    TopProvisional.objects.create(
+        canco=capped,
+        territori="CAT",
+        posicio=1,
+        escoltes_setmanals=22167,
+        score_setmanal=8116.0,
+        age_factor=1.0,
+        past_top_factor=1.0,
+        monopoli_factor=1.0,
+    )
+    plain = Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="Plain",
+        slug="plain-track",
+        data_llancament=date(2026, 1, 1),
+        verificada=True,
+    )
+    TopProvisional.objects.create(
+        canco=plain,
+        territori="CAT",
+        posicio=2,
+        escoltes_setmanals=900,
+        score_setmanal=900.0,
+        age_factor=1.0,
+        past_top_factor=1.0,
+        monopoli_factor=1.0,
+    )
+    return {"capped": capped, "plain": plain}
+
+
+def test_top_list_escoltes_efectives_reconciles_with_breakdown(
+    staff_client, anon_client, top_with_softcap
+):
+    """NON-REGRESSION: the staff list `escoltes_efectives` must equal, to
+    the unit, the `weekly_plays_eff` the per-cançó breakdown panel shows
+    for the same row — both go through the SAME `_derive_plays_eff`."""
+    capped = top_with_softcap["capped"]
+
+    r = staff_client.get("/api/v1/staff/ranking/?territori=CAT")
+    assert r.status_code == 200, r.content
+    list_entry = {e["canco_pk"]: e for e in r.json()["entries"]}[capped.pk]
+    assert list_entry["soft_cap_aplicat"] is True
+    assert list_entry["escoltes_setmanals"] == 22167
+    assert list_entry["escoltes_efectives"] == 8116
+
+    # Same source the TopBreakdownPanel reads (public, slug-based).
+    rb = anon_client.get(f"/api/v1/cancons/{capped.slug}/top-breakdown/")
+    assert rb.status_code == 200, rb.content
+    cat = next(e for e in rb.json()["entries"] if e["territori"] == "CAT")
+    assert cat["weekly_plays_eff"] == list_entry["escoltes_efectives"]
+    assert cat["soft_cap_aplicat"] == list_entry["soft_cap_aplicat"]
+
+
+def test_top_list_uncompressed_row_eff_equals_raw(staff_client, top_with_softcap):
+    """When the soft-cap doesn't compress a row, effective == raw."""
+    plain = top_with_softcap["plain"]
+    r = staff_client.get("/api/v1/staff/ranking/?territori=CAT")
+    e = {x["canco_pk"]: x for x in r.json()["entries"]}[plain.pk]
+    assert e["soft_cap_aplicat"] is False
+    assert e["escoltes_efectives"] == e["escoltes_setmanals"] == 900
+
+
+def test_top_list_is_read_only(staff_client, top_with_softcap):
+    """The list endpoint must not mutate TopProvisional: no score drift,
+    no rows written or deleted."""
+    from ranking.models import TopProvisional
+
+    before = dict(TopProvisional.objects.values_list("pk", "score_setmanal"))
+    staff_client.get("/api/v1/staff/ranking/?territori=CAT")
+    after = dict(TopProvisional.objects.values_list("pk", "score_setmanal"))
+    assert after == before
+    assert TopProvisional.objects.count() == len(before)
+
+
 def test_staff_cancons_list_responds(staff_client):
     """Cançons list with default filters. Empty DB → empty results."""
     r = staff_client.get("/api/v1/staff/cancons/")

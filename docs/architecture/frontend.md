@@ -167,6 +167,11 @@ Not to be confused with `/staff/publicacions` (community posts).
 - ETag + Last-Modified on the hot read endpoints
   (`/ranking`, `/artistes`, `/mapa/artistes-top`) means re-fetches
   return 304 in a few ms.
+- `StaffRankingPage` (`/staff/top`) renders both raw and effective
+  weekly plays — the `escoltes_setmanals` and `escoltes_efectives` /
+  `soft_cap_aplicat` fields from `/staff/top/` (post per-territori
+  soft-cap, reconciled with the per-cançó `TopBreakdownPanel`). See
+  `docs/architecture/staff.md`.
 
 ## Build, dev, deploy
 

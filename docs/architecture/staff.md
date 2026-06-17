@@ -106,7 +106,7 @@ the link under `spotify` with `is_manual` and a `hydration` state
 ### Top (provisional)
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/staff/top/?territori=CAT` | Top-40 provisional + territori list + motius. |
+| GET | `/staff/top/?territori=CAT` | Top-40 provisional + territori list + motius. Each entry carries `escoltes_setmanals` (raw weekly plays) plus `escoltes_efectives` + `soft_cap_aplicat` — the post-soft-cap effective plays, derived read-only from the persisted score via the SAME `web/api/canco_views.py::_derive_plays_eff` the per-cançó `TopBreakdownPanel` uses (equals the raw value when the cap left the row uncompressed). |
 | POST | `/staff/top/accio/` | Bulk `rebutjar_canco` / `rebutjar_artista` with `motiu`. |
 | GET | `/cancons/<slug>/top-breakdown/` | Algorithm transparency for one Canço. **Public endpoint**, but the payload differentiates by viewer (anonymous → only territoris where the song currently sits in `TopProvisional`; staff or `UserArtista.verificat=True` over the song's main artist → also the eligible-territori list with theoretical scores for ones the song hasn't broken into yet). Returned shape per entry: `{territori, nom_territori, posicio, escoltes_setmanals, dies_des_del_llancament, age_factor, past_top_penalty_pct, monopoli_album_pct, monopoli_artista_pct, score_final, setmanes_al_top, is_at_top}`. Theoretical entries set `posicio: null` and `is_at_top: false` and exclude the monopoli post-process (would require re-running the per-artist pass). Sprint E, 2026-04-25. |
 

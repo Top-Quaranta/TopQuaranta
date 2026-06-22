@@ -23,10 +23,9 @@ import datetime
 
 from django.contrib.syndication.views import Feed
 from django.http import HttpResponse
-from django.urls import reverse
 from django.utils.feedgenerator import Atom1Feed
 
-from music.models import Album, Canco
+from music.models import Canco
 from ranking.models import ConfiguracioGlobal, TopSetmanal
 
 # Per-feed item cap — keep payloads small and predictable.

@@ -1,10 +1,8 @@
-import difflib
-import fcntl
 import logging
 from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.db.models import F, Q
 from django.utils import timezone
 

@@ -15,8 +15,6 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 from ingesta.clients.spotify_backfill_controller import (
     BUMP,
     DAYS_BEFORE_BUMP,

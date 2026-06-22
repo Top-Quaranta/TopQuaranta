@@ -1,7 +1,5 @@
 """Tests for music/titlecase_catala.py."""
 
-import pytest
-
 from music.titlecase_catala import normalize_apostrophes, titlecase_catala
 
 

@@ -12,7 +12,6 @@ the view returns 404 so Google de-indexes it within hours.
 from __future__ import annotations
 
 import datetime
-import json
 from functools import wraps
 
 from django.db.models import Count, Q
@@ -20,7 +19,6 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
-from django.views.decorators.cache import cache_control
 from django.views.decorators.http import condition, require_safe
 
 

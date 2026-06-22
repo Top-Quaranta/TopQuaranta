@@ -1,8 +1,5 @@
 from datetime import date
-from unittest.mock import MagicMock, patch
-
-import pytest
-import requests
+from unittest.mock import patch
 
 from ingesta.clients.deezer import (
     _normalize,

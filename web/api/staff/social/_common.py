@@ -5,8 +5,6 @@ server. Public callables live in `accounts`, `posts`, `controls`."""
 
 from __future__ import annotations
 
-import datetime
-
 from music.dates import project_week_number
 from social.calendari import publication_date_for, upcoming_week
 from social.models import (

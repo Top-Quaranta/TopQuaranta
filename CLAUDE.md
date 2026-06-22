@@ -203,24 +203,40 @@ to refresh the dist bundle that Caddy serves.
 1. Colors / fonts / spacing / shadows come from `var(--mm-*)` or Tailwind's
    `tq-*` tokens. Never hardcode hex values in templates or components.
 2. Fonts: Playfair Display (headings), Roboto (body).
-3. Territory accent: a single brand mapping lives at
-   `web-react/src/components/editorial.jsx::TERR_COLORS`. Public-page
-   labels use `TERRITORI_NOM` (visible) — note that "PPCC" is shown as
-   **"Global"** to visitors but stays as the legacy code in DB and API
-   query params.
+3. Territory accent: the canonical public mapping is the CSS custom
+   properties `--color-terr-*` in `web-react/src/index.css`, mirrored
+   in JS by `web-react/src/components/rd/terr.js::PAL` (consumed by the
+   `rd/` primitives). Public-page labels use `TERRITORI_NOM` (visible) —
+   note that "PPCC" is shown as **"Global"** to visitors but stays as the
+   legacy code in DB and API query params. **Caveat (2026-06-23 audit):**
+   the territory palette is currently duplicated across four divergent
+   sources (`index.css` ≡ `rd/terr.js`, but `editorial.jsx::TERR_COLORS`
+   and `StaffAnalyticsPage.jsx::TERR_COLORS` each hold different hexes);
+   collapsing them onto `--color-terr-*` is a tracked follow-up. See
+   `docs/audits/2026-06-23-auditoria-dry-modular.md` §2.3.
 
-**Editorial primitives** (Sprint J bis, `components/editorial.jsx`):
-shared by HomePage, TopPage, ArtistesPage, MapaPage and the
-`/comunitat` pages.
-- `<Section tone="ink|white">` — alternating full-bleed band.
-- `<SectionHeader kicker title>` — kicker auto-recolours per band
-  (yellow on ink, ink/60 on white) so a kicker can never re-introduce
-  the 1.53:1 yellow-on-white violation caught at the Sprint F audit.
-- `<TerritoriBadge codi>` — monochrome SVG via mask (inherits
-  `currentColor`).
-- `<TrendCue posicio posicio_anterior>` — top-list arrow icon used
-  by every weekly-top surface; its colours are tone-safe on both
-  ink and white.
+**Design layers (real state, 2026-06-23).** There is no single shared
+primitive set across the SPA; public and staff run on separate systems
+on top of the common `index.css` `@theme` tokens:
+
+- **Public** → `components/rd/primitives.jsx` (`Band`, `Glass`, `Btn`,
+  `Kicker`, `Crit`, `TerrLogo`, …) + the `.rd-*` CSS in `index.css`.
+  This is the live public design system (the "redisseny", introduced
+  2026-06-13); ~14 pages consume it.
+- **Staff** → `components/staff/StaffTable.jsx` (`TableCard`, `Table`,
+  `Pill`, `Btn`, `Input`, …) + `components/StaffLayout.jsx`, on plain
+  Tailwind. ~36 staff pages consume it. It does **not** use the `.rd-*`
+  classes and was never retrofitted onto the redisseny.
+
+- **`components/editorial.jsx` is LEGACY, pending retirement.** It was
+  the original public primitive set (Sprint J bis: `Section`,
+  `SectionHeader`, `TerritoriBadge`, `TrendCue`, `TERR_COLORS`,
+  `TERRITORI_NOM`) but the public pages migrated to `rd/primitives` in
+  the 2026-06-13 redisseny. It is now stranded with only 3 importers
+  (`CancoChart.jsx`, `rd/terr.js`, `StaffAnalyticsPage.jsx`). Do **not**
+  build new UI on it; prefer `rd/primitives` (public) or `staff/*`
+  (staff). Retirement is a tracked follow-up
+  (`docs/audits/2026-06-23-auditoria-dry-modular.md` §2.2).
 
 **A11y baseline** (Sprint F + J bis): WCAG AA across the public
 SPA. Re-audited via puppeteer + axe-core on every redesign sprint

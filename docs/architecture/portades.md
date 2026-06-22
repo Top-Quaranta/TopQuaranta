@@ -185,12 +185,39 @@ e.g. https://www.topquaranta.cat/portades/album/12345-500.webp
 `web-react/src/components/Cover.jsx` renders a `<picture>` over the
 self-hosted variants: AVIF → WebP `<source>`s (250w + 500w srcset,
 `sizes="(max-width:600px) 250px, 500px"`) + a local JPG `<img>`. When a
-`deezerId` is absent, or all three local formats 404 (entity not yet
-covered — e.g. `canco`/`artista` before the cron drains them), the
-`<img>`'s `onError` falls back to the original Deezer URL via
-`deezerImg`. `priority` → `loading=eager` + `fetchpriority=high` for the
-LCP hero. URL builders `portadaUrl` / `portadaSrcset` live in
-`lib/img.js` (unit-tested).
+`deezerId` is absent it renders a plain Deezer `<img>` directly (no
+failed local requests). `priority` → `loading=eager` +
+`fetchpriority=high` for the LCP hero. URL builders `portadaUrl` /
+`portadaSrcset` / `portadaFallbackChain` live in `lib/img.js`
+(unit-tested; `Cover.jsx` itself is covered by `Cover.test.jsx`).
+
+### Stepped fallback chain (audit 2026-06-22)
+
+The `<img>`'s `onError` walks an ordered chain so a cover never
+renders broken — driven entirely by load errors, so the happy path
+(the `-500` variant loads first try) is byte-for-byte unchanged:
+
+1. **local JPG `-500`** — the normal src.
+2. **local JPG `-250`** — some albums never got the `-500` variant on
+   disk while `-250` is present (the audit case:
+   `/portades/album/<id>-500.jpg` 404s on `/canco/anna-andreu-focs`,
+   `/album/ets-un-colom`). Step down *within our own origin* before
+   leaving it.
+3. **original Deezer URL** (via `deezerImg`, resized to the slot) —
+   present whenever the entity has any cover at all.
+4. **stop** — nothing more to try; the `<img>` keeps its last src and
+   the browser shows its native broken-image affordance.
+
+The step index is held in component state; `onError` advances it once
+per failure and is a **no-op past the end**, so a permanently-broken
+final URL can never re-trigger a render loop. The `<picture>`
+`<source>`s (self-hosted avif/webp) are dropped after the first
+fallback step so the browser can't keep preferring a 404'ing variant
+over the chosen `<img>` src. Ordering + the empty-Deezer-URL drop are
+pinned by `portadaFallbackChain`'s unit tests; the
+`-500 → -250 → Deezer` advance and the no-loop terminal step are
+asserted by `Cover.test.jsx` (jsdom, dispatching `error` on the
+`<img>`).
 
 Wired so far: the **album** and **cançó** detail-page hero covers (both
 show the album cover; `Album.deezer_id` is exposed on the album detail

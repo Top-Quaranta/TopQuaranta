@@ -54,3 +54,34 @@ export function portadaSrcset(entitat, deezerId, fmt) {
     `${portadaUrl(entitat, deezerId, 500, fmt)} 500w`
   )
 }
+
+/**
+ * Ordered <img> fallback chain for a self-hosted cover, walked one
+ * step per onError so a cover never renders broken (audit 2026-06-22:
+ * some albums lack the -500 variant on disk while -250 is present, so
+ * the -500 <img> 404s).
+ *
+ *   [0] local JPG -500   the normal 500px self-hosted cover
+ *   [1] local JPG -250   step down within our own origin first
+ *   [2] Deezer CDN       original stored cover, resized via the WxH
+ *                        trick — present whenever the entity has a
+ *                        cover at all
+ *
+ * The Deezer entry is dropped when `imatgeUrl` is empty/non-resolvable
+ * so the chain never ends on a guaranteed-failing step. With a
+ * `deezerId` the chain is never empty (it always has the -500 entry).
+ *
+ * @param {string} entitat - 'album' | 'canco' | 'artista'
+ * @param {string|number} deezerId - the entity's Deezer id
+ * @param {string|null|undefined} imatgeUrl - stored Deezer cover URL
+ * @param {number} size - target square side for the Deezer fallback
+ * @returns {string[]} ordered list of <img> src candidates
+ */
+export function portadaFallbackChain(entitat, deezerId, imatgeUrl, size = 500) {
+  const deezerSrc = deezerImg(imatgeUrl, size)
+  return [
+    portadaUrl(entitat, deezerId, 500, 'jpg'),
+    portadaUrl(entitat, deezerId, 250, 'jpg'),
+    ...(deezerSrc ? [deezerSrc] : []),
+  ]
+}

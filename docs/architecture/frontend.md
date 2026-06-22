@@ -287,7 +287,9 @@ flip; never deployed mid-way.
   top" / "el top complet" / "la llista". Repo-wide grep is clean.
 - **Conserved:** all URLs (incl. SEO-nested) + `?t=`/`?s=` params, every
   `/api/v1/*` contract, AuthContext/2FA, FeedbackContext, CancoChart,
-  ExternalListenLinks, Cover, the countdown logic. Legacy `editorial.jsx`
+  ExternalListenLinks, Cover (whose self-hosted→Deezer fallback chain
+  `-500 → -250 → Deezer` is detailed in `portades.md` § "Stepped
+  fallback chain"), the countdown logic. Legacy `editorial.jsx`
   + Playfair/Roboto remain only because `ArtistaDashboardPage` (the
   verified-manager portal, reskinned post-flip) still uses them.
 - **A11y:** axe (WCAG 2a/2aa/21a/21aa) = 0 violations across all public

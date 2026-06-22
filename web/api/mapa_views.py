@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from music.models import Artista, ArtistaLocalitat, Municipi
+from music.models import ArtistaLocalitat, Municipi
 from ranking.models import SenyalDiari, TopSetmanal
 from web.api.utils import cache_for_anon
 
@@ -242,16 +242,10 @@ def mapa_stats(request: Request) -> Response:
     """
     import time
 
-    from django.db.models import Count
-    from django.db.models.functions import Lower
-
     from comptes.models import Usuari  # noqa: F401 (keeps import graph stable)
     from music.models import (
-        Album,
         ArtistaLocalitat,
         Canco,
-        Municipi,
-        Territori,
     )
     from ranking.models import TopSetmanal
 

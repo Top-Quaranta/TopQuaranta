@@ -13,7 +13,6 @@ What we're locking in:
 
 from __future__ import annotations
 
-import datetime
 import json
 import re
 

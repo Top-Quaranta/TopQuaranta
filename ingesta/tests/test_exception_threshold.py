@@ -44,7 +44,7 @@ def test_obtenir_metadata_high_failure_rate_raises():
     """Force every `_process_artist` call to raise; the loop wraps
     it in `except Exception` → counter increments → threshold trips
     → `CommandError` propagates."""
-    from music.models import Album, Artista
+    from music.models import Artista
 
     a1 = Artista.objects.create(nom="X1", slug="x1", aprovat=True)
     a2 = Artista.objects.create(nom="X2", slug="x2", aprovat=True)
@@ -71,7 +71,7 @@ def test_obtenir_metadata_high_failure_rate_raises():
 @pytest.mark.django_db
 def test_obtenir_metadata_below_threshold_does_not_raise():
     """30% failure rate → no raise."""
-    from music.models import Album, Artista
+    from music.models import Artista
 
     artists = [
         Artista.objects.create(nom=f"X{i}", slug=f"x{i}", aprovat=True)

@@ -165,7 +165,7 @@ def artistes_list(request: Request) -> Response:
     # `_plays` so it doesn't conflict with any existing field.
     sort = (request.GET.get("sort") or "nom").strip().lower()
     if sort == "popularitat":
-        from django.db.models import Max, Sum
+        from django.db.models import Sum
 
         qs = (
             qs.annotate(

@@ -4,8 +4,6 @@ Confirms registration consent gates are enforced + the data export
 + newsletter unsubscribe token round-trip.
 """
 
-from datetime import timedelta
-
 import pytest
 from django.core import mail, signing
 from django.utils import timezone

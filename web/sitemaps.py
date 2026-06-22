@@ -218,8 +218,6 @@ class ComarquesSitemap(Sitemap):
 
         from django.utils.text import slugify
 
-        from music.models import Municipi
-
         # Count approved artistes per comarca; expose only those
         # with ≥3 to avoid thin pages.
         rows = Artista.objects.public().values_list(
@@ -250,7 +248,6 @@ class DecadesSitemap(Sitemap):
     protocol = "https"
 
     def items(self):
-        from django.db.models import Count
 
         years = Canco.objects.filter(
             verificada=True, activa=True, data_llancament__isnull=False

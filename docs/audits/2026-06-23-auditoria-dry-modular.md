@@ -35,9 +35,9 @@ els altres mòduls de l'app: `pendents.py`, `audit.py`, `configuracio.py`,
 
 Mecànica verificada: cada mòdul **repeteix el bloc d'imports sencer** (~60
 línies, `django.db.models`, `django_otp`, `comptes.models`, `music.models`,
-`ranking.models`…) — vegeu [web/api/staff/pendents.py:9-71](web/api/staff/pendents.py:9) —
+`ranking.models`…) — vegeu `web/api/staff/pendents.py:9-71` —
 **i a més** importa els helpers compartits reals de `_common`
-([pendents.py:75](web/api/staff/pendents.py:75):
+(`pendents.py:75`:
 `from web.api.staff._common import IsStaff, _paginate, noms_amb_homonims`). És a
 dir: `_common` ja existeix com a llar dels helpers, però el preàmbul s'ha
 copiat-enganxat igualment. Recompte: **17/22** mòduls staff porten el bloc
@@ -50,13 +50,13 @@ qualsevol canvi al conjunt d'imports requereix tocar 17 fitxers.
 Derivat de 1.1, l'scan automàtic reporta imports presents però no usats al
 mòdul:
 - `from django.core.paginator import Paginator` a ~16 mòduls staff (p.ex.
-  [web/api/staff/artistes.py:18](web/api/staff/artistes.py:18)) tot i que la
+  `web/api/staff/artistes.py:18`) tot i que la
   paginació real va pel helper `_paginate()` de `_common`.
 - `from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista`
   a mòduls que no n'usen cap (p.ex. `albums.py`, `audit.py`, `senyal.py`).
 - Re-import dels helpers de cerca `normalize_search_term`/`unaccent_field` des de
   `web.api.search_utils` a 14+ mòduls (p.ex.
-  [web/api/staff/pendents.py:70-71](web/api/staff/pendents.py:70)) en lloc de
+  `web/api/staff/pendents.py:70-71`) en lloc de
   reexportar-los des de `_common`.
 
 **[NO MESURAT amb precisió]**: el recompte exacte d'imports morts per mòdul prové
@@ -65,20 +65,20 @@ confirmar amb `ruff --select F401` abans de cap neteja. Es deixa explícit.
 
 ### 1.3 [MITJÀ] Filtres de queryset escrits a mà en lloc dels managers existents
 `music/models.py` ja exposa managers DRY (`Canco.objects.public()` a
-[music/models.py:965](music/models.py:965), `.pendents()` a
-[music/models.py:88](music/models.py:88), `.with_mbid()` a
-[music/models.py:101](music/models.py:101)). Tot i això es repeteix la lògica
+`music/models.py:965`, `.pendents()` a
+`music/models.py:88`, `.with_mbid()` a
+`music/models.py:101`). Tot i això es repeteix la lògica
 crua:
 - `.filter(verificada=True, activa=True)` a
-  [web/sitemaps.py:134](web/sitemaps.py:134),
-  [web/api/staff/estat.py:487](web/api/staff/estat.py:487),
-  [web/seo/meta.py:206](web/seo/meta.py:206),
-  [analytics/management/commands/recollir_metrics_psi.py:73](analytics/management/commands/recollir_metrics_psi.py:73).
+  `web/sitemaps.py:134`,
+  `web/api/staff/estat.py:487`,
+  `web/seo/meta.py:206`,
+  `analytics/management/commands/recollir_metrics_psi.py:73`.
 - `.filter(aprovat=False, pendent_review=True)` a
-  [web/api/staff/pendents.py:211](web/api/staff/pendents.py:211) i
-  [music/management/commands/purgar_pendents_buits.py:71](music/management/commands/purgar_pendents_buits.py:71).
+  `web/api/staff/pendents.py:211` i
+  `music/management/commands/purgar_pendents_buits.py:71`.
 - `.exclude(musicbrainz_id__isnull=True).exclude(musicbrainz_id="")` a
-  [web/api/staff/artistes.py:124](web/api/staff/artistes.py:124) en lloc de
+  `web/api/staff/artistes.py:124` en lloc de
   `.with_mbid()`.
 
 Risc real de deriva el dia que s'afegisca una tercera flag de publicabilitat.
@@ -86,21 +86,21 @@ Risc real de deriva el dia que s'afegisca una tercera flag de publicabilitat.
 ### 1.4 [BAIX] Clons JSX intra-domini (no inter-domini)
 Els 51 clons JSX de `jscpd` són gairebé tots **dins** d'un mateix domini
 (públic↔públic o staff↔staff), no entre públic i staff. Mostres:
-- Capçalera de pàgina de detall: [src/pages/AlbumPage.jsx:38-63](web-react/src/pages/AlbumPage.jsx:38)
-  ↔ [src/pages/CancoPage.jsx:43-68](web-react/src/pages/CancoPage.jsx:43) (26 L).
+- Capçalera de pàgina de detall: `src/pages/AlbumPage.jsx:38-63`
+  ↔ `src/pages/CancoPage.jsx:43-68` (26 L).
 - Bloc repetit dins el mateix fitxer:
-  [src/pages/ArtistaDashboardPage.jsx:424-449](web-react/src/pages/ArtistaDashboardPage.jsx:424)
+  `src/pages/ArtistaDashboardPage.jsx:424-449`
   ↔ `:570-595` (26 L) — i 5 parells més intra-fitxer al mateix Dashboard.
 - Scaffolding de pàgina-llista staff replicat:
-  [src/pages/staff/PendentsPage.jsx:24-45](web-react/src/pages/staff/PendentsPage.jsx:24)
-  ↔ [src/pages/staff/StaffArtistesSenseInstagramPage.jsx:22-40](web-react/src/pages/staff/StaffArtistesSenseInstagramPage.jsx:22).
+  `src/pages/staff/PendentsPage.jsx:24-45`
+  ↔ `src/pages/staff/StaffArtistesSenseInstagramPage.jsx:22-40`.
 - Pickers paral·lels:
-  [src/components/staff/ArtistaPicker.jsx:22-40](web-react/src/components/staff/ArtistaPicker.jsx:22)
-  ↔ [src/components/staff/ArtistesColPicker.jsx:28-46](web-react/src/components/staff/ArtistesColPicker.jsx:28)
+  `src/components/staff/ArtistaPicker.jsx:22-40`
+  ↔ `src/components/staff/ArtistesColPicker.jsx:28-46`
   (i 2 parells més entre ambdós).
 - Panells de proveïdor bessons:
-  [src/components/staff/LastfmPanel.jsx:17-38](web-react/src/components/staff/LastfmPanel.jsx:17)
-  ↔ [src/components/staff/MusicBrainzPanel.jsx:11-32](web-react/src/components/staff/MusicBrainzPanel.jsx:11).
+  `src/components/staff/LastfmPanel.jsx:17-38`
+  ↔ `src/components/staff/MusicBrainzPanel.jsx:11-32`.
 
 Aquest patró (clons **intra**-domini) és la prova quantitativa que **públic i
 staff no comparteixen primitives**; cadascun duplica internament. Connecta amb
@@ -108,7 +108,7 @@ el Bloc 2.
 
 ### 1.5 [BAIX] Plantilles d'error Django gairebé idèntiques
 `jscpd` marca el grup `markup` amb **38,28 % de línies duplicades**, concentrat a
-les pàgines d'error: [templates/web/403.html:5-25](web/templates/web/403.html:5)
+les pàgines d'error: `templates/web/403.html:5-25`
 ↔ `404.html` ↔ `500.html` (21/13/9 L). Candidates a un `_base_error.html` amb
 bloc de missatge.
 
@@ -126,7 +126,7 @@ es prioritzen (els tests queden fora del gate de docs per disseny).
 va perdre la centralització»: CONFIRMADA, amb una precisió que la reforça.**
 
 Hi ha una font de tokens compartida —
-[web-react/src/index.css](web-react/src/index.css) `@theme` (tq-yellow/ink,
+`web-react/src/index.css` `@theme` (tq-yellow/ink,
 `--color-terr-*`, `--font-crit/whisper/body`, classes `.rd-*`)— **necessària però
 insuficient**: només defineix colors/fonts, no primitives de layout. Damunt
 d'aquesta base hi conviuen **tres generacions de disseny**, no dues, evidenciat
@@ -158,9 +158,9 @@ un descuit puntual sinó el residu de re-plataformar només una meitat del produ
 `editorial.jsx` (la «font de veritat» que el `CLAUDE.md` encara cita per
 HomePage/TopPage/etc.) ja **no** la importen les pàgines públiques —
 `rd/primitives` les va substituir. Avui només l'importen **3** consumidors:
-[src/components/CancoChart.jsx](web-react/src/components/CancoChart.jsx),
-[src/components/rd/terr.js](web-react/src/components/rd/terr.js) i
-[src/pages/staff/StaffAnalyticsPage.jsx](web-react/src/pages/staff/StaffAnalyticsPage.jsx).
+`src/components/CancoChart.jsx`,
+`src/components/rd/terr.js` i
+`src/pages/staff/StaffAnalyticsPage.jsx`.
 És una capa morta-a-mitges: ni del tot pública ni de staff. **El `CLAUDE.md`
 §5 (TERR_COLORS «single brand mapping» a editorial.jsx) està desactualitzat
 respecte el codi.**
@@ -168,17 +168,17 @@ respecte el codi.**
 ### 2.3 [ALT] Quatre paletes de territori divergents
 El mateix concepte (color de territori) viu, amb **valors diferents**, a quatre
 llocs:
-- [src/index.css:152](web-react/src/index.css:152) `--color-terr-pri-deep: #2f5a2f`
-- [src/components/rd/terr.js:17](web-react/src/components/rd/terr.js:17) `PAL.CAT = ['#2f5a2f','#7bbf7b']`
-- [src/components/editorial.jsx:27](web-react/src/components/editorial.jsx:27) `TERR_COLORS.CAT = '#8a6900'`
-- [src/pages/staff/StaffAnalyticsPage.jsx:42](web-react/src/pages/staff/StaffAnalyticsPage.jsx:42) `TERR_COLORS.CAT = '#c99b0c'`
+- `src/index.css:152` `--color-terr-pri-deep: #2f5a2f`
+- `src/components/rd/terr.js:17` `PAL.CAT = ['#2f5a2f','#7bbf7b']`
+- `src/components/editorial.jsx:27` `TERR_COLORS.CAT = '#8a6900'`
+- `src/pages/staff/StaffAnalyticsPage.jsx:42` `TERR_COLORS.CAT = '#c99b0c'`
 
 Per CAT són **tres tons diferents** (#2f5a2f vs #8a6900 vs #c99b0c). index.css i
 `rd/terr.js` coincideixen; editorial.jsx i StaffAnalytics divergeixen cadascun pel
 seu compte. No hi ha un únic mapa de marca.
 
 ### 2.4 [MITJÀ] Hardcoding de color en lloc de tokens
-- Staff: [src/pages/staff/StaffAnalyticsPage.jsx:42-72](web-react/src/pages/staff/StaffAnalyticsPage.jsx:42)
+- Staff: `src/pages/staff/StaffAnalyticsPage.jsx:42-72`
   manté taules pròpies de TERR/PLATFORM/SERIES colors hardcodejades;
   `StaffTable.jsx` (Pill/Callout) usa `rgba()` inline amb fallback a hex en lloc
   de `--color-tq-danger/success`.
@@ -197,7 +197,7 @@ més), magnitud a confirmar amb `grep -rcE '#[0-9a-fA-F]{6}'`.
 Existeix `/feed-tokens.json` a l'arrel (afegit **2026-06-12**, `b2331f3`) **i**
 el canònic `social/feed_design/feed-tokens.json` (afegit **2026-06-10**,
 `0a58656`). El codi només carrega el segon —
-[social/feed_redesign.py:44](social/feed_redesign.py:44)
+`social/feed_redesign.py:44`
 `_TOKENS_PATH = _DESIGN_DIR / "feed-tokens.json"`. `grep` de `feed-tokens.json`
 a tot l'arbre no troba cap càrrega de l'arrel; només referències al path
 `social/feed_design/…` (codi + un help_text de migració). A més els dos fitxers
@@ -207,7 +207,7 @@ computats i territoris `alt`/`car`). L'arrel és una còpia vella i **morta**;
 candidata a esborrar.
 
 ### 3.2 [MITJÀ] `top-tokens.json` declara compartició que no és real
-[social/top_design/top-tokens.json:2](social/top_design/top-tokens.json:2)
+`social/top_design/top-tokens.json:2`
 (`_provenance`) afirma «Palette/fonts/grain/territory chips are SHARED with
 feed-tokens.json + render_core», però el fitxer **no** defineix territoris (només
 `ppcc`); en temps d'execució `top_redesign` delega a `feed_redesign.territori()`.
@@ -215,7 +215,7 @@ La paleta **sí** té una sola font (correcte: `feed-tokens.json` la posseeix), 
 la `_provenance` indueix a error. És sobre-documentació, no sobre-codi.
 
 ### 3.3 [MITJÀ] `renderer.py` monolític amb asimetria feed/story
-[social/renderer.py](social/renderer.py) = **1 676 línies**. El feed està
+`social/renderer.py` = **1 676 línies**. El feed està
 externalitzat a `feed_redesign.py` (606 L) i el TOP a `top_redesign.py`, però
 **tot el render de stories segueix inline** dins `renderer.py`
 (`_story_intro_ppcc` …`_story_outro_ppcc`, ~576 L entre les línies 922-1498).
@@ -226,11 +226,11 @@ primitives: `render_core.py` (431 L) està genuïnament centralitzat i tant
 cap reimplementació de `star`/`grain`/`tile`/`radial_bg`).
 
 ### 3.4 [BAIX] Funcions staff molt llargues
-[web/api/staff/artistes.py](web/api/staff/artistes.py) = **1 147 L**;
+`web/api/staff/artistes.py` = **1 147 L**;
 `artista_detail()` ~261 L (GET+PATCH+aliases+sync MB barrejats),
 `artistes_list()` ~200 L (filtres+cerca+sort+paginació+serialització). Candidates
 a extreure helpers de filtre/serialització. Igualment
-[StaffAnalyticsPage.jsx](web-react/src/pages/staff/StaffAnalyticsPage.jsx) =
+`StaffAnalyticsPage.jsx` =
 **1 601 L** (té 6 clons interns segons jscpd).
 
 ### 3.5 [INFORMATIU] El motor narratiu NO és codi mort

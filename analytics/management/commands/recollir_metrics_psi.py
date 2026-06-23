@@ -69,11 +69,7 @@ def _representative_urls() -> list[str]:
     )
     if a:
         urls.append(f"{base}/artista/{a.slug}")
-    c = (
-        Canco.objects.filter(verificada=True, activa=True)
-        .order_by("-data_llancament")
-        .first()
-    )
+    c = Canco.objects.public().order_by("-data_llancament").first()
     if c:
         urls.append(f"{base}/canco/{c.slug}")
     return urls

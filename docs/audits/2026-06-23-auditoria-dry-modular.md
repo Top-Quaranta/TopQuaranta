@@ -32,9 +32,10 @@ Neteja DRY de Tier 1 (backend/docs, inert, reversible) aplicada en PRs petits:
 - **PR #290** — preàmbul d'imports duplicat llevat dels 16 mòduls staff (669).
 - **PR #291** — `CLAUDE.md §5` corregit (estat real del disseny; `editorial.jsx`
   marcat llegat). Vegeu Bloc 2.2.
-- **Orfe `/feed-tokens.json` (Bloc 3.1) — NO esborrat:** la salvaguarda va
-  saltar (hi ha una referència de l'arrel; és un parell co-orfe amb
-  `FEED-PIL-SPEC.md`). Reportat per a confirmació, no tocat.
+- **Parell co-orfe de l'arrel (Bloc 3.1) — RESOLT:** `/feed-tokens.json` +
+  `/FEED-PIL-SPEC.md` esborrats junts (cap carregador ni referència des de codi;
+  re-verificat amb grep dels dos noms). Còpies canòniques a `social/feed_design/`
+  intactes.
 
 Recomptes *NO MESURAT* tancats: imports morts (730, §1.2) i hex de territori
 (públic 15/9 fitxers · staff 61/2 fitxers, §2.4). Tot allò visual/scoring/render
@@ -234,21 +235,22 @@ clau territorial `nor`; el canònic té `cover/album/singles`, valors `rgb()`
 computats i territoris `alt`/`car`). L'arrel és una còpia vella i **morta** com
 a DADA (cap codi la carrega).
 
-**Actualització 2026-06-23 — NO esborrada; la salvaguarda va saltar.** En provar
-l'orfania amb un `grep "feed-tokens.json"` a tot el repo (web, web-react,
-social, deploy, .github, Caddyfile) abans d'esborrar, va aparèixer **una
-referència a la còpia de l'arrel**: el `FEED-PIL-SPEC.md` de l'arrel
-(`FEED-PIL-SPEC.md:5`) l'anomena com la seua font de veritat germana. Aquest
-`FEED-PIL-SPEC.md` de l'arrel és **idèntic byte-a-byte** al canònic
-`social/feed_design/FEED-PIL-SPEC.md` i es va afegir al mateix commit que el JSON
-orfe (`b2331f3`, #208); el backlink `# Spec:` del codi
-(`social/feed_redesign.py:3`) apunta al canònic, no a l'arrel. És a dir: els dos
-fitxers de l'arrel (`feed-tokens.json` + `FEED-PIL-SPEC.md`) són un **parell
-co-orfe** que només es referencien l'un a l'altre. Com que la consigna era «si
-apareix QUALSEVOL referència a la còpia de l'arrel, no l'esborres, para i
-reporta», **no s'ha esborrat res en aquesta sessió**. Recomanació per a una
-sessió de confirmació: esborrar els dos fitxers de l'arrel junts (el JSON i el
-seu spec germà), no només el JSON, per no deixar un backlink penjant.
+**Resolt 2026-06-23 — parell co-orfe esborrat.** El que en una primera passada
+va aturar la salvaguarda era que el `grep` trobava **una referència a la còpia
+de l'arrel**: el `FEED-PIL-SPEC.md` de l'arrel (`FEED-PIL-SPEC.md:5`) l'anomena
+com la seua font de veritat germana. Aquest `FEED-PIL-SPEC.md` de l'arrel és
+**idèntic byte-a-byte** al canònic `social/feed_design/FEED-PIL-SPEC.md`
+(sha256 `8e832eca…`) i es va afegir al mateix commit que el JSON orfe
+(`b2331f3`, #208); el backlink `# Spec:` del codi (`social/feed_redesign.py:3`)
+apunta al canònic, **no** a l'arrel. És a dir: els dos fitxers de l'arrel
+(`feed-tokens.json` + `FEED-PIL-SPEC.md`) eren un **parell co-orfe** que només
+es referenciava l'un a l'altre, sense cap carregador ni cap referència des de
+codi. Re-verificat (grep de `feed-tokens.json` **i** `FEED-PIL-SPEC` a tot el
+repo: l'únic carregador segueix sent `social/feed_redesign.py:44` cap a
+`social/feed_design/`, i cap config de build/packaging els referencia per glob),
+**s'han esborrat els dos junts** en un sol PR docs/backend inert i reversible
+(la prova del grep va al cos del PR). Les còpies canòniques a
+`social/feed_design/` queden intactes; els tests segueixen verds.
 
 ### 3.2 [MITJÀ] `top-tokens.json` declara compartició que no és real
 `social/top_design/top-tokens.json:2`
@@ -306,10 +308,9 @@ Ordenades per relació impacte/cost (no és pla d'implementació; només l'inven
    §5` actualitzat marcant `editorial.jsx` com a llegat pendent de retirada i
    apuntant l'estat real (rd/primitives públic, staff/StaffTable staff). La
    migració dels 3 consumidors + esborrat queda per a la sessió visual. (Bloc 2.2)
-4. **Esborrar el parell co-orfe de l'arrel** (`/feed-tokens.json` +
-   `/FEED-PIL-SPEC.md`). **NO fet aquesta sessió**: la salvaguarda va saltar
-   (vegeu 3.1); requereix confirmació explícita perquè implica esborrar també
-   `FEED-PIL-SPEC.md`, fora de l'abast nominal. (Bloc 3.1)
+4. ~~**Esborrar el parell co-orfe de l'arrel**~~ **FET**: `/feed-tokens.json` +
+   `/FEED-PIL-SPEC.md` esborrats junts un cop confirmat que cap codi els carrega
+   ni referencia (vegeu 3.1). (Bloc 3.1)
 5. **Primitiva de pàgina-llista staff.** Un `<StaffListPage header filters table
    pagination>` absorbiria l'scaffolding repetit (Pendents/SenseInstagram/
    Albums/Cançons/Usuaris…). (Bloc 1.4)

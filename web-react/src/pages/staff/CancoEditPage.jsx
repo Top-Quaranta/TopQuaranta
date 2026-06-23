@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { Btn, Input, PageHeader, TableCard } from '../../components/staff/StaffTable'
+import { Btn, Input, PageHeader, TableCard } from '../../components/rd/surface'
 import ArtistaPicker from '../../components/staff/ArtistaPicker'
 import ArtistesColPicker from '../../components/staff/ArtistesColPicker'
 import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'

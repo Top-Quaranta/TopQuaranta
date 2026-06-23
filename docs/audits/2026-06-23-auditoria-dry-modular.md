@@ -32,10 +32,13 @@ Neteja DRY de Tier 1 (backend/docs, inert, reversible) aplicada en PRs petits:
 - **PR #290** — preàmbul d'imports duplicat llevat dels 16 mòduls staff (669).
 - **PR #291** — `CLAUDE.md §5` corregit (estat real del disseny; `editorial.jsx`
   marcat llegat). Vegeu Bloc 2.2.
-- **Parell co-orfe de l'arrel (Bloc 3.1) — RESOLT:** `/feed-tokens.json` +
-  `/FEED-PIL-SPEC.md` esborrats junts (cap carregador ni referència des de codi;
+- **Parell co-orfe de l'arrel (Bloc 3.1) — RESOLT (PR #293):** `/feed-tokens.json`
+  + `/FEED-PIL-SPEC.md` esborrats junts (cap carregador ni referència des de codi;
   re-verificat amb grep dels dos noms). Còpies canòniques a `social/feed_design/`
   intactes.
+- **PR #294** — `Canco.objects.public()` als 3 `.filter(verificada=True,
+  activa=True)` del conjunt públic complet (sitemap, `/staff/estat`, PSI), amb
+  test pin d'equivalència. Equivalència estricta per construcció. Vegeu Bloc 1.3.
 
 Recomptes *NO MESURAT* tancats: imports morts (730, §1.2) i hex de territori
 (públic 15/9 fitxers · staff 61/2 fitxers, §2.4). Tot allò visual/scoring/render
@@ -95,17 +98,21 @@ preàmbul staff. Diferit a sessió pròpia (per exclusió explícita): render
 `music/models.py:88`, `.with_mbid()` a
 `music/models.py:101`). Tot i això es repeteix la lògica
 crua:
-- `.filter(verificada=True, activa=True)` a
-  `web/sitemaps.py:134`,
-  `web/api/staff/estat.py:487`,
-  `web/seo/meta.py:206`,
-  `analytics/management/commands/recollir_metrics_psi.py:73`.
+- `.filter(verificada=True, activa=True)` — **swap parcial fet (PR #294)**:
+  els 3 llocs que volen el **conjunt públic complet** ara usen
+  `Canco.objects.public()` (`web/sitemaps.py`, `web/api/staff/estat.py` i
+  `analytics/.../recollir_metrics_psi.py`), amb test pin d'equivalència
+  id-a-id a `music/tests/test_canco_public_manager.py`. **NO** tocats per no
+  ser el mateix conjunt: `web/seo/meta.py:206` (`a.cancons.*`, scoped a un
+  artista i `.public()` no exposat al related manager), `web/sitemaps.py:253`
+  (`+data_llancament__isnull=False`), i els `verificada=True`-sols
+  (`estat.py:533/623`, `cancons.py:163`).
 - `.filter(aprovat=False, pendent_review=True)` a
   `web/api/staff/pendents.py:211` i
-  `music/management/commands/purgar_pendents_buits.py:71`.
+  `music/management/commands/purgar_pendents_buits.py:71`. (Pendent.)
 - `.exclude(musicbrainz_id__isnull=True).exclude(musicbrainz_id="")` a
   `web/api/staff/artistes.py:124` en lloc de
-  `.with_mbid()`.
+  `.with_mbid()`. (Pendent.)
 
 Risc real de deriva el dia que s'afegisca una tercera flag de publicabilitat.
 
@@ -317,7 +324,10 @@ Ordenades per relació impacte/cost (no és pla d'implementació; només l'inven
 6. **Externalitzar story render** a `story_redesign.py` per simetria amb
    feed/top. (Bloc 3.3)
 7. **`_base_error.html`** per a 403/404/500. (Bloc 1.5)
-8. **Managers en lloc de filtres a mà** als 7 punts de 1.3.
+8. **Managers en lloc de filtres a mà** als punts de 1.3. **Parcial (PR #294)**:
+   els 3 `.filter(verificada=True, activa=True)` del conjunt públic complet ja
+   usen `.public()` amb test pin. Queden els `.pendents()` i `.with_mbid()` no
+   estrictes/scoped i els `aprovat=False, pendent_review=True`.
 
 ---
 

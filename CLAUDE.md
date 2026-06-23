@@ -208,15 +208,18 @@ to refresh the dist bundle that Caddy serves.
    in JS by `web-react/src/components/rd/terr.js::PAL` (consumed by the
    `rd/` primitives). Public-page labels use `TERRITORI_NOM` (visible) —
    note that "PPCC" is shown as **"Global"** to visitors but stays as the
-   legacy code in DB and API query params. **Caveat (2026-06-23):** the
-   canon (`index.css --color-terr-*` ≡ `rd/terr.js::PAL`, deep/accent
-   pairs) is mirrored by a legacy single-hex *chart* palette that still
-   diverges: `StaffAnalyticsPage.jsx::TERR_COLORS` and
-   `CancoChart.jsx::TERRITORI_COLORS` (identical to each other, both
-   missing CAR). The dead `editorial.jsx::TERR_COLORS` copy was removed
-   (PR A). Collapsing the two live chart copies onto a single
-   territory-token module (deep as the chart-series value) is Fase 1 of
-   the unification — see `docs/audits/2026-06-23-recon-disseny-unificacio.md`.
+   legacy code in DB and API query params. **Territory palette (Fase 1
+   unified, 2026-06-23):** the single source is
+   `web-react/src/components/rd/terr.js` — `PAL` (deep/accent pairs,
+   mirrored by `index.css --color-terr-*`), plus `terrChart(code)` =
+   the canonical **deep**, the one value every territory *chart* series
+   uses. Both chart consumers read it: `CancoChart.jsx` (line stroke) and
+   `StaffAnalyticsPage.jsx` (`<Cell fill>`). The earlier divergent copies
+   (`editorial.jsx::TERR_COLORS` — removed PR A; the per-chart
+   `TERR_COLORS`/`TERRITORI_COLORS` — removed PR B) are gone. Fase 2
+   (promote the palette to `ConfiguracioGlobal` + a staff-editable API)
+   is not done yet; it is all in code. See
+   `docs/audits/2026-06-23-recon-disseny-unificacio.md`.
 
 **Design layers (real state, 2026-06-23).** There is no single shared
 primitive set across the SPA; public and staff run on separate systems

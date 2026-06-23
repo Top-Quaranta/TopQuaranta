@@ -257,14 +257,24 @@ flip; never deployed mid-way.
   `index.css @theme` (`--color-tq-ink-2`, the `--color-terr-*` table,
   `--font-crit`/`--font-whisper`/`--font-body`); the `.rd-*` utility
   surface (bands, glass, grain, header/footer) is scoped under `.rd-root`.
+- **Light mode (additive, 2026-06-23 — staff-unification option B):**
+  `primitives.jsx` now also offers light-surface variants — `Glass
+  tone="light"` (white card) and `Btn tone=primary|secondary|outline|
+  danger|ghost` + `size` (sm|md) — whose class strings mirror
+  `components/staff/StaffTable` byte-for-byte (Tailwind utilities, so
+  they work outside `.rd-root`). This lets staff adopt the rd canon while
+  **staying white**. The layer exists but is **not yet consumed**; the
+  page-by-page staff retrofit is a later, per-page-visual-review step.
 - **PERF (hard rule):** glass blur + the fractal-noise grain are layered
   on **only at `@media (min-width:901px)`**, with a
   `prefers-reduced-transparency` fallback — phones get flat solid
   surfaces, no blur, no grain. Never JS sniffing.
 - **Shell split** (`Layout.jsx`): public routes get the dark rd shell
   (full-bleed `<main>`, bands compose full width); `/staff/*` keeps the
-  **legacy yellow shell, byte-unchanged**. This is the permanent
-  public/staff boundary — the redisseny is public-web only.
+  **legacy yellow shell, byte-unchanged**. This was the public/staff
+  boundary while the redisseny was public-web only; the staff-unification
+  (option B, in progress) now shares the rd canon via its new light mode
+  (above) rather than darkening staff — but no staff page consumes it yet.
 - **Vocabulary veto:** "rànquing" is banned from user-facing copy → "el
   top" / "el top complet" / "la llista". Repo-wide grep is clean.
 - **Conserved:** all URLs (incl. SEO-nested) + `?t=`/`?s=` params, every

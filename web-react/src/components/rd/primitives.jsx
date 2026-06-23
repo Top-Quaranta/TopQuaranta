@@ -8,6 +8,12 @@
  *
  * Exports: Band, Glow, Glass, Btn, Kicker, Crit, Numeral, Move,
  * TerrLogo, RdCover.
+ *
+ * Light mode (additive, 2026-06-23 — staff retrofit option B): `Glass`
+ * takes `tone="light"` (white card) and `Btn` takes `tone` (primary |
+ * secondary | outline | danger | ghost) + `size` (sm | md) for the
+ * light surface. These mirror staff `StaffTable` byte-for-byte and are
+ * NOT yet consumed by any page — the canon just gained the layer.
  */
 import { createElement } from 'react'
 import MmIcon from '../MmIcon'
@@ -32,14 +38,45 @@ export function Glow({ variant = 'a', color, style }) {
   return <div className={`rd-glow rd-glow--${variant}`} style={s} aria-hidden="true" />
 }
 
-/* Liquid-glass surface (solid on mobile, blurred on desktop — see CSS). */
-export function Glass({ as = 'div', className = '', children, ...rest }) {
-  return createElement(as, { className: `rd-glass ${className}`, ...rest }, children)
+/* Surface primitive.
+   tone: ink (default) — the dark liquid-glass redisseny surface
+   (`.rd-glass`, solid on mobile, blurred on desktop — see CSS).
+   tone: light — a white card with ink text (mirrors the staff
+   `StaffTable::TableCard` byte-for-byte). LIGHT MODE is additive for the
+   staff retrofit (option B: staff stays white, rd gains a light layer);
+   it uses Tailwind utilities so it renders correctly OUTSIDE `.rd-root`
+   too. The ink path is unchanged. */
+const GLASS_LIGHT = 'bg-white text-tq-ink rounded-lg border border-black/5 overflow-hidden'
+export function Glass({ as = 'div', tone = 'ink', className = '', children, ...rest }) {
+  const base = tone === 'light' ? GLASS_LIGHT : 'rd-glass'
+  return createElement(as, { className: `${base} ${className}`, ...rest }, children)
 }
 
-/* Pill button. variant: hot | ghost. Renders <button> or, with `href`,
-   <a>. */
-export function Btn({ variant = 'hot', className = '', href, children, ...rest }) {
+/* Button.
+   Default (ink/redisseny): pill, variant: hot | ghost (`.rd-btn`).
+   LIGHT MODE (additive): pass `tone` (primary | secondary | outline |
+   danger | ghost) + `size` (sm | md) to render the light-surface button.
+   The tone/size class strings mirror staff `StaffTable::Btn`
+   byte-for-byte, so a future staff swap is pixel-identical. When `tone`
+   is omitted the existing pill path is unchanged. Renders <button> or,
+   with `href`, <a>. */
+const BTN_LIGHT_TONES = {
+  primary: 'bg-tq-ink text-tq-yellow hover:bg-tq-ink/90',
+  secondary: 'bg-transparent text-tq-ink border border-tq-ink/20 hover:bg-tq-ink/5',
+  outline: 'bg-transparent text-white border border-white/30 hover:bg-white/10',
+  danger: 'bg-red-600 text-white hover:bg-red-700',
+  ghost: 'text-tq-ink/70 hover:text-tq-ink hover:bg-tq-ink/5',
+}
+const BTN_LIGHT_SIZES = {
+  sm: 'text-xs font-semibold px-2.5 py-1 rounded',
+  md: 'text-sm font-semibold px-3 py-1.5 rounded',
+}
+export function Btn({ variant = 'hot', tone, size = 'sm', className = '', href, children, ...rest }) {
+  if (tone) {
+    const cls = `${BTN_LIGHT_TONES[tone] || BTN_LIGHT_TONES.primary} ${BTN_LIGHT_SIZES[size] || BTN_LIGHT_SIZES.sm} transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`.trim()
+    if (href) return <a href={href} className={cls} {...rest}>{children}</a>
+    return <button type="button" className={cls} {...rest}>{children}</button>
+  }
   const cls = `rd-btn rd-btn--${variant} ${className}`
   if (href) return <a href={href} className={cls} {...rest}>{children}</a>
   return <button type="button" className={cls} {...rest}>{children}</button>

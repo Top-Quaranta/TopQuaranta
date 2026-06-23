@@ -22,7 +22,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 export default function SenyalPage() {
   const [q, setQ] = useState('')

@@ -36,20 +36,11 @@ import {
 } from "recharts";
 import { api } from "../../lib/api";
 import { PageHeader, Pill, TableCard } from "../../components/staff/StaffTable";
+import { terrChart } from "../../components/rd/terr";
 
-// ── Brand-aware palette. Sourced from `editorial.jsx::TERR_COLORS`
-//    plus a neutral set for non-territory series (platforms, etc.).
-const TERR_COLORS = {
-  PPCC: "#427c42",
-  CAT: "#c99b0c",
-  VAL: "#cf3339",
-  BAL: "#0047ba",
-  AND: "#7c3aed",
-  CNO: "#0891b2",
-  FRA: "#ea580c",
-  ALG: "#db2777",
-  ALT: "#6b7280",
-};
+// ── Territory chart colours come from the single territory-token source
+//    (rd/terr.js::terrChart = canonical deep). Non-territory series
+//    (platforms, generic) keep their own neutral sets below.
 const PLATFORM_COLORS = {
   instagram: "#e1306c",
   instagram_feed: "#e1306c",
@@ -489,7 +480,7 @@ function PipelineTab({ data }) {
               <Tooltip />
               <Bar dataKey="valor">
                 {territoris.map((t, i) => (
-                  <Cell key={i} fill={TERR_COLORS[t.codi] || "#0a0a0a"} />
+                  <Cell key={i} fill={terrChart(t.codi)} />
                 ))}
               </Bar>
             </BarChart>

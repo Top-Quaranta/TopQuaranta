@@ -208,8 +208,8 @@ the entire payload; five tabs derive client-side from that one call.
   surface, verification growth, best-performing post); joint
   pageviews + registres line.
 * **Pipeline** — verificades / pendents / rebutjades line, cobertura
-  whisper + MB, per-territori bar (using `TERR_COLORS`), comunitat
-  line.
+  whisper + MB, per-territori bar (using `terrChart`, the canonical
+  territory deep from `rd/terr.js`), comunitat line.
 * **Social** — followers KPI strip, followers daily series per
   platform (using `PLATFORM_COLORS`), publicacions per canal bar,
   top 10 posts table with CSV export.

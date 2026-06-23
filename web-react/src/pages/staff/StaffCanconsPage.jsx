@@ -21,8 +21,8 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
-import { Field } from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
+import { Field } from '../../components/rd/surface'
 import FilterPanel from '../../components/staff/FilterPanel'
 
 // Mirror of music.constants.MOTIUS_REBUIG (label/value pairs).

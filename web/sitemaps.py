@@ -131,9 +131,7 @@ class CanconsSitemap(Sitemap):
     limit = 50_000
 
     def items(self):
-        return Canco.objects.filter(verificada=True, activa=True).only(
-            "slug", "updated_at"
-        )
+        return Canco.objects.public().only("slug", "updated_at")
 
     def location(self, obj):
         return f"/canco/{obj.slug}"

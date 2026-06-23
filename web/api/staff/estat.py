@@ -452,7 +452,7 @@ def _spotify_enrichment_stats() -> dict:
     # Breakdown by verificada (the same axis the workbench uses).
     found_public = found_qs.filter(canco__verificada=True, canco__activa=True).count()
     found_pending = found_qs.filter(canco__verificada=False, canco__activa=True).count()
-    public_total = Canco.objects.filter(verificada=True, activa=True).count()
+    public_total = Canco.objects.public().count()
     pending_total = Canco.objects.pendents().count()
 
     # Coverage ratios. `found / canco_total` is the dashboard-level

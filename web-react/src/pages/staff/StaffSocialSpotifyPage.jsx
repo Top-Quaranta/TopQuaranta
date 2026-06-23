@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { api } from '../../lib/api'
-import { Btn, Callout, Pill } from '../../components/staff/StaffTable'
+import { Btn, Callout, Pill } from '../../components/rd/surface'
 
 // Coverage bar colour bands match the FASE F monitoring thresholds:
 // >=0.95 green, 0.85-0.95 yellow, <0.85 red. NULL coverage (never

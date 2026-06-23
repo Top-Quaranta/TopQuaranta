@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { PageHeader, Pill, TableCard } from '../../components/staff/StaffTable'
+import { PageHeader, Pill, TableCard } from '../../components/rd/surface'
 
 // ── Small display helpers ────────────────────────────────────────────────
 

@@ -229,18 +229,18 @@ on top of the common `index.css` `@theme` tokens:
   `Kicker`, `Crit`, `TerrLogo`, …) + the `.rd-*` CSS in `index.css`.
   This is the live public design system (the "redisseny", introduced
   2026-06-13); ~14 pages consume it.
-- **Staff** → `components/staff/StaffTable.jsx` (`TableCard`, `Table`,
-  `Pill`, `Btn`, `Input`, …) + `components/StaffLayout.jsx`, on plain
-  Tailwind. ~36 staff pages consume it. It is white/data-dense and does
-  **not** use the `.rd-*` ink classes.
-- **Unification (option B, in progress):** staff stays white; the rd
-  canon gains a **light mode** instead of staff going dark. As of
-  2026-06-23 `rd/primitives.jsx` exposes `Glass tone="light"` (white
-  card) and `Btn tone=primary|secondary|outline|danger|ghost` + `size`
-  (sm|md) — light-surface variants that mirror `StaffTable` byte-for-byte.
-  **The layer exists but is not yet consumed** — the page-by-page retrofit
-  (staff `StaffTable`/`Btn` → rd light variants) is a later step, gated on
-  visual review per page.
+- **Staff** → the **rd light canon**. The staff table/form kit lives at
+  `components/rd/surface.jsx` (`TableCard`, `Table`, `Th`/`Td`/`Tr`,
+  `Pill`, `Input`, `Select`, `Pagination`, `PageHeader`, `Field`,
+  `Callout`, `EmptyState`, `Btn`); `TableCard` delegates to `Glass
+  tone="light"` and `Btn` to the unified canon `Btn` (staff `primary`
+  default preserved). The 36 staff pages import from `rd/surface` + use
+  `components/StaffLayout.jsx`. Staff stays **white/data-dense** (option
+  B: rd gained a light mode rather than staff going dark). The retrofit
+  was **pixel-identical by construction** (the rd light variants mirror
+  the old `StaffTable` byte-for-byte). `components/staff/StaffTable.jsx`
+  is now a **back-compat shim** re-exporting `rd/surface` so public pages
+  (`Field`/`Select`) and the shared `FilterPanel`/panels keep working.
 
 - **`components/editorial.jsx` is LEGACY, pending retirement.** It was
   the original public primitive set (Sprint J bis: `Section`,

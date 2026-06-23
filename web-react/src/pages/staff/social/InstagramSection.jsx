@@ -18,7 +18,7 @@
  */
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
-import { Btn, Pill, TableCard } from "../../../components/staff/StaffTable";
+import { Btn, Pill, TableCard } from "../../../components/rd/surface";
 import MatriuCanalToggles from "./MatriuCanalToggles";
 
 function tokenTone(daysLeft) {

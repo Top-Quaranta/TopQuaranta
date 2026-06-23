@@ -35,7 +35,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../../lib/api";
-import { PageHeader, Pill, TableCard } from "../../components/staff/StaffTable";
+import { PageHeader, Pill, TableCard } from "../../components/rd/surface";
 import { terrChart } from "../../components/rd/terr";
 
 // ── Territory chart colours come from the single territory-token source

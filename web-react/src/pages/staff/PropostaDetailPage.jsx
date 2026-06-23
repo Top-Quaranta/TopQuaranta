@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { Btn, PageHeader, Pill, TableCard } from '../../components/staff/StaffTable'
+import { Btn, PageHeader, Pill, TableCard } from '../../components/rd/surface'
 
 function ConflictPanel({ conflicts, onMerge, onReject, busy }) {
   return (

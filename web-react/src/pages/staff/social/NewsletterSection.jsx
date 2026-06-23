@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../lib/api'
-import { Btn, Pill, Select, TableCard } from '../../../components/staff/StaffTable'
+import { Btn, Pill, Select, TableCard } from '../../../components/rd/surface'
 import NewsletterDraftEditor from './NewsletterDraftEditor'
 
 export default function NewsletterSection() {

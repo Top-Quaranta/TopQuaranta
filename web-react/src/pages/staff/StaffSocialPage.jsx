@@ -21,7 +21,7 @@ import {
   PageHeader,
   Pill,
   TableCard,
-} from "../../components/staff/StaffTable";
+} from "../../components/rd/surface";
 
 // Effective per-channel state from /staff/social/estat-canals/, mapped
 // to house Pill tones (semantic, token-driven — no raw palette).

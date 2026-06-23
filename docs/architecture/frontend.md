@@ -43,10 +43,12 @@ web-react/
     ├── components/         Cross-page UI (Layout, AdminRoute,
     │                       editorial primitives, MmIcon, ...)
     │   ├── ui/             Buttons, inputs, modals
-    │   └── staff/          Staff-only widgets. `StaffTable.jsx` is the
-    │                       house kit: Table/TableCard, Btn, Pill, Input,
-    │                       Select, Pagination, and `Callout` (tone-driven
-    │                       wide banner, the counterpart of Pill).
+    │   └── staff/          Staff-only widgets (FilterPanel, panels, …).
+    │                       The table/form house kit moved to
+    │                       `components/rd/surface.jsx`; `StaffTable.jsx`
+    │                       is now a back-compat shim re-exporting it
+    │                       (Table/TableCard, Btn, Pill, Input, Select,
+    │                       Pagination, Callout, …).
     ├── context/            React contexts:
     │                       - AuthContext (profile, login, refresh)
     │                       - FeedbackContext (toast bus)
@@ -257,24 +259,26 @@ flip; never deployed mid-way.
   `index.css @theme` (`--color-tq-ink-2`, the `--color-terr-*` table,
   `--font-crit`/`--font-whisper`/`--font-body`); the `.rd-*` utility
   surface (bands, glass, grain, header/footer) is scoped under `.rd-root`.
-- **Light mode (additive, 2026-06-23 — staff-unification option B):**
-  `primitives.jsx` now also offers light-surface variants — `Glass
-  tone="light"` (white card) and `Btn tone=primary|secondary|outline|
-  danger|ghost` + `size` (sm|md) — whose class strings mirror
-  `components/staff/StaffTable` byte-for-byte (Tailwind utilities, so
-  they work outside `.rd-root`). This lets staff adopt the rd canon while
-  **staying white**. The layer exists but is **not yet consumed**; the
-  page-by-page staff retrofit is a later, per-page-visual-review step.
+- **Light mode (staff-unification option B, 2026-06-23):** `primitives.jsx`
+  offers light-surface variants — `Glass tone="light"` (white card) and
+  `Btn tone=primary|secondary|outline|danger|ghost` + `size` (sm|md) —
+  whose class strings mirror the old `StaffTable` byte-for-byte. The staff
+  table/form kit now lives at `components/rd/surface.jsx` (built on those
+  variants); **all 36 staff pages consume it**, and
+  `components/staff/StaffTable.jsx` is a back-compat shim re-exporting
+  `rd/surface` (so public `Field`/`Select` + the shared `FilterPanel`/
+  panels still resolve). The retrofit was an import-path swap, pixel-
+  identical by construction — staff stays white.
 - **PERF (hard rule):** glass blur + the fractal-noise grain are layered
   on **only at `@media (min-width:901px)`**, with a
   `prefers-reduced-transparency` fallback — phones get flat solid
   surfaces, no blur, no grain. Never JS sniffing.
 - **Shell split** (`Layout.jsx`): public routes get the dark rd shell
   (full-bleed `<main>`, bands compose full width); `/staff/*` keeps the
-  **legacy yellow shell, byte-unchanged**. This was the public/staff
-  boundary while the redisseny was public-web only; the staff-unification
-  (option B, in progress) now shares the rd canon via its new light mode
-  (above) rather than darkening staff — but no staff page consumes it yet.
+  **legacy yellow shell, byte-unchanged**. The staff *pages* now consume
+  the rd canon via the light mode (`rd/surface`, above) — pixel-identical,
+  staff stays white — but the shell/layout is still the legacy yellow one;
+  it is not on the dark rd `.rd-root` surface.
 - **Vocabulary veto:** "rànquing" is banned from user-facing copy → "el
   top" / "el top complet" / "la llista". Repo-wide grep is clean.
 - **Conserved:** all URLs (incl. SEO-nested) + `?t=`/`?s=` params, every

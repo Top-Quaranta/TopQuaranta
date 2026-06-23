@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { Btn, Input, PageHeader, TableCard } from '../../components/staff/StaffTable'
+import { Btn, Input, PageHeader, TableCard } from '../../components/rd/surface'
 
 export default function ArtistaCrearPage() {
   const navigate = useNavigate()

@@ -19,7 +19,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 function fmtFactor(v) {
   if (v === null || v === undefined) return '—'

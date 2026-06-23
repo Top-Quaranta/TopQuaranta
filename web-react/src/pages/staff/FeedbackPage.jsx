@@ -26,7 +26,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 function targetEditPath(t) {
   if (!t.target_pk) return null

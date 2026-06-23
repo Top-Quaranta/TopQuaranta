@@ -14,12 +14,16 @@
 - **Fase 1 completada (PR #298, mergejada 2026-06-23):** la paleta de
   territori està unificada 5→1 a `rd/terr.js` (`terrChart` = deep);
   CancoChart (públic) i StaffAnalyticsPage (staff) hi llegeixen.
-- **Capa light de rd ja existeix** (branca `feat/rd-light-mode`, additiu,
-  zero-píxel): `rd/primitives.jsx` exposa `Glass tone="light"` + `Btn
-  tone/size` (variants light que reflecteixen `StaffTable` byte-a-byte).
-  És **opció B** (staff es queda blanc; rd guanya mode light). Encara
-  **no la consumeix cap pàgina**: el retrofit staff pàgina-a-pàgina ve
-  després, amb revisió visual per pàgina.
+- **Capa light de rd** (PR #299, additiu, zero-píxel): `rd/primitives.jsx`
+  exposa `Glass tone="light"` + `Btn tone/size` (variants light que
+  reflecteixen `StaffTable` byte-a-byte). És **opció B** (staff es queda
+  blanc; rd guanya mode light).
+- **Retrofit staff complet (branca `feat/staff-retrofit-rd-light`):** el
+  kit de taula/formulari s'ha mogut a `components/rd/surface.jsx` i les
+  **36 pàgines staff** hi apunten (un swap d'import per pàgina, un commit
+  cadascuna). `StaffTable.jsx` queda com a **shim** de compatibilitat.
+  Pixel-idèntic per construcció; fluxos públic→staff intactes. PR obert
+  per a revisió visual (és UI).
 
 ---
 

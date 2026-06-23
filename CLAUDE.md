@@ -208,12 +208,15 @@ to refresh the dist bundle that Caddy serves.
    in JS by `web-react/src/components/rd/terr.js::PAL` (consumed by the
    `rd/` primitives). Public-page labels use `TERRITORI_NOM` (visible) —
    note that "PPCC" is shown as **"Global"** to visitors but stays as the
-   legacy code in DB and API query params. **Caveat (2026-06-23 audit):**
-   the territory palette is currently duplicated across four divergent
-   sources (`index.css` ≡ `rd/terr.js`, but `editorial.jsx::TERR_COLORS`
-   and `StaffAnalyticsPage.jsx::TERR_COLORS` each hold different hexes);
-   collapsing them onto `--color-terr-*` is a tracked follow-up. See
-   `docs/audits/2026-06-23-auditoria-dry-modular.md` §2.3.
+   legacy code in DB and API query params. **Caveat (2026-06-23):** the
+   canon (`index.css --color-terr-*` ≡ `rd/terr.js::PAL`, deep/accent
+   pairs) is mirrored by a legacy single-hex *chart* palette that still
+   diverges: `StaffAnalyticsPage.jsx::TERR_COLORS` and
+   `CancoChart.jsx::TERRITORI_COLORS` (identical to each other, both
+   missing CAR). The dead `editorial.jsx::TERR_COLORS` copy was removed
+   (PR A). Collapsing the two live chart copies onto a single
+   territory-token module (deep as the chart-series value) is Fase 1 of
+   the unification — see `docs/audits/2026-06-23-recon-disseny-unificacio.md`.
 
 **Design layers (real state, 2026-06-23).** There is no single shared
 primitive set across the SPA; public and staff run on separate systems
@@ -230,11 +233,13 @@ on top of the common `index.css` `@theme` tokens:
 
 - **`components/editorial.jsx` is LEGACY, pending retirement.** It was
   the original public primitive set (Sprint J bis: `Section`,
-  `SectionHeader`, `TerritoriBadge`, `TrendCue`, `TERR_COLORS`,
-  `TERRITORI_NOM`) but the public pages migrated to `rd/primitives` in
-  the 2026-06-13 redisseny. It is now stranded with only 3 importers
-  (`CancoChart.jsx`, `rd/terr.js`, `StaffAnalyticsPage.jsx`). Do **not**
-  build new UI on it; prefer `rd/primitives` (public) or `staff/*`
+  `SectionHeader`, `TerritoriBadge`, `TrendCue`, `TERRITORI_NOM`) but the
+  public pages migrated to `rd/primitives` in the 2026-06-13 redisseny.
+  It is now stranded with only **2 importers** (`CancoChart.jsx`,
+  `rd/terr.js`), both pulling only `TERRITORI_NOM`. (Its dead
+  `TERR_COLORS` export was removed in PR A; `StaffAnalyticsPage.jsx` does
+  **not** import editorial — it has its own local chart palette.) Do
+  **not** build new UI on it; prefer `rd/primitives` (public) or `staff/*`
   (staff). Retirement is a tracked follow-up
   (`docs/audits/2026-06-23-auditoria-dry-modular.md` §2.2).
 

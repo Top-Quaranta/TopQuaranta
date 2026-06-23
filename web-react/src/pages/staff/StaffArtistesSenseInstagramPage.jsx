@@ -26,7 +26,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 function useDebounced(value, ms = 250) {
   const [v, setV] = useState(value)

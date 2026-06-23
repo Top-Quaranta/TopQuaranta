@@ -231,8 +231,16 @@ on top of the common `index.css` `@theme` tokens:
   2026-06-13); ~14 pages consume it.
 - **Staff** → `components/staff/StaffTable.jsx` (`TableCard`, `Table`,
   `Pill`, `Btn`, `Input`, …) + `components/StaffLayout.jsx`, on plain
-  Tailwind. ~36 staff pages consume it. It does **not** use the `.rd-*`
-  classes and was never retrofitted onto the redisseny.
+  Tailwind. ~36 staff pages consume it. It is white/data-dense and does
+  **not** use the `.rd-*` ink classes.
+- **Unification (option B, in progress):** staff stays white; the rd
+  canon gains a **light mode** instead of staff going dark. As of
+  2026-06-23 `rd/primitives.jsx` exposes `Glass tone="light"` (white
+  card) and `Btn tone=primary|secondary|outline|danger|ghost` + `size`
+  (sm|md) — light-surface variants that mirror `StaffTable` byte-for-byte.
+  **The layer exists but is not yet consumed** — the page-by-page retrofit
+  (staff `StaffTable`/`Btn` → rd light variants) is a later step, gated on
+  visual review per page.
 
 - **`components/editorial.jsx` is LEGACY, pending retirement.** It was
   the original public primitive set (Sprint J bis: `Section`,

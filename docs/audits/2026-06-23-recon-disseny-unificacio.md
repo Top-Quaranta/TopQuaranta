@@ -9,6 +9,20 @@
 
 ---
 
+## Estat d'execució (afegit post-recon)
+
+- **Fase 1 completada (PR #298, mergejada 2026-06-23):** la paleta de
+  territori està unificada 5→1 a `rd/terr.js` (`terrChart` = deep);
+  CancoChart (públic) i StaffAnalyticsPage (staff) hi llegeixen.
+- **Capa light de rd ja existeix** (branca `feat/rd-light-mode`, additiu,
+  zero-píxel): `rd/primitives.jsx` exposa `Glass tone="light"` + `Btn
+  tone/size` (variants light que reflecteixen `StaffTable` byte-a-byte).
+  És **opció B** (staff es queda blanc; rd guanya mode light). Encara
+  **no la consumeix cap pàgina**: el retrofit staff pàgina-a-pàgina ve
+  després, amb revisió visual per pàgina.
+
+---
+
 ## Pas 1 — Inventari verificat de `rd/primitives` com a canon
 
 ### 1.1 Què exporta `rd/primitives.jsx` (10 primitives) — `web-react/src/components/rd/primitives.jsx`

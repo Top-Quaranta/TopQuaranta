@@ -374,12 +374,17 @@ def test_slide_tags_top_alternates_x_columns():
     assert len(set(xs)) >= 3
 
 
-def test_slide_tags_album_slide_anchors_on_artist_label():
+def test_slide_tags_album_slide_tags_principal():
     from social.management.commands.publicar_social import Command
 
     items = [{"artista_instagram_url": "https://instagram.com/banda"}]
     out = Command._slide_tags("nous_albums", n_slides=2, data={"items": items})
-    assert out[1] == [{"username": "banda", "x": 0.50, "y": 0.55}]
+    # One album slide, one tag for the album artist, placed within the
+    # canvas (exact bubble coords are cosmetic — see `_row_xy`).
+    assert len(out[1]) == 1
+    tag = out[1][0]
+    assert tag["username"] == "banda"
+    assert 0.05 <= tag["x"] <= 0.95 and 0.05 <= tag["y"] <= 0.95
 
 
 def test_slide_tags_cover_slide_has_no_tags():

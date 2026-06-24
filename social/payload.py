@@ -75,6 +75,32 @@ def _instagram_urls_for_canco(canco) -> list[str]:
     return out
 
 
+def _album_collab_instagram_urls(album_ids: list[int]) -> dict[int, list[str]]:
+    """Per-album collaborator Instagram URLs (union across the album's
+    verified+active tracks, de-duplicated, stable order). An album is
+    credited to one artist, but a release often features guests on
+    individual tracks; the IG tagger tags them too so every artist on
+    the release gets notified — same intent as
+    `_instagram_urls_for_canco` for the top carousel."""
+    out: dict[int, list[str]] = {aid: [] for aid in album_ids}
+    if not album_ids:
+        return out
+    seen: dict[int, set[str]] = {aid: set() for aid in album_ids}
+    cancons = (
+        Canco.objects.filter(album_id__in=album_ids, verificada=True, activa=True)
+        .prefetch_related("artistes_col")
+        .order_by("album_id", "id")
+    )
+    for canco in cancons:
+        aid = canco.album_id
+        for a in canco.artistes_col.all():
+            u = _instagram_url(a)
+            if u and u not in seen[aid]:
+                out[aid].append(u)
+                seen[aid].add(u)
+    return out
+
+
 def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
     """Build the top entries (chart order) + previous-week positions
     so the renderer can draw arrows. Returns None if the requested
@@ -247,6 +273,10 @@ def build_novetats(
     if not albums:
         return None
 
+    # Collaborator handles per album (for the IG tagger). Batched so the
+    # per-item loop below stays N+1-free.
+    collab_urls = _album_collab_instagram_urls([a.id for a in albums])
+
     # ── Batched enrichment for the narrative detectors (n1-n4) ───────
     # Compute the flags once, in a handful of queries, instead of an
     # N+1 lookup per album inside the detectors.
@@ -268,6 +298,14 @@ def build_novetats(
         dies = None
         if a.data_llancament:
             dies = max(0, (publish_date - a.data_llancament).days)
+        # Principal first, then track collaborators (de-duplicated). The
+        # IG tagger reads this list; renderer/caption keep using the
+        # principal-only `artista_instagram_url` below.
+        principal_url = _instagram_url(artista)
+        artistes_instagram_urls = [principal_url] if principal_url else []
+        for u in collab_urls.get(a.id, []):
+            if u and u not in artistes_instagram_urls:
+                artistes_instagram_urls.append(u)
         items.append(
             {
                 "nom": a.nom,
@@ -276,7 +314,8 @@ def build_novetats(
                 "artista_id": artista.id if artista else None,
                 "artista_nom": artista.nom if artista else "—",
                 "artista_slug": artista.slug if artista else None,
-                "artista_instagram_url": _instagram_url(artista),
+                "artista_instagram_url": principal_url,
+                "artistes_instagram_urls": artistes_instagram_urls,
                 "artista_territori": territori,
                 "cover_url": getattr(a, "imatge_url", None) or None,
                 "album_deezer_id": getattr(a, "deezer_id", None),

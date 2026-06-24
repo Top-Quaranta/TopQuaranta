@@ -499,20 +499,26 @@ class Command(BaseCommand):
         """Per-slide `user_tags` payloads, one entry per slide.
 
         Slide 0 is always the cover (no tags). The rest mirror the
-        renderer's chunking logic so every artist appears on the same
-        slide where their entry was drawn:
+        renderer's chunking AND ordering so every artist appears on the
+        same slide — and the same row — where their entry was drawn:
 
-          • top_*       → 10 entries per slide (uniform)
+          • top_*       → `render_feed_top`'s countdown blocks
+                          [(30,40),(20,30),(10,20),(0,10)], each block
+                          REVERSED within the slide (40→31 … 10→1)
           • nous_albums → 1 album per slide
           • nous_singles → bin-packed (≤10 per slide, even split)
 
-        Tag coordinates are spread across the canvas so Instagram's
-        tappable bubbles don't all clump at the centre (the previous
-        (0.5, 0.5)-for-all approach made the slide look like a single
-        crowded balloon). For list slides we anchor each tag to the
-        approximate row Y of the corresponding entry and zigzag the X
-        between three columns; for the album slide (one item) we sit
-        the tag over the artist label area.
+        The reversal matters: pre-2026-06 the tags were built 1→40
+        while the slides render 40→1, so every tag pointed at the
+        wrong artist. We now build the per-slide chunk in the exact
+        order the renderer drew it.
+
+        For top + nous_singles every artist on the entry is tagged
+        (principal + collaborators); nous_albums tags the album artist
+        plus each track collaborator. Tag coordinates are spread across
+        the canvas so Instagram's tappable bubbles don't all clump at
+        the centre. We anchor each tag to the approximate row Y of the
+        corresponding entry and zigzag the X between three columns.
         """
         out: list[list[dict]] = [[]]  # cover slide → no tags
 
@@ -543,84 +549,79 @@ class Command(BaseCommand):
             y = Y_TOP + step * (row_idx + 0.5)
             return XS[row_idx % len(XS)], y
 
-        TOP_TIPUS = (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL)
-        if tipus in TOP_TIPUS:
-            entries = data.get("entries") or []
-            for page in range(1, n_slides):
-                chunk = entries[(page - 1) * 10 : page * 10]
-                # Build the tag list with a principal-first, then
-                # round-robin-over-collabs strategy so a single cançó
-                # with many collaborators can never monopolise the
-                # 20-tags-per-image Meta cap and starve other entries
-                # of their principal tag. Concretely:
-                #
-                #   Pass 1: principal of every entry (up to 10 tags).
-                #   Pass 2: 1st collab of every entry that has one.
-                #   Pass 3: 2nd collab of every entry that has one.
-                #   ...
-                #
-                # Each pass stops as soon as the budget is exhausted.
-                # `tags[:20]` at the end is now defensive (the
-                # algorithm already caps by construction) but kept
-                # for safety.
-                #
-                # Caught at the 2026-05-23 audit on a real worst-case
-                # ("La Gent de la Mediterrània" has 23 collaborators
-                # with Instagram handles); without round-robin that
-                # one entry would have consumed all 20 slots.
-                CAP = 20
-                tags: list[dict] = []
+        CAP = 20  # Meta's per-image user_tags limit.
 
-                def _entry_urls(entry: dict) -> list[str]:
-                    """Resolve the per-entry handle list, accepting
-                    both the new payload (`artistes_instagram_urls`)
-                    and the legacy single-URL fallback."""
-                    urls = entry.get("artistes_instagram_urls")
-                    if not urls:
-                        single = entry.get("artista_instagram_url")
-                        urls = [single] if single else []
-                    return [u for u in urls if u]
+        def _entry_urls(entry: dict) -> list[str]:
+            """Resolve the per-entry handle list, accepting both the
+            new payload (`artistes_instagram_urls`) and the legacy
+            single-URL fallback."""
+            urls = entry.get("artistes_instagram_urls")
+            if not urls:
+                single = entry.get("artista_instagram_url")
+                urls = [single] if single else []
+            return [u for u in urls if u]
 
-                chunk_urls = [_entry_urls(e) for e in chunk]
-                # Pass 1: principals (collab_idx = 0).
+        def _tags_for_chunk(chunk: list[dict]) -> list[dict]:
+            """Tags for one slide's entries, IN THE ORDER GIVEN (the
+            caller passes the chunk in the same order the renderer drew
+            it). Principal-first, then round-robin over collabs so a
+            single very-collaborative entry can never monopolise the
+            CAP and starve other entries of their principal tag:
+
+              Pass 1: principal of every entry.
+              Pass 2: 1st collab of every entry that has one.
+              Pass 3: 2nd collab of every entry that has one.  …
+
+            Caught at the 2026-05-23 audit on a real worst-case
+            ("La Gent de la Mediterrània", 23 collaborators); without
+            round-robin that one entry would have eaten all 20 slots."""
+            chunk_urls = [_entry_urls(e) for e in chunk]
+            tags: list[dict] = []
+            for i, urls in enumerate(chunk_urls):
+                if len(tags) >= CAP:
+                    break
+                if not urls:
+                    continue
+                bx, by = _row_xy(i, len(chunk))
+                t = _tag(urls[0], x=bx, y=by)
+                if t and t not in tags:
+                    tags.append(t)
+            max_extra = max((len(u) - 1 for u in chunk_urls), default=0)
+            for collab_idx in range(1, max_extra + 1):
+                if len(tags) >= CAP:
+                    break
                 for i, urls in enumerate(chunk_urls):
                     if len(tags) >= CAP:
                         break
-                    if not urls:
+                    if collab_idx >= len(urls):
                         continue
-                    base_x, base_y = _row_xy(i, len(chunk))
-                    t = _tag(urls[0], x=base_x, y=base_y)
+                    bx, by = _row_xy(i, len(chunk))
+                    # Horizontal nudge keyed on collab_idx so adjacent
+                    # collab bubbles don't overlap the principal at bx.
+                    nudge_dx = (collab_idx % 3) * 0.10 - 0.10
+                    t = _tag(urls[collab_idx], x=bx + nudge_dx, y=by)
                     if t and t not in tags:
                         tags.append(t)
-                # Pass 2+: round-robin over collabs by index.
-                max_extra = max((len(u) - 1 for u in chunk_urls), default=0)
-                for collab_idx in range(1, max_extra + 1):
-                    if len(tags) >= CAP:
-                        break
-                    for i, urls in enumerate(chunk_urls):
-                        if len(tags) >= CAP:
-                            break
-                        if collab_idx >= len(urls):
-                            continue
-                        base_x, base_y = _row_xy(i, len(chunk))
-                        # Three-step horizontal nudge keyed on
-                        # collab_idx so adjacent collab bubbles in the
-                        # same row don't overlap each other or the
-                        # principal at base_x.
-                        nudge_dx = (collab_idx % 3) * 0.10 - 0.10
-                        t = _tag(urls[collab_idx], x=base_x + nudge_dx, y=base_y)
-                        if t and t not in tags:
-                            tags.append(t)
-                out.append(tags[:CAP])  # defensive cap
+            return tags[:CAP]
+
+        TOP_TIPUS = (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL)
+        if tipus in TOP_TIPUS:
+            entries = data.get("entries") or []
+            # Mirror render_feed_top EXACTLY: same countdown blocks,
+            # same present-filtering, same per-slide reversal — so each
+            # tag lands on the slide AND row where the renderer drew it.
+            for lo, hi in ((30, 40), (20, 30), (10, 20), (0, 10)):
+                block = entries[lo:hi]
+                if not block:
+                    continue
+                out.append(_tags_for_chunk(list(reversed(block))))
         elif tipus == SocialPost.TIPUS_NOUS_ALBUMS:
             items = data.get("items") or []
             # 1 slide per album (renderer caps at 9; n_slides may be
-            # smaller if there are fewer items). Tag sits over the
-            # artist label area, which the renderer paints at roughly
-            # 55 % of the canvas height.
+            # smaller if there are fewer items). Tag the album artist +
+            # every track collaborator that has a handle.
             for item in items[: n_slides - 1]:
-                t = _tag(item.get("artista_instagram_url"), x=0.50, y=0.55)
-                out.append([t] if t else [])
+                out.append(_tags_for_chunk([item]))
         elif tipus == SocialPost.TIPUS_NOUS_SINGLES:
             # Mirror the bin-packing in `render_feed_novetats`:
             # `per_slide = ceil(n / n_slides)`. Trailing slide may
@@ -631,17 +632,7 @@ class Command(BaseCommand):
             per_slide = -(-n // slides) if n else 0
             offset = 0
             for _ in range(slides):
-                chunk = items[offset : offset + per_slide]
-                if not chunk:
-                    out.append([])
-                else:
-                    tags = []
-                    for i, e in enumerate(chunk):
-                        x, y = _row_xy(i, len(chunk))
-                        t = _tag(e.get("artista_instagram_url"), x=x, y=y)
-                        if t:
-                            tags.append(t)
-                    out.append(tags[:20])
+                out.append(_tags_for_chunk(items[offset : offset + per_slide]))
                 offset += per_slide
         # Pad to exactly n_slides in case of any mismatch — the
         # publisher indexes by slide position and would otherwise

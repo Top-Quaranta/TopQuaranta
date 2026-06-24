@@ -21,7 +21,12 @@ from music.models import Album, Artista, Canco
 from ranking.models import TopSetmanal
 from social.management.commands.publicar_social import Command
 from social.models import SocialPost
-from social.payload import _instagram_urls_for_canco, build_top
+from social.payload import (
+    _album_collab_instagram_urls,
+    _instagram_urls_for_canco,
+    build_top,
+)
+from social.top_redesign import _artist_credit
 
 
 @pytest.fixture
@@ -124,6 +129,27 @@ def test_build_top_includes_artistes_instagram_urls(trio):
     ]
     # Backward-compat field still present.
     assert entry["artista_instagram_url"] == "https://instagram.com/exemple_principal"
+
+
+@pytest.mark.django_db
+def test_album_collab_instagram_urls(trio):
+    """Per-album collaborator handles, principal not included, deduped,
+    only collaborators with a handle (c2 has none)."""
+    p, c1, c2 = trio
+    c = _make_canco(p, c1, c2)
+    urls = _album_collab_instagram_urls([c.album_id])
+    assert urls[c.album_id] == ["https://instagram.com/exemple_collab1"]
+
+
+def test_artist_credit_joins_collaborators():
+    """Top rows must show principal + collaborators (was principal-only,
+    while stories already showed all)."""
+    assert (
+        _artist_credit({"artistes_noms": ["Main", "Col 1", "Col 2"]})
+        == "Main, Col 1, Col 2"
+    )
+    # Legacy fallback when only the single field is present.
+    assert _artist_credit({"artista_nom": "Solo"}) == "Solo"
 
 
 def _entry(urls: list[str]) -> dict:
@@ -245,7 +271,11 @@ def test_slide_tags_principal_first_round_robin_protects_all_entries():
 def test_slide_tags_round_robin_when_multiple_entries_have_collabs():
     """Two entries with collabs: budget shared via round-robin so
     every entry gets its principal AND its first collab before any
-    entry gets its second collab."""
+    entry gets its second collab.
+
+    NOTE: the slide is built in the renderer's countdown order, which
+    REVERSES each block, so entry `b` (drawn first on the slide)
+    precedes entry `a` within every pass."""
     a = _entry(
         [
             "https://instagram.com/a_p",
@@ -263,12 +293,53 @@ def test_slide_tags_round_robin_when_multiple_entries_have_collabs():
     data = {"entries": [a, b]}
     out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 2, data)
     handles = [t["username"] for t in out[1]]
-    # Principals first.
-    assert handles[0] == "a_p"
-    assert handles[1] == "b_p"
+    # Principals first (reversed block order → b before a).
+    assert handles[0] == "b_p"
+    assert handles[1] == "a_p"
     # Then 1st collab of every entry before any 2nd collab.
-    assert handles[2] == "a_c1"
-    assert handles[3] == "b_c1"
+    assert handles[2] == "b_c1"
+    assert handles[3] == "a_c1"
     # Then 2nd collabs.
-    assert handles[4] == "a_c2"
-    assert handles[5] == "b_c2"
+    assert handles[4] == "b_c2"
+    assert handles[5] == "a_c2"
+
+
+def test_slide_tags_top_mirror_renderer_countdown_order():
+    """Regression for the pre-2026-06 bug: slides render 40→1 but tags
+    were built 1→40, mismatching every tag to the wrong artist. The
+    tag chunks must now mirror `render_feed_top`'s countdown blocks
+    ([(30,40),(20,30),(10,20),(0,10)], each reversed)."""
+    # 40 entries, principal handle = "p{posicio}" (posicio = i + 1).
+    entries = [_entry([f"https://instagram.com/p{i + 1}"]) for i in range(40)]
+    data = {"entries": entries}
+    # 1 cover + 4 list slides.
+    out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 5, data)
+    # Slide 1 = block (30,40) reversed → positions 40,39,…,31.
+    assert [t["username"] for t in out[1]] == [f"p{n}" for n in range(40, 30, -1)]
+    # Slide 4 = block (0,10) reversed → positions 10,9,…,1.
+    assert [t["username"] for t in out[4]] == [f"p{n}" for n in range(10, 0, -1)]
+
+
+def test_slide_tags_novetats_singles_tags_collabs():
+    """nous_singles slides tag the principal + every collaborator with
+    a handle (was principal-only before 2026-06)."""
+    data = {
+        "items": [
+            _entry(["https://instagram.com/s_p", "https://instagram.com/s_c"]),
+            _entry(["https://instagram.com/t_p"]),
+        ]
+    }
+    out = Command._slide_tags(SocialPost.TIPUS_NOUS_SINGLES, 2, data)
+    assert set(t["username"] for t in out[1]) == {"s_p", "s_c", "t_p"}
+
+
+def test_slide_tags_novetats_albums_tags_collabs():
+    """nous_albums: one slide per album, tagging the album artist +
+    its track collaborators."""
+    data = {
+        "items": [
+            _entry(["https://instagram.com/al_p", "https://instagram.com/al_c"]),
+        ]
+    }
+    out = Command._slide_tags(SocialPost.TIPUS_NOUS_ALBUMS, 2, data)
+    assert set(t["username"] for t in out[1]) == {"al_p", "al_c"}

@@ -303,7 +303,7 @@ sencer de la setmana", "EL TOP DE LA SETMANA", "el top de la setmana N".
 **Fix pins (2026-06-12):** ink-anchored ±8 px against the artboards — EL TOP/40
 gap, list numerals + SETMANA pill ink-centred (`render_core.draw_text(ink_center=)`),
 and no title↔artist overlap (rich = 2-line clamp + artist stacked & centred;
-dense = title ellipsised but artist always kept).
+dense = title ellipsised but artist always kept). **IG tagging + credits (2026-06):** list rows show the full credit (principal + collaborators via `artistes_noms`, like the stories) and `user_tags` mirror the carousel EXACTLY — same countdown blocks, each reversed — so every tag lands on its drawn row (`publicar_social._slide_tags`); top + nous_singles tag all collaborators, nous_albums tags the album artist + track collaborators (`payload.artistes_instagram_urls`).
 
 **Movement** is one primitive: `render_core.draw_move` (up/down/new/re/eq;
 semantic colours, palette-independent). `parse_move` derives it from real data;

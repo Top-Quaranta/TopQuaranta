@@ -81,6 +81,16 @@ def _thumb(e, size):
     )
 
 
+def _artist_credit(e: dict) -> str:
+    """Per-song credit for a top row: principal + collaborators,
+    comma-joined (mirrors the story slides, which already show every
+    artist via `artistes_noms`). Falls back to the legacy single
+    `artista_nom`. Callers wrap it in `F._ellipsize` to fit the slot,
+    so a long credit truncates instead of overflowing."""
+    names = e.get("artistes_noms") or [e.get("artista_nom") or ""]
+    return ", ".join(n for n in names if n)
+
+
 def build_poster(entries: list[dict], setmana, variant: str = "ppcc") -> Image.Image:
     """The TOP cartell (1080×1350, single image): top-10 rich + 11-40 dense,
     movement on every row. `variant` 'ppcc' (global, unlabelled) or a territory
@@ -193,7 +203,7 @@ def build_poster(entries: list[dict], setmana, variant: str = "ppcc") -> Image.I
             img,
             tx,
             top + len(lines) * lh + 6,
-            F._ellipsize(img, e.get("artista_nom", ""), fa, tw_avail),
+            F._ellipsize(img, _artist_credit(e), fa, tw_avail),
             fa,
             (255, 255, 255, 153),
             ink_top=True,
@@ -240,7 +250,7 @@ def build_poster(entries: list[dict], setmana, variant: str = "ppcc") -> Image.I
         # Title + dimmed artist inline on one line. RESERVE room for the artist
         # so a long title ellipsises but the artist STAYS visible (deviates from
         # the design's whole-run ellipsis, which could drop the artist).
-        artist = e.get("artista_nom", "")
+        artist = _artist_credit(e)
         art_w = min(d.textlength(artist, font=fa), tw_avail * 0.5)
         title = F._ellipsize(img, e.get("canco_nom", ""), ft, tw_avail - art_w - gap)
         title_w = R.draw_text(img, tx, ty, title, ft, white, composite=True)
@@ -370,7 +380,7 @@ def build_albums_mosaic(albums: list[dict], setmana) -> Image.Image:
                 img,
                 cx,
                 ty + len(lines) * lh + art_gap,
-                F._ellipsize(img, e.get("artista_nom", ""), fa, cov),
+                F._ellipsize(img, _artist_credit(e), fa, cov),
                 fa,
                 F._col(gr["artist"]["color"]),
                 composite=True,
@@ -639,7 +649,7 @@ def build_top_list(rows, current, total, setmana, variant: str = "ppcc") -> Imag
             img,
             text_x,
             y + ar["dy"],
-            F._ellipsize(img, e.get("artista_nom", ""), fa, avail),
+            F._ellipsize(img, _artist_credit(e), fa, avail),
             fa,
             F._col(ar["color"]),
             composite=True,

@@ -203,6 +203,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # external call so a Mastodon hiccup doesn't break the dashboard.
 30 22 * * * topquaranta   /home/topquaranta/bin/tq-run recollir_metrics_social >> /var/log/topquaranta/analytics.log 2>&1
 
+# Hourly → reconcile pending IG collaborator invitations (ADR-0015 §5.5).
+# DORMANT: no-ops cleanly (exit 0) while
+# ConfiguracioGlobal.ig_collaboradors_actiu is False (the default), so it
+# stays fresh + green on the health dashboard. Ships in cron so activating
+# the feature (tranche 3) needs no crontab edit.
+0 * * * *   topquaranta   /home/topquaranta/bin/tq-run pollar_colaboracions_ig >> /var/log/topquaranta/analytics.log 2>&1
+
 # 02:00 dilluns → Setmanal: neteja pendents òrfens (sense Deezer ID
 # + sense tracks principals + ≥1 collab + 1 únic germà aprovat).
 0 2 * * 1   topquaranta   /home/topquaranta/bin/tq-run netejar_pendents_orfes >> /var/log/topquaranta/neteja.log 2>&1

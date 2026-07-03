@@ -149,6 +149,12 @@
     "max_age_hours": 26,
     "skip_concern": 1
   },
+  "pollar_colaboracions_ig": {
+    "frequency_label": "Cada hora",
+    "max_age_hours": 2,
+    "skip_concern": 3,
+    "description": "Reconcilia invitacions de col·laboració IG pendents (ADR-0015); dorment fins que s'activa el flag mestre."
+  },
   "enviar_digest_setmanal": {
     "frequency_label": "Cada dilluns 08:00",
     "max_age_hours": 170,

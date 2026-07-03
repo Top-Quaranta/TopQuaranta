@@ -328,6 +328,42 @@ an artist/team to share, the move behind our best organic reach. No
 positional `#<digit>` (same audience-leak discipline as the weekly
 captions). The live post + campaign strategy stay manual (Miquel).
 
+## Collaborator invitations — feed (ADR-0015, tranche 1: INERT)
+
+Scaffolding for inviting artists as IG **collaborators** (their handle on
+the post → it lands on their grid too), a step up from `user_tags`
+mentions. **Feed / reels / carousels only — Meta does not support
+collaborators on stories.** Entirely dormant in tranche 1: nothing in the
+publish path imports it, and the master flag
+`ConfiguracioGlobal.ig_collaboradors_actiu` defaults **False**.
+
+- **`social.models.InvitacioColaboracioIG`** — one row per
+  `(artista, ig_media_id)`: `username_snapshot`, `tipus_publicacio`,
+  `data_invitacio`, `estat` (pendent/acceptada/rebutjada), `data_resolucio`.
+  Artist FK is `PROTECT` (acceptance stats depend on the history).
+- **`social/collaboradors.py`** — pure, side-effect-free policy.
+  `select_collaborators(pool, historic, config, *, now)` picks ≤
+  `effective_slots` candidates: A (has accepted) / B (never invited) /
+  C (only rejected/pending); slots 1-`slots_acceptats` → A backfilled
+  from B, remaining → next B, C only fills otherwise-empty slots;
+  cooldowns A/C, pending never re-invited. `GRAPH_MAX_COLLABORATORS = 3`
+  hard-clamps `ig_collab_slots_total` (Meta's documented max).
+  `publish_with_collaborator_guard(usernames, slots, try_container)` is
+  the non-blocking substitution guard (§5.3): drop the offending handle,
+  substitute the next candidate, last resort publish with none — a bad
+  handle never blocks publication.
+- **`pollar_colaboracions_ig`** (hourly cron, dormant) reconciles pending
+  invites via `GET /<media>/collaborators` and writes the acceptance rate
+  to `MetricaPipeline` (`ig_collab_taxa_acceptacio`). No-op while the flag
+  is off; best-effort + idempotent.
+- **Config** (§5.4): `ig_collaboradors_actiu`, `ig_collab_slots_total`,
+  `ig_collab_slots_acceptats`, `ig_collab_cooldown_a_dies`,
+  `ig_collab_cooldown_c_dies` — staff-editable under a dedicated
+  **Col·laboradors IG** section of `/staff/configuracio/`.
+
+Tranche 3 (a later, supervised PR) wires the policy into `publicar_social`
+and flips the flag. Design + probe findings: `docs/decisions/0015-ig-collaborator-invitations.md`.
+
 ## Related
 
 - Narrative engine detail: [`social-narrative.md`](social-narrative.md).

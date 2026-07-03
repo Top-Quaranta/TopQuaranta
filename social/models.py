@@ -291,3 +291,66 @@ class TelegramAuth(models.Model):
     @classmethod
     def load(cls) -> "TelegramAuth | None":
         return cls.objects.filter(pk=1).first()
+
+
+class InvitacioColaboracioIG(models.Model):
+    """One Instagram collaborator invite we sent for a feed post.
+
+    Spec: docs/decisions/0015-ig-collaborator-invitations.md §5.1.
+
+    Records every invite + its async resolution (pending →
+    accepted/rejected). Keyed by `(artista, ig_media_id)`: one invite per
+    artist per post. The acceptance poller (`pollar_colaboracions_ig`)
+    stamps `data_resolucio` when the state leaves `pendent`. This model
+    is INERT in tranche 1 — nothing writes to it until the master flag
+    `ConfiguracioGlobal.ig_collaboradors_actiu` is switched on and the
+    policy is wired into `publicar_social` (tranche 3).
+    """
+
+    ESTAT_PENDENT = "pendent"
+    ESTAT_ACCEPTADA = "acceptada"
+    ESTAT_REBUTJADA = "rebutjada"
+    ESTAT_CHOICES = [
+        (ESTAT_PENDENT, "Pendent"),
+        (ESTAT_ACCEPTADA, "Acceptada"),
+        (ESTAT_REBUTJADA, "Rebutjada"),
+    ]
+    # Set form for membership checks (mirrors the ADR's `ESTATS`).
+    ESTATS = {ESTAT_PENDENT, ESTAT_ACCEPTADA, ESTAT_REBUTJADA}
+
+    artista = models.ForeignKey(
+        "music.Artista",
+        on_delete=models.PROTECT,
+        related_name="invitacions_ig",
+        help_text="Artist we invited as a collaborator.",
+    )
+    # The bare handle at invite time. Accounts get renamed; the snapshot
+    # is what we actually sent, independent of the artist's current
+    # instagram_url.
+    username_snapshot = models.CharField(max_length=64)
+    ig_media_id = models.CharField(max_length=40, db_index=True)
+    tipus_publicacio = models.CharField(max_length=30, choices=SocialPost.TIPUS_CHOICES)
+    data_invitacio = models.DateTimeField(db_index=True)
+    estat = models.CharField(
+        max_length=12, choices=ESTAT_CHOICES, default=ESTAT_PENDENT
+    )
+    data_resolucio = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Invitació de col·laboració IG"
+        verbose_name_plural = "Invitacions de col·laboració IG"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["artista", "ig_media_id"],
+                name="invitaciocolaboracioig_uniq_artista_media",
+            ),
+        ]
+        indexes = [
+            # Poller scan window: pending invites of the last N days.
+            models.Index(fields=["estat", "data_invitacio"]),
+            # Category A/C lookup: an artist's invite history by state.
+            models.Index(fields=["artista", "estat"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.username_snapshot}@{self.ig_media_id} · {self.estat}"

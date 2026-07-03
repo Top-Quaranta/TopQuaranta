@@ -159,9 +159,7 @@ def test_feed_redesign_artist_credit_joins_collaborators():
     too — same parity fix as the top rows, applied to feed_redesign."""
     from social.feed_redesign import _artist_credit as feed_credit
 
-    assert (
-        feed_credit({"artistes_noms": ["Main", "Guest"]}) == "Main, Guest"
-    )
+    assert feed_credit({"artistes_noms": ["Main", "Guest"]}) == "Main, Guest"
     assert feed_credit({"artista_nom": "Solo"}) == "Solo"
     assert feed_credit({}) == "—"
 

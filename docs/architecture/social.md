@@ -328,14 +328,15 @@ an artist/team to share, the move behind our best organic reach. No
 positional `#<digit>` (same audience-leak discipline as the weekly
 captions). The live post + campaign strategy stay manual (Miquel).
 
-## Collaborator invitations — feed (ADR-0015, tranche 1: INERT)
+## Collaborator invitations — feed (ADR-0015, tranche 3a: wired, gated off)
 
-Scaffolding for inviting artists as IG **collaborators** (their handle on
-the post → it lands on their grid too), a step up from `user_tags`
-mentions. **Feed / reels / carousels only — Meta does not support
-collaborators on stories.** Entirely dormant in tranche 1: nothing in the
-publish path imports it, and the master flag
-`ConfiguracioGlobal.ig_collaboradors_actiu` defaults **False**.
+Inviting artists as IG **collaborators** (their handle on the post → it
+lands on their grid too), a step up from `user_tags` mentions. **Feed /
+reels / carousels only — Meta does not support collaborators on stories.**
+Behaviourally dormant: the master flag
+`ConfiguracioGlobal.ig_collaboradors_actiu` defaults **False**, and with it
+off the feed publish path is byte-identical to before (no `collaborators`
+key ever reaches a container, no registry rows written).
 
 - **`social.models.InvitacioColaboracioIG`** — one row per
   `(artista, ig_media_id)`: `username_snapshot`, `tipus_publicacio`,
@@ -356,13 +357,28 @@ publish path imports it, and the master flag
   invites via `GET /<media>/collaborators` and writes the acceptance rate
   to `MetricaPipeline` (`ig_collab_taxa_acceptacio`). No-op while the flag
   is off; best-effort + idempotent.
+- **Wiring** (tranche 3a): `publicar_social._publish_feed`, **gated on the
+  flag**, builds the ordered pool from the payload (`payload.build_top` /
+  `build_novetats` now carry `artistes_pool` = `[{id, username}]`, additive),
+  applies the policy against the live registry, and passes
+  `collaborators=[…]` to the parent container
+  (`instagram_client.{create_carousel,upload_image}`, additive param). The
+  guard wraps the parent create+FINISH so a handle error at create OR async
+  processing triggers substitution. On a successful publish it writes one
+  `InvitacioColaboracioIG` per sent handle (idempotent `get_or_create`);
+  if `media_publish` raises, no rows are written (no orphans).
+- **`simular_colaboradors_ig`** — read-only dry-run command: builds the real
+  pool for the latest top + novetats, applies the policy against the live
+  registry, and prints per-post the pool, each artist's category +
+  eligibility, the ≤3 selected, and who's discarded (cooldown / no handle).
+  Sends nothing, writes nothing, works with the flag off.
 - **Config** (§5.4): `ig_collaboradors_actiu`, `ig_collab_slots_total`,
   `ig_collab_slots_acceptats`, `ig_collab_cooldown_a_dies`,
   `ig_collab_cooldown_c_dies` — staff-editable under a dedicated
   **Col·laboradors IG** section of `/staff/configuracio/`.
 
-Tranche 3 (a later, supervised PR) wires the policy into `publicar_social`
-and flips the flag. Design + probe findings: `docs/decisions/0015-ig-collaborator-invitations.md`.
+Tranche 3b (a later, supervised session) flips the flag and runs the first
+real invite batch. Design + probe findings: `docs/decisions/0015-ig-collaborator-invitations.md`.
 
 ## Related
 

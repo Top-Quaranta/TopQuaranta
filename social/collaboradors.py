@@ -103,27 +103,46 @@ def _has_pending(records: list[InviteRecord]) -> bool:
     return any(r.estat == ESTAT_PENDENT for r in records)
 
 
+def candidate_status(
+    records: list[InviteRecord], config: PolicyConfig, now: datetime
+) -> tuple[str, bool, str]:
+    """`(categoria, elegible, motiu)` for one artist. Single source of
+    truth for both the selector's eligibility gate and the dry-run's
+    human-readable reason. A pending invite blocks regardless of
+    category; A respects `cooldown_a_dies` since its last invite;
+    C-rejected respects `cooldown_c_dies` since the rejection; B is
+    always eligible."""
+    cat = _category(records)
+    if _has_pending(records):
+        return cat, False, "pendent (invitació sense resoldre)"
+    if cat == CAT_A:
+        last = max((r.data_invitacio for r in records), default=None)
+        if last is not None and (now - last).days < config.cooldown_a_dies:
+            return (
+                cat,
+                False,
+                f"cooldown A ({(now - last).days}d < {config.cooldown_a_dies}d)",
+            )
+        return cat, True, "acceptador (A)"
+    if cat == CAT_C:
+        rejections = [r for r in records if r.estat == ESTAT_REBUTJADA]
+        if rejections:
+            last_rej = max((r.data_resolucio or r.data_invitacio) for r in rejections)
+            if (now - last_rej).days < config.cooldown_c_dies:
+                return (
+                    cat,
+                    False,
+                    f"cooldown C ({(now - last_rej).days}d < {config.cooldown_c_dies}d)",
+                )
+        return cat, True, "rebutjat (C) fora de cooldown"
+    return CAT_B, True, "mai convidat (B)"
+
+
 def _eligible(
     records: list[InviteRecord], categoria: str, config: PolicyConfig, now: datetime
 ) -> bool:
-    """Cooldown + pending gate. A pending invite blocks the artist
-    regardless of category; A respects `cooldown_a_dies` since its last
-    invite; C-rejected respects `cooldown_c_dies` since the rejection; B
-    is always eligible."""
-    if _has_pending(records):
-        return False
-    if categoria == CAT_A:
-        last_invite = max((r.data_invitacio for r in records), default=None)
-        return last_invite is None or (now - last_invite).days >= config.cooldown_a_dies
-    if categoria == CAT_C:
-        rejections = [r for r in records if r.estat == ESTAT_REBUTJADA]
-        if not rejections:
-            # C with no rejection means pending-only, already blocked
-            # above; defensive True keeps the function total.
-            return True
-        last_rej = max((r.data_resolucio or r.data_invitacio) for r in rejections)
-        return (now - last_rej).days >= config.cooldown_c_dies
-    return True  # CAT_B
+    """Cooldown + pending gate (bool view of `candidate_status`)."""
+    return candidate_status(records, config, now)[1]
 
 
 def select_collaborators(

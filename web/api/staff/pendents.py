@@ -147,6 +147,10 @@ def _artista_card(a, homset=None) -> dict:
         # two numbers match, but they're kept named per use case for
         # clarity at the call site.
         "n_top": getattr(a, "n_top", None),
+        # Distinct live cançons (verificada+activa) where the artist is
+        # principal or collaborator. Surfaced with `?include_n_top=1`
+        # (same gate as `n_top`); None otherwise.
+        "n_cancons_vives": getattr(a, "n_cancons_vives", None),
         "instagram_url": a.instagram_url or "",
         # Last.fm artist metadata — surfaced everywhere the card is used
         # (artistes list, pendents, edit page) so staff can spot

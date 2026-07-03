@@ -156,6 +156,125 @@ def test_n_top_no_double_counting_when_principal_and_collab(staff_client):
     assert by_nom["EXEMPLE Both"]["n_top"] == 2
 
 
+def _canco(artista, album, nom, isrc, *, verificada=True, activa=True):
+    return Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom=nom,
+        isrc=isrc,
+        verificada=verificada,
+        activa=activa,
+    )
+
+
+@pytest.mark.django_db
+def test_cancons_vives_counts_principal_or_collaborator(staff_client):
+    """`n_cancons_vives` = distinct live (verificada+activa) cançons the
+    artist takes part in, as principal OR collaborator. Dead/unverified
+    tracks don't count."""
+    Artista.objects.all().delete()
+    a = Artista.objects.create(nom="EXEMPLE Viu", aprovat=True)
+    lead = Artista.objects.create(nom="EXEMPLE Amfitrio", aprovat=True)
+    al = Album.objects.create(artista=a, nom="EXEMPLE Al")
+    al2 = Album.objects.create(artista=lead, nom="EXEMPLE Al2")
+    # 2 live as principal.
+    _canco(a, al, "EXEMPLE P1", "ZZ00VIU000001")
+    _canco(a, al, "EXEMPLE P2", "ZZ00VIU000002")
+    # 1 live as collaborator.
+    feat = _canco(lead, al2, "EXEMPLE Feat", "ZZ00VIU000003")
+    feat.artistes_col.add(a)
+    # 1 NON-live as principal (unverified) + 1 inactive → excluded.
+    _canco(a, al, "EXEMPLE Dead1", "ZZ00VIU000004", verificada=False)
+    _canco(a, al, "EXEMPLE Dead2", "ZZ00VIU000005", activa=False)
+
+    r = staff_client.get("/api/v1/staff/artistes/?include_n_top=1&sort=-n_top")
+    by_nom = {row["nom"]: row for row in r.json()["results"]}
+    assert by_nom["EXEMPLE Viu"]["n_cancons_vives"] == 3  # 2 principal + 1 collab
+
+
+@pytest.mark.django_db
+def test_cancons_vives_no_double_counting_principal_and_collab(staff_client):
+    """The two count paths (principal + collab) don't double-count.
+
+    They are disjoint PER cançó — the D5 signal forbids an artist from
+    being a collaborator on their own track — so summing them is exact,
+    no overlap correction needed. An artist who is principal on one live
+    track AND collaborator on a *different* one counts as exactly 2
+    (not Cartesian-inflated)."""
+    Artista.objects.all().delete()
+    a = Artista.objects.create(nom="EXEMPLE Doble", aprovat=True)
+    al = Album.objects.create(artista=a, nom="EXEMPLE Al")
+    _canco(a, al, "EXEMPLE Own", "ZZ00DBL000001")  # principal
+    other = Artista.objects.create(nom="EXEMPLE Amfitrio", aprovat=True)
+    al2 = Album.objects.create(artista=other, nom="EXEMPLE Al2")
+    feat = _canco(other, al2, "EXEMPLE Feat", "ZZ00DBL000002")
+    feat.artistes_col.add(a)  # collaborator on a different track
+
+    r = staff_client.get("/api/v1/staff/artistes/?include_n_top=1&sort=-n_top")
+    by_nom = {row["nom"]: row for row in r.json()["results"]}
+    assert by_nom["EXEMPLE Doble"]["n_cancons_vives"] == 2
+
+
+@pytest.mark.django_db
+def test_ordering_three_keys_novetats_surface(staff_client):
+    """Full ordering: n_top DESC, then n_cancons_vives DESC, then
+    alphabetical. A novetats-style collaborator (0 tops, 1 live song as
+    collaborator — the Trapella case) surfaces above the 0-top silence,
+    and equal (0-top, equal-vives) artists fall back to alphabetical."""
+    Artista.objects.all().delete()
+    # 1 top appearance — must lead regardless of live-song counts.
+    topper = Artista.objects.create(nom="EXEMPLE Topper", aprovat=True)
+    al_t = Album.objects.create(artista=topper, nom="EXEMPLE AlT")
+    c_t = _canco(topper, al_t, "EXEMPLE T", "ZZ00ORD000001")
+    TopSetmanal.objects.create(
+        canco=c_t, territori="CAT", setmana=date(2026, 5, 19), posicio=5,
+        score_setmanal=0.5,
+    )
+    # 0 tops, 5 live songs.
+    z5 = Artista.objects.create(nom="EXEMPLE Zulu Cinc", aprovat=True)
+    al_z = Album.objects.create(artista=z5, nom="EXEMPLE AlZ")
+    for i in range(5):
+        _canco(z5, al_z, f"EXEMPLE Z{i}", f"ZZ00ORD00010{i}")
+    # 0 tops, 2 live songs — two of them, to test the alphabetical tiebreak.
+    eq_b = Artista.objects.create(nom="EXEMPLE Equal B", aprovat=True)
+    eq_a = Artista.objects.create(nom="EXEMPLE Equal A", aprovat=True)
+    for art, tag in ((eq_b, "B"), (eq_a, "A")):
+        al = Album.objects.create(artista=art, nom=f"EXEMPLE AlEq{tag}")
+        _canco(art, al, f"EXEMPLE Eq{tag}1", f"ZZ00ORDEQ{tag}01")
+        _canco(art, al, f"EXEMPLE Eq{tag}2", f"ZZ00ORDEQ{tag}02")
+    # 0 tops, 1 live song as COLLABORATOR only (the Trapella case).
+    trapella = Artista.objects.create(nom="EXEMPLE Trapella", aprovat=True)
+    host = Artista.objects.create(nom="EXEMPLE Zzz Host", aprovat=True)
+    al_h = Album.objects.create(artista=host, nom="EXEMPLE AlH")
+    feat = _canco(host, al_h, "EXEMPLE HostTrack", "ZZ00ORD000200")
+    feat.artistes_col.add(trapella)
+
+    r = staff_client.get(
+        "/api/v1/staff/artistes/?aprovat=1&instagram=no&include_n_top=1&sort=-n_top"
+    )
+    rows = r.json()["results"]
+    order = [row["nom"] for row in rows]
+    # Topper (1 top) first.
+    assert order[0] == "EXEMPLE Topper"
+
+    def pos(nom):
+        return order.index(nom)
+
+    # Within the 0-top block: 5 vives > 2 vives > 1 vive (collaborator).
+    assert pos("EXEMPLE Zulu Cinc") < pos("EXEMPLE Equal A")
+    assert pos("EXEMPLE Equal A") < pos("EXEMPLE Trapella")
+    # Equal vives (2 each) → alphabetical: "Equal A" before "Equal B".
+    assert pos("EXEMPLE Equal A") < pos("EXEMPLE Equal B")
+    # The collaborator-only novetats artist rises ABOVE the 0-vive host
+    # (host has 1 live song too — as principal — so tie on vives=1 →
+    # alphabetical: "Trapella" before "Zzz Host").
+    assert pos("EXEMPLE Trapella") < pos("EXEMPLE Zzz Host")
+    # And the Trapella row reports its live-song count.
+    by_nom = {row["nom"]: row for row in rows}
+    assert by_nom["EXEMPLE Trapella"]["n_cancons_vives"] == 1
+    assert by_nom["EXEMPLE Trapella"]["n_top"] == 0
+
+
 @pytest.mark.django_db
 def test_al_top_filter_and_gestor_email_flag(staff_client, django_user_model):
     """Fase 2 D2: ?al_top=1 lists artistes in the latest PPCC week and

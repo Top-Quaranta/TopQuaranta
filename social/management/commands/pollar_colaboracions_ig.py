@@ -67,6 +67,18 @@ class Command(BaseCommand):
 
         now = timezone.now()
         cutoff = now - timedelta(days=WINDOW_DIES)
+
+        # (a) Expire pending invites older than the window: IG acceptance
+        # is immediate-or-never, so an un-resolved invite past 14 days is a
+        # soft decline. Marking `caducada` (with `data_resolucio`) closes
+        # the "eternal pendent" hole — the policy then treats it like a
+        # rejection (C, 90-day cooldown) so the artist can be re-invited.
+        caducades = InvitacioColaboracioIG.objects.filter(
+            estat=InvitacioColaboracioIG.ESTAT_PENDENT,
+            data_invitacio__lt=cutoff,
+        ).update(estat=InvitacioColaboracioIG.ESTAT_CADUCADA, data_resolucio=now)
+
+        # (b) Reconcile still-fresh pending invites against the API.
         pendents = InvitacioColaboracioIG.objects.filter(
             estat=InvitacioColaboracioIG.ESTAT_PENDENT,
             data_invitacio__gte=cutoff,
@@ -99,14 +111,18 @@ class Command(BaseCommand):
 
         # Rolling acceptance rate over ALL resolved invites (derived from
         # DB state → idempotent). update_or_create so re-running the same
-        # day overwrites the gauge instead of adding a row.
+        # day overwrites the gauge instead of adding a row. `caducada`
+        # counts as a non-acceptance in the denominator (a soft decline).
         n_acc = InvitacioColaboracioIG.objects.filter(
             estat=InvitacioColaboracioIG.ESTAT_ACCEPTADA
         ).count()
-        n_rej = InvitacioColaboracioIG.objects.filter(
-            estat=InvitacioColaboracioIG.ESTAT_REBUTJADA
+        n_no = InvitacioColaboracioIG.objects.filter(
+            estat__in=[
+                InvitacioColaboracioIG.ESTAT_REBUTJADA,
+                InvitacioColaboracioIG.ESTAT_CADUCADA,
+            ]
         ).count()
-        denom = n_acc + n_rej
+        denom = n_acc + n_no
         taxa = (n_acc / denom) if denom else 0.0
         MetricaPipeline.objects.update_or_create(
             data=now.date(),
@@ -115,6 +131,6 @@ class Command(BaseCommand):
             defaults={"valor_float": taxa},
         )
         self.stdout.write(
-            f"Resoltes {resolved} invitacions · taxa acceptació "
+            f"Caducades {caducades} · resoltes {resolved} · taxa acceptació "
             f"{taxa:.3f} ({n_acc}/{denom})."
         )

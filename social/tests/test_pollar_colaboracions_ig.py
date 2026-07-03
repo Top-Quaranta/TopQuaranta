@@ -50,6 +50,48 @@ def _invite(artista, media, username, *, dies=1):
 
 
 @pytest.mark.django_db
+def test_poller_expires_old_pending_to_caducada(monkeypatch):
+    """Pending invites older than the 14-day window become `caducada`
+    (with data_resolucio), closing the eternal-pending hole. Fresh
+    pending is untouched by this pass."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    a = _artista("EXEMPLE A")
+    old = _invite(a, "m1", "u_old", dies=20)  # > 14d
+    fresh = _invite(a, "m2", "u_fresh", dies=2)  # < 14d
+    # API unknown → fresh stays pending; only the expiry pass acts.
+    monkeypatch.setattr(instagram_client, "get_collaborators", lambda m: None)
+    call_command("pollar_colaboracions_ig")
+    old.refresh_from_db()
+    fresh.refresh_from_db()
+    assert old.estat == Inv.ESTAT_CADUCADA and old.data_resolucio is not None
+    assert fresh.estat == Inv.ESTAT_PENDENT and fresh.data_resolucio is None
+    # caducada counts as a non-acceptance in the rate (0 acc / 1 no = 0.0).
+    m = MetricaPipeline.objects.get(clau=METRICA_CLAU)
+    assert m.valor_float == 0.0
+
+
+@pytest.mark.django_db
+def test_poller_caducada_is_idempotent(monkeypatch):
+    cfg = ConfiguracioGlobal.load()
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    a = _artista("EXEMPLE A")
+    old = _invite(a, "m1", "u_old", dies=20)
+    monkeypatch.setattr(instagram_client, "get_collaborators", lambda m: None)
+    call_command("pollar_colaboracions_ig")
+    old.refresh_from_db()
+    first_resolucio = old.data_resolucio
+    call_command("pollar_colaboracions_ig")  # second run
+    old.refresh_from_db()
+    # Already caducada → not re-touched (the expiry pass filters on pendent).
+    assert old.estat == Inv.ESTAT_CADUCADA
+    assert old.data_resolucio == first_resolucio
+    assert MetricaPipeline.objects.filter(clau=METRICA_CLAU).count() == 1
+
+
+@pytest.mark.django_db
 def test_noop_when_flag_off():
     cfg = ConfiguracioGlobal.load()
     cfg.ig_collaboradors_actiu = False
@@ -148,7 +190,9 @@ def test_poller_leaves_pending_on_api_error(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_poller_skips_pending_older_than_window(monkeypatch):
+def test_poller_old_pending_expires_not_api_queried(monkeypatch):
+    """A pending invite older than the window is expired to `caducada`
+    by the local pass — its media is never queried against the API."""
     cfg = ConfiguracioGlobal.load()
     cfg.ig_collaboradors_actiu = True
     cfg.save()
@@ -160,8 +204,8 @@ def test_poller_skips_pending_older_than_window(monkeypatch):
     )
     call_command("pollar_colaboracions_ig")
     old.refresh_from_db()
-    assert old.estat == Inv.ESTAT_PENDENT
-    assert seen == []  # its media never queried
+    assert old.estat == Inv.ESTAT_CADUCADA  # expired, not left pending
+    assert seen == []  # its media never queried (only fresh pending hit the API)
 
 
 @pytest.mark.django_db

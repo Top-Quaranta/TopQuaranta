@@ -310,13 +310,21 @@ class InvitacioColaboracioIG(models.Model):
     ESTAT_PENDENT = "pendent"
     ESTAT_ACCEPTADA = "acceptada"
     ESTAT_REBUTJADA = "rebutjada"
+    # `caducada`: still pending after the 14-day poll window — IG invite
+    # acceptance is effectively immediate-or-never, so an un-resolved
+    # invite is treated as a soft decline (the poller stamps it; the
+    # policy treats it like a rejection: category C, 90-day cooldown).
+    # Closes the "eternal pendent" hole where such rows blocked the
+    # artist's re-invitation forever.
+    ESTAT_CADUCADA = "caducada"
     ESTAT_CHOICES = [
         (ESTAT_PENDENT, "Pendent"),
         (ESTAT_ACCEPTADA, "Acceptada"),
         (ESTAT_REBUTJADA, "Rebutjada"),
+        (ESTAT_CADUCADA, "Caducada"),
     ]
     # Set form for membership checks (mirrors the ADR's `ESTATS`).
-    ESTATS = {ESTAT_PENDENT, ESTAT_ACCEPTADA, ESTAT_REBUTJADA}
+    ESTATS = {ESTAT_PENDENT, ESTAT_ACCEPTADA, ESTAT_REBUTJADA, ESTAT_CADUCADA}
 
     artista = models.ForeignKey(
         "music.Artista",

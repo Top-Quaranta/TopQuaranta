@@ -340,12 +340,14 @@ key ever reaches a container, no registry rows written).
 
 - **`social.models.InvitacioColaboracioIG`** — one row per
   `(artista, ig_media_id)`: `username_snapshot`, `tipus_publicacio`,
-  `data_invitacio`, `estat` (pendent/acceptada/rebutjada), `data_resolucio`.
-  Artist FK is `PROTECT` (acceptance stats depend on the history).
+  `data_invitacio`, `estat` (pendent/acceptada/rebutjada/**caducada**),
+  `data_resolucio`. Artist FK is `PROTECT` (acceptance stats depend on the
+  history). `caducada` = pending past the 14-day window; the policy treats
+  it like a rejection.
 - **`social/collaboradors.py`** — pure, side-effect-free policy.
   `select_collaborators(pool, historic, config, *, now)` picks ≤
   `effective_slots` candidates: A (has accepted) / B (never invited) /
-  C (only rejected/pending); slots 1-`slots_acceptats` → A backfilled
+  C (only rejected/caducada/pending); slots 1-`slots_acceptats` → A backfilled
   from B, remaining → next B, C only fills otherwise-empty slots;
   cooldowns A/C, pending never re-invited. `GRAPH_MAX_COLLABORATORS = 3`
   hard-clamps `ig_collab_slots_total` (Meta's documented max).
@@ -353,10 +355,12 @@ key ever reaches a container, no registry rows written).
   the non-blocking substitution guard (§5.3): drop the offending handle,
   substitute the next candidate, last resort publish with none — a bad
   handle never blocks publication.
-- **`pollar_colaboracions_ig`** (hourly cron, dormant) reconciles pending
-  invites via `GET /<media>/collaborators` and writes the acceptance rate
-  to `MetricaPipeline` (`ig_collab_taxa_acceptacio`). No-op while the flag
-  is off; best-effort + idempotent.
+- **`pollar_colaboracions_ig`** (hourly cron) reconciles fresh pending
+  invites via `GET /<media>/collaborators` AND expires pending invites
+  older than 14 days to `caducada` (closing the eternal-pending hole),
+  then writes the acceptance rate to `MetricaPipeline`
+  (`ig_collab_taxa_acceptacio`; `caducada` counts as a non-acceptance in
+  the denominator). No-op while the flag is off; best-effort + idempotent.
 - **Wiring** (tranche 3a): `publicar_social._publish_feed`, **gated on the
   flag**, builds the ordered pool from the payload (`payload.build_top` /
   `build_novetats` now carry `artistes_pool` = `[{id, username}]`, additive),

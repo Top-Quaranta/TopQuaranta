@@ -32,11 +32,14 @@ GRAPH_MAX_COLLABORATORS = 3
 ESTAT_PENDENT = "pendent"
 ESTAT_ACCEPTADA = "acceptada"
 ESTAT_REBUTJADA = "rebutjada"
+# `caducada` (pending past the 14-day window) is treated exactly like a
+# rejection by the policy: category C + the C cooldown from its resolution.
+ESTAT_CADUCADA = "caducada"
 
 # Categories.
 CAT_A = "A"  # has accepted at least once
 CAT_B = "B"  # never invited
-CAT_C = "C"  # only rejected and/or pending, never accepted
+CAT_C = "C"  # only rejected / caducada / pending, never accepted
 
 
 @dataclass(frozen=True)
@@ -125,7 +128,9 @@ def candidate_status(
             )
         return cat, True, "acceptador (A)"
     if cat == CAT_C:
-        rejections = [r for r in records if r.estat == ESTAT_REBUTJADA]
+        rejections = [
+            r for r in records if r.estat in (ESTAT_REBUTJADA, ESTAT_CADUCADA)
+        ]
         if rejections:
             last_rej = max((r.data_resolucio or r.data_invitacio) for r in rejections)
             if (now - last_rej).days < config.cooldown_c_dies:

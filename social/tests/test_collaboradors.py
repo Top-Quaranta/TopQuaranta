@@ -121,6 +121,18 @@ def test_C_rejected_cooldown_90_days():
     assert [(s.username, s.categoria) for s in out2] == [("c1", CAT_C)]
 
 
+def test_C_caducada_treated_like_rejection_90_day_cooldown():
+    # A caducada invite (expired pending) behaves exactly like a
+    # rejection: category C, 90-day cooldown from its resolution.
+    recent = {
+        1: [InviteRecord("caducada", _days_ago(60), data_resolucio=_days_ago(50))]
+    }
+    assert select_collaborators(_pool("c1"), recent, CFG, now=NOW) == []
+    old = {1: [InviteRecord("caducada", _days_ago(120), data_resolucio=_days_ago(100))]}
+    out = select_collaborators(_pool("c1"), old, CFG, now=NOW)
+    assert [(s.username, s.categoria) for s in out] == [("c1", CAT_C)]
+
+
 def test_C_never_displaces_A_or_fresh_B():
     # Pool: c1 (eligible C, old rejection), a1 (eligible A), b1/b2 fresh B.
     hist = {

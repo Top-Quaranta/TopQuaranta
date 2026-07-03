@@ -104,7 +104,11 @@ backfill):
 | `data_resolucio` | `DateTimeField(null=True, blank=True)` | set by the poller when `estat` leaves `pendent` |
 
 - `UNIQUE(artista, ig_media_id)` — one invite row per artist per post.
-- `estat` choices constant `ESTATS = {"pendent","acceptada","rebutjada"}`.
+- `estat` choices constant
+  `ESTATS = {"pendent","acceptada","rebutjada","caducada"}`. `caducada`
+  (tranche 3b) = pending past the 14-day window; the policy treats it like
+  `rebutjada` (category C, 90-day cooldown), closing the eternal-pending
+  hole where an un-resolved invite blocked the artist forever.
 - Indexes: `(estat, data_invitacio)` (poller scan window),
   `(artista, estat)` (category A/C lookup).
 - `PROTECT` on the artist FK so a merge/delete can't silently orphan
@@ -214,16 +218,20 @@ distribution surface.
 
 New management command `social/management/commands/pollar_colaboracions_ig.py`:
 
-- Selects `InvitacioColaboracioIG` rows with `estat="pendent"` and
-  `data_invitacio >= now - 14d` (invites older than 14 days that are
-  still pending are treated as effectively declined and skipped — IG's
-  invite acceptance is practically immediate or never).
-- Groups by `ig_media_id`, calls `GET /<media>/collaborators` once per
-  media, and reconciles each row: present + accepted → `acceptada`;
-  present + declined / absent → `rebutjada`; stamps `data_resolucio`.
+- **Expiry pass (tranche 3b):** pending rows with `data_invitacio < now -
+  14d` are set to `caducada` (with `data_resolucio`) — IG acceptance is
+  immediate-or-never, so an un-resolved invite past the window is a soft
+  decline. This closes the eternal-pending hole (such rows used to sit
+  `pendent` forever, blocking the artist's re-invitation).
+- Reconcile pass: selects the still-fresh `estat="pendent"` rows
+  (`data_invitacio >= now - 14d`), groups by `ig_media_id`, calls
+  `GET /<media>/collaborators` once per media, and reconciles each:
+  present + accepted → `acceptada`; present + declined / absent →
+  `rebutjada`; stamps `data_resolucio`.
 - Writes a **`MetricaPipeline`** row per run with the rolling acceptance
-  rate (`acceptades / (acceptades + rebutjades)` over resolved invites)
-  so the acceptance trend is visible in the pipeline dashboard.
+  rate (`acceptades / (acceptades + rebutjades + caducades)` — `caducada`
+  is a non-acceptance) so the acceptance trend is visible on the pipeline
+  dashboard.
 - Best-effort and idempotent: a Graph hiccup logs and leaves the row
   `pendent` for the next tick; re-running never double-counts (state is
   derived from the API, not incremented).

@@ -1485,8 +1485,9 @@ def _story_novetats(
                 center_w=STORY_W,
             )
             ty += ti["lh"]
+        names = it.get("artistes_noms") or [it.get("artista_nom") or "—"]
         artist = _truncate(
-            d, it.get("artista_nom") or "—", f_artist, STORY_W - ar["wrap_margin"]
+            d, ", ".join(names), f_artist, STORY_W - ar["wrap_margin"]
         )
         _draw_tracked(
             d, 0, ty + ar["gap_above"], artist, f_artist, subtle, center_w=STORY_W

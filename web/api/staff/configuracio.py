@@ -78,6 +78,7 @@ _SECTION_MAP = {
     # D — editorial
     "editorial_veu": SECTION_EDITORIAL,
     "landing_editorial_veu": SECTION_EDITORIAL,
+    "novetats_stories_per_pagina": SECTION_EDITORIAL,
     # B — distribution / channels (managed primarily in the distribution
     # cockpit; surfaced here read/write because the model is reflected).
     "newsletter_publicacio_pont_actiu": SECTION_DISTRIBUCIO,

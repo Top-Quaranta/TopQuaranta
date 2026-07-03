@@ -246,6 +246,41 @@ Operational note: the link-sticker on the outro story must still be
 added manually each week through the Instagram app — the Graph API
 does not expose story stickers programmatically.
 
+## Novetats story set — paginated (2026-07-03)
+
+`renderer.render_stories_novetats(setmana, items, *, per_page,
+territori)` renders the novetats releases as a **paginated story set** —
+one 1080×1920 JPEG per chunk of `per_page` items — so every release
+appears (the weekly PPCC set's single slide 6 still shows only 2-3). The
+page count is `ceil(len(items)/per_page)`; each page carries a discreet
+`· k/M` suffix on the kicker (reusing the section-header style). Geometry
+comes from `_novetats_fit(cap, band_top)`: it keeps the design cover
+(210 px) and only tightens the inter-item gap, shrinking covers solely
+once the gap floor is hit (≥5 per page); every page in a set is sized for
+`per_page` so all share one scale and start-Y. `per_page` is
+`ConfiguracioGlobal.novetats_stories_per_pagina` (default **4**,
+staff-editable in Config → Editorial, renderer clamp 1-8).
+`_story_novetats` is unchanged in single-page mode (no `page`/`total_pages`
+args) — the weekly PPCC/territorial callers are byte-identical.
+
+`user_tags` are computed **per story** from the visible items only
+(principal + collaborators of those releases that have an `instagram_url`),
+coordinates anchored to each item's cover — no mention without a visible
+song. The publisher applies the same non-blocking guard as the feed
+carousel: a handle that errors a STORIES container is dropped and the
+story retried, last-resort published without mentions (stories support
+`user_tags` since 2025-07-09; **no** collaborators/product tags — feed
+only). First real run 2026-07-03: 11 nous_singles → 3 stories (4+4+3),
+5 effective mentions.
+
+**Collaborator parity (2026-07-03).** `payload.build_novetats` now emits
+`artistes_noms` (principal + track collaborators, deduped, via a single
+`_album_collabs` pass that also feeds the tag list), so the novetats feed
+slides (`feed_redesign.build_album` / `build_singles`) and the novetats
+story (`_story_novetats`) show **every** artist on a release — parity with
+the top carousel (`top_redesign._artist_credit`, PR #301), which had the
+fix while the novetats path did not.
+
 ## Territorial stories — Step 3c
 
 `render_stories_territorial` reuses the PPCC builders, recoloured by

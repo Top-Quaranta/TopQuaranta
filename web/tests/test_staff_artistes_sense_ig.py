@@ -227,7 +227,10 @@ def test_ordering_three_keys_novetats_surface(staff_client):
     al_t = Album.objects.create(artista=topper, nom="EXEMPLE AlT")
     c_t = _canco(topper, al_t, "EXEMPLE T", "ZZ00ORD000001")
     TopSetmanal.objects.create(
-        canco=c_t, territori="CAT", setmana=date(2026, 5, 19), posicio=5,
+        canco=c_t,
+        territori="CAT",
+        setmana=date(2026, 5, 19),
+        posicio=5,
         score_setmanal=0.5,
     )
     # 0 tops, 5 live songs.

@@ -192,70 +192,13 @@ short uppercase headline (≤ 50 chars) per hero `scenario_code` for the
 #1 story hero slide (e.g. a13 → "TORNA AL CIM DESPRÉS DE 5 SETMANES",
 a2 → "5A SETMANA AL CIM"). Created in 3a; wired into the renderer in 3b.
 
-## PPCC story set — 7 editorial slides (Step 3b)
+## Story sets — see `social-stories.md`
 
-`renderer.render_stories_ppcc(setmana, entries, *, novetats_items,
-hero_headline)` replaces the legacy PPCC sequence (intro + up to 40
-cançó slides + CTA) with a fixed seven-slide set ordered toward the #1
-climax (structure + a **2026-06-02 redesign** porting the validated
-Claude Design canvas, pixel-measured from the 1080×1920 references).
-Both are Step 3b; the territorial port is Step 3c (section below):
-
-1. **intro** — green radial field, white logo, "presenta" serif accent,
-   the big **EL TOP / 40 / D'AQUESTA SETMANA** stack, star-separated
-   SETMANA pill row.
-2. **top 40→11** — 5×6 cover mosaic, yellow Anton number badge pinned to
-   each cover's top-left corner (`width:auto`, so double digits stay
-   left-aligned), Bricolage titles + Roboto artist subtitles.
-3. **top 10→4** — 2-column cover grid (#10/#9, #8/#7, #6/#5) with #4
-   centred below (mirrors the newsletter D1a block).
-4. **podi #3-2** — two centred 300 px covers stacked, big Anton badge +
-   Bricolage title + Roboto artist.
-5. **#1 hero** — inverted hierarchy: a ghost "1" clipped at the right, a
-   subordinate yellow scenario kicker, and the SONG TITLE in **Playfair
-   Display 800** as the primary element (the only Playfair on the set).
-6. **novetats** — 2-3 most recent releases (albums + singles merged,
-   newest first); **skipped** when nothing is recent → 6 or 7 slides.
-7. **outro** — yellow field, ink logo, "EL TOP 40" (Anton), star
-   separator, an informative (non-clickable) underlined `topquaranta.cat`
-   CTA, SETMANA footer. No slate `COLOR_CARD` card.
-
-**Typography** (vendored OFL TTFs under `social/fonts/`): **Anton**
-(display/numbers/pills/footers), **Bricolage Grotesque 800** (song
-titles on 2/3/4/6), **Playfair Display 800** (slide-5 title only),
-**Instrument Serif italic** (the two serif accents); the sans role
-(kickers, artist subtitles, hero scenario, CTA) reuses bundled
-**Roboto**. Playfair/Bricolage are static instances cut from the upstream
-variable fonts. Letter-spacing + line-height are emulated glyph-by-glyph
-(`_draw_tracked`); the star separators are vector polygons
-(`_draw_star`); backgrounds are numpy radial gradients (`_radial_bg`,
-flat green/ink/yellow + gradient — grain deliberately skipped). The logo
-reuses `svg_assets.logo_image_mono` (white on dark, ink on yellow). No
-trend cues anywhere.
-
-Covers resolve **local self-hosted portada first** (`ingesta.portades`,
-250 px for small slots / 500 px for large) then the live Deezer CDN URL
-then a placeholder tile — the newsletter placeholder does NOT apply here.
-The PPCC story set is a fixed 7-slide editorial sequence (the
-`story_max_cancons_ppcc` field + its `/staff/social/story-cap/` endpoint were
-removed 2026-06-11 — they governed nothing). The `#1` headline comes from
-`_story_hero_headline(setmana, territori)`. Output stays JPEG q90; a
-full set is ~1 MB (7 JPG) vs the legacy ~42 PNG.
-
-Operational note: the link-sticker on the outro story must still be
-added manually each week through the Instagram app — the Graph API
-does not expose story stickers programmatically.
-
-## Territorial stories — Step 3c
-
-`render_stories_territorial` reuses the PPCC builders, recoloured by
-`colors.story_palette` (accent/deep/light + a `badge` role; CAT badge is
-a vivid orange, others = accent). Slides add a `TERRITORI_SHORT` pill, an
-intro territory-icon watermark (`_STORY_ICON_CODI` maps CAT → senyera)
-and a `TERRITORI_DE` subtitle (step-down past 680 px); hero/outro stay
-brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
-below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
-loud. PPCC byte-identical.
+The Instagram **story** renderers (PPCC 7-slide editorial set, the
+paginated novetats story set, and the territorial port) live in
+**`docs/architecture/social-stories.md`** — split out 2026-07-03 to
+keep this doc under the size ceiling (docs-maintenance Rule 3). Feed
+renderers stay below.
 
 ## Render engine — `social/render_core.py` (shared primitives)
 

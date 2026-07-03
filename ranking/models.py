@@ -272,6 +272,21 @@ class ConfiguracioGlobal(models.Model):
         ),
     )
 
+    # How many novetats releases fit on each Instagram novetats story
+    # before it spills to the next one. The novetats set is paginated
+    # into ceil(N/per_page) stories so every release surfaces (was a
+    # single 3-item slide). Staff-editable from Configuració. Clamped to
+    # 1..8 by the renderer (`social/renderer.py::render_stories_novetats`);
+    # 4 keeps the item scale close to the old 3-per-slide look.
+    novetats_stories_per_pagina = models.PositiveSmallIntegerField(
+        default=4,
+        help_text=(
+            "Novetats per story d'Instagram abans de passar a la següent "
+            "(paginació). Les novetats es reparteixen en diverses stories "
+            "perquè apareguen totes. Inicial 4; el renderer el limita a 1-8."
+        ),
+    )
+
     # Channel arg → its per-channel `*_actiu` field. Single source of
     # truth for the set of distribution channels the master gates.
     CHANNEL_SWITCH_FIELDS = {

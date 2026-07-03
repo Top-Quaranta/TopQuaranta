@@ -100,6 +100,25 @@ def _album_collabs(album_ids: list[int]) -> dict[int, list]:
     return out
 
 
+def _artistes_pool(artistes) -> list[dict]:
+    """Ordered `[{"id", "username"}]` for the collaborator slot policy
+    (ADR-0015): principal + collaborators that have a resolvable IG
+    username, de-duplicated by artist id, in the given order. Additive —
+    the tagger keeps reading `artistes_instagram_urls`."""
+    from .captions import instagram_username
+
+    out: list[dict] = []
+    seen: set[int] = set()
+    for a in artistes:
+        if a is None or a.id in seen:
+            continue
+        u = instagram_username(getattr(a, "instagram_url", "") or "")
+        if u:
+            out.append({"id": a.id, "username": u})
+            seen.add(a.id)
+    return out
+
+
 def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
     """Build the top entries (chart order) + previous-week positions
     so the renderer can draw arrows. Returns None if the requested
@@ -158,9 +177,11 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
             # Lets the newsletter link every collaborator to /artista/{slug}
             # (Slice 2); the social engine ignores this field.
             artistes_slugs = [artista.slug, *[a.slug for a in col_objs]]
+            artistes_pool = _artistes_pool([artista, *col_objs])
         else:
             artistes_noms = ["—"]
             artistes_slugs = [None]
+            artistes_pool = []
         # Primary territori for the row's silhouette. Prefer a
         # non-aggregate code (icon variety); fall back to PPCC if the
         # artist is only tagged global. Without this the renderer's
@@ -192,6 +213,9 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 # The publicar_social tagger reads this list to attach
                 # one `user_tags` payload per artist per slide.
                 "artistes_instagram_urls": _instagram_urls_for_canco(canco),
+                # Ordered [{"id","username"}] for the collaborator slot
+                # policy (ADR-0015). Additive; the tagger ignores it.
+                "artistes_pool": artistes_pool,
                 "cover_url": getattr(album, "imatge_url", None) or None,
                 # Deezer album id for the newsletter's local-cover lookup
                 # (`comptes.newsletter_covers.album_cover_url`).
@@ -322,6 +346,9 @@ def build_novetats(
                 "artista_slug": artista.slug if artista else None,
                 "artista_instagram_url": principal_url,
                 "artistes_instagram_urls": artistes_instagram_urls,
+                # Ordered [{"id","username"}] for the collaborator slot
+                # policy (ADR-0015). Additive; the tagger ignores it.
+                "artistes_pool": _artistes_pool([artista, *col_objs]),
                 "artista_territori": territori,
                 "cover_url": getattr(a, "imatge_url", None) or None,
                 "album_deezer_id": getattr(a, "deezer_id", None),

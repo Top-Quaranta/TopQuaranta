@@ -269,12 +269,23 @@ expectations against: **91/177 handles (51.4 %)** on 2026-07-03.
   grids); a polite, history-aware invite policy; an acceptance metric to
   judge whether it's worth it; zero risk until the flag flips.
 - **Negative / sharp-edged:**
-  - IG imposes a **max collaborators per post** (documented as small —
-    treat `ig_collab_slots_total` as the cap and never exceed the Graph
-    limit; verify the exact number against the live Media reference at
-    implementation time, as Meta has changed it before).
+  - IG's documented **max is 3 collaborators per post** (Meta Media
+    reference, confirmed 2026-07-03: "up to 3 instagram usernames as
+    collaborators", on feed image / reels / carousels — **not stories**).
+    `social.collaboradors.GRAPH_MAX_COLLABORATORS = 3` hard-clamps
+    `ig_collab_slots_total` to this. **Observed** in a create-only probe
+    (2026-07-03): a feed `/media` container with **4** collaborators was
+    accepted with **no error** (container id returned), and the
+    `collaborators` field is **not readable back** off a container (`GET`
+    → code 100 "nonexisting field"). So container-creation is lenient;
+    the documented 3-limit is presumably enforced (or the extras dropped)
+    at `media_publish`, which was **not** tested to avoid a real post.
+    Net: keep the clamp at 3 (matches the docs); do not infer the API
+    enforces it at create time.
   - `collaborators` **errors** the container on a bad handle (unlike the
     silent `user_tags` drop) — the guard is load-bearing, not a nicety.
+    (The count-limit leniency above is separate: bad *handles* are
+    expected to error; an over-count did not.)
   - Acceptance is async and often **never** happens; the 14-day poller
     window + "pending blocks re-invite" rule keep the queue from
     thrashing, but a chunk of invites will sit unresolved forever

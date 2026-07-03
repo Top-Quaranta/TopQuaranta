@@ -322,6 +322,30 @@ def get_post_metrics(media_id: str, *, is_story: bool = False) -> dict:
     }
 
 
+def get_collaborators(media_id: str) -> dict[str, str] | None:
+    """Invite state of a published feed media's collaborators.
+
+    Returns `{username_lower: invite_status_lower}` from
+    `GET /<media>/collaborators?fields=username,invite_status`, or
+    **None** when we can't know (DRY_RUN, or no media id) so the poller
+    leaves those invites `pendent` rather than misreading silence as a
+    rejection. Raises `RuntimeError` on a live API error — the poller
+    catches it and skips that media for this tick.
+
+    Consumed only by `pollar_colaboracions_ig` (ADR-0015 §5.5); inert in
+    tranche 1 (the poller no-ops while the master flag is off).
+    """
+    if is_dry_run() or not media_id:
+        return None
+    body = _get(f"{media_id}/collaborators", {"fields": "username,invite_status"})
+    out: dict[str, str] = {}
+    for row in body.get("data") or []:
+        name = (row.get("username") or "").strip().lower()
+        if name:
+            out[name] = (row.get("invite_status") or "").strip().lower()
+    return out
+
+
 def get_account_stats() -> dict:
     """Snapshot of follower + media counts for the IG business account."""
     if is_dry_run():

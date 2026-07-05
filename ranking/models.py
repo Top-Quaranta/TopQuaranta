@@ -248,6 +248,20 @@ class ConfiguracioGlobal(models.Model):
         default=0,
         help_text="Minuts de retard addicional per a newsletter. Tope 180.",
     )
+    # Optional EXTRA recipient for the weekly newsletter DRAFT preview
+    # (email-client render testing, 2026-07-05). Empty (default) keeps
+    # the behaviour byte-identical: the preview goes to settings.ADMINS
+    # only. It is NEVER used for the real subscriber send.
+    newsletter_desti_prova = models.EmailField(
+        blank=True,
+        default="",
+        help_text=(
+            "Adreça opcional que rep TAMBÉ l'esborrany setmanal de la "
+            "newsletter (a més de l'admin), per a provar el render als "
+            "clients de correu. Buit = cap enviament extra. Mai s'usa "
+            "per a l'enviament real als subscriptors."
+        ),
+    )
     editorial_veu = models.TextField(
         blank=True,
         default="",

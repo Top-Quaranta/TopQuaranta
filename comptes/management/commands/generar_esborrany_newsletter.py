@@ -103,6 +103,7 @@ class Command(BaseCommand):
             font=NewsletterDraft.FONT_MOTOR,
         )
         self._email_staff(draft)
+        self._email_desti_prova(draft)
         self.stdout.write(
             self.style.SUCCESS(f"Esborrany creat (pk={draft.pk}, setmana={setmana}).")
         )
@@ -127,3 +128,18 @@ class Command(BaseCommand):
             )
         except Exception:  # noqa: BLE001
             logger.exception("generar_esborrany_newsletter: mail_admins failed")
+
+    def _email_desti_prova(self, draft: NewsletterDraft) -> None:
+        """Send the FULL rendered preview to the optional render-testing
+        address (`ConfiguracioGlobal.newsletter_desti_prova`) ONLY. Empty
+        field (the default) → no extra send, byte-identical behaviour.
+        Never reaches subscribers: this is the draft-preview path."""
+        from comptes.newsletter import (
+            notify_admins_draft_preview,
+            preview_extra_recipient,
+        )
+
+        extra = preview_extra_recipient()
+        if not extra:
+            return
+        notify_admins_draft_preview(draft, recipients=[extra])

@@ -117,6 +117,76 @@ def test_generation_idempotent_does_not_overwrite(mock_build, mock_mail):
     assert NewsletterDraft.objects.filter(setmana=monday).count() == 1
 
 
+# ── newsletter_desti_prova (extra draft-preview recipient) ──────────
+
+
+@pytest.mark.django_db
+@patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
+@patch("comptes.management.commands.generar_esborrany_newsletter.build_draft_text")
+def test_generation_no_extra_mail_when_desti_prova_empty(
+    mock_build, mock_mail, mailoutbox
+):
+    """Default (camp buit) → byte-identical behaviour: only the
+    mail_admins notification, no extra preview send."""
+    monday = _current_monday()
+    _seed_top(setmana=monday)
+    mock_build.return_value = ("Subjecte", "<p>n</p>")
+    call_command("generar_esborrany_newsletter", stdout=StringIO())
+    assert mock_mail.called
+    assert len(mailoutbox) == 0  # no preview mail fired
+
+
+@pytest.mark.django_db
+@patch("comptes.management.commands.generar_esborrany_newsletter.mail_admins")
+def test_generation_sends_full_preview_to_desti_prova(mock_mail, mailoutbox):
+    """With `newsletter_desti_prova` set, the engine path ALSO sends the
+    FULL rendered preview (management block included) to that address
+    only — the admin link mail stays untouched."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.newsletter_desti_prova = "prova.render@example.com"
+    cfg.save()
+    monday = _current_monday()
+    _seed_top(setmana=monday)
+    call_command("generar_esborrany_newsletter", stdout=StringIO())
+    assert mock_mail.called  # admin link mail unchanged
+    assert len(mailoutbox) == 1
+    m = mailoutbox[0]
+    assert m.to == ["prova.render@example.com"]
+    html = m.alternatives[0][0]
+    assert "Còpia de gestió" in html  # full preview, admin block included
+
+
+@pytest.mark.django_db
+def test_desti_prova_never_reaches_subscriber_send(mailoutbox, django_user_model):
+    """The real subscriber send ignores `newsletter_desti_prova`."""
+    from comptes.models import PerfilUsuari
+    from comptes.newsletter import send_top_newsletter
+    from social import payload
+
+    cfg = ConfiguracioGlobal.load()
+    cfg.newsletter_desti_prova = "prova.render@example.com"
+    cfg.save()
+    monday = _current_monday()
+    _seed_top(setmana=monday)
+    user = django_user_model.objects.create_user(
+        username="sub_dp", email="sub_dp@example.com", password="x"
+    )
+    PerfilUsuari.objects.filter(usuari=user).update(vol_newsletter=True)
+    data = payload.build_top("PPCC", monday)
+    summary = send_top_newsletter(
+        "top_ppcc",
+        "PPCC",
+        monday,
+        monday + datetime.timedelta(days=5),
+        data["entries"],
+        subject_override="Subj",
+        narrative_html_override="<p>n</p>",
+    )
+    assert summary == "sent=1 fail=0"
+    recipients = [addr for m in mailoutbox for addr in m.to]
+    assert recipients == ["sub_dp@example.com"]
+
+
 # ── send ─────────────────────────────────────────────────────────────
 
 

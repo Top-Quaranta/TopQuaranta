@@ -308,6 +308,16 @@ function CronStatus({ cron }) {
           : `Aquest cron no hauria de saltar mai (la pròxima execució és lluny). ` +
             `Si persisteix, l'execució anterior està penjada.`
     }
+  } else if (cron.status === 'DISABLED' && !stale) {
+    // Feature gated off by flag (e.g. backup offsite abans d'activar):
+    // estat legítim, mai vermell. Si el wrapper deixa de córrer (status
+    // file envellit més enllà de max_age_hours), cau a la branca STALE
+    // de baix i es posa vermell — paritat amb health_report.classify_cron.
+    tone = 'gray'
+    label = 'DESACTIVAT'
+    worry =
+      `Funcionalitat apagada per flag — no és cap fallada. ` +
+      `S'activa des del .env (vegeu docs/ops/backup-offsite.md).`
   } else if (stale) {
     tone = 'red'
     label = `STALE`

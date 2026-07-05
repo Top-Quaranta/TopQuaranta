@@ -65,6 +65,11 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 03:00 → PostgreSQL backup. Tiered retention in /home/topquaranta/backups/
 0 3 * * *   postgres      /home/topquaranta/bin/tq-backup >> /var/log/topquaranta/backup.log 2>&1
 
+# 03:30 → Offsite backup (capa 2): restic → Backblaze B2, append-only.
+# GATED: inert (status=DISABLED, exit 0) until OFFSITE_BACKUP_ACTIU=1 +
+# restic vars in the .env + restic installed. docs/ops/backup-offsite.md.
+30 3 * * *  topquaranta   /home/topquaranta/bin/tq-backup-offsite >> /var/log/topquaranta/backup-offsite.log 2>&1
+
 # 04:00 → Purge expired unverified tracks (older than DIES_CADUCITAT).
 0 4 * * *   topquaranta   /home/topquaranta/bin/tq-run netejar_caducades >> /var/log/topquaranta/neteja.log 2>&1
 

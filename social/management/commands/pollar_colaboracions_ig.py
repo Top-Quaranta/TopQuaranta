@@ -13,6 +13,12 @@ reconciles each row. Best-effort + idempotent: a Graph hiccup leaves the
 row `pendent` for the next tick; the acceptance rate written to
 `MetricaPipeline` is derived from DB state (not incremented), so
 re-running the same day overwrites rather than double-counts.
+
+Fail-safe (2026-07-05, added before the first live batch): every fetch
+is logged raw BEFORE interpretation, and a response that is empty or
+contains none of the media's pending invitees resolves nothing — we
+can't distinguish "everyone declined" from "Graph doesn't list pending
+invitees", so a human reads the raw log and decides.
 """
 
 from __future__ import annotations
@@ -99,6 +105,26 @@ class Command(BaseCommand):
                 continue
             if statuses is None:
                 # DRY_RUN or unknown — don't misread silence as rejection.
+                continue
+            # Parsed map, logged BEFORE interpretation (the client already
+            # logs the verbatim Graph body). Persistent via cron redirect.
+            self.stdout.write(f"[raw] media={media_id} statuses={statuses!r}")
+            pendents_media = {inv.username_snapshot.lower() for inv in rows}
+            if not statuses or not (pendents_media & statuses.keys()):
+                # FAIL-SAFE (2026-07-05, pre first live batch): an empty
+                # collaborators list — or one containing NONE of our pending
+                # invitees — is indistinguishable from "the endpoint doesn't
+                # list pending invitees at all". Touch nothing (no estat, no
+                # cooldown); the raw log above is the evidence for a human
+                # call. Once ≥1 pending invitee DOES appear in a response,
+                # absence of the others is meaningful again (declined or
+                # removed) and the original mapping below applies untouched.
+                logger.warning(
+                    "fail-safe: media %s — resposta sense cap dels %d "
+                    "invitats pendents; cap estat modificat",
+                    media_id,
+                    len(rows),
+                )
                 continue
             for inv in rows:
                 nou = reconcile_estat(statuses.get(inv.username_snapshot.lower()))

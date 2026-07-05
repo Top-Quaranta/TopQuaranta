@@ -363,6 +363,11 @@ def get_collaborators(media_id: str) -> dict[str, str] | None:
     if is_dry_run() or not media_id:
         return None
     body = _get(f"{media_id}/collaborators", {"fields": "username,invite_status"})
+    # Raw capture BEFORE any parsing/interpretation (ADR-0015 §5.5
+    # fail-safe, 2026-07-05): lands in analytics.log via the cron
+    # redirect, so the first live batch leaves a verbatim record of
+    # what Graph actually returned for pending invitees.
+    logger.info("get_collaborators raw media=%s body=%r", media_id, body)
     out: dict[str, str] = {}
     for row in body.get("data") or []:
         name = (row.get("username") or "").strip().lower()

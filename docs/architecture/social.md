@@ -361,6 +361,9 @@ key ever reaches a container, no registry rows written).
   then writes the acceptance rate to `MetricaPipeline`
   (`ig_collab_taxa_acceptacio`; `caducada` counts as a non-acceptance in
   the denominator). No-op while the flag is off; best-effort + idempotent.
+  Fail-safe (2026-07-05): every fetch is logged raw before interpretation;
+  an empty response — or one with none of the media's pending invitees —
+  resolves nothing (no estat, no cooldown; a human reads the raw log).
 - **Wiring** (tranche 3a): `publicar_social._publish_feed`, **gated on the
   flag**, builds the ordered pool from the payload (`payload.build_top` /
   `build_novetats` now carry `artistes_pool` = `[{id, username}]`, additive),

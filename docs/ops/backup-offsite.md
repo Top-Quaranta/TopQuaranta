@@ -1,174 +1,186 @@
-# Backup offsite (capa 2) — document de disseny
+# Backup offsite (capa 2) — disseny i activació
 
-> Estat: **PROPOSTA** (2026-07-05). Cap peça implementada. Les decisions
-> de la §8 corresponen al Miquel. Mesures que fonamenten aquest disseny:
-> `docs/audits/2026-07-05-recon-backup-offsite.md`.
-> Capa 1 existent: Hetzner Cloud Backups (imatge diària, 7 de retenció,
-> 20% del preu de la instància) + `tq-backup` (dumps locals) +
-> `tq-restore-test` (mensual). Vegeu runbook §4.
+> Estat: **DECIDIT I IMPLEMENTAT (GATED)** — 2026-07-05. El codi és a
+> main però inert: fins que el Miquel no complete l'activació (§9), el
+> cron reporta `DISABLED` i no toca res. Decisions preses pel Miquel el
+> 2026-07-05: destí **Backblaze B2** amb key append-only; **retenció
+> dividida per PII** (90 dies el dump complet / 12 mesos el sanejat);
+> xifratge restic en origen. Mesures que fonamenten el disseny:
+> `docs/audits/2026-07-05-recon-backup-offsite.md`. Política de
+> retenció completa: `docs/ops/retention.md` §Backups.
 
 ## 1. Per què una capa 2
 
-La capa 1 sencera comparteix un únic domini de fallada: el compte
-Hetzner. El token de l'API viu al `.env` del mateix servidor, així que
-un compromís del box permet esborrar també les imatges Cloud. I la BD
-conté ara PII de comunitat (perfils, DMs) — la condició que el runbook
-fixava per revisar el risc acceptat del 2026-05-07.
+La capa 1 (imatges Hetzner Cloud diàries ×7 + dumps locals de
+`tq-backup` + `tq-restore-test` mensual) comparteix un únic domini de
+fallada: el compte Hetzner. El token de l'API viu al `.env` del mateix
+servidor, així que un compromís del box permet esborrar també les
+imatges Cloud. I la BD conté PII de comunitat (perfils, DMs) — la
+condició que el runbook fixava per revisar el risc acceptat del
+2026-05-07.
 
 Objectiu: una còpia **fora del compte Hetzner**, **xifrada en origen**,
 que **el servidor no puga destruir** ni tan sols amb root.
 
-## 2. Eina: restic
+## 2. Peces (totes a main, totes gated)
 
-- Xifratge autenticat en origen (AES-256 + Poly1305); el destí només veu
-  blobs opacs.
-- Dedup per contingut: les portades (868 MB, append-mostly) costen una
-  vegada; els dumps diaris només pugen el delta real.
-- Suporta SFTP (Storage Box) i S3 (Backblaze B2) sense dependències.
-- Binari estàtic únic — s'instal·la copiant un fitxer (quan s'aprove;
-  res s'instal·la durant el recon).
-- `restic check --read-data-subset` permet verificació d'integritat
-  incremental barata.
-
-## 3. Què es copia (payload)
-
-| Inclòs | Mida | Nota |
+| Peça | Fitxer | Estat |
 |---|---|---|
-| Dump BD del dia | ~30 MB | Vegeu nota de format ↓ |
-| `/home/topquaranta/app/.env` | 2 KB | Secrets — xifrats per restic |
-| `/home/topquaranta/app/data/` | 2 MB | CSVs d'operacions |
-| `/var/topquaranta/portades/` | 868 MB | Cobreix àlbums Deezer delistats |
+| Script diari 03:30 | `bin/tq-backup-offsite` | Implementat; `DISABLED` fins a l'activació |
+| Cron | `deploy/cron.topquaranta` (03:30) + `deploy/cron-meta.json` | Desplegat |
+| Estat a tq-health / panell | `analytics/health_report.py` + `EstatPage.jsx` — estat `DISABLED` gris, legítim, sense alerta; si el wrapper deixa de córrer, cau a `STALE` vermell | Implementat |
+| Dump sanejat mensual | `bin/tq-backup` → `monthly-safe/tq-month-safe-*` | Actiu des del primer dia 1 post-deploy |
+| Retenció PII 90 d | `bin/tq-backup` → `monthly/tq-month-pii-*` | Activa (només fitxers nous; els legacy conserven 365 d) |
+| Guards CI | `topquaranta/tests/test_backup_offsite.py` | Actius |
 
-Exclòs (regenerable): `.venv`, `staticfiles/`, renders socials, models
-ML, goaccess, logs. El conjunt està definit al recon §3.
+## 3. Payload i tags
 
-**Nota de format del dump**: el `gzip -9` actual trenca la dedup de
-restic (qualsevol canvi re-xifra tot el fitxer). Opcions, de menys a més
-canvi: (a) apuntar restic al `.sql.gz` tal qual i acceptar ~30 MB/dia de
-churn — simple, i a aquesta escala el cost és negligible; (b) afegir un
-`pg_dump -Fc` (custom, comprimit intern per taula, dedup raonable) només
-per a la capa 2. **Proposta: (a) per començar** — 30 MB/dia × retenció
-365 dies ≈ 11 GB/any de pitjor cas, que segueix costant cèntims. Es pot
-migrar a (b) si el dipòsit molesta.
+Dos snapshots restic per nit, etiquetats per política de retenció:
 
-## 4. Freqüència i encaix amb el cron
+- **`--tag pii`** (retenció ≤90 dies, aplicada des del Mac): últim dump
+  diari complet + `.env` + `data/`.
+- **`--tag safe`** (12 mesos): `monthly-safe/` (dumps sanejats — schema
+  complet, DATA de les taules amb dades personals exclosa; llista
+  exacta i guard CI a `retention.md` §Backups) + portades (868 MB,
+  append-mostly; cobreix els àlbums Deezer delistats).
 
-- **Diari, 03:30** (30 min després de `tq-backup`, que acaba en segons).
-- Embolcallat amb el contracte existent: `tq-run tq-backup-offsite` →
-  status file → visible a `tq-health` i al panell `/staff/estat`, amb
-  entrada a `deploy/cron-meta.json` (threshold de preocupació: 26 h).
-- `SingletonLock` no cal (una execució diària, curta); sí un timeout
-  generós per a la primera pujada (~1 GB inicial).
+El dump diari viatja en `gzip -9` tal qual (churn ~30 MB/dia — l'opció
+(a) del recon; a aquesta escala el cost és negligible i evita tocar el
+`tq-backup` existent més del necessari).
 
-## 5. Model append-only: què protegeix i què no
+## 4. Append-only: què protegeix i què no
 
-El requisit central: **les credencials que viuen al servidor no poden
-esborrar ni sobreescriure res del dipòsit.**
+La key B2 del servidor té **només** `listFiles`/`readFiles`/`writeFiles`
+— sense `deleteFiles`. `restic forget`/`prune` des del servidor falla
+amb permission denied; el script no els invoca mai (guard al test: cap
+verb destructiu a les crides restic).
 
-- **Backblaze B2**: application key **sense** `deleteFiles` ni
-  `listBuckets` (només `listFiles`, `readFiles`, `writeFiles`). restic
-  no pot fer `prune`/`forget` des del servidor — falla amb permission
-  denied. El prune es fa des d'una màquina de confiança (el Mac) amb una
-  key separada que mai toca el servidor. Opcional: Object Lock al bucket
-  per a immutabilitat amb finestra temporal.
-- **Hetzner Storage Box**: SFTP no té permisos append-only de veritat (el
-  mateix login que escriu pot esborrar). La mitigació són els
-  **snapshots automàtics del Storage Box** (fins a 10, programables
-  diaris/setmanals): es gestionen des del panell Robot del compte destí,
-  el client SFTP no els pot tocar. Protecció equivalent en la pràctica
-  (finestra de snapshots), però no és un deny real a nivell de
-  credencial.
+**Protegeix contra**: compromís total del box (root inclòs) — l'atacant
+pot llegir el repo (res que no tinga ja del disc viu) i pujar
+escombraria (detectable, §7), però **no pot destruir l'històric**;
+esborrat accidental; ransomware; pèrdua del compte Hetzner sencer.
 
-**Protegeix contra**: compromís total del servidor (root inclòs) — l'
-atacant pot llegir el repo (i ja té les dades vives, res de nou), pot
-pujar snapshots-escombraria (cost, detectable per la verificació §7),
-però **no pot destruir l'històric**; esborrat accidental (`rm` humà o
-script); ransomware al box; pèrdua del compte Hetzner sencer.
+**NO protegeix contra**: compromís del compte B2 mestre (per això el
+compte és independent, amb 2FA, i la key privilegiada només viu al
+Mac); pèrdua de la contrasenya restic (repo il·legible — còpia al
+gestor personal I en paper); bugs de restic (mitigat per la capa 1,
+tecnologia diferent); un atacant pacient que espera que expire l'últim
+backup net.
 
-**NO protegeix contra**: compromís del compte destí (credencials mestres
-B2/Robot — per això el compte destí ha de ser independent, amb 2FA i
-sense cap credencial seua al servidor); pèrdua de la contrasenya restic
-(el repo esdevé il·legible: cal guardar-la a un gestor de contrasenyes
-personal I en paper, mai al servidor... però sí al `.env` per poder
-escriure — vegeu matís §8.4); bugs de restic mateix (mitigat per la
-capa 1, que és d'una tecnologia diferent); i un atacant pacient que
-espera que la retenció expire l'últim backup net.
+## 5. RGPD i transferència fora de la UE
 
-## 6. Destins considerats i cost mensual estimat
+restic xifra i autentica **en origen** (AES-256 + Poly1305): Backblaze
+només emmagatzema blobs opacs i **mai veu dades en clar**. Això cobreix
+el matís de transferència internacional — el processador extern no té
+accés a dades personals, només a xifrat del qual no posseeix la clau.
+Tot i això, es recomana bucket a la regió UE de B2 (Amsterdam, mateix
+preu). El límit temporal de PII als backups (90 dies) està declarat a
+`retention.md` §Backups.
 
-Dipòsit estimat (payload ~0,9 GB + churn 30 MB/dia amb retenció §8.3):
-**~2-4 GB el primer any**, ~12 GB de pitjor cas si mai es fa prune.
+## 6. Cost
 
-| | Hetzner Storage Box (compte separat) | Backblaze B2 |
-|---|---|---|
-| Preu | BX11 1 TB ≈ **3,8 €/mes** (preu fix) | 6 $/TB/mes → **&lt;0,10 $/mes** a 4 GB (mínims a banda) |
-| Append-only | Aproximat (snapshots del box, §5) | **Real** (capacitats de la key) |
-| Independència | Compte Hetzner separat: proveïdor igual, jurisdicció igual | Proveïdor i jurisdicció diferents (EUA) |
-| Protocol | SFTP (restic natiu) | S3 (restic natiu) |
-| RGPD | UE (Alemanya/Finlàndia) | EUA (o cluster UE de B2 a Amsterdam, mateix preu) |
-| Fricció | Panell Robot conegut; factura previsible | Compte nou; facturació per ús |
+Dipòsit estimat ~2-4 GB el primer any (payload inicial ~0,9 GB + churn
+30 MB/dia amb la retenció de §3): **< 0,10 $/mes** a les tarifes B2
+(6 $/TB/mes), mínims de facturació a banda. Irrellevant al pressupost.
 
-Lectura honesta: a la nostra mida, el cost és irrellevant en tots dos
-casos; la decisió real és **append-only fort + proveïdor divers (B2,
-regió UE)** contra **jurisdicció UE amb marca coneguda i preu fix
-(Storage Box)**. El disseny funciona igual amb qualsevol; només canvia
-l'URL del repo i el mecanisme de la §5.
+## 7. Verificació
 
-## 7. Pla de verificació (integrat amb tq-health)
+1. **Diari** (dins del mateix run): el status file inclou el tail del
+   `restic backup` de cada tag; `tq-health` marca `STALE` si el status
+   envelleix (>26 h) i `FAIL` si restic retorna error.
+2. **Trimestral, manual, des del Mac** (§9.7): `restic check
+   --read-data-subset=10%` + restore real del dump més recent + el
+   `forget`+`prune` amb la key privilegiada. És alhora la prova que la
+   capa 2 és recuperable sense el box.
+3. **Post-activació (seguiment, no implementat encara)**: cron setmanal
+   de `restic check` lleuger i variant mensual de `tq-restore-test`
+   que restaure des del destí — es faran quan el sistema estiga actiu
+   i hi haja snapshots reals contra els quals provar; mentre el flag
+   està apagat serien files DISABLED permanents sense valor.
 
-1. **Diari** (dins del mateix `tq-backup-offsite`): `restic snapshots
-   --latest 1` post-pujada; el status file inclou id, mida i durada.
-   `tq-health` marca STUCK si el status envelleix (>26 h), com qualsevol
-   cron.
-2. **Setmanal** (diumenge, slot tranquil): `restic check
-   --read-data-subset=10%` — verifica integritat real d'un 10% rotatori
-   dels blobs descarregant-los i re-hashant-los. Status file propi.
-3. **Mensual, restore-test real de la capa 2**: variant de
-   `tq-restore-test` que en lloc del dump local fa `restic restore` del
-   dump més recent **des del destí** a un directori temporal, el
-   restaura a `topquaranta_restore_test` i passa les mateixes sanity
-   queries de forma i row counts. Si el disc ho fa patir (dump ~30 MB,
-   cap problema previst), `restic dump` en streaming directe a psql.
-4. **Trimestral, manual, des del Mac** (documentat al runbook, no
-   automatitzable des del servidor per definició): restore amb les
-   credencials de només-lectura des d'una màquina que no és el box —
-   prova que la capa 2 és recuperable encara que el box haja
-   desaparegut. També és el moment del `restic forget + prune` amb la
-   key privilegiada (B2) o de revisar els snapshots del box (Storage
-   Box).
+## 8. Decisions preses (2026-07-05, Miquel)
 
-La detecció d'un atacant que puja escombraria (§5) cau del punt 2-3: un
-repo corromput o inflat falla el check o dispara la mida reportada.
+1. **Destí**: Backblaze B2, compte propi del Miquel (2FA, email de
+   recuperació propi); cap credencial mestra toca el servidor.
+2. **Retenció**: dividida per PII — complet 90 dies / sanejat 12 mesos,
+   local i offsite (detall a `retention.md` §Backups). Els monthly
+   locals legacy conserven la finestra original de 365 dies;
+   esborrar-los abans demana OK explícit seu.
+3. **Contrasenya restic**: generada pel Miquel, al seu gestor personal +
+   còpia en paper; al servidor només via `.env` (necessària per
+   escriure). Un atacant amb el `.env` pot *llegir* el repo offsite
+   (res de nou per a ell) però no esborrar-lo.
+4. **Pla B autoritzat però NO exercit**: la divisió del dump ha resultat
+   viable (una llista `--exclude-table-data` + guard CI), així que la
+   sèrie de 12 mesos es conserva.
 
-## 8. Decisions que corresponen al Miquel
+## 9. Procediment d'activació (el que fa el Miquel)
 
-1. **Proveïdor i compte destí**: B2 (append-only real, jurisdicció
-   mixta) vs Storage Box en compte separat (UE, preu fix). El compte, en
-   tots dos casos, l'obri i el controla ell (2FA, email de recuperació
-   propi); cap credencial mestra toca mai el servidor.
-2. **Pressupost**: tots dos càpiguen en &lt;4 €/mes; confirmar que el marge
-   existeix i si es prefereix cost fix (Storage Box) o per ús (B2).
-3. **Retenció de la capa 2 amb PII**: proposta inicial 7 diaris / 4
-   setmanals / 12 mensuals (mirall de `tq-backup`). Però cal una decisió
-   RGPD explícita: un compte esborrat persisteix als backups fins que
-   l'últim dump que el conté expira (12 mesos amb la proposta). Cal (a)
-   fixar aquest màxim com a política documentada a `retention.md`
-   (l'enfocament estàndard: backups exempts de l'esborrat immediat amb
-   retenció màxima declarada), o (b) escurçar la retenció mensual de la
-   capa 2 (p. ex. 6 mesos) si 12 es considera excessiu. La mateixa
-   decisió aplica retroactivament als monthly locals de `tq-backup`
-   (365 dies), que avui no estan documentats a `retention.md`.
-4. **On viu la contrasenya del repo restic**: proposta — generada pel
-   Miquel, guardada al seu gestor personal + còpia en paper; al servidor
-   només via `.env` (la necessita per escriure). Matís important: això
-   vol dir que un atacant amb el `.env` pot *llegir* el repo offsite
-   (res que no tinga ja del disc viu) però continua sense poder-lo
-   esborrar. Si es vol que ni tan sols puga llegir-lo, cal un esquema de
-   claus asimètric fora de restic (age/rclone crypt) — complexitat que
-   NO es proposa per a la v1.
+Cap d'aquests passos el fa el codi; el sistema queda actiu quan tots
+estan fets. Ordre pensat perquè cada pas siga verificable abans del
+següent.
 
-## 9. Fora d'abast d'aquesta proposta
+1. **Compte B2** (backblaze.com): compte nou amb 2FA, bucket privat
+   (regió UE — `eu-central-003`), sense lifecycle rules (la retenció la
+   gestiona restic des del Mac).
+2. **Dues application keys**:
+   - *Key servidor* (anirà al `.env`): capabilities `listFiles`,
+     `readFiles`, `writeFiles` — **sense** `deleteFiles`. Restringida al
+     bucket.
+   - *Key admin* (només al Mac, per a §9.6-9.7): totes les capabilities
+     del bucket.
+3. **Contrasenya restic**: genera-la (gestor de contrasenyes) i fes-ne
+   la còpia en paper ABANS de continuar.
+4. **Inicialitza el repo des del Mac** (així la primera operació ja
+   prova les credencials fora del box):
 
-Implementació (binari restic, systemd/cron, entrada a `cron-meta.json`,
-extensió de `tq-health`, docs runbook §4) — vindrà com a PR separat
-quan les decisions de la §8 estiguen preses. Cap canvi a la capa 1.
+   ```bash
+   export AWS_ACCESS_KEY_ID=<keyID admin>
+   export AWS_SECRET_ACCESS_KEY=<applicationKey admin>
+   restic -r s3:s3.eu-central-003.backblazeb2.com/<bucket> init
+   ```
+
+5. **Servidor** — instal·la restic i posa les variables:
+
+   ```bash
+   sudo apt-get update && sudo apt-get install -y restic
+   ```
+
+   Al `.env` de `/home/topquaranta/app/` (noms exactes que llig
+   `bin/tq-backup-offsite`):
+
+   ```dotenv
+   OFFSITE_BACKUP_ACTIU=1
+   RESTIC_REPOSITORY=s3:s3.eu-central-003.backblazeb2.com/<bucket>
+   RESTIC_PASSWORD=<contrasenya restic>
+   AWS_ACCESS_KEY_ID=<keyID SERVIDOR>
+   AWS_SECRET_ACCESS_KEY=<applicationKey SERVIDOR>
+   ```
+
+6. **Primer run manual + verificació**:
+
+   ```bash
+   sudo -u topquaranta /home/topquaranta/bin/tq-backup-offsite
+   cat /var/log/topquaranta/status/tq-backup-offsite.status   # status=OK
+   sudo -u topquaranta tq-health | grep -i offsite            # 🟢
+   ```
+
+   I des del Mac (key admin): `restic snapshots` ha de mostrar els dos
+   tags. Prova també que la key del SERVIDOR no pot esborrar:
+   `restic forget --id <snap>` amb les credencials del servidor ha de
+   fallar amb permission denied.
+7. **Prova de recuperació en fred (obligatòria la primera vegada)**: al
+   Mac, teclejant la contrasenya des de la CÒPIA EN PAPER (ni gestor ni
+   copy-paste — és el simulacre de "he perdut el Mac i el servidor"):
+   `restic restore latest --tag pii --target /tmp/tq-drill`, obre el
+   dump i verifica que conté dades. Després `rm -rf /tmp/tq-drill`.
+   Repetir el drill (ja amb el gestor) cada trimestre, juntament amb:
+
+   ```bash
+   restic check --read-data-subset=10%
+   restic forget --tag pii  --keep-within 90d --prune
+   restic forget --tag safe --keep-monthly 12 --prune
+   ```
+
+8. Quan tot això estiga verd: cap acció més — el cron de les 03:30 ja
+   corre cada nit i tq-health el vigila com qualsevol altre.

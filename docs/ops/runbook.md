@@ -218,24 +218,23 @@ sudo systemctl restart topquaranta-web
 
 **⚠ This overwrites current data.** Take a fresh `pg_dump` first.
 
-### Backup scope — single-host, accepted risk
+### Backup layers — local + offsite (capa 2)
 
-Backups land at `/home/topquaranta/backups/{daily,weekly,monthly}/`
-on the same Hetzner CX22. **There is no off-site copy.** If the disk
-fails or the host gets compromised, the backups go with it.
+Backups land at `/home/topquaranta/backups/{daily,weekly,monthly,monthly-safe}/`
+on the same Hetzner CX22 (retention tiers: `docs/ops/retention.md`
+§Backups). The 2026-05-07 "single-host, accepted risk" decision was
+**revisited 2026-07-05** when the DB gained community PII: a second,
+offsite layer now exists — `bin/tq-backup-offsite` (daily 03:30,
+restic → Backblaze B2, append-only server key, encrypted at origin).
+It ships **gated**: until `OFFSITE_BACKUP_ACTIU=1` + the restic vars
+land in the `.env` and restic is installed, it reports `DISABLED`
+(gray in tq-health — a legitimate state, not a failure). Activation
+procedure, threat model and payload: `docs/ops/backup-offsite.md`.
 
-This is an **accepted risk** (decision 2026-05-07): the project's
-data is recoverable conceptually — every signal is re-fetchable from
-Last.fm + Deezer + MusicBrainz, every artiste row is staff-curated
-and could be rebuilt from external sources, and the codebase lives
-in GitHub. What's irreplaceable is the curation history (which
-artiste is approved, which song is verified, the audit log) — for
-that, the on-host backup is the only line of defence.
-
-If the project's audience grows past hobbyist scale or the curation
-trail becomes legally relevant, revisit this decision: add a daily
-`restic` push to a Hetzner Storage Box (~3 €/mo, EU) or B2
-(~0.5 €/mo, off-EU). Encryption first, then push.
+To restore from the offsite layer (box lost entirely): from the Mac,
+with the restic password from the password manager and the B2 admin
+key, `restic -r <repo> restore latest --target /tmp/restore`. The
+quarterly manual drill in `backup-offsite.md` §9 keeps this path warm.
 
 ---
 

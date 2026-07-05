@@ -59,9 +59,9 @@ Every doc lives under `docs/` organised by audience. Quick map:
 - **`docs/post-mortems/`** — incident write-ups.
 - **`docs/product/`** — `definition.md` (què compta com a música en català).
 - **`docs/ops/`** — `runbook.md`, `retention.md`, `deprecation.md`,
-  `ssh-keys.md`, `backup-offsite.md` (proposta capa 2, pendent de
-  decisió). Things you read when something breaks or has to be
-  decommissioned.
+  `ssh-keys.md`, `backup-offsite.md` (capa 2 implementada GATED —
+  restic→B2 append-only, esperant activació del Miquel; procediment §9).
+  Things you read when something breaks or has to be decommissioned.
 - **`docs/history/`** — `roadmap.md` (estat + sprints), `changelog.md`.
 
 Also at the repo root:

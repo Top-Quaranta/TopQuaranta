@@ -78,6 +78,22 @@ def test_classify_fail():
     assert r["state"] == "FAIL" and r["escalates"]
 
 
+def test_classify_disabled_is_legitimate():
+    # Gated-off feature (e.g. tq-backup-offsite before activation):
+    # fresh DISABLED status is neither an anomaly nor an escalation.
+    r = _c(status="DISABLED", last_run_iso=_iso(1), max_age_h=26)
+    assert r["state"] == "DISABLED"
+    assert not r["escalates"] and not r["is_anomaly"]
+
+
+def test_classify_disabled_still_goes_stale():
+    # If the gated cron's wrapper stops running entirely, the row must
+    # NOT stay a benign gray forever — the stale rule wins.
+    r = _c(status="DISABLED", last_run_iso=_iso(40), max_age_h=26)
+    assert r["state"] == "STALE"
+    assert r["escalates"]
+
+
 def test_classify_waiting_infrequent_is_benign():
     # A weekly/monthly cron with no status file yet: genuinely awaiting
     # its first run → benign WAITING, never escalates.

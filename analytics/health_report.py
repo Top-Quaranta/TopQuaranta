@@ -108,6 +108,7 @@ _EMOJI = {
     "OK": "🟢",
     "SKIP": "🟡",
     "WAITING": "⚪",
+    "DISABLED": "⚪",
     "WARN": "🟠",
     "ORPHAN": "🟠",
     "MISSING": "🔴",
@@ -242,6 +243,13 @@ def classify_cron(
             escalates = True
     elif status == "SKIPPED_BY_LOCK":
         state, display = "SKIP", f"SKIP({skips})"
+    elif status == "DISABLED":
+        # Feature gated off by a flag (e.g. tq-backup-offsite before
+        # activation). A legitimate steady state: never escalates, never
+        # an anomaly. The stale check above still applies — if the
+        # wrapper itself stops running, the row goes STALE and alerts,
+        # exactly like any other cron.
+        state, display = "DISABLED", f"DISABLED({age_h}h)"
     elif status != "OK":
         state, display = "FAIL", "FAIL"
         if silenced:

@@ -69,9 +69,7 @@ def _run_offsite(tmp_path: Path, env_lines: list[str], with_restic_stub=False):
         stub = bin_dir / "restic"
         log = tmp_path / "restic-calls.log"
         stub.write_text(
-            "#!/bin/bash\n"
-            f'echo "$@" >> "{log}"\n'
-            'echo "snapshot deadbeef saved"\n'
+            "#!/bin/bash\n" f'echo "$@" >> "{log}"\n' 'echo "snapshot deadbeef saved"\n'
         )
         stub.chmod(0o755)
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
@@ -80,8 +78,21 @@ def _run_offsite(tmp_path: Path, env_lines: list[str], with_restic_stub=False):
         # it installed: reduce PATH to a stub-free dir.
         empty = tmp_path / "empty-bin"
         empty.mkdir()
-        for tool in ("bash", "grep", "cut", "head", "ls", "date", "mktemp",
-                     "chmod", "mv", "mkdir", "basename", "cat", "tail"):
+        for tool in (
+            "bash",
+            "grep",
+            "cut",
+            "head",
+            "ls",
+            "date",
+            "mktemp",
+            "chmod",
+            "mv",
+            "mkdir",
+            "basename",
+            "cat",
+            "tail",
+        ):
             src = _which(tool)
             if src:
                 (empty / tool).symlink_to(src)
@@ -123,7 +134,9 @@ def test_flag_off_is_clean_noop(tmp_path):
     proc, status = _run_offsite(tmp_path, BASE_VARS)  # no flag line
     assert proc.returncode == 0, proc.stderr
     assert status.get("status") == "DISABLED"
-    assert "flag apagat" in (tmp_path / "status" / "tq-backup-offsite.status").read_text()
+    assert (
+        "flag apagat" in (tmp_path / "status" / "tq-backup-offsite.status").read_text()
+    )
     assert not (tmp_path / "restic-calls.log").exists()
 
 
@@ -141,7 +154,9 @@ def test_flag_on_vars_ok_but_no_restic_is_disabled(tmp_path):
     proc, status = _run_offsite(tmp_path, ["OFFSITE_BACKUP_ACTIU=1"] + BASE_VARS)
     assert proc.returncode == 0, proc.stderr
     assert status.get("status") == "DISABLED"
-    assert "falta restic" in (tmp_path / "status" / "tq-backup-offsite.status").read_text()
+    assert (
+        "falta restic" in (tmp_path / "status" / "tq-backup-offsite.status").read_text()
+    )
 
 
 def test_fully_enabled_runs_two_tagged_backups(tmp_path):
@@ -195,10 +210,14 @@ def test_pii_exclude_list_covers_user_tables():
         if model._meta.app_label == "comptes":
             must_cover.add(table)
         for field in model._meta.get_fields():
-            if getattr(field, "related_model", None) is not None and (
-                field.related_model._meta.label_lower
-                == settings.AUTH_USER_MODEL.lower()
-            ) and getattr(field, "many_to_one", False):
+            if (
+                getattr(field, "related_model", None) is not None
+                and (
+                    field.related_model._meta.label_lower
+                    == settings.AUTH_USER_MODEL.lower()
+                )
+                and getattr(field, "many_to_one", False)
+            ):
                 must_cover.add(table)
     # Django internals with personal data that get_models may not flag.
     must_cover |= {"django_session", "django_admin_log"}
@@ -225,17 +244,17 @@ def test_pii_excludes_cover_axes_and_otp():
 
 def test_retention_rules_are_disjoint_and_non_retroactive():
     text = BACKUP.read_text()
-    finds = dict(
-        re.findall(r'-name "([^"]+)"\s+-mtime \+(\d+)\s+-delete', text)
-    )
+    finds = dict(re.findall(r'-name "([^"]+)"\s+-mtime \+(\d+)\s+-delete', text))
     assert finds.get("tq-month-pii-*.sql.gz") == "90"
     assert finds.get("tq-month-safe-*.sql.gz") == "365"
     # Legacy full monthlies keep their ORIGINAL 365-day window: the new
     # 90-day PII rule must not touch them (no retroactive deletion).
     assert finds.get("tq-month-2*.sql.gz") == "365"
     # And the legacy glob must not swallow the new names.
-    for new_name in ("tq-month-pii-20260801-030001.sql.gz",
-                     "tq-month-safe-20260801-030001.sql.gz"):
+    for new_name in (
+        "tq-month-pii-20260801-030001.sql.gz",
+        "tq-month-safe-20260801-030001.sql.gz",
+    ):
         assert not fnmatch.fnmatch(new_name, "tq-month-2*.sql.gz")
 
 

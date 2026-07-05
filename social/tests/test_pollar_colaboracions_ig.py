@@ -221,3 +221,91 @@ def test_poller_none_statuses_leaves_pending(monkeypatch):
     call_command("pollar_colaboracions_ig")
     inv.refresh_from_db()
     assert inv.estat == Inv.ESTAT_PENDENT
+
+
+# ── fail-safe (2026-07-05, pre first live batch) ─────────────────────
+
+
+@pytest.mark.django_db
+def test_failsafe_empty_response_leaves_all_pending(monkeypatch):
+    """An EMPTY collaborators list must resolve nothing: it is
+    indistinguishable from 'Graph does not list pending invitees'."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    a1, a2 = _artista("EXEMPLE A"), _artista("EXEMPLE B")
+    i1, i2 = _invite(a1, "m1", "u1"), _invite(a2, "m1", "u2")
+    monkeypatch.setattr(instagram_client, "get_collaborators", lambda m: {})
+    call_command("pollar_colaboracions_ig")
+    i1.refresh_from_db()
+    i2.refresh_from_db()
+    assert i1.estat == Inv.ESTAT_PENDENT and i1.data_resolucio is None
+    assert i2.estat == Inv.ESTAT_PENDENT and i2.data_resolucio is None
+
+
+@pytest.mark.django_db
+def test_failsafe_no_known_usernames_leaves_all_pending(monkeypatch):
+    """A non-empty response containing NONE of our pending invitees is
+    equally untrustworthy — no estat change, no cooldown."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    a = _artista("EXEMPLE A")
+    inv = _invite(a, "m1", "u_nostre")
+    monkeypatch.setattr(
+        instagram_client,
+        "get_collaborators",
+        lambda m: {"algu_altre": "accepted"},
+    )
+    call_command("pollar_colaboracions_ig")
+    inv.refresh_from_db()
+    assert inv.estat == Inv.ESTAT_PENDENT and inv.data_resolucio is None
+
+
+@pytest.mark.django_db
+def test_raw_output_logged_before_interpretation(monkeypatch):
+    """Both paths emit the raw parsed map to stdout (persistent via the
+    cron redirect) BEFORE any interpretation."""
+    from io import StringIO
+
+    cfg = ConfiguracioGlobal.load()
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    a = _artista("EXEMPLE A")
+    _invite(a, "m1", "u1")
+
+    # Fail-safe path (empty response).
+    monkeypatch.setattr(instagram_client, "get_collaborators", lambda m: {})
+    out = StringIO()
+    call_command("pollar_colaboracions_ig", stdout=out)
+    assert "[raw] media=m1 statuses={}" in out.getvalue()
+
+    # Happy path (our invitee present) — raw line still first-class.
+    monkeypatch.setattr(
+        instagram_client, "get_collaborators", lambda m: {"u1": "accepted"}
+    )
+    out = StringIO()
+    call_command("pollar_colaboracions_ig", stdout=out)
+    assert "[raw] media=m1 statuses={'u1': 'accepted'}" in out.getvalue()
+
+
+@pytest.mark.django_db
+def test_happy_path_absent_username_still_rejected(monkeypatch):
+    """No-regression pin: when ≥1 of OUR pending invitees IS in the
+    response, absence of another one keeps meaning declined/removed."""
+    cfg = ConfiguracioGlobal.load()
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    a1, a2 = _artista("EXEMPLE A"), _artista("EXEMPLE B")
+    i_present = _invite(a1, "m1", "u_present")
+    i_absent = _invite(a2, "m1", "u_absent")
+    monkeypatch.setattr(
+        instagram_client,
+        "get_collaborators",
+        lambda m: {"u_present": "accepted"},
+    )
+    call_command("pollar_colaboracions_ig")
+    i_present.refresh_from_db()
+    i_absent.refresh_from_db()
+    assert i_present.estat == Inv.ESTAT_ACCEPTADA
+    assert i_absent.estat == Inv.ESTAT_REBUTJADA

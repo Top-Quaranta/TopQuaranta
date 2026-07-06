@@ -30,6 +30,16 @@ mapping:
   # narrower doc; the generic `social/` entry catches the rest.
   - prefix: social/narrative/
     doc: docs/architecture/social-narrative.md
+  # IG collaborator invitations split out of social.md (2026-07-06,
+  # docs-size headroom): policy module + poller + dry-run command
+  # resolve to the narrower doc; the wiring inside publicar_social.py
+  # stays with the generic `social/` entry.
+  - prefix: social/collaboradors.py
+    doc: docs/architecture/social-collaboradors.md
+  - prefix: social/management/commands/pollar_colaboracions_ig.py
+    doc: docs/architecture/social-collaboradors.md
+  - prefix: social/management/commands/simular_colaboradors_ig.py
+    doc: docs/architecture/social-collaboradors.md
   - prefix: social/
     doc: docs/architecture/social.md
   - prefix: comptes/

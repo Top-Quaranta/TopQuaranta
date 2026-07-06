@@ -19,6 +19,15 @@ is logged raw BEFORE interpretation, and a response that is empty or
 contains none of the media's pending invitees resolves nothing — we
 can't distinguish "everyone declined" from "Graph doesn't list pending
 invitees", so a human reads the raw log and decides.
+
+Temporary brake (2026-07-06, until the endpoint behaviour is verified):
+even when ≥1 pending invitee IS present in the response, an ABSENT
+invitee stays `pendent` (warning logged) instead of resolving to
+`rebutjada` + 90-day cooldown. If Graph omits still-pending invitees
+from the list, the old mapping would mis-reject them the first tick
+after publish. Only an explicit non-accepted `invite_status` resolves
+to `rebutjada`. Revert the block in the loop below once GET
+/<media>/collaborators is confirmed to list pending invitees.
 """
 
 from __future__ import annotations
@@ -116,9 +125,10 @@ class Command(BaseCommand):
                 # invitees — is indistinguishable from "the endpoint doesn't
                 # list pending invitees at all". Touch nothing (no estat, no
                 # cooldown); the raw log above is the evidence for a human
-                # call. Once ≥1 pending invitee DOES appear in a response,
-                # absence of the others is meaningful again (declined or
-                # removed) and the original mapping below applies untouched.
+                # call. (With ≥1 pending invitee present, per-row handling
+                # below applies — where the 2026-07-06 temporary brake also
+                # keeps ABSENT invitees pendent until the endpoint's
+                # behaviour with pending invites is verified.)
                 logger.warning(
                     "fail-safe: media %s — resposta sense cap dels %d "
                     "invitats pendents; cap estat modificat",
@@ -127,7 +137,25 @@ class Command(BaseCommand):
                 )
                 continue
             for inv in rows:
-                nou = reconcile_estat(statuses.get(inv.username_snapshot.lower()))
+                status = statuses.get(inv.username_snapshot.lower())
+                if status is None:
+                    # FRE TEMPORAL (2026-07-06): absent-from-response does
+                    # NOT resolve to rebutjada until the endpoint's real
+                    # behaviour with pending invitees is confirmed (does
+                    # Graph list them with invite_status=pending, or omit
+                    # them?). Until then an absent invitee stays `pendent`;
+                    # only an explicit non-accepted status resolves. Revert
+                    # by deleting this block once verified — the final
+                    # mapping lives (documented + tested) in
+                    # `reconcile_estat`.
+                    logger.warning(
+                        "fre temporal: media %s — %s absent de la resposta; "
+                        "es manté pendent (cap cooldown)",
+                        media_id,
+                        inv.username_snapshot,
+                    )
+                    continue
+                nou = reconcile_estat(status)
                 if nou is None:
                     continue
                 inv.estat = nou

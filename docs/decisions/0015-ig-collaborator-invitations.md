@@ -1,6 +1,6 @@
 # ADR-0015 — Instagram collaborator invitations for feed posts
 
-- **Status:** Proposed (inert spec — no runtime behaviour until the master flag is switched on)
+- **Status:** Proposed (all tranches merged; flag switched ON in prod and first supervised batch sent 2026-07-06 — stays Proposed until the acceptance-polling cycle is verified end-to-end, which the first live poll error blocks)
 - **Date:** 2026-07-03
 - **Authors:** Miquel Matoses (+ Claude Opus 4.8)
 
@@ -227,7 +227,16 @@ New management command `social/management/commands/pollar_colaboracions_ig.py`:
   (`data_invitacio >= now - 14d`), groups by `ig_media_id`, calls
   `GET /<media>/collaborators` once per media, and reconciles each:
   present + accepted → `acceptada`; present + declined / absent →
-  `rebutjada`; stamps `data_resolucio`.
+  `rebutjada`; stamps `data_resolucio`. **Fail-safe (2026-07-05) +
+  temporary brake (2026-07-06):** raw Graph body logged before any
+  parsing; a response that is empty or contains none of the media's
+  pending invitees resolves nothing, and — until the endpoint's
+  behaviour with pending invitees is verified live — an ABSENT invitee
+  stays `pendent` too (only an explicit non-accepted `invite_status`
+  resolves to `rebutjada`). The final absent→rebutjada mapping stays in
+  `reconcile_estat`, tested. Note: the 14-day window is currently a
+  module constant (`WINDOW_DIES`), not a `ConfiguracioGlobal` field —
+  the one §5.4 tunable that is still hardcoded.
 - Writes a **`MetricaPipeline`** row per run with the rolling acceptance
   rate (`acceptades / (acceptades + rebutjades + caducades)` — `caducada`
   is a non-acceptance) so the acceptance trend is visible on the pipeline
@@ -269,7 +278,10 @@ expectations against: **91/177 handles (51.4 %)** on 2026-07-03.
    `ig_collaboradors_actiu` to True and wiring the policy into
    `publicar_social._publish_feed`, plus the **first real invite batch**.
    Done as a small follow-up PR reviewed live, so the first invites go
-   out under supervision.
+   out under supervision. *(Outcome: the wiring merged early as tranche
+   3a, gated + inert — PR #308; the caducada expiry as 3b — PR #309; the
+   flag flip + first supervised batch happened Monday 2026-07-06,
+   top_territorial BAL.)*
 
 ## Consequences
 

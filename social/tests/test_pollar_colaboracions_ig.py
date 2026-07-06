@@ -133,7 +133,8 @@ def test_poller_reconciles_states(monkeypatch):
             "u_accept": "accepted",
             "u_pending": "pending",
             "u_declined": "declined",
-            # u_absent intentionally missing → rejected
+            # u_absent intentionally missing → stays pendent (temporary
+            # brake 2026-07-06; final mapping would be rebutjada)
         }
 
     monkeypatch.setattr(instagram_client, "get_collaborators", fake)
@@ -146,11 +147,12 @@ def test_poller_reconciles_states(monkeypatch):
     assert i_acc.estat == Inv.ESTAT_ACCEPTADA and i_acc.data_resolucio is not None
     assert i_pend.estat == Inv.ESTAT_PENDENT and i_pend.data_resolucio is None
     assert i_dec.estat == Inv.ESTAT_REBUTJADA
-    assert i_absent.estat == Inv.ESTAT_REBUTJADA
+    # Temporary brake (2026-07-06): absent stays pendent, no cooldown.
+    assert i_absent.estat == Inv.ESTAT_PENDENT and i_absent.data_resolucio is None
 
-    # Acceptance rate = 1 accepted / (1 accepted + 2 rejected) = 0.333…
+    # Acceptance rate = 1 accepted / (1 accepted + 1 rejected) = 0.5
     m = MetricaPipeline.objects.get(clau=METRICA_CLAU)
-    assert abs(m.valor_float - (1 / 3)) < 1e-6
+    assert abs(m.valor_float - 0.5) < 1e-6
 
 
 @pytest.mark.django_db
@@ -290,22 +292,28 @@ def test_raw_output_logged_before_interpretation(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_happy_path_absent_username_still_rejected(monkeypatch):
-    """No-regression pin: when ≥1 of OUR pending invitees IS in the
-    response, absence of another one keeps meaning declined/removed."""
+def test_brake_absent_username_stays_pending(monkeypatch):
+    """Temporary brake (2026-07-06): even with ≥1 of OUR pending
+    invitees present in the response, an ABSENT invitee stays pendent
+    (no rebutjada, no 90-day cooldown) until the endpoint's behaviour
+    with pending invites is verified. An explicit non-accepted status
+    still resolves."""
     cfg = ConfiguracioGlobal.load()
     cfg.ig_collaboradors_actiu = True
     cfg.save()
-    a1, a2 = _artista("EXEMPLE A"), _artista("EXEMPLE B")
+    a1, a2, a3 = _artista("EXEMPLE A"), _artista("EXEMPLE B"), _artista("EXEMPLE C")
     i_present = _invite(a1, "m1", "u_present")
     i_absent = _invite(a2, "m1", "u_absent")
+    i_declined = _invite(a3, "m1", "u_declined")
     monkeypatch.setattr(
         instagram_client,
         "get_collaborators",
-        lambda m: {"u_present": "accepted"},
+        lambda m: {"u_present": "accepted", "u_declined": "declined"},
     )
     call_command("pollar_colaboracions_ig")
     i_present.refresh_from_db()
     i_absent.refresh_from_db()
+    i_declined.refresh_from_db()
     assert i_present.estat == Inv.ESTAT_ACCEPTADA
-    assert i_absent.estat == Inv.ESTAT_REBUTJADA
+    assert i_absent.estat == Inv.ESTAT_PENDENT and i_absent.data_resolucio is None
+    assert i_declined.estat == Inv.ESTAT_REBUTJADA

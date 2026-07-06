@@ -168,8 +168,9 @@ per-channel state (effective state + last send) at
 
 Driven by `social/calendari.py`. Slots per weekday (the `min_fase`
 rollout gate was removed 2026-06 — see the matrix section). Sat 09:30
-UTC is the canonical `top_ppcc` cycle; territorials Sun 09:50 UTC;
-novetats slots Mon/Wed mornings.
+UTC is the canonical `top_ppcc` cycle; territorials Mon (ROTATORI_B)
+and Wed (ROTATORI_A) 09:30 UTC; novetats Tue (`nous_albums`) and Fri
+(`nous_singles`) 10:00 UTC.
 
 ## Renderer image format + PPCC feed cover (Step 3a, 2026-06-01)
 
@@ -328,15 +329,15 @@ an artist/team to share, the move behind our best organic reach. No
 positional `#<digit>` (same audience-leak discipline as the weekly
 captions). The live post + campaign strategy stay manual (Miquel).
 
-## Collaborator invitations — feed (ADR-0015, tranche 3a: wired, gated off)
+## Collaborator invitations — feed (ADR-0015; live since 2026-07-06)
 
 Inviting artists as IG **collaborators** (their handle on the post → it
 lands on their grid too), a step up from `user_tags` mentions. **Feed /
 reels / carousels only — Meta does not support collaborators on stories.**
-Behaviourally dormant: the master flag
-`ConfiguracioGlobal.ig_collaboradors_actiu` defaults **False**, and with it
-off the feed publish path is byte-identical to before (no `collaborators`
-key ever reaches a container, no registry rows written).
+Gated on the master flag `ConfiguracioGlobal.ig_collaboradors_actiu`
+(default **False**; switched ON in prod for the first batch, 2026-07-06):
+with it off the feed publish path is byte-identical to before (no
+`collaborators` key ever reaches a container, no registry rows written).
 
 - **`social.models.InvitacioColaboracioIG`** — one row per
   `(artista, ig_media_id)`: `username_snapshot`, `tipus_publicacio`,
@@ -364,6 +365,12 @@ key ever reaches a container, no registry rows written).
   Fail-safe (2026-07-05): every fetch is logged raw before interpretation;
   an empty response — or one with none of the media's pending invitees —
   resolves nothing (no estat, no cooldown; a human reads the raw log).
+  Temporary brake (2026-07-06): an invitee ABSENT from the response also
+  stays `pendent` (warning logged) — only an explicit non-accepted
+  `invite_status` resolves to `rebutjada` — until Meta's behaviour with
+  pending invitees on `GET /<media>/collaborators` is verified end-to-end
+  (the first live poll errored; diagnosis pending). The final
+  absent→rebutjada mapping stays documented + tested in `reconcile_estat`.
 - **Wiring** (tranche 3a): `publicar_social._publish_feed`, **gated on the
   flag**, builds the ordered pool from the payload (`payload.build_top` /
   `build_novetats` now carry `artistes_pool` = `[{id, username}]`, additive),
@@ -384,8 +391,11 @@ key ever reaches a container, no registry rows written).
   `ig_collab_cooldown_c_dies` — staff-editable under a dedicated
   **Col·laboradors IG** section of `/staff/configuracio/`.
 
-Tranche 3b (a later, supervised session) flips the flag and runs the first
-real invite batch. Design + probe findings: `docs/decisions/0015-ig-collaborator-invitations.md`.
+Activation: the flag was switched on and the first real invite batch went
+out Monday 2026-07-06 (top_territorial BAL, 09:30 UTC cron). The polling
+cycle is NOT yet verified end-to-end (the first live poll errored — see
+the temporary brake above), so ADR-0015 stays **Proposed** until it is.
+Design + probe findings: `docs/decisions/0015-ig-collaborator-invitations.md`.
 
 ## Related
 

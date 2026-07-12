@@ -43,6 +43,13 @@ cron (publicar_social or publicar_canal)
   ↓ StaffAuditLog                 audit trail
 ```
 
+Both publish commands (`publicar_social`, `publicar_canal`) exit
+**non-zero** (`CommandError`) when any slot ends in `error`, so `tq-run`
+records `status=FAIL` and the watchdog alerts. Slots that published stay
+`publicat` — partial failure is reported, not rolled back; `omes` skips
+don't count. (Before 2026-07 they returned 0 on partial failure, so a
+dead IG token went unnoticed for days — the invisible-outage incident.)
+
 ## Channels
 
 | Channel | Module | Max chars | Mentions | Hashtag density |

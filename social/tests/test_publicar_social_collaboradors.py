@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 from music.models import Album, Artista, Canco
 from ranking.models import ConfiguracioGlobal, TopSetmanal
@@ -207,7 +208,10 @@ def test_no_orphan_rows_when_publish_fails_after_container(top_with_handles):
     raises → NO registry rows (they'd be orphans), post marked ERROR."""
     _cfg(collab=True)
     fake = _FakeCarousel()
-    _run_feed(fake, publish_side_effect=RuntimeError("IG API 500 on publish"))
+    # The publish failure now also makes the command exit non-zero
+    # (2026-07 exit-code fix); the invariants below still hold.
+    with pytest.raises(CommandError):
+        _run_feed(fake, publish_side_effect=RuntimeError("IG API 500 on publish"))
     assert InvitacioColaboracioIG.objects.count() == 0
     post = SocialPost.objects.get(
         platform=SocialPost.PLATFORM_INSTAGRAM_FEED, tipus="top_ppcc"

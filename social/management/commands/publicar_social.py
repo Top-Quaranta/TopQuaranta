@@ -25,7 +25,7 @@ import logging
 from pathlib import Path
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from music.audit import log_staff_action
@@ -139,8 +139,18 @@ class Command(BaseCommand):
         # Stash the resolved publication date so per-slot novetats
         # can compute their window without recomputing from scratch.
         opts["_target_date"] = target
+        self._n_errors = 0
         for slot, territori in slots:
             self._handle_slot(slot, territori, setmana, cfg, opts)
+        # A per-slot failure marks the SocialPost ERROR but must NOT be
+        # swallowed: exit non-zero so tq-run records status=FAIL and the
+        # watchdog alerts (the 2026-07 invisible-IG-outage bug). Slots
+        # that already published stay publicat — partial failure is
+        # reported, not rolled back.
+        if self._n_errors:
+            raise CommandError(
+                f"{self._n_errors} slot(s) van fallar; SocialPost en estat ERROR."
+            )
 
     # ── per-slot dispatch ─────────────────────────────────────────
 
@@ -222,6 +232,7 @@ class Command(BaseCommand):
         except Exception as exc:  # noqa: BLE001 — never crash the cron
             logger.exception("publicar_social failed for %s", label)
             self._mark(post, SocialPost.STATUS_ERROR, error_msg=str(exc)[:500])
+            self._n_errors += 1
             # Surface the error in stdout too so the staff cockpit
             # can show it (the panel proxies the captured stdout
             # back to the operator).

@@ -33,21 +33,22 @@ with it off the feed publish path is byte-identical to before (no
   the non-blocking substitution guard (§5.3): drop the offending handle,
   substitute the next candidate, last resort publish with none — a bad
   handle never blocks publication.
-- **`pollar_colaboracions_ig`** (hourly cron) reconciles fresh pending
-  invites via `GET /<media>/collaborators` AND expires pending invites
-  older than 14 days to `caducada` (closing the eternal-pending hole),
-  then writes the acceptance rate to `MetricaPipeline`
-  (`ig_collab_taxa_acceptacio`; `caducada` counts as a non-acceptance in
-  the denominator). No-op while the flag is off; best-effort + idempotent.
-  Fail-safe (2026-07-05): every fetch is logged raw before interpretation;
-  an empty response — or one with none of the media's pending invitees —
-  resolves nothing (no estat, no cooldown; a human reads the raw log).
-  Temporary brake (2026-07-06): an invitee ABSENT from the response also
-  stays `pendent` (warning logged) — only an explicit non-accepted
-  `invite_status` resolves to `rebutjada` — until Meta's behaviour with
-  pending invitees on `GET /<media>/collaborators` is verified end-to-end
-  (the first live poll errored; diagnosis pending). The final
-  absent→rebutjada mapping stays documented + tested in `reconcile_estat`.
+- **`pollar_colaboracions_ig`** (hourly cron) — since 2026-07-13 a pure
+  **expiry cron**, no Graph API at all (the acceptance-read path is
+  closed; see Status below): expires `pendent` invites older than 14
+  days to `caducada` (closing the eternal-pending hole) and writes the
+  acceptance rate to `MetricaPipeline` (`ig_collab_taxa_acceptacio` =
+  acceptades / resoltes, derived from registry state; `caducada` counts
+  as a non-acceptance). No-op while the flag is off; idempotent
+  (update_or_create per day).
+- **Staff panel** (`/staff/social/instagram`, 2026-07-13): the
+  invitation registry as a table (artista, username, post, tipus, data,
+  estat) with a single **"Marcar acceptada"** action per row —
+  `POST /staff/social/invitacions/acceptar/` writes `estat=acceptada` +
+  `data_resolucio` (audit action `collab_invitacio_acceptada`).
+  Deliberately no manual reject: `caducada` covers silence and
+  rejection alike (both category C, 90-day cooldown). List endpoint:
+  `GET /staff/social/invitacions/`.
 - **Wiring** (tranche 3a): `publicar_social._publish_feed`, **gated on the
   flag**, builds the ordered pool from the payload (`payload.build_top` /
   `build_novetats` now carry `artistes_pool` = `[{id, username}]`, additive),
@@ -79,9 +80,10 @@ Page token is inaccessible to the app type). Definitive design: invitation
 via API, **manual resolution from staff**, `caducada` at 14 days as the
 only automatic terminal. Acceptances are marked manually from the staff
 social panel (single "Marcar acceptada" action; deliberately no manual
-reject — `caducada` covers silence and rejection alike). The poller's
-reconcile pass (and the temporary brake) are pending removal; ADR-0015
-stays **Proposed** until that lands.
+reject — `caducada` covers silence and rejection alike). The definitive
+cycle is implemented (2026-07-13: poller reduced to the expiry pass, the
+reconcile pass + temporary brake + `get_collaborators` removed, staff UI
+live) and ADR-0015 is **Accepted**.
 
 ## Related
 

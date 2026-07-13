@@ -393,8 +393,10 @@ shared with the planned pre-commit hook).
 
 - **`docs-coherence`** is a HARD gate: a PR that touches a mapped
   subsystem without updating its doc fails. Test files
-  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`) and
-  Django migrations (`*/migrations/*`) are filtered out before
+  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`), Django
+  migrations (`*/migrations/*`) and dependency manifests/lockfiles
+  (`package.json`, `package-lock.json`, `requirements*.txt` —
+  2026-07-13, unblocks dependabot) are filtered out before
   resolution: they are implementation churn, not architecture, and
   do not trigger the gate.
 - Override (excepcional): one line in the PR body, format

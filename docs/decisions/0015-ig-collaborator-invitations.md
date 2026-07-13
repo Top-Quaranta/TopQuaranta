@@ -1,6 +1,6 @@
 # ADR-0015 — Instagram collaborator invitations for feed posts
 
-- **Status:** Proposed (all tranches merged; flag switched ON in prod and first supervised batch sent 2026-07-06 — stays Proposed until the acceptance-polling cycle is verified end-to-end, which the first live poll error blocks)
+- **Status:** Proposed (all tranches merged; flag switched ON in prod and first supervised batch sent 2026-07-06. The programmatic acceptance-read path was closed empirically on 2026-07-13 — see §5.5 — so the definitive design is: invitation via API, manual resolution from staff, `caducada` as the only automatic terminal. Stays Proposed until that design is implemented in the poller)
 - **Date:** 2026-07-03
 - **Authors:** Miquel Matoses (+ Claude Opus 4.8)
 
@@ -246,6 +246,40 @@ New management command `social/management/commands/pollar_colaboracions_ig.py`:
   derived from the API, not incremented).
 - Cron cadence: hourly is plenty (invites resolve fast); gated on
   `ig_collaboradors_actiu` so it no-ops while the flag is off.
+
+**Empirical closure of programmatic acceptance reads (2026-07-13).**
+Verified against the first live batch's media (`18094840829027683`,
+3 invitations pending at the time of both tests):
+
+1. **Instagram Login (the app's token flavour):** the media node does
+   not expose the `/collaborators` edge at all. 29 hourly poller ticks
+   (2026-07-06 10:00 → 2026-07-07 04:00 UTC, token still valid)
+   consistently returned code 100 `"Tried accessing nonexisting field
+   (collaborators)"` on `graph.instagram.com` v19.0.
+2. **Facebook Login, user token (v25.0; manual test by Miquel in the
+   Graph API Explorer, 2026-07-13):** `GET /<media>/collaborators`
+   responds **200 with empty `data`** — no error, but none of the 3
+   invitations listed, while the Instagram app showed all 3 still
+   PENDING in the collaborator editor (and no co-author on the post
+   header). A user token does not expose pending invitations.
+3. **Facebook Login, Page token:** would be the remaining candidate,
+   but the app cannot generate one — Page permissions (including
+   `pages_show_list`) are not available to its app type (verified in
+   the Explorer, 2026-07-13).
+
+Conclusion: programmatic acceptance reading is unviable with the
+current app for **two independent reasons** (Instagram Login lacks the
+edge; Facebook Login with a user token has the edge but returns it
+empty for pending invitations, and the Page token is inaccessible).
+**Definitive design:** invitation via API at publish time (unchanged);
+resolution is **manual from staff**, by observation in the Instagram
+app; `caducada` at 14 days stays as the **only automatic terminal**.
+The reconcile-against-Graph pass (and with it the temporary brake) is
+dead weight to be removed from the poller — implementation pending;
+the expiry pass and the acceptance-rate metric remain. For the
+record: as of 2026-07-13 none of the 3 invitations of the 2026-07-06
+batch is accepted; they stay `pendent` until resolved manually or
+expiring on 2026-07-20.
 
 ### 5.6 Story pagination + per-story mentions as permanent pipeline behaviour
 

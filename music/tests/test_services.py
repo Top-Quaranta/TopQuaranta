@@ -24,6 +24,7 @@ from music.services import (
     _try_auto_unlink_homonym_deezer,
     aprovar_canco,
     aprovar_canco_auto_ml,
+    auto_aprovar_per_whisper,
     rebutjar_album,
     rebutjar_artista,
     rebutjar_canco,
@@ -219,6 +220,63 @@ class TestAprovarCanco:
         assert HistorialRevisio.objects.filter(
             artista_nom=a.nom, decisio="aprovada", motiu=MOTIU_AUTO_ML
         ).exists()
+
+
+# ── auto_aprovar_per_whisper (Whisper-LID gate) ─────────────────────
+
+
+@pytest.mark.django_db
+class TestAutoAprovarPerWhisper:
+    @patch("web.seo.indexnow.notify_canco")
+    def test_approves_over_threshold(self, mock_indexnow):
+        from music.constants import MOTIU_AUTO_WHISPER
+
+        a = _mk_artista()
+        c = _mk_canco(
+            a,
+            verificada=False,
+            whisper_lang="ca",
+            whisper_p=0.95,
+            whisper_all_probs={"ca": 0.95, "es": 0.03},
+        )
+        assert auto_aprovar_per_whisper(c) is True
+        c.refresh_from_db()
+        assert c.verificada is True
+        assert HistorialRevisio.objects.filter(
+            artista_nom=a.nom, decisio="aprovada", motiu=MOTIU_AUTO_WHISPER
+        ).exists()
+        mock_indexnow.assert_called_once_with(c)
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_falls_back_to_top1_when_no_all_probs(self, _ix):
+        a = _mk_artista()
+        c = _mk_canco(a, verificada=False, whisper_lang="ca", whisper_p=0.95)
+        assert auto_aprovar_per_whisper(c) is True
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_skips_at_or_below_threshold(self, _ix):
+        a = _mk_artista()
+        # 0.90 is NOT > 0.90 (strict), and a lower value is skipped too.
+        for p in (0.90, 0.85):
+            c = _mk_canco(a, verificada=False, whisper_all_probs={"ca": p, "es": 0.1})
+            assert auto_aprovar_per_whisper(c) is False
+            c.refresh_from_db()
+            assert c.verificada is False
+        assert not HistorialRevisio.objects.filter(decisio="aprovada").exists()
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_skips_when_already_verified(self, _ix):
+        a = _mk_artista()
+        c = _mk_canco(a, verificada=True, whisper_all_probs={"ca": 0.99})
+        assert auto_aprovar_per_whisper(c) is False
+
+    @patch("web.seo.indexnow.notify_canco")
+    def test_skips_orphan_without_approved_artist(self, _ix):
+        a = Artista.objects.create(nom="Orfe", lastfm_nom="Orfe", aprovat=False)
+        c = _mk_canco(a, verificada=False, whisper_all_probs={"ca": 0.99})
+        assert auto_aprovar_per_whisper(c) is False
+        c.refresh_from_db()
+        assert c.verificada is False
 
 
 # ── processar_collaboradors_pendents ────────────────────────────────

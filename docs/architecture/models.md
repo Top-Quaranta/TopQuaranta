@@ -177,7 +177,7 @@ Territory derived via `artista.territoris ∪ artistes_col.territoris`.
 - `lastfm_lookup_nom` (property) — falls back to `nom` if `lastfm_nom` is empty
 - `get_territoris()` — returns union of main + collaborator territories
 
-**Whisper fields** (populated nightly by `analitzar_whisper` at 01:30
+**Whisper fields** (populated nightly by `analitzar_whisper` at 04:00
 UTC). `whisper_all_probs` is the full 99-language distribution —
 richer than the top-1 shortcut (`whisper_lang` + `whisper_p`) and fed
 into the RF classifier as 4 features (`whisper_p_ca`, `whisper_p_es`,
@@ -267,8 +267,9 @@ and confidence — this allows the ML model to be retrained from its own history
 - **Decision:** `decisio` (aprovada/rebutjada), `motiu` — action code
   from `music.constants.MOTIUS_REBUIG` (for rebuigs:
   `desvincular_canco`, `desvincular_album`, `desvincular_artista`)
-  or `ok` / `auto_ml` for approvals. Each value names the exact
-  action the rebuig triggered; full semantics at
+  or `ok` / `auto_ml` / `auto_whisper` for approvals (`auto_whisper` =
+  the Whisper-LID p_ca>0.90 gate, see pipeline.md §3.5). Each value
+  names the exact action the rebuig triggered; full semantics at
   `docs/architecture/staff.md §5`. Renamed 2026-05-25 from
   cause-based codes (`no_catala`, `album_incorrecte`,
   `artista_incorrecte`, `no_musica`) via migration

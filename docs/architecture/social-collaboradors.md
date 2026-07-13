@@ -32,7 +32,10 @@ with it off the feed publish path is byte-identical to before (no
   `publish_with_collaborator_guard(usernames, slots, try_container)` is
   the non-blocking substitution guard (§5.3): drop the offending handle,
   substitute the next candidate, last resort publish with none — a bad
-  handle never blocks publication.
+  handle never blocks publication. Since 2026-07-13 it takes an optional
+  `max_slots` (default 3, the collaborator cap) so the story-mention
+  publisher can reuse the same semantics for `user_tags`
+  (`max_slots=20`; see `social-stories.md`).
 - **`pollar_colaboracions_ig`** (hourly cron) — since 2026-07-13 a pure
   **expiry cron**, no Graph API at all (the acceptance-read path is
   closed; see Status below): expires `pendent` invites older than 14

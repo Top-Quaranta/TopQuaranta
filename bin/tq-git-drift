@@ -1,0 +1,73 @@
+#!/bin/bash
+# Classify the prod git working tree vs origin/main for tq-health.
+#
+# Prints a human-readable detail line to stdout and signals via exit
+# code: 0 = OK (deploy-consistent), 1 = DRIFT (needs attention). Kept as
+# a standalone helper (not inline in tq-health) so the classification is
+# unit-testable with throwaway git repos — see
+# `topquaranta/tests/test_deploy_safety.py::test_tq_git_drift_*`.
+#
+# OK cases:
+#   - HEAD == origin/main, tree clean.
+#   - HEAD strictly BEHIND origin/main (fast-forwardable) AND every file
+#     that differs is a deploy-ignored path. `deploy.yml`'s paths-ignore
+#     (docs/**, *.md, LICENSE*, ci*.yml, PR template, markdownlint) skips
+#     deploys for those, so prod legitimately lags origin until the next
+#     code change lands — that is expected, not an incident. (Before this
+#     helper, every doc-only merge tripped a false 🔴 the moment #328/#329
+#     merged while prod stayed on the last code deploy.)
+#
+# DRIFT cases (the ones the watchdog actually exists to catch):
+#   - Dirty tree (tracked change or untracked file, excluding data/):
+#     someone wrote code out-of-band (the 2026-06-02 caducitat incident).
+#   - HEAD ahead of / divergent from origin/main.
+#   - HEAD behind by a commit that touches CODE: a real deploy is pending
+#     or failed.
+#
+# The paths-ignore globs below MUST mirror `.github/workflows/deploy.yml`.
+set -u
+
+APP_DIR="${1:?usage: tq-git-drift <app-dir>}"
+
+# Mirror of deploy.yml paths-ignore. A changed file is "deploy-ignored"
+# when it matches this; if EVERY file in HEAD..origin/main is ignored,
+# the lag never triggered a deploy and is benign.
+DEPLOY_IGNORED_RE='^docs/|\.md$|^LICENSE|^\.github/workflows/ci(-docs)?\.yml$|^\.markdownlint\.json$'
+
+git -C "$APP_DIR" fetch -q --no-tags origin main >/dev/null 2>&1 || true
+head_sha=$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
+origin_sha=$(git -C "$APP_DIR" rev-parse --short origin/main 2>/dev/null || echo "?")
+
+# Dirty tree always wins — it means live, un-reviewed edits.
+dirty=$(git -C "$APP_DIR" status --porcelain 2>/dev/null \
+    | grep -vE '^(.. |\?\? )data/' || true)
+if [[ -n "$dirty" ]]; then
+    n=$(printf '%s\n' "$dirty" | grep -c .)
+    first=$(printf '%s\n' "$dirty" | head -1 | sed 's/^ *//')
+    echo "DRIFT — $n fitxer(s) out-of-band (p.ex. $first)"
+    exit 1
+fi
+
+# Clean tree matching origin (or origin unknown → best-effort OK).
+if [[ "$origin_sha" == "?" || "$head_sha" == "$origin_sha" ]]; then
+    echo "OK (matches origin/main, clean)"
+    exit 0
+fi
+
+# Clean tree, HEAD != origin/main. Benign only when strictly behind by
+# deploy-ignored paths.
+if git -C "$APP_DIR" merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
+    changed=$(git -C "$APP_DIR" diff --name-only HEAD origin/main 2>/dev/null)
+    code=$(printf '%s\n' "$changed" | grep -vE "$DEPLOY_IGNORED_RE" || true)
+    if [[ -z "$code" && -n "$changed" ]]; then
+        nc=$(git -C "$APP_DIR" rev-list --count HEAD..origin/main 2>/dev/null || echo "?")
+        echo "OK (behind origin by $nc doc-only commit(s), deploy-skipped)"
+        exit 0
+    fi
+    echo "DRIFT — HEAD $head_sha != origin/main $origin_sha (codi pendent de desplegar)"
+    exit 1
+fi
+
+# Ahead of, or divergent from, origin/main.
+echo "DRIFT — HEAD $head_sha != origin/main $origin_sha"
+exit 1

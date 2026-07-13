@@ -429,3 +429,82 @@ def test_sync_infra_does_not_touch_confd():
         "executable code. That directory is reserved for snippets "
         "owned by other repos. See docs/ops/infra.md."
     )
+
+
+def _git(cwd, *args):
+    import os
+
+    env = {
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
+        "PATH": os.environ.get("PATH", ""),
+    }
+    subprocess.run(
+        ["git", "-C", str(cwd), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_tq_git_drift_classifies_doc_only_vs_code(tmp_path):
+    """`bin/tq-git-drift` must NOT flag a prod tree that merely lags
+    origin/main by doc-only commits (deploy.yml skips those), but MUST
+    flag a lag that includes code, or a dirty tree. Regression guard for
+    the false red alert every doc-only merge produced before this
+    helper existed (#328/#329 while prod stayed on the last code deploy)."""
+    drift = PROJECT_ROOT / "bin" / "tq-git-drift"
+    if not drift.is_file():
+        pytest.skip("tq-git-drift not present")
+
+    origin = tmp_path / "origin.git"
+    work = tmp_path / "work"
+    prod = tmp_path / "prod"
+    subprocess.run(
+        ["git", "-c", "init.defaultBranch=main", "init", "-q", "--bare", str(origin)],
+        check=True,
+    )
+    subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True)
+    (work / "app").mkdir()
+    (work / "app" / "code.py").write_text("x = 1\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "init")
+    _git(work, "push", "-q", "origin", "main")
+    subprocess.run(["git", "clone", "-q", str(origin), str(prod)], check=True)
+
+    def run():
+        return subprocess.run(
+            [str(drift), str(prod)], capture_output=True, text=True, timeout=30
+        )
+
+    # In sync → OK.
+    r = run()
+    assert r.returncode == 0, r.stdout
+
+    # Origin advances by a docs-only commit; prod lags → still OK.
+    (work / "docs").mkdir()
+    (work / "docs" / "x.md").write_text("hi\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "docs")
+    _git(work, "push", "-q", "origin", "main")
+    r = run()
+    assert r.returncode == 0, f"doc-only lag flagged as drift: {r.stdout}"
+    assert "doc-only" in r.stdout
+
+    # Origin advances by a CODE commit; prod lags → DRIFT.
+    (work / "app" / "more.py").write_text("y = 2\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-qm", "code")
+    _git(work, "push", "-q", "origin", "main")
+    r = run()
+    assert r.returncode == 1, f"code lag not flagged: {r.stdout}"
+
+    # Dirty tree (untracked non-data file) → DRIFT.
+    _git(prod, "fetch", "-q", "origin", "main")
+    _git(prod, "reset", "-q", "--hard", "origin/main")
+    (prod / "app" / "hack.py").write_text("hack\n")
+    r = run()
+    assert r.returncode == 1, f"dirty tree not flagged: {r.stdout}"

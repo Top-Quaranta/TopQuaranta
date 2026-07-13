@@ -147,29 +147,18 @@ if [[ -f "$ERRORS_LOG" ]]; then
 fi
 
 # ── Git working-tree drift ─────────────────────────────────────────────
-# Prod must match origin/main EXACTLY: tq-deploy does `git reset --hard
-# origin/main`, so any tracked modification or untracked file (other than
-# the data/ scratch dir) means someone wrote to the working tree
-# out-of-band — un-reviewed code that runs until the next deploy silently
-# reverts it (the 2026-06-02 caducitat-guard incident). We also flag
-# HEAD != origin/main. The fetch is best-effort (deploy SSH key present);
-# on network failure we fall back to the last-known origin/main ref and
-# still catch dirty trees.
+# Delegated to `bin/tq-git-drift` (kept separate so the classification is
+# unit-testable). It flags a dirty tree, or HEAD ahead/divergent, or HEAD
+# behind by a CODE commit — but NOT a HEAD that merely lags origin/main by
+# deploy-ignored (doc-only) commits, which is expected because deploy.yml
+# skips deploys for docs/**, *.md, etc. See the helper's header and the
+# git-drift row in docs/ops/runbook.md.
 GIT_OK=1; GIT_DETAIL="OK (matches origin/main, clean)"
-if [[ -d "$APP_DIR/.git" ]]; then
-    git -C "$APP_DIR" fetch -q --no-tags origin main >/dev/null 2>&1 || true
-    head_sha=$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo "?")
-    origin_sha=$(git -C "$APP_DIR" rev-parse --short origin/main 2>/dev/null || echo "?")
-    dirty=$(git -C "$APP_DIR" status --porcelain 2>/dev/null \
-        | grep -vE '^(.. |\?\? )data/' || true)
-    if [[ -n "$dirty" ]]; then
+if [[ -d "$APP_DIR/.git" && -x "$APP_DIR/bin/tq-git-drift" ]]; then
+    if GIT_DETAIL=$("$APP_DIR/bin/tq-git-drift" "$APP_DIR" 2>/dev/null); then
+        GIT_OK=1
+    else
         GIT_OK=0
-        n=$(printf '%s\n' "$dirty" | grep -c .)
-        first=$(printf '%s\n' "$dirty" | head -1 | sed 's/^ *//')
-        GIT_DETAIL="DRIFT — $n fitxer(s) out-of-band (p.ex. $first)"
-    elif [[ "$origin_sha" != "?" && "$head_sha" != "$origin_sha" ]]; then
-        GIT_OK=0
-        GIT_DETAIL="DRIFT — HEAD $head_sha != origin/main $origin_sha"
     fi
 fi
 

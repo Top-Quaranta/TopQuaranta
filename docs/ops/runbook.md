@@ -398,17 +398,30 @@ grep'd the report, which embedded the summary timestamp, the "fa Xh"
 ages and the daily error count, so every hourly tick re-spammed.)
 
 **Git-tree drift detection** (added 2026-06-02): `tq-health` also
-emits a `Git tree: ...` row. Because `tq-deploy` does
-`git reset --hard origin/main`, the prod working tree must always be
-clean and at `origin/main`. The check flags a `DRIFT` anomaly (and
-escalates `overall`, so `--email-on-fail` mails admin@ within the hour)
-when `git status --porcelain` is non-empty (excluding the `data/`
-scratch dir) or `HEAD != origin/main` — i.e. someone wrote code
-directly into `/home/topquaranta/app/`, bypassing push→GHA→`tq-deploy`.
-Such edits run un-reviewed and are silently reverted on the next
-deploy. Canonical incident: the 2026-06-02 caducitat guard
-(`ingesta/caducitat.py`) ran in prod for days while absent from
-`origin/main`. The token `DRIFT` is included in the email-alert grep.
+emits a `Git tree: ...` row, delegating the classification to
+`bin/tq-git-drift` (a standalone helper so the logic is unit-tested —
+`topquaranta/tests/test_deploy_safety.py::test_tq_git_drift_*`). It
+flags a `DRIFT` anomaly (and escalates `overall`, so `--email-on-fail`
+mails admin@ within the hour) when:
+
+- `git status --porcelain` is non-empty (excluding the `data/` scratch
+  dir) — someone wrote code directly into `/home/topquaranta/app/`,
+  bypassing push→GHA→`tq-deploy`. Such edits run un-reviewed and are
+  silently reverted on the next deploy. Canonical incident: the
+  2026-06-02 caducitat guard (`ingesta/caducitat.py`) ran in prod for
+  days while absent from `origin/main`; or
+- `HEAD` is **ahead of / divergent from** `origin/main`, or behind it by
+  a commit that touches **code** — a real deploy is pending or failed.
+
+It does **NOT** flag a `HEAD` that merely lags `origin/main` by
+**doc-only** commits (`docs/**`, `*.md`, `LICENSE*`, CI/docs workflows).
+`deploy.yml`'s `paths-ignore` skips deploys for those, so prod
+legitimately stays behind until the next code change — reporting it as
+`OK (behind origin by N doc-only commit(s), deploy-skipped)`. This
+closed a false-🔴 that fired after every doc-only merge (surfaced
+2026-07-14 by PRs #328/#329 landing while prod sat on the last code
+deploy). The helper's `paths-ignore` regex MUST mirror `deploy.yml`.
+The token `DRIFT` is included in the email-alert grep.
 
 **Pytest gates**: `topquaranta/tests/test_deploy_safety.py` asserts
 (a) `makemigrations --check` is clean (every model change has a

@@ -21,7 +21,7 @@ For each territori the algorithm looks at:
 1. **`SenyalDiari.lastfm_playcount`** — the raw cumulative Last.fm play
    count per (cançó, data). Ingested daily by `obtenir_senyal`
    (06:00 UTC). No normalisation; we consume it as-is.
-2. **`RankingSetmanal`** — every prior weekly ranking row for this
+2. **`TopSetmanal`** — every prior weekly ranking row for this
    (cançó, territori) at posicions ≤ 40. Used to compute the
    past-top-position penalty.
 3. **`ConfiguracioGlobal`** — four editable coefficients:
@@ -151,7 +151,7 @@ s'accelera cap als 365 dies.
 ### 2.3 `past_top_factor`
 
 Penalització acumulada per aparicions prèvies al top setmanal.
-Per cada fila de `RankingSetmanal(canco=C, territori=T, posicio=N)`
+Per cada fila de `TopSetmanal(canco=C, territori=T, posicio=N)`
 amb N ≤ 40, suma:
 
 ```
@@ -200,7 +200,7 @@ Després del monopoli reordenem per `final_score` i truncem a top 100.
 ### 2.5 `canvi_posicio`
 
 Per visualització: diferència entre la posició actual i la posició a
-la setmana immediatament anterior (RankingSetmanal ordenat per
+la setmana immediatament anterior (TopSetmanal ordenat per
 `-setmana`). NEW si no hi havia.
 
 ---
@@ -236,7 +236,7 @@ encara que el seu territori natal tingui poca producció.
 
 ## 5. Config snapshot per reproducibilitat
 
-Cada fila de `RankingSetmanal` guarda `algorithm_version="v2.0"` i
+Cada fila de `TopSetmanal` guarda `algorithm_version="v2.0"` i
 `config_snapshot` amb els coeficients usats en aquell càlcul. Això
 permet reproduir exactament el top d'una setmana històrica
 encara que els defaults canviïn més endavant.

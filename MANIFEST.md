@@ -100,7 +100,7 @@ Every coefficient lives in `ConfiguracioGlobal`. Every change to a
 coefficient is recorded in `StaffAuditLog` with actor, timestamp, and
 reason. The public `/com-funciona/historial/` page shows the full
 history. A ranking computed last month is **reproducible today**
-(R1: `RankingSetmanal` stores `config_snapshot`).
+(R1: `TopSetmanal` stores `config_snapshot`).
 
 This means we can improve the algorithm, but we can't quietly
 re-weight the past to change what was published.

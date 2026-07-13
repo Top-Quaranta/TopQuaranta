@@ -15,7 +15,7 @@
            │                                        │
    staff review → verificada=True ──────────────────┤
                                                     ▼
-                                     calcular_ranking (daily provisional,
+                                     calcular_top (daily provisional,
                                                        Saturday official)
                                                     │
                                weekly_plays = playcount_today
@@ -25,7 +25,7 @@
                                     × monopoly (album / artista)
                                                     │
                                                     ▼
-                                     RankingProvisional / RankingSetmanal
+                                     TopProvisional / TopSetmanal
 ```
 
 > Related: the **self-hosted cover pipeline** (`ingesta/portades/` +
@@ -85,16 +85,16 @@ into `SenyalDiari`. Skips tracks already ingested for that date
 normalisation was removed in algorithm v2.0 (2026-04-23); the
 ranking consumes the raw counts directly.
 
-### 3.2 `calcular_ranking`
+### 3.2 `calcular_top`
 ```bash
-python manage.py calcular_ranking [--setmana YYYY-MM-DD] [--territori CODE]
+python manage.py calcular_top [--setmana YYYY-MM-DD] [--territori CODE]
                                    [--dry-run] [--provisional]
 ```
-- Without `--provisional`: writes `RankingSetmanal`. Run Saturday 08:00.
+- Without `--provisional`: writes `TopSetmanal`. Run Saturday 08:00.
   Territories processed: `TERRITORIS_FIXOS = {CAT, VAL, BAL}` + aggregates
   `{ALT, PPCC}`. Each territory is `delete + bulk_create` inside a transaction
   (prevents stale entries from previous runs).
-- With `--provisional`: writes `RankingProvisional`. Run daily 07:00. Includes
+- With `--provisional`: writes `TopProvisional`. Run daily 07:00. Includes
   all eligible territories (fixed + aggregates + optional if they cross the
   `min_cancons_ranking_propi` threshold).
 - Aggregates (ALT, PPCC) must run last — they read the just-computed individual
@@ -382,7 +382,7 @@ and rewrites its tracklist in place. Runs 15 minutes after the provisional
 ranking settles.
 
 Per kind:
-- `top` → `RankingProvisional.filter(territori=X).order_by('posicio')[:40]`
+- `top` → `TopProvisional.filter(territori=X).order_by('posicio')[:40]`
 - `novetats` → `Canco.filter(data_llancament=yesterday, activa=True)[:100]`
 
 Resolves each Canço to a Spotify URI via `UserSpotifyClient.search_isrc()`
@@ -627,17 +627,27 @@ health check (§7).
 0 4 * * *    topquaranta  tq-run analitzar_whisper --limit 200    # 04:00 Whisper LID
 0 5 * * *    topquaranta  tq-run obtenir_metadata_lastfm --limit 500  # 05:00 Last.fm artist meta
 0 6 * * *    topquaranta  tq-run obtenir_senyal                   # 06:00 Last.fm signal
-0 7 * * *    topquaranta  tq-run calcular_ranking --provisional   # 07:00 provisional
-15 7 * * *   topquaranta  tq-run actualitzar_playlists_spotify    # 07:15 Spotify sync
+45 6 * * *   topquaranta  tq-run detectar_anomalies_senyal        # 06:45 clean signal before ranking
+0 7 * * *    topquaranta  tq-run calcular_top --provisional       # 07:00 daily provisional
+15 */2 * * * topquaranta  tq-run actualitzar_playlists_spotify --freq daily  # every 2h Spotify Process A
 
 # Weekly
-0 8 * * 6    topquaranta  tq-run calcular_ranking                 # Sat 08:00 official
+0 8 * * 6    topquaranta  tq-run calcular_top                     # Sat 08:00 official
+0 10 * * 6   topquaranta  tq-run actualitzar_playlists_spotify --freq weekly # Sat 10:00 weekly playlists
 
 # Retention + ops
 0 5 1 1,4,7,10 * topquaranta tq-run arxivar_senyal_vell           # quarterly
 30 4 1 * *   postgres       tq-restore-test                       # monthly
 */30 * * * * topquaranta    tq-recover                            # recovery sweep
 ```
+
+Curated subset — the **source of truth is `deploy/cron.topquaranta`**
+(synced by `bin/tq-sync-infra`). Not shown above: Spotify Process B
+enrichment (`enriquir_spotify` 03:00, `enriquir_spotify_rebuigs`
+05:00), self-hosted covers (`descarregar_portades` 02:00), SEO
+inference + metrics snapshots (02:00, 21:00–23:30), social distribution
+(`publicar_social` / `publicar_canal`, Sat/Wed/Mon/Fri/Tue) and the
+`tq-health` watchdog (hourly at :15).
 
 Two pacing changes since the original schedule (2026-04-25 sweep):
 - `obtenir_metadata_musicbrainz` was `*/15` during the MB backfill;

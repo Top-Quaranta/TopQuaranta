@@ -24,9 +24,9 @@ the license permits.
 
 This license covers:
 
-- Weekly rankings (`RankingSetmanal`): positions, scores, dates, and the
+- Weekly rankings (`TopSetmanal`): positions, scores, dates, and the
   tracks / artists referenced.
-- Provisional daily rankings (`RankingProvisional`).
+- Provisional daily rankings (`TopProvisional`).
 - Daily signal data (`SenyalDiari`): playcounts, listeners, and the
   derived `score_entrada` normalization.
 - Ranking algorithm coefficients and their history

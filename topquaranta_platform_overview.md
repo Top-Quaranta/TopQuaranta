@@ -172,8 +172,10 @@ captures status for `tq-health` and retries 3× on failure).
 (Plus SEO inference 02:00, metrics 21:00–23:30, `tq-recover` */30, `tq-health
 --email-on-fail` hourly, backups 03:00, quarterly `arxivar_senyal_vell`.)
 
-Note: README/CLAUDE prose says "calcular_ranking"; the real command is
-**`calcular_top`** (`ranking/management/commands/calcular_top.py`).
+Note: the ranking command is **`calcular_top`**
+(`ranking/management/commands/calcular_top.py`); the models are
+**`TopSetmanal`** / **`TopProvisional`** (renamed from `Ranking*` in
+migration `ranking/0013`, tables `ranking_top{setmanal,provisional}`).
 
 ### `obtenir_novetats` — P1/P2/P3 (`ingesta/management/commands/obtenir_novetats.py`)
 

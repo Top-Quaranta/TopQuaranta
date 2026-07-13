@@ -311,13 +311,13 @@ Daily Last.fm signal per track. One row per `(canco, data)`.
 - **No normalisation** since 2026-04-23. Algorithm v2.0 reads
   `lastfm_playcount` directly and computes weekly deltas at ranking time.
 
-### `RankingSetmanal` — `ranking_rankingsetmanal`
+### `TopSetmanal` — `ranking_topsetmanal`
 Weekly official ranking. `setmana` = Monday of the ranking ISO week.
 - `canco` FK, `territori` CharField(4), `setmana` DateField
 - `posicio` PositiveSmallInt, `score_setmanal` Float
 - Unique: `(canco, territori, setmana)`. Index: `(setmana, territori)`
 
-### `RankingProvisional` — `ranking_rankingprovisional`
+### `TopProvisional` — `ranking_topprovisional`
 Rolling daily ranking. Truncated and rebuilt on each run.
 - `canco` FK (SET_NULL), `territori` CharField(4)
 - `posicio`, `score_setmanal` (the v2.0 final score = base × monopoli)

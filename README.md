@@ -157,7 +157,7 @@ El CI (GitHub Actions) ho valida. El pre-commit local ho fa en segons.
 🟢 **En producció**: [topquaranta.cat](https://www.topquaranta.cat).
 
 El pipeline corre automàticament via cron (hourly `obtenir_novetats`,
-daily `obtenir_senyal`, weekly `calcular_ranking` oficials; vegeu
+daily `obtenir_senyal`, weekly `calcular_top` oficials; vegeu
 `/etc/cron.d/topquaranta` i `docs/history/roadmap.md`). Health: `tq-health` sobre el
 servidor.
 

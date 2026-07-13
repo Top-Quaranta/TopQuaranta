@@ -28,16 +28,16 @@ cairosvg==2.9.0
 pillow-avif-plugin==1.5.5
 # Language identification (Whisper LID as a staff signal on Canco)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.12.0+cpu            # CPU-only PyTorch for faster-whisper backbone
+torch==2.13.0+cpu            # CPU-only PyTorch for faster-whisper backbone
 faster-whisper==1.2.1        # large-v3 LID via detect_language(), int8 CPU
 soundfile==0.14.0            # WAV loader (no torchcodec dependency)
 
 # SEO monitoring (Sprint S Bloc D, 2026-05-06).
-google-api-python-client>=2.197.0
-google-auth>=2.54.0
+google-api-python-client>=2.198.0
+google-auth>=2.56.0
 google-auth-httplib2>=0.4.0
 
 # Newsletter → Community bridge (2026-06-10): convert NewsletterDraft
 # narrative_html to markdown for the public Publicacio body (option b).
 # Pulls beautifulsoup4. The feed renders cos with react-markdown + remark-gfm.
-markdownify>=1.2.2,<2.0
+markdownify>=1.2.3,<2.0

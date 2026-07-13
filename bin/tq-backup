@@ -3,10 +3,21 @@
 #
 # Must run as user `postgres` (pg_dump uses peer auth).
 #
-# Retention (on ~45 MB DB, gzipped ~5-10 MB each, total ~250 MB worst case):
-#   - daily/   last 7 days
-#   - weekly/  last 4 weeks (Sundays)
-#   - monthly/ last 12 months (1st of month)
+# Retention (on a 288 MB DB, gzipped ~29 MB each, ~600 MB worst case;
+# sizes re-measured 2026-07-05, see docs/audits/2026-07-05-recon-backup-offsite.md):
+#   - daily/        full dump, last 7 days
+#   - weekly/       full dump, last 4 weeks (Sundays)
+#   - monthly/      full dump WITH PII (tq-month-pii-*), last 90 days
+#   - monthly-safe/ sanitized dump WITHOUT PII data (tq-month-safe-*),
+#                   last 12 months — the long series feeds the offsite
+#                   layer's `safe` tag (docs/ops/backup-offsite.md)
+#
+# PII split (2026-07-05, docs/ops/retention.md §Backups): any dump that
+# contains community/user data is retained at most 90 days, local and
+# offsite. The 12-month series is a full-schema dump whose PII tables
+# have their DATA excluded (catalog, rankings and aliases stay intact;
+# the excluded set is guarded by topquaranta/tests/test_backup_offsite.py,
+# which fails CI if a new model with a user FK is not covered here).
 
 set -euo pipefail
 
@@ -49,7 +60,8 @@ on_error() {
 }
 trap 'on_error $LINENO' ERR
 
-mkdir -p "$BACKUP_DIR/daily" "$BACKUP_DIR/weekly" "$BACKUP_DIR/monthly"
+mkdir -p "$BACKUP_DIR/daily" "$BACKUP_DIR/weekly" "$BACKUP_DIR/monthly" \
+         "$BACKUP_DIR/monthly-safe"
 
 out="$BACKUP_DIR/daily/tq-$DATE.sql.gz"
 pg_dump "$DB" | gzip -9 > "$out"
@@ -60,13 +72,42 @@ if [[ "$DOW" == "7" ]]; then
     cp "$out" "$BACKUP_DIR/weekly/tq-week-$DATE.sql.gz"
 fi
 if [[ "$DOM" == "01" ]]; then
-    cp "$out" "$BACKUP_DIR/monthly/tq-month-$DATE.sql.gz"
+    cp "$out" "$BACKUP_DIR/monthly/tq-month-pii-$DATE.sql.gz"
+    # Sanitized long-series dump: full schema, but the DATA of every
+    # table holding personal data is excluded (empty on restore). The
+    # only user FK outside comptes is music_staffauditlog.actor, so
+    # excluding these leaves no dangling FK at restore time. Guarded by
+    # test_backup_offsite.py::test_pii_exclude_list_covers_user_tables.
+    # NB: the custom user model keeps the legacy table name `auth_user`
+    # (comptes/models.py Meta.db_table), so `comptes_*` alone would MISS
+    # the most sensitive table — caught by the invariant test on first run.
+    pg_dump "$DB" \
+        --exclude-table-data='comptes_*' \
+        --exclude-table-data='auth_user*' \
+        --exclude-table-data='music_staffauditlog' \
+        --exclude-table-data='music_artistalastfmalias' \
+        --exclude-table-data='social_*auth' \
+        --exclude-table-data='django_session' \
+        --exclude-table-data='axes_*' \
+        --exclude-table-data='otp_*' \
+        --exclude-table-data='django_admin_log' \
+        | gzip -9 > "$BACKUP_DIR/monthly-safe/tq-month-safe-$DATE.sql.gz"
 fi
 
 # Retention — delete old files
-find "$BACKUP_DIR/daily"   -name "tq-*.sql.gz"       -mtime +7   -delete
-find "$BACKUP_DIR/weekly"  -name "tq-week-*.sql.gz"  -mtime +30  -delete
-find "$BACKUP_DIR/monthly" -name "tq-month-*.sql.gz" -mtime +365 -delete
+find "$BACKUP_DIR/daily"   -name "tq-*.sql.gz"      -mtime +7  -delete
+find "$BACKUP_DIR/weekly"  -name "tq-week-*.sql.gz" -mtime +30 -delete
+# PII monthlies: 90 days (docs/ops/retention.md §Backups, 2026-07-05).
+find "$BACKUP_DIR/monthly" -name "tq-month-pii-*.sql.gz" -mtime +90 -delete
+# Sanitized long series: 12 months.
+find "$BACKUP_DIR/monthly-safe" -name "tq-month-safe-*.sql.gz" -mtime +365 -delete
+# LEGACY full monthlies (tq-month-<YYYYMMDD>-*, created before the PII
+# split; they DO contain PII). The 90-day policy applies forward only —
+# deleting these earlier than their original 365-day window needs
+# Miquel's explicit OK, so they keep the old rule until they age out.
+# The `tq-month-2*` glob matches the date-first legacy names and never
+# the new tq-month-pii-*/tq-month-safe-* files.
+find "$BACKUP_DIR/monthly" -name "tq-month-2*.sql.gz" -mtime +365 -delete
 
 write_status 0 "file=$out size_bytes=$size date=$DATE"
 echo "backup_ok=1 file=$out size_bytes=$size date=$DATE"

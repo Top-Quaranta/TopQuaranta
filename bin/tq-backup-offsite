@@ -1,0 +1,113 @@
+#!/bin/bash
+# Offsite backup — capa 2 (restic → Backblaze B2, append-only).
+# Spec: docs/ops/backup-offsite.md
+#
+# Runs daily at 03:30 as user `topquaranta` (30 min after tq-backup so
+# the day's dump exists). Two tagged restic snapshots:
+#   --tag pii   latest daily dump + .env + data/     (retention: 90 days,
+#               pruned from the Mac — the server key cannot delete)
+#   --tag safe  monthly-safe sanitized dumps + portades  (12 months)
+#
+# GATED AND INERT BY DEFAULT. It only does real work when ALL of:
+#   1. OFFSITE_BACKUP_ACTIU=1 in the .env
+#   2. RESTIC_REPOSITORY, RESTIC_PASSWORD, AWS_ACCESS_KEY_ID and
+#      AWS_SECRET_ACCESS_KEY present in the .env
+#   3. the `restic` binary is installed
+# Anything missing → status=DISABLED (a legitimate state in tq-health,
+# no alert), exit 0. Activation procedure: docs/ops/backup-offsite.md §9.
+#
+# Never calls `restic forget`/`prune`: the server-side B2 key has no
+# deleteFiles capability (append-only), so retention on the remote is
+# applied quarterly from the Mac with the privileged key.
+#
+# The TQ_* env overrides exist for the test suite only (they let the
+# no-regression tests run the real script against a tmpdir).
+
+set -euo pipefail
+
+APP_DIR=${TQ_APP_DIR:-/home/topquaranta/app}
+ENV_FILE=${TQ_ENV_FILE:-$APP_DIR/.env}
+BACKUP_DIR=${TQ_BACKUP_DIR:-/home/topquaranta/backups}
+STATUS_DIR=${TQ_STATUS_DIR:-/var/log/topquaranta/status}
+PORTADES_DIR=${TQ_PORTADES_DIR:-/var/topquaranta/portades}
+
+ts=$(date -Iseconds)
+status_file="$STATUS_DIR/tq-backup-offsite.status"
+mkdir -p "$STATUS_DIR"
+
+write_status() {
+    local st="$1" rc="$2" extra="$3" tmp
+    tmp=$(mktemp)
+    {
+        echo "command=tq-backup-offsite"
+        echo "args="
+        echo "last_run=$ts"
+        echo "exit_code=$rc"
+        echo "status=$st"
+        echo "last_output<<EOF"
+        echo "$extra"
+        echo "EOF"
+    } > "$tmp"
+    chmod 644 "$tmp"
+    mv "$tmp" "$status_file"
+}
+
+disabled() {
+    # A missing prerequisite is NOT an error: report and exit clean so
+    # tq-health shows a gray DISABLED row instead of a red FAIL.
+    write_status DISABLED 0 "desactivat: $1"
+    echo "offsite_disabled=1 reason=$1"
+    exit 0
+}
+
+on_error() {
+    local rc=$?
+    write_status FAIL "$rc" "aborted at line $1 (exit $rc)" || true
+    exit "$rc"
+}
+trap 'on_error $LINENO' ERR
+
+# ── gating ──────────────────────────────────────────────────────────────
+[[ -f "$ENV_FILE" ]] || disabled "no existeix $ENV_FILE"
+
+env_get() { grep -E "^$1=" "$ENV_FILE" | head -1 | cut -d= -f2- || true; }
+
+[[ "$(env_get OFFSITE_BACKUP_ACTIU)" == "1" ]] \
+    || disabled "flag apagat (OFFSITE_BACKUP_ACTIU != 1)"
+
+missing=()
+for var in RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+    [[ -n "$(env_get "$var")" ]] || missing+=("$var")
+done
+[[ ${#missing[@]} -eq 0 ]] || disabled "falten variables al .env: ${missing[*]}"
+
+command -v restic >/dev/null 2>&1 \
+    || disabled "falta restic (instal·lació: docs/ops/backup-offsite.md §9)"
+
+export RESTIC_REPOSITORY="$(env_get RESTIC_REPOSITORY)"
+export RESTIC_PASSWORD="$(env_get RESTIC_PASSWORD)"
+export AWS_ACCESS_KEY_ID="$(env_get AWS_ACCESS_KEY_ID)"
+export AWS_SECRET_ACCESS_KEY="$(env_get AWS_SECRET_ACCESS_KEY)"
+
+# ── payload ─────────────────────────────────────────────────────────────
+latest_daily=$(ls -1t "$BACKUP_DIR"/daily/tq-*.sql.gz 2>/dev/null | head -1)
+if [[ -z "$latest_daily" ]]; then
+    write_status FAIL 1 "cap dump diari a $BACKUP_DIR/daily — tq-backup ha corregut?"
+    exit 1
+fi
+
+pii_paths=("$latest_daily" "$ENV_FILE")
+[[ -d "$APP_DIR/data" ]] && pii_paths+=("$APP_DIR/data")
+
+safe_paths=()
+[[ -d "$PORTADES_DIR" ]] && safe_paths+=("$PORTADES_DIR")
+[[ -d "$BACKUP_DIR/monthly-safe" ]] && safe_paths+=("$BACKUP_DIR/monthly-safe")
+
+out_pii=$(restic backup --tag pii --host topquaranta "${pii_paths[@]}" 2>&1 | tail -3)
+out_safe="(res a copiar amb tag safe)"
+if [[ ${#safe_paths[@]} -gt 0 ]]; then
+    out_safe=$(restic backup --tag safe --host topquaranta "${safe_paths[@]}" 2>&1 | tail -3)
+fi
+
+write_status OK 0 "pii: ${out_pii} | safe: ${out_safe}"
+echo "offsite_ok=1 daily=$(basename "$latest_daily")"

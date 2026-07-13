@@ -75,17 +75,17 @@ def _instagram_urls_for_canco(canco) -> list[str]:
     return out
 
 
-def _album_collab_instagram_urls(album_ids: list[int]) -> dict[int, list[str]]:
-    """Per-album collaborator Instagram URLs (union across the album's
-    verified+active tracks, de-duplicated, stable order). An album is
-    credited to one artist, but a release often features guests on
-    individual tracks; the IG tagger tags them too so every artist on
-    the release gets notified — same intent as
-    `_instagram_urls_for_canco` for the top carousel."""
-    out: dict[int, list[str]] = {aid: [] for aid in album_ids}
+def _album_collabs(album_ids: list[int]) -> dict[int, list]:
+    """Per-album collaborator Artistes (union across the album's
+    verified+active tracks, de-duplicated by artist, stable order). An
+    album is credited to one artist, but a release often features guests
+    on individual tracks; both the visible credit (`artistes_noms`) and
+    the IG tagger (`artistes_instagram_urls`) derive from this one pass —
+    same intent as `_instagram_urls_for_canco` for the top carousel."""
+    out: dict[int, list] = {aid: [] for aid in album_ids}
     if not album_ids:
         return out
-    seen: dict[int, set[str]] = {aid: set() for aid in album_ids}
+    seen: dict[int, set[int]] = {aid: set() for aid in album_ids}
     cancons = (
         Canco.objects.filter(album_id__in=album_ids, verificada=True, activa=True)
         .prefetch_related("artistes_col")
@@ -94,10 +94,28 @@ def _album_collab_instagram_urls(album_ids: list[int]) -> dict[int, list[str]]:
     for canco in cancons:
         aid = canco.album_id
         for a in canco.artistes_col.all():
-            u = _instagram_url(a)
-            if u and u not in seen[aid]:
-                out[aid].append(u)
-                seen[aid].add(u)
+            if a.id not in seen[aid]:
+                out[aid].append(a)
+                seen[aid].add(a.id)
+    return out
+
+
+def _artistes_pool(artistes) -> list[dict]:
+    """Ordered `[{"id", "username"}]` for the collaborator slot policy
+    (ADR-0015): principal + collaborators that have a resolvable IG
+    username, de-duplicated by artist id, in the given order. Additive —
+    the tagger keeps reading `artistes_instagram_urls`."""
+    from .captions import instagram_username
+
+    out: list[dict] = []
+    seen: set[int] = set()
+    for a in artistes:
+        if a is None or a.id in seen:
+            continue
+        u = instagram_username(getattr(a, "instagram_url", "") or "")
+        if u:
+            out.append({"id": a.id, "username": u})
+            seen.add(a.id)
     return out
 
 
@@ -159,9 +177,11 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
             # Lets the newsletter link every collaborator to /artista/{slug}
             # (Slice 2); the social engine ignores this field.
             artistes_slugs = [artista.slug, *[a.slug for a in col_objs]]
+            artistes_pool = _artistes_pool([artista, *col_objs])
         else:
             artistes_noms = ["—"]
             artistes_slugs = [None]
+            artistes_pool = []
         # Primary territori for the row's silhouette. Prefer a
         # non-aggregate code (icon variety); fall back to PPCC if the
         # artist is only tagged global. Without this the renderer's
@@ -193,6 +213,9 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
                 # The publicar_social tagger reads this list to attach
                 # one `user_tags` payload per artist per slide.
                 "artistes_instagram_urls": _instagram_urls_for_canco(canco),
+                # Ordered [{"id","username"}] for the collaborator slot
+                # policy (ADR-0015). Additive; the tagger ignores it.
+                "artistes_pool": artistes_pool,
                 "cover_url": getattr(album, "imatge_url", None) or None,
                 # Deezer album id for the newsletter's local-cover lookup
                 # (`comptes.newsletter_covers.album_cover_url`).
@@ -273,9 +296,9 @@ def build_novetats(
     if not albums:
         return None
 
-    # Collaborator handles per album (for the IG tagger). Batched so the
-    # per-item loop below stays N+1-free.
-    collab_urls = _album_collab_instagram_urls([a.id for a in albums])
+    # Collaborators per album (names + handles). Batched so the per-item
+    # loop below stays N+1-free.
+    collabs = _album_collabs([a.id for a in albums])
 
     # ── Batched enrichment for the narrative detectors (n1-n4) ───────
     # Compute the flags once, in a handful of queries, instead of an
@@ -299,11 +322,17 @@ def build_novetats(
         if a.data_llancament:
             dies = max(0, (publish_date - a.data_llancament).days)
         # Principal first, then track collaborators (de-duplicated). The
-        # IG tagger reads this list; renderer/caption keep using the
-        # principal-only `artista_instagram_url` below.
+        # renderer + story slide read `artistes_noms` to show every artist
+        # on the release (parity with the top carousel, #301); the IG
+        # tagger reads `artistes_instagram_urls`. Both derive from the
+        # single `_album_collabs` pass. `artista_nom` stays for legacy
+        # callers reading a single string.
+        col_objs = collabs.get(a.id, [])
+        artistes_noms = [artista.nom, *[c.nom for c in col_objs]] if artista else ["—"]
         principal_url = _instagram_url(artista)
         artistes_instagram_urls = [principal_url] if principal_url else []
-        for u in collab_urls.get(a.id, []):
+        for c in col_objs:
+            u = _instagram_url(c)
             if u and u not in artistes_instagram_urls:
                 artistes_instagram_urls.append(u)
         items.append(
@@ -312,10 +341,14 @@ def build_novetats(
                 "slug": a.slug,
                 "tipus": a.tipus,
                 "artista_id": artista.id if artista else None,
-                "artista_nom": artista.nom if artista else "—",
+                "artista_nom": artista.nom if artista else "—",  # DEPRECATED
+                "artistes_noms": artistes_noms,
                 "artista_slug": artista.slug if artista else None,
                 "artista_instagram_url": principal_url,
                 "artistes_instagram_urls": artistes_instagram_urls,
+                # Ordered [{"id","username"}] for the collaborator slot
+                # policy (ADR-0015). Additive; the tagger ignores it.
+                "artistes_pool": _artistes_pool([artista, *col_objs]),
                 "artista_territori": territori,
                 "cover_url": getattr(a, "imatge_url", None) or None,
                 "album_deezer_id": getattr(a, "deezer_id", None),

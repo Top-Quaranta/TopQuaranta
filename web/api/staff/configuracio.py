@@ -59,6 +59,7 @@ SECTION_RANKINGS = "Rànquing i fórmules"
 SECTION_SOFTCAP = "Soft cap (outliers)"
 SECTION_EDITORIAL = "Editorial"
 SECTION_DISTRIBUCIO = "Distribució i canals"
+SECTION_COLABORADORS = "Col·laboradors IG"
 SECTION_ALTRES = "Altres"
 
 _SECTION_MAP = {
@@ -78,6 +79,7 @@ _SECTION_MAP = {
     # D — editorial
     "editorial_veu": SECTION_EDITORIAL,
     "landing_editorial_veu": SECTION_EDITORIAL,
+    "novetats_stories_per_pagina": SECTION_EDITORIAL,
     # B — distribution / channels (managed primarily in the distribution
     # cockpit; surfaced here read/write because the model is reflected).
     "newsletter_publicacio_pont_actiu": SECTION_DISTRIBUCIO,
@@ -93,6 +95,14 @@ _SECTION_MAP = {
     "delay_bluesky_min": SECTION_DISTRIBUCIO,
     "delay_telegram_min": SECTION_DISTRIBUCIO,
     "delay_newsletter_min": SECTION_DISTRIBUCIO,
+    # IG collaborator invitations (ADR-0015). Own visible section (the
+    # distribution section is hidden here, so these live separately so
+    # staff can flip the master flag + tune slots/cooldowns).
+    "ig_collaboradors_actiu": SECTION_COLABORADORS,
+    "ig_collab_slots_total": SECTION_COLABORADORS,
+    "ig_collab_slots_acceptats": SECTION_COLABORADORS,
+    "ig_collab_cooldown_a_dies": SECTION_COLABORADORS,
+    "ig_collab_cooldown_c_dies": SECTION_COLABORADORS,
 }
 
 # Stable display order of the sections in the SPA.
@@ -100,6 +110,7 @@ SECTION_ORDER = [
     SECTION_RANKINGS,
     SECTION_SOFTCAP,
     SECTION_EDITORIAL,
+    SECTION_COLABORADORS,
     SECTION_DISTRIBUCIO,
     SECTION_ALTRES,
 ]

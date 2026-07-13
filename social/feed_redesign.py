@@ -96,6 +96,15 @@ def territori(code: str | None) -> dict:
 # ── fonts ────────────────────────────────────────────────────────────
 
 
+def _artist_credit(item: dict) -> str:
+    """Per-release credit: principal + collaborators, comma-joined
+    (mirrors `top_redesign._artist_credit` and the story slides, which
+    show every artist via `artistes_noms`). Falls back to the legacy
+    single `artista_nom`. Callers wrap it in `_ellipsize` to fit."""
+    names = item.get("artistes_noms") or [item.get("artista_nom") or ""]
+    return ", ".join(n for n in names if n) or "—"
+
+
 def _font(role: str, size, weight: int = 800):
     size = int(round(size))
     if role == "anton":
@@ -398,12 +407,15 @@ def build_album(item: dict) -> Image.Image:
             _col(tcfg["color"]),
         )
     ar = A["artist"]
+    f_ar = _font("bricolage", ar["size"], ar["weight"])
+    # Ellipsise the credit so a long principal+collab list can't collide
+    # with the right-aligned territory block (abbr/name end at x=1000).
     _text(
         img,
         ar["x"],
         ar["y"],
-        item.get("artista_nom", "—"),
-        _font("bricolage", ar["size"], ar["weight"]),
+        _ellipsize(img, _artist_credit(item), f_ar, A["title"]["wrap_budget"] - 60),
+        f_ar,
         _col(ar["color"]),
     )
     ab = A["abbr"]
@@ -542,7 +554,7 @@ def build_singles(
             img,
             ar["x"],
             y + ar["y_off"],
-            _ellipsize(img, e.get("artista_nom", "—"), f_ar, text_w),
+            _ellipsize(img, _artist_credit(e), f_ar, text_w),
             f_ar,
             _col(ar["color"]),
         )

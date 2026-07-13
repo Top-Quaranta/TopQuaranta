@@ -25,7 +25,7 @@ import datetime
 import logging
 from pathlib import Path
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from music.audit import log_staff_action
@@ -103,8 +103,16 @@ class Command(BaseCommand):
 
         sat = tq_week_start(target)
         setmana = sat - datetime.timedelta(days=sat.weekday())
+        self._n_errors = 0
         for slot, territori in slots:
             self._handle(channel, slot, territori, setmana, target, opts)
+        # Exit non-zero on any per-slot failure so tq-run records
+        # status=FAIL (else a dead channel fails silently — the 2026-07
+        # IG outage). Already-published slots stay publicat.
+        if self._n_errors:
+            raise CommandError(
+                f"{self._n_errors} slot(s) van fallar; SocialPost en estat ERROR."
+            )
 
     # ── per-slot ─────────────────────────────────────────────────
 
@@ -226,6 +234,7 @@ class Command(BaseCommand):
         except Exception as exc:  # noqa: BLE001
             logger.exception("publicar_canal failed for %s", label)
             self._mark(post, SocialPost.STATUS_ERROR, error_msg=str(exc)[:500])
+            self._n_errors += 1
             self.stdout.write(f"  · ERROR: {type(exc).__name__}: {exc}")
             return
 

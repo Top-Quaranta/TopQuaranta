@@ -147,6 +147,24 @@ ML_AUTO_APPROVE_SUBTIERS: tuple[str, ...] = ()
 ML_AUTO_REJECT_SUBTIERS: tuple[str, ...] = ()
 MOTIU_AUTO_ML = "auto_ml"
 
+# Whisper LID auto-approval gate (2026-07). A track whose Whisper
+# Catalan probability exceeds this threshold is auto-approved right
+# after `analitzar_whisper` scores it, WITHOUT waiting for staff.
+# Empirically justified: on 18 755 staff decisions, of the 1 961 with
+# p_ca > 0.90 the precision was 100 % once the 6 apparent rejections
+# (all songs staff false-rejected and later re-approved → currently
+# verified) are counted as approvals. The first genuine non-Catalan
+# false positive only appears at p_ca ≈ 0.879 (an Italian track), so
+# 0.90 leaves margin. This is the ONLY signal that clears
+# ML_AUTO_APPROVE_THRESHOLD; no ML sub-tier does. Unlike `auto_ml`,
+# whisper is an independent oracle (an acoustic LID model, not the RF),
+# so `auto_whisper` approvals DO feed RF training — they propagate the
+# "this spotify_artist_id / deezer_id is ours" label into feature space
+# even for the artist's future tracks that lack a preview. Distinct
+# motiu kept only for provenance and honest-accuracy audits.
+WHISPER_AUTO_APPROVE_P_CA = 0.9
+MOTIU_AUTO_WHISPER = "auto_whisper"
+
 # Bayesian smoothing on the three "ratio_rebuig_*" ML features. With
 # few decisions the raw ratio rej/total is extremely noisy (two
 # rejections in a row push it to 100 % and feed a reinforcement loop).

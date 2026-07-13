@@ -194,6 +194,21 @@ signal step). Backfill of the historical ~6.7k catalogue completed
 See ADR-0014 (`docs/decisions/0014-whisper-lid-eval.md`) for the eval
 numbers that justified this integration.
 
+**Whisper-LID auto-approval gate (2026-07).** Right after each track's
+Whisper fields are saved, `music.services.auto_aprovar_per_whisper`
+runs: a still-pending track with an approved artist anchor and
+`p_ca > WHISPER_AUTO_APPROVE_P_CA` (0.90) is auto-approved on the spot
+(`motiu="auto_whisper"`), skipping the staff queue. The command reports
+`auto_aprovades=N` in its summary. Justification: on 18 755 staff
+decisions, `p_ca > 0.90` had 100 % precision once staff false-rejects
+later re-approved are counted correctly; the first genuine non-Catalan
+false positive only appears at p_ca ≈ 0.879. This is the only signal
+that clears `ML_AUTO_APPROVE_THRESHOLD`. Unlike `auto_ml`, Whisper is an
+independent oracle, so `auto_whisper` rows DO feed RF training (they
+propagate the "this spotify/deezer id is ours" label). See
+`music/constants.py::WHISPER_AUTO_APPROVE_P_CA` and models.md
+(`HistorialRevisio.motiu`).
+
 ### 3.6 `obtenir_metadata_musicbrainz` — hourly at minute 30
 ```bash
 python manage.py obtenir_metadata_musicbrainz [--refresh-days N]

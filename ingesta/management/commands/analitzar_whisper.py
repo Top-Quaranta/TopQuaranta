@@ -19,10 +19,12 @@ import logging
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.utils import timezone
 
 from ingesta.clients.whisper import analyze_preview, get_model
 from music.models import Canco
+from music.services import auto_aprovar_per_whisper
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +112,7 @@ class Command(BaseCommand):
         fail = 0
         ca = 0
         non_ca = 0
+        auto_ap = 0
         for i, canco in enumerate(qs, 1):
             result = analyze_preview(canco.preview_url, canco.deezer_id)
             if result is None:
@@ -121,14 +124,20 @@ class Command(BaseCommand):
             canco.whisper_p = prob
             canco.whisper_all_probs = all_probs
             canco.whisper_processat_at = timezone.now()
-            canco.save(
-                update_fields=[
-                    "whisper_lang",
-                    "whisper_p",
-                    "whisper_all_probs",
-                    "whisper_processat_at",
-                ]
-            )
+            with transaction.atomic():
+                canco.save(
+                    update_fields=[
+                        "whisper_lang",
+                        "whisper_p",
+                        "whisper_all_probs",
+                        "whisper_processat_at",
+                    ]
+                )
+                # Whisper-LID gate: near-certain Catalan → auto-approve
+                # now instead of queueing for staff. No-op unless the
+                # track is still pending with an approved artist anchor.
+                if auto_aprovar_per_whisper(canco):
+                    auto_ap += 1
             ok += 1
             if lang == "ca":
                 ca += 1
@@ -137,11 +146,12 @@ class Command(BaseCommand):
             if i % 50 == 0:
                 self.stdout.write(
                     f"  Processed {i}/{total}  ok={ok} fail={fail} "
-                    f"ca={ca} non_ca={non_ca}"
+                    f"ca={ca} non_ca={non_ca} auto_ap={auto_ap}"
                 )
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"\n  Done. ok={ok} fail={fail} ca={ca} non_ca={non_ca} total={total}"
+                f"\n  Done. ok={ok} fail={fail} ca={ca} non_ca={non_ca} "
+                f"auto_aprovades={auto_ap} total={total}"
             )
         )

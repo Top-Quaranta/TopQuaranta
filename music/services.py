@@ -242,18 +242,16 @@ def processar_collaboradors_pendents(canco: Canco) -> int:
     return created
 
 
-def aprovar_canco(canco: Canco) -> None:
-    """Approve a single track: record historial, set verificada=True.
-
-    Also materialises any deferred `contributors_raw` into real
-    Artista rows + `artistes_col` links — see
-    `processar_collaboradors_pendents` for context.
-
-    Pings IndexNow so Bing/Yandex (and the rest of the consortium)
-    crawl the new public URL within hours instead of waiting for our
-    weekly sitemap recrawl. Fail-open — never blocks the staff flow.
-    """
-    crear_historial(canco, "aprovada", "ok")
+def _aprovar(canco: Canco, motiu: str) -> None:
+    """Shared approval core: record the historial row with `motiu`, set
+    verificada=True, materialise any deferred `contributors_raw` into
+    real Artista rows + `artistes_col` links (see
+    `processar_collaboradors_pendents`), and ping IndexNow so Bing/Yandex
+    (and the rest of the consortium) crawl the new public URL within
+    hours instead of waiting for the weekly sitemap recrawl (fail-open —
+    never blocks the caller). Callers wrap in `transaction.atomic()` as
+    needed."""
+    crear_historial(canco, "aprovada", motiu)
     canco.verificada = True
     canco.save(update_fields=["verificada"])
     processar_collaboradors_pendents(canco)
@@ -264,24 +262,67 @@ def aprovar_canco(canco: Canco) -> None:
     notify_canco(canco)
 
 
+def aprovar_canco(canco: Canco) -> None:
+    """Approve a single track (manual staff action): motiu="ok"."""
+    _aprovar(canco, "ok")
+
+
 def aprovar_canco_auto_ml(canco: Canco) -> None:
     """ML auto-approval (A++ blind-trust path).
 
-    Same outcome as `aprovar_canco` (including
-    `processar_collaboradors_pendents`) but tags the historial entry
-    with `motiu="auto_ml"` so the training pipeline can filter these
-    rows out — otherwise the model would learn from its own decisions
-    and drift toward over-confidence.
+    Same outcome as `aprovar_canco` but tags the historial entry with
+    `motiu="auto_ml"` so `entrenar_model` filters these rows out —
+    otherwise the RF would learn from its own decisions and drift toward
+    over-confidence.
     """
     from .constants import MOTIU_AUTO_ML
 
-    crear_historial(canco, "aprovada", MOTIU_AUTO_ML)
-    canco.verificada = True
-    canco.save(update_fields=["verificada"])
-    processar_collaboradors_pendents(canco)
-    from web.seo.indexnow import notify_canco
+    _aprovar(canco, MOTIU_AUTO_ML)
 
-    notify_canco(canco)
+
+def _p_ca(canco: Canco) -> float | None:
+    """Whisper Catalan probability for a track, or None when Whisper has
+    no usable output. Prefers the full 99-language distribution
+    (`whisper_all_probs['ca']`); falls back to the top-1 shortcut only
+    when Whisper's best guess IS Catalan."""
+    probs = canco.whisper_all_probs
+    if probs and "ca" in probs:
+        return float(probs.get("ca") or 0.0)
+    if canco.whisper_lang == "ca" and canco.whisper_p is not None:
+        return float(canco.whisper_p)
+    return None
+
+
+def auto_aprovar_per_whisper(canco: Canco) -> bool:
+    """Whisper-LID gate: auto-approve a pending track when Whisper is
+    near-certain it's Catalan (p_ca > WHISPER_AUTO_APPROVE_P_CA).
+
+    Returns True iff it approved. No-op (False) unless the track is still
+    pending AND has an approved artist anchor (`has_approved_artist`) —
+    we never promote an orphan into the public catalog. Records the
+    decision with `motiu=MOTIU_AUTO_WHISPER`. Unlike `auto_ml`, these
+    rows DO feed RF training (Whisper is an independent oracle, not the
+    RF eating its own tail); the distinct motiu is kept for provenance
+    and honest-accuracy audits. See the constant's docstring for the
+    empirical justification.
+    """
+    from .constants import MOTIU_AUTO_WHISPER, WHISPER_AUTO_APPROVE_P_CA
+
+    if canco.verificada:
+        return False
+    p_ca = _p_ca(canco)
+    if p_ca is None or p_ca <= WHISPER_AUTO_APPROVE_P_CA:
+        return False
+    if not has_approved_artist(canco):
+        return False
+    _aprovar(canco, MOTIU_AUTO_WHISPER)
+    logger.info(
+        "[whisper-gate] auto-approved canco %s '%s' (p_ca=%.3f)",
+        canco.pk,
+        canco.nom,
+        p_ca,
+    )
+    return True
 
 
 def rebutjar_album(album: Album, motiu: str) -> int:

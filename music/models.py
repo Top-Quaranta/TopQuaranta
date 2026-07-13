@@ -1208,6 +1208,7 @@ class HistorialRevisio(models.Model):
     MOTIUS = [
         ("ok", "Aprovada"),
         ("auto_ml", "Aprovada per ML"),
+        ("auto_whisper", "Aprovada per Whisper (LID català)"),
         ("desvincular_canco", "Desvincular la cançó"),
         ("desvincular_album", "Desvincular l'àlbum"),
         ("desvincular_artista", "Desvincular l'artista"),

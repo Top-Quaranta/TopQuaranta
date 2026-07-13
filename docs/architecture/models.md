@@ -267,8 +267,9 @@ and confidence — this allows the ML model to be retrained from its own history
 - **Decision:** `decisio` (aprovada/rebutjada), `motiu` — action code
   from `music.constants.MOTIUS_REBUIG` (for rebuigs:
   `desvincular_canco`, `desvincular_album`, `desvincular_artista`)
-  or `ok` / `auto_ml` for approvals. Each value names the exact
-  action the rebuig triggered; full semantics at
+  or `ok` / `auto_ml` / `auto_whisper` for approvals (`auto_whisper` =
+  the Whisper-LID p_ca>0.90 gate, see pipeline.md §3.5). Each value
+  names the exact action the rebuig triggered; full semantics at
   `docs/architecture/staff.md §5`. Renamed 2026-05-25 from
   cause-based codes (`no_catala`, `album_incorrecte`,
   `artista_incorrecte`, `no_musica`) via migration

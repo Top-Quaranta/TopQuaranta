@@ -177,7 +177,7 @@ Not in the cron by default — run on demand when staff approves a
 batch of new artists without Deezer ids, or before a marketing push
 that needs fresh fan counts.
 
-### 3.5 `analitzar_whisper` — nightly 05:00 UTC
+### 3.5 `analitzar_whisper` — nightly 04:00 UTC
 ```bash
 python manage.py analitzar_whisper [--limit N] [--refresh-older-than DAYS]
                                     [--canco-id PK] [--dry-run]
@@ -186,10 +186,11 @@ Runs `faster-whisper large-v3 .detect_language()` on each Canco's
 30-second Deezer preview. Populates `Canco.whisper_lang`,
 `whisper_p`, `whisper_all_probs` (99-lang JSON), `whisper_processat_at`.
 Processes tracks never analysed first, optionally re-analyses rows
-older than N days. Cron window is 05:00 with `--limit 100` (~45 min
-worst case at ~27 s/track on CPU, finishing well before the 06:00
-signal step). Backfill of the historical ~6.7k catalogue completed
-2026-04-25 — from now on the daily intake is <50 tracks/night.
+older than N days. Cron window is 04:00 with `--limit 200` (~27 s/track
+on CPU; daily intake is <50 tracks/night, so it finishes well before
+the 06:00 signal step). Slot moved 05:00→04:00 UTC (2026-05-05) to
+clear the 04:30 MusicBrainz tick. Backfill of the historical ~6.7k
+catalogue completed 2026-04-25.
 
 See ADR-0014 (`docs/decisions/0014-whisper-lid-eval.md`) for the eval
 numbers that justified this integration.
@@ -623,7 +624,7 @@ health check (§7).
 # Nightly pipeline (each step feeds the next)
 0 3 * * *    postgres     tq-backup                               # 03:00 DB backup
 0 4 * * *    topquaranta  tq-run netejar_caducades                # 04:00 purge expired
-0 5 * * *    topquaranta  tq-run analitzar_whisper --limit 100    # 05:00 Whisper LID
+0 4 * * *    topquaranta  tq-run analitzar_whisper --limit 200    # 04:00 Whisper LID
 0 5 * * *    topquaranta  tq-run obtenir_metadata_lastfm --limit 500  # 05:00 Last.fm artist meta
 0 6 * * *    topquaranta  tq-run obtenir_senyal                   # 06:00 Last.fm signal
 0 7 * * *    topquaranta  tq-run calcular_ranking --provisional   # 07:00 provisional
@@ -643,9 +644,9 @@ Two pacing changes since the original schedule (2026-04-25 sweep):
   now hourly at minute 30 — the queue is empty most of the time and
   the 15-min cadence was just polling for nothing.
 - `analitzar_whisper` was 01:30 with `--limit 700` (5 h backfill
-  window). Backlog drained 2026-04-25; now 05:00 with `--limit 100`
-  (~45 min worst case), so it slots cleanly into the daily pipeline
-  before signal ingestion.
+  window). Backlog drained 2026-04-25; now 04:00 with `--limit 200`
+  (slot moved 05:00→04:00 on 2026-05-05 to clear the 04:30 MB tick),
+  so it slots cleanly into the daily pipeline before signal ingestion.
 
 ## 6. Backups
 

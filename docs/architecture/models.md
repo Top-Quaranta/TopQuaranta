@@ -177,7 +177,7 @@ Territory derived via `artista.territoris ∪ artistes_col.territoris`.
 - `lastfm_lookup_nom` (property) — falls back to `nom` if `lastfm_nom` is empty
 - `get_territoris()` — returns union of main + collaborator territories
 
-**Whisper fields** (populated nightly by `analitzar_whisper` at 01:30
+**Whisper fields** (populated nightly by `analitzar_whisper` at 04:00
 UTC). `whisper_all_probs` is the full 99-language distribution —
 richer than the top-1 shortcut (`whisper_lang` + `whisper_p`) and fed
 into the RF classifier as 4 features (`whisper_p_ca`, `whisper_p_es`,

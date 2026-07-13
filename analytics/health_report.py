@@ -385,6 +385,7 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     spotify = extras.get("spotify", {})
     premium = spotify.get("premium", {})
     coverage = spotify.get("coverage", {})
+    igtoken = extras.get("instagram", {}).get("token", {})
     migrations_ok = bool(extras.get("migrations_ok", True))
     errors = extras.get("errors", {})
     errors_count = int(errors.get("count") or 0)
@@ -404,6 +405,8 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     if not premium.get("ok", True):
         overall = 1
     if not coverage.get("ok", True):
+        overall = 1
+    if not igtoken.get("ok", True):
         overall = 1
     if not migrations_ok:
         overall = 1
@@ -428,6 +431,10 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
         sys_anomalies.append(f"Spotify Premium {premium.get('severity', '?')}")
     if not coverage.get("ok", True):
         sys_anomalies.append(f"Spotify coverage {coverage.get('severity', '?')}")
+    if not igtoken.get("ok", True):
+        sys_anomalies.append(
+            f"IG token {igtoken.get('severity', '?')}: {igtoken.get('message', '')}"
+        )
 
     n_crons = len(crons)
     out: list[str] = []
@@ -509,6 +516,14 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     out.append(
         f"{_ok_emoji(coverage.get('ok', True))} Playlist coverage: "
         f"{coverage.get('severity', '?')} — {coverage.get('message', '')}"
+    )
+    out.append("")
+
+    # ── social ──
+    out.append(f"{_SEP}\n SOCIAL\n{_SEP}")
+    out.append(
+        f"{_ok_emoji(igtoken.get('ok', True))} IG token: "
+        f"{igtoken.get('severity', '?')} — {igtoken.get('message', '')}"
     )
     out.append("")
 

@@ -243,13 +243,27 @@ def upload_image(
     return _post(f"{_user_id()}/media", body)["id"]
 
 
-def upload_story(image_url: str) -> str:
-    """Story (image, no caption). Returns container ID."""
+def upload_story(image_url: str, *, user_tags: list[dict] | None = None) -> str:
+    """Story (image, no caption). Returns container ID.
+
+    `user_tags` — Meta `user_tags` payload (stories accept mentions
+    since 2025-07-09; NO collaborators/product tags — feed only).
+    Omitted when falsy so the no-mention payload is unchanged.
+    """
     if is_dry_run():
         cid = f"dry-story-{int(time.time()*1000)}-{abs(hash(image_url)) & 0xffff:04x}"
-        logger.info("[DRY] upload_story %s → %s", image_url, cid)
+        logger.info(
+            "[DRY] upload_story %s tags=%d → %s",
+            image_url,
+            len(user_tags or []),
+            cid,
+        )
         return cid
     body = {"image_url": image_url, "media_type": "STORIES"}
+    if user_tags:
+        import json
+
+        body["user_tags"] = json.dumps(user_tags[:20])
     return _post(f"{_user_id()}/media", body)["id"]
 
 
@@ -347,33 +361,12 @@ def get_post_metrics(media_id: str, *, is_story: bool = False) -> dict:
     }
 
 
-def get_collaborators(media_id: str) -> dict[str, str] | None:
-    """Invite state of a published feed media's collaborators.
-
-    Returns `{username_lower: invite_status_lower}` from
-    `GET /<media>/collaborators?fields=username,invite_status`, or
-    **None** when we can't know (DRY_RUN, or no media id) so the poller
-    leaves those invites `pendent` rather than misreading silence as a
-    rejection. Raises `RuntimeError` on a live API error — the poller
-    catches it and skips that media for this tick.
-
-    Consumed only by `pollar_colaboracions_ig` (ADR-0015 §5.5); inert in
-    tranche 1 (the poller no-ops while the master flag is off).
-    """
-    if is_dry_run() or not media_id:
-        return None
-    body = _get(f"{media_id}/collaborators", {"fields": "username,invite_status"})
-    # Raw capture BEFORE any parsing/interpretation (ADR-0015 §5.5
-    # fail-safe, 2026-07-05): lands in analytics.log via the cron
-    # redirect, so the first live batch leaves a verbatim record of
-    # what Graph actually returned for pending invitees.
-    logger.info("get_collaborators raw media=%s body=%r", media_id, body)
-    out: dict[str, str] = {}
-    for row in body.get("data") or []:
-        name = (row.get("username") or "").strip().lower()
-        if name:
-            out[name] = (row.get("invite_status") or "").strip().lower()
-    return out
+# NOTE: there is deliberately no `get_collaborators` here. Reading
+# invite acceptance programmatically is unviable with this app's API
+# flavour (ADR-0015 §5.5, verified 2026-07-13): Instagram Login lacks
+# the `/collaborators` edge, and a Facebook-Login user token returns
+# it empty for pending invitations. Acceptances are marked manually
+# from the staff social panel.
 
 
 def get_account_stats() -> dict:

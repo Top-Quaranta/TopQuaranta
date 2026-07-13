@@ -89,6 +89,31 @@ story retried, last-resort published without mentions (stories support
 only). First real run 2026-07-03: 11 nous_singles → 3 stories (4+4+3),
 5 effective mentions.
 
+## Story mentions — ALL pipeline story sets (2026-07-13)
+
+The per-story mention engine now covers every story path the cron
+publishes, not just the novetats pages. `publicar_social._story_tags`
+builds one `user_tags` list per rendered story, mirroring
+`render_stories_ppcc` / `render_stories_territorial` emission EXACTLY
+(same slices, same conditional territorial tiers, same draw-order
+reversal): intro/outro carry nothing; the mosaic tags entries 40→11
+(capped at Meta's 20/image, principal-first round-robin so one
+hyper-collaborative entry can't starve the rest); the grid 10→4; the
+podi #3/#2; the hero #1; the PPCC novetats slide its ≤3 releases.
+Anchors are approximate normalized centres of each drawn item
+(`_pos_story_*` — same discipline as the feed tagger's row anchors,
+not pixel-exact). `instagram_client.upload_story` gained an additive
+`user_tags` param. Guards, two levels: per mention, the feed
+substitution guard reused with `max_slots=20` (drop the offending
+handle, retry, last resort untagged); per story, a page that still
+fails is skipped and the REST of the set publishes — partial failure
+marks the slot `publicat` with `metadata.stories_fallides` +
+`error_msg` and exits non-zero (same report-don't-roll-back discipline
+as the 2026-07-12 slot-level rule). A tag/slide count mismatch
+publishes the whole set untagged rather than mis-anchored. Images are
+untouched — this is API payload only. No new config: the only knob
+remains `novetats_stories_per_pagina`.
+
 **Collaborator parity (2026-07-03).** `payload.build_novetats` now emits
 `artistes_noms` (principal + track collaborators, deduped, via a single
 `_album_collabs` pass that also feeds the tag list), so the novetats feed

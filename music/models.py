@@ -1395,6 +1395,12 @@ class StaffAuditLog(models.Model):
         # legacy Instagram-only label; the multi-channel cron writes
         # one of `<channel>_publicat` per CHANNELS in publicar_canal.py.
         ("social_publicat", "Social: publicat (Instagram)"),
+        # ADR-0015 §5.5 definitive cycle: staff marks IG collaborator
+        # acceptances manually (no programmatic read is possible).
+        (
+            "collab_invitacio_acceptada",
+            "Col·laboració IG: invitació marcada acceptada",
+        ),
         ("mastodon_publicat", "Social: publicat (Mastodon)"),
         ("bluesky_publicat", "Social: publicat (Bluesky)"),
         ("telegram_publicat", "Social: publicat (Telegram)"),

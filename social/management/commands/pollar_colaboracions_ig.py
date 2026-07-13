@@ -1,30 +1,28 @@
-"""Reconcile pending IG collaborator invitations against the Graph API.
+"""Expire stale IG collaborator invitations + refresh the acceptance metric.
 
 # Spec: docs/decisions/0015-ig-collaborator-invitations.md §5.5
 
-Tranche 1 (INERT): gated on `ConfiguracioGlobal.ig_collaboradors_actiu`.
-While the master flag is off (the default) this command is a clean
-no-op — it writes nothing and calls no API. It ships in the cron dormant
-so that switching the flag on (tranche 3) needs no deploy.
+Definitive cycle (2026-07-13, ADR-0015 §5.5): programmatic acceptance
+reads are unviable with the app's API flavour (Instagram Login lacks
+the `/collaborators` edge; a Facebook-Login user token returns it
+empty for pending invitations; a Page token is inaccessible to the
+app type), so this command calls no Graph API at all. Acceptances are
+marked manually from the staff social panel
+(`POST /staff/social/invitacions/acceptar/`); this cron keeps the two
+automatic duties:
 
-When active: selects `pendent` invites of the last 14 days, groups by
-`ig_media_id`, calls `GET /<media>/collaborators` once per media, and
-reconciles each row. Best-effort + idempotent: a Graph hiccup leaves the
-row `pendent` for the next tick; the acceptance rate written to
-`MetricaPipeline` is derived from DB state (not incremented), so
-re-running the same day overwrites rather than double-counts.
+  (a) expire `pendent` invites older than the 14-day window to
+      `caducada` (IG acceptance is immediate-or-never; the policy
+      treats it like a rejection: category C, 90-day cooldown), and
+  (b) write the rolling acceptance rate to `MetricaPipeline`, derived
+      from registry state (update_or_create → idempotent per day).
 
-Fail-safe (2026-07-05, added before the first live batch): every fetch
-is logged raw BEFORE interpretation, and a response that is empty or
-contains none of the media's pending invitees resolves nothing — we
-can't distinguish "everyone declined" from "Graph doesn't list pending
-invitees", so a human reads the raw log and decides.
+Gated on `ConfiguracioGlobal.ig_collaboradors_actiu` — a clean no-op
+while the master flag is off.
 """
 
 from __future__ import annotations
 
-import logging
-from collections import defaultdict
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
@@ -32,38 +30,17 @@ from django.utils import timezone
 
 from analytics.models import MetricaPipeline
 from ranking.models import ConfiguracioGlobal
-from social import instagram_client
 from social.models import InvitacioColaboracioIG
-
-logger = logging.getLogger(__name__)
 
 WINDOW_DIES = 14
 METRICA_CLAU = "ig_collab_taxa_acceptacio"
 
 
-def reconcile_estat(invite_status: str | None) -> str | None:
-    """Map a Graph `invite_status` to our terminal estat, or None to
-    leave the invite pending.
-
-      - accepted/active            → acceptada
-      - pending/requested          → None (still pending)
-      - anything else, OR absent   → rebutjada (declined / removed)
-
-    `invite_status is None` means the username was absent from the
-    collaborators list of a *successful* fetch, i.e. the invite was
-    declined or the collaborator removed → rebutjada."""
-    if invite_status is None:
-        return InvitacioColaboracioIG.ESTAT_REBUTJADA
-    s = invite_status.strip().lower()
-    if s in ("accepted", "acceptada", "active"):
-        return InvitacioColaboracioIG.ESTAT_ACCEPTADA
-    if s in ("pending", "pendent", "requested"):
-        return None
-    return InvitacioColaboracioIG.ESTAT_REBUTJADA
-
-
 class Command(BaseCommand):
-    help = "Reconcilia invitacions de col·laboració IG pendents (ADR-0015 §5.5)."
+    help = (
+        "Caduca invitacions de col·laboració IG pendents de >14 dies i "
+        "actualitza la taxa d'acceptació (ADR-0015 §5.5)."
+    )
 
     def handle(self, *args, **opts):
         cfg = ConfiguracioGlobal.load()
@@ -74,66 +51,10 @@ class Command(BaseCommand):
         now = timezone.now()
         cutoff = now - timedelta(days=WINDOW_DIES)
 
-        # (a) Expire pending invites older than the window: IG acceptance
-        # is immediate-or-never, so an un-resolved invite past 14 days is a
-        # soft decline. Marking `caducada` (with `data_resolucio`) closes
-        # the "eternal pendent" hole — the policy then treats it like a
-        # rejection (C, 90-day cooldown) so the artist can be re-invited.
         caducades = InvitacioColaboracioIG.objects.filter(
             estat=InvitacioColaboracioIG.ESTAT_PENDENT,
             data_invitacio__lt=cutoff,
         ).update(estat=InvitacioColaboracioIG.ESTAT_CADUCADA, data_resolucio=now)
-
-        # (b) Reconcile still-fresh pending invites against the API.
-        pendents = InvitacioColaboracioIG.objects.filter(
-            estat=InvitacioColaboracioIG.ESTAT_PENDENT,
-            data_invitacio__gte=cutoff,
-        )
-        by_media: dict[str, list] = defaultdict(list)
-        for inv in pendents:
-            by_media[inv.ig_media_id].append(inv)
-
-        resolved = 0
-        for media_id, rows in by_media.items():
-            try:
-                statuses = instagram_client.get_collaborators(media_id)
-            except Exception:  # noqa: BLE001 — a Graph hiccup must not abort
-                logger.exception(
-                    "get_collaborators failed for media %s; leaving pending",
-                    media_id,
-                )
-                continue
-            if statuses is None:
-                # DRY_RUN or unknown — don't misread silence as rejection.
-                continue
-            # Parsed map, logged BEFORE interpretation (the client already
-            # logs the verbatim Graph body). Persistent via cron redirect.
-            self.stdout.write(f"[raw] media={media_id} statuses={statuses!r}")
-            pendents_media = {inv.username_snapshot.lower() for inv in rows}
-            if not statuses or not (pendents_media & statuses.keys()):
-                # FAIL-SAFE (2026-07-05, pre first live batch): an empty
-                # collaborators list — or one containing NONE of our pending
-                # invitees — is indistinguishable from "the endpoint doesn't
-                # list pending invitees at all". Touch nothing (no estat, no
-                # cooldown); the raw log above is the evidence for a human
-                # call. Once ≥1 pending invitee DOES appear in a response,
-                # absence of the others is meaningful again (declined or
-                # removed) and the original mapping below applies untouched.
-                logger.warning(
-                    "fail-safe: media %s — resposta sense cap dels %d "
-                    "invitats pendents; cap estat modificat",
-                    media_id,
-                    len(rows),
-                )
-                continue
-            for inv in rows:
-                nou = reconcile_estat(statuses.get(inv.username_snapshot.lower()))
-                if nou is None:
-                    continue
-                inv.estat = nou
-                inv.data_resolucio = now
-                inv.save(update_fields=["estat", "data_resolucio"])
-                resolved += 1
 
         # Rolling acceptance rate over ALL resolved invites (derived from
         # DB state → idempotent). update_or_create so re-running the same
@@ -157,6 +78,5 @@ class Command(BaseCommand):
             defaults={"valor_float": taxa},
         )
         self.stdout.write(
-            f"Caducades {caducades} · resoltes {resolved} · taxa acceptació "
-            f"{taxa:.3f} ({n_acc}/{denom})."
+            f"Caducades {caducades} · taxa acceptació {taxa:.3f} ({n_acc}/{denom})."
         )

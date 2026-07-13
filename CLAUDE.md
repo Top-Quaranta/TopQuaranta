@@ -127,7 +127,7 @@ the SPA palette but has no dependency on mm-design.
 ## 3. Infrastructure
 
 - **Server:** Hetzner CX22 (`188.245.60.20`), Ubuntu 22.04.
-- **Runtime:** Python 3.12, Django 6.0.4, PostgreSQL 14. Node 22 + Vite 8
+- **Runtime:** Python 3.12, Django 6.0.6, PostgreSQL 14. Node 22 + Vite 8
   for the SPA.
 - **Reverse proxy:** Caddy (auto TLS). The shared box hosts TopQuaranta
   alongside other projects (e.g. cercol-api), so Caddy's config is
@@ -348,7 +348,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **575 passed, 8 skipped** (May 2026).
+Mock all external HTTP — no real API calls. Current suite: **1481 passed, 10 skipped** (July 2026, CI on main 98e1d00).
 Run: `.venv/bin/python -m pytest -q`.
 
 `pytest.ini` pins `addopts = --ds=topquaranta.settings.test`, so env-var
@@ -393,8 +393,10 @@ shared with the planned pre-commit hook).
 
 - **`docs-coherence`** is a HARD gate: a PR that touches a mapped
   subsystem without updating its doc fails. Test files
-  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`) and
-  Django migrations (`*/migrations/*`) are filtered out before
+  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`), Django
+  migrations (`*/migrations/*`) and dependency manifests/lockfiles
+  (`package.json`, `package-lock.json`, `requirements*.txt` —
+  2026-07-13, unblocks dependabot) are filtered out before
   resolution: they are implementation churn, not architecture, and
   do not trigger the gate.
 - Override (excepcional): one line in the PR body, format

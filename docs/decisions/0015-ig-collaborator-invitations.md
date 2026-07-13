@@ -1,6 +1,6 @@
 # ADR-0015 — Instagram collaborator invitations for feed posts
 
-- **Status:** Proposed (inert spec — no runtime behaviour until the master flag is switched on)
+- **Status:** Accepted (2026-07-13 — all tranches merged; flag ON in prod; first supervised batch 2026-07-06. The programmatic acceptance-read path was closed empirically — see §5.5 — and the definitive cycle is implemented: invite via API; acceptances marked manually from the staff panel; `caducada` at 14 days covers everything else)
 - **Date:** 2026-07-03
 - **Authors:** Miquel Matoses (+ Claude Opus 4.8)
 
@@ -222,21 +222,71 @@ New management command `social/management/commands/pollar_colaboracions_ig.py`:
   14d` are set to `caducada` (with `data_resolucio`) — IG acceptance is
   immediate-or-never, so an un-resolved invite past the window is a soft
   decline. This closes the eternal-pending hole (such rows used to sit
-  `pendent` forever, blocking the artist's re-invitation).
-- Reconcile pass: selects the still-fresh `estat="pendent"` rows
-  (`data_invitacio >= now - 14d`), groups by `ig_media_id`, calls
-  `GET /<media>/collaborators` once per media, and reconciles each:
-  present + accepted → `acceptada`; present + declined / absent →
-  `rebutjada`; stamps `data_resolucio`.
+  `pendent` forever, blocking the artist's re-invitation). Note: the
+  14-day window is currently a module constant (`WINDOW_DIES`), not a
+  `ConfiguracioGlobal` field — the one §5.4 tunable that is still
+  hardcoded.
 - Writes a **`MetricaPipeline`** row per run with the rolling acceptance
   rate (`acceptades / (acceptades + rebutjades + caducades)` — `caducada`
-  is a non-acceptance) so the acceptance trend is visible on the pipeline
-  dashboard.
-- Best-effort and idempotent: a Graph hiccup logs and leaves the row
-  `pendent` for the next tick; re-running never double-counts (state is
-  derived from the API, not incremented).
-- Cron cadence: hourly is plenty (invites resolve fast); gated on
-  `ig_collaboradors_actiu` so it no-ops while the flag is off.
+  is a non-acceptance), derived from registry state (idempotent per day)
+  so the acceptance trend is visible on the pipeline dashboard.
+- Cron cadence: hourly; gated on `ig_collaboradors_actiu` so it no-ops
+  while the flag is off.
+- *History:* the command originally also carried a reconcile pass
+  (`GET /<media>/collaborators` per media, with a 2026-07-05 fail-safe
+  and a 2026-07-06 temporary brake after the first live poll errored).
+  That whole path was removed on 2026-07-13 when the empirical closure
+  below proved programmatic acceptance reads unviable.
+
+**Empirical closure of programmatic acceptance reads (2026-07-13).**
+Verified against the first live batch's media (`18094840829027683`,
+3 invitations pending at the time of both tests):
+
+1. **Instagram Login (the app's token flavour):** the media node does
+   not expose the `/collaborators` edge at all. 29 hourly poller ticks
+   (2026-07-06 10:00 → 2026-07-07 04:00 UTC, token still valid)
+   consistently returned code 100 `"Tried accessing nonexisting field
+   (collaborators)"` on `graph.instagram.com` v19.0.
+2. **Facebook Login, user token (v25.0; manual test by Miquel in the
+   Graph API Explorer, 2026-07-13):** `GET /<media>/collaborators`
+   responds **200 with empty `data`** — no error, but none of the 3
+   invitations listed, while the Instagram app showed all 3 still
+   PENDING in the collaborator editor (and no co-author on the post
+   header). A user token does not expose pending invitations.
+3. **Facebook Login, Page token:** would be the remaining candidate,
+   but the app cannot generate one — Page permissions (including
+   `pages_show_list`) are not available to its app type (verified in
+   the Explorer, 2026-07-13).
+
+Conclusion: programmatic acceptance reading is unviable with the
+current app for **two independent reasons** (Instagram Login lacks the
+edge; Facebook Login with a user token has the edge but returns it
+empty for pending invitations, and the Page token is inaccessible).
+
+**Definitive cycle (decided 2026-07-13):**
+
+1. **Invite via API** at publish time (unchanged — §5.2/§5.3).
+2. **Acceptances are marked manually from staff**, when Miquel
+   observes them in the Instagram app. Minimal UI on the staff social
+   panel: the invitation list with each row's estat and a single
+   **"Marcar acceptada"** button that writes `estat=acceptada` +
+   `data_resolucio`. There is deliberately **no "mark as rejected"
+   action**: the automatic `pendent → caducada` pass at 14 days
+   already covers both silence and rejection, which are the same
+   thing to the policy (category C, 90-day cooldown).
+3. **`caducada` is the only automatic terminal** — the poller keeps
+   the expiry pass and the acceptance-rate metric, now read directly
+   from the registry (`acceptades / resoltes`); the
+   reconcile-against-Graph pass (and with it the temporary brake and
+   `instagram_client.get_collaborators`) was removed when this cycle
+   was implemented (same day). Staff endpoints:
+   `GET /staff/social/invitacions/` +
+   `POST /staff/social/invitacions/acceptar/` (audit action
+   `collab_invitacio_acceptada`); UI on `/staff/social/instagram`.
+
+For the record: as of 2026-07-13 none of the 3 invitations of the
+2026-07-06 batch is accepted; they stay `pendent` until marked
+accepted manually or expiring on 2026-07-20.
 
 ### 5.6 Story pagination + per-story mentions as permanent pipeline behaviour
 
@@ -269,7 +319,10 @@ expectations against: **91/177 handles (51.4 %)** on 2026-07-03.
    `ig_collaboradors_actiu` to True and wiring the policy into
    `publicar_social._publish_feed`, plus the **first real invite batch**.
    Done as a small follow-up PR reviewed live, so the first invites go
-   out under supervision.
+   out under supervision. *(Outcome: the wiring merged early as tranche
+   3a, gated + inert — PR #308; the caducada expiry as 3b — PR #309; the
+   flag flip + first supervised batch happened Monday 2026-07-06,
+   top_territorial BAL.)*
 
 ## Consequences
 

@@ -43,6 +43,13 @@ cron (publicar_social or publicar_canal)
   ↓ StaffAuditLog                 audit trail
 ```
 
+Both publish commands (`publicar_social`, `publicar_canal`) exit
+**non-zero** (`CommandError`) when any slot ends in `error`, so `tq-run`
+records `status=FAIL` and the watchdog alerts. Slots that published stay
+`publicat` — partial failure is reported, not rolled back; `omes` skips
+don't count. (Before 2026-07 they returned 0 on partial failure, so a
+dead IG token went unnoticed for days — the invisible-outage incident.)
+
 ## Channels
 
 | Channel | Module | Max chars | Mentions | Hashtag density |
@@ -168,8 +175,9 @@ per-channel state (effective state + last send) at
 
 Driven by `social/calendari.py`. Slots per weekday (the `min_fase`
 rollout gate was removed 2026-06 — see the matrix section). Sat 09:30
-UTC is the canonical `top_ppcc` cycle; territorials Sun 09:50 UTC;
-novetats slots Mon/Wed mornings.
+UTC is the canonical `top_ppcc` cycle; territorials Mon (ROTATORI_B)
+and Wed (ROTATORI_A) 09:30 UTC; novetats Tue (`nous_albums`) and Fri
+(`nous_singles`) 10:00 UTC.
 
 ## Renderer image format + PPCC feed cover (Step 3a, 2026-06-01)
 
@@ -246,7 +254,7 @@ sencer de la setmana", "EL TOP DE LA SETMANA", "el top de la setmana N".
 **Fix pins (2026-06-12):** ink-anchored ±8 px against the artboards — EL TOP/40
 gap, list numerals + SETMANA pill ink-centred (`render_core.draw_text(ink_center=)`),
 and no title↔artist overlap (rich = 2-line clamp + artist stacked & centred;
-dense = title ellipsised but artist always kept). **IG tagging + credits (2026-06):** list rows show the full credit (principal + collaborators via `artistes_noms`, like the stories) and `user_tags` mirror the carousel EXACTLY — same countdown blocks, each reversed — so every tag lands on its drawn row (`publicar_social._slide_tags`); top + nous_singles tag all collaborators, nous_albums tags the album artist + track collaborators (`payload.artistes_instagram_urls`).
+dense = title ellipsised but artist always kept). **IG tagging + credits (2026-06):** list rows show the full credit (principal + collaborators via `artistes_noms`, like the stories) and `user_tags` mirror the carousel EXACTLY — same countdown blocks, each reversed — so every tag lands on its drawn row (`publicar_social._slide_tags`); top + nous_singles tag all collaborators, nous_albums tags the album artist + track collaborators (`payload.artistes_instagram_urls`). **Story mentions (2026-07):** the cron story sets (PPCC + territorial) carry per-story `user_tags` too — `publicar_social._story_tags` mirrors the story-set emission (same slices/conditional tiers/draw order) so each story mentions only the artists of its visible songs, anchored near their drawn item; `upload_story` gained an additive `user_tags` param; the feed's non-blocking guard is reused per story (`max_slots=20`), and a story that still fails is skipped without blocking the rest of the set (partial failure → `stories_fallides` in metadata + non-zero exit). Detail: `social-stories.md`.
 
 **Movement** is one primitive: `render_core.draw_move` (up/down/new/re/eq;
 semantic colours, palette-independent). `parse_move` derives it from real data;
@@ -328,67 +336,22 @@ an artist/team to share, the move behind our best organic reach. No
 positional `#<digit>` (same audience-leak discipline as the weekly
 captions). The live post + campaign strategy stay manual (Miquel).
 
-## Collaborator invitations — feed (ADR-0015, tranche 3a: wired, gated off)
+## Collaborator invitations — feed (ADR-0015; live since 2026-07-06)
 
-Inviting artists as IG **collaborators** (their handle on the post → it
-lands on their grid too), a step up from `user_tags` mentions. **Feed /
-reels / carousels only — Meta does not support collaborators on stories.**
-Behaviourally dormant: the master flag
-`ConfiguracioGlobal.ig_collaboradors_actiu` defaults **False**, and with it
-off the feed publish path is byte-identical to before (no `collaborators`
-key ever reaches a container, no registry rows written).
-
-- **`social.models.InvitacioColaboracioIG`** — one row per
-  `(artista, ig_media_id)`: `username_snapshot`, `tipus_publicacio`,
-  `data_invitacio`, `estat` (pendent/acceptada/rebutjada/**caducada**),
-  `data_resolucio`. Artist FK is `PROTECT` (acceptance stats depend on the
-  history). `caducada` = pending past the 14-day window; the policy treats
-  it like a rejection.
-- **`social/collaboradors.py`** — pure, side-effect-free policy.
-  `select_collaborators(pool, historic, config, *, now)` picks ≤
-  `effective_slots` candidates: A (has accepted) / B (never invited) /
-  C (only rejected/caducada/pending); slots 1-`slots_acceptats` → A backfilled
-  from B, remaining → next B, C only fills otherwise-empty slots;
-  cooldowns A/C, pending never re-invited. `GRAPH_MAX_COLLABORATORS = 3`
-  hard-clamps `ig_collab_slots_total` (Meta's documented max).
-  `publish_with_collaborator_guard(usernames, slots, try_container)` is
-  the non-blocking substitution guard (§5.3): drop the offending handle,
-  substitute the next candidate, last resort publish with none — a bad
-  handle never blocks publication.
-- **`pollar_colaboracions_ig`** (hourly cron) reconciles fresh pending
-  invites via `GET /<media>/collaborators` AND expires pending invites
-  older than 14 days to `caducada` (closing the eternal-pending hole),
-  then writes the acceptance rate to `MetricaPipeline`
-  (`ig_collab_taxa_acceptacio`; `caducada` counts as a non-acceptance in
-  the denominator). No-op while the flag is off; best-effort + idempotent.
-  Fail-safe (2026-07-05): every fetch is logged raw before interpretation;
-  an empty response — or one with none of the media's pending invitees —
-  resolves nothing (no estat, no cooldown; a human reads the raw log).
-- **Wiring** (tranche 3a): `publicar_social._publish_feed`, **gated on the
-  flag**, builds the ordered pool from the payload (`payload.build_top` /
-  `build_novetats` now carry `artistes_pool` = `[{id, username}]`, additive),
-  applies the policy against the live registry, and passes
-  `collaborators=[…]` to the parent container
-  (`instagram_client.{create_carousel,upload_image}`, additive param). The
-  guard wraps the parent create+FINISH so a handle error at create OR async
-  processing triggers substitution. On a successful publish it writes one
-  `InvitacioColaboracioIG` per sent handle (idempotent `get_or_create`);
-  if `media_publish` raises, no rows are written (no orphans).
-- **`simular_colaboradors_ig`** — read-only dry-run command: builds the real
-  pool for the latest top + novetats, applies the policy against the live
-  registry, and prints per-post the pool, each artist's category +
-  eligibility, the ≤3 selected, and who's discarded (cooldown / no handle).
-  Sends nothing, writes nothing, works with the flag off.
-- **Config** (§5.4): `ig_collaboradors_actiu`, `ig_collab_slots_total`,
-  `ig_collab_slots_acceptats`, `ig_collab_cooldown_a_dies`,
-  `ig_collab_cooldown_c_dies` — staff-editable under a dedicated
-  **Col·laboradors IG** section of `/staff/configuracio/`.
-
-Tranche 3b (a later, supervised session) flips the flag and runs the first
-real invite batch. Design + probe findings: `docs/decisions/0015-ig-collaborator-invitations.md`.
+Detail moved to [`social-collaboradors.md`](social-collaboradors.md)
+(2026-07-06, docs-size split — same pattern as `social-narrative.md`).
+In one line: artists invited as IG **collaborators** on feed posts
+(never stories), gated on `ConfiguracioGlobal.ig_collaboradors_actiu`,
+policy in `social/collaboradors.py`, non-blocking substitution guard at
+publish. Acceptances are marked **manually from staff**
+(`/staff/social/instagram`); the hourly `pollar_colaboracions_ig` is a
+pure expiry cron (`caducada` at 14 days + registry-derived acceptance
+rate — no Graph reads; the read path is unviable, ADR-0015 §5.5).
+First real batch 2026-07-06; definitive cycle since 2026-07-13.
 
 ## Related
 
+- Collaborator invitations detail: [`social-collaboradors.md`](social-collaboradors.md).
 - Narrative engine detail: [`social-narrative.md`](social-narrative.md).
 - Post-mortems: `2026-05-20-narrative-engine-collapsed.md`
   (Resolved by ADR-0006/0007/0008),

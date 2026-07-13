@@ -232,6 +232,8 @@ def publish_with_collaborator_guard(
     ordered_usernames: list[str],
     slots: int,
     try_container,
+    *,
+    max_slots: int = GRAPH_MAX_COLLABORATORS,
 ) -> GuardResult:
     """Non-blocking collaborator publish (§5.3). Publication NEVER blocks
     on a bad handle.
@@ -247,8 +249,13 @@ def publish_with_collaborator_guard(
     candidate substituted, and the container retried. When the pool is
     exhausted the post is published with NO collaborators (empty set).
     Raises `CollaboratorContainerError` only if the container fails even
-    with zero collaborators (a non-handle problem)."""
-    slots = max(0, min(slots, GRAPH_MAX_COLLABORATORS))
+    with zero collaborators (a non-handle problem).
+
+    `max_slots` is the API ceiling to clamp `slots` against. It defaults
+    to the collaborator limit (3); the story-mention publisher reuses
+    this guard for `user_tags` with `max_slots=20` (Meta's per-image
+    tag limit) — same drop/substitute/last-resort-empty semantics."""
+    slots = max(0, min(slots, max_slots))
     active = list(ordered_usernames[:slots])
     reserve = list(ordered_usernames[slots:])
     dropped: list[dict] = []

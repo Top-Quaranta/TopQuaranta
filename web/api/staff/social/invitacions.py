@@ -63,9 +63,7 @@ def social_invitacio_acceptar(request: Request) -> Response:
         pk = int(request.data.get("id"))
     except (TypeError, ValueError):
         return Response({"error": "invitació desconeguda"}, status=404)
-    inv = (
-        InvitacioColaboracioIG.objects.select_related("artista").filter(pk=pk).first()
-    )
+    inv = InvitacioColaboracioIG.objects.select_related("artista").filter(pk=pk).first()
     if inv is None:
         return Response({"error": "invitació desconeguda"}, status=404)
     if inv.estat == InvitacioColaboracioIG.ESTAT_ACCEPTADA:

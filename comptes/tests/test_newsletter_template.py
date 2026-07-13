@@ -143,6 +143,54 @@ def test_dark_mode_and_responsive_present():
     assert "max-width:640px" in html
 
 
+# ── Gmail compatibility (2026-07-05 refactor) ────────────────────────
+
+
+def test_gmail_meta_color_scheme_dark():
+    """Gmail auto-inverts ambiguous emails; the meta pins dark-only."""
+    html = _render()
+    assert '<meta name="color-scheme" content="dark">' in html
+    assert '<meta name="supported-color-schemes" content="dark">' in html
+
+
+def test_gmail_redundant_bgcolor_attributes():
+    """Every surface cell carries `bgcolor` redundant with the inline
+    style, so Gmail keeps the dark surfaces even when it strips or
+    ignores CSS (dark-mode inversion, clipped <style>)."""
+    html = _render()
+    assert html.count('bgcolor="#060608"') >= 8  # body/sections
+    assert html.count('bgcolor="#141319"') >= 10  # cards
+    assert 'bgcolor="#1c1a10"' not in html  # gestio block absent by default
+
+
+def test_gmail_no_rgba_and_no_anchor_wrapped_tables():
+    """rgba() borders were replaced by solid hex equivalents and no <a>
+    wraps a <table> (Gmail reflows block anchors)."""
+    html = _render()
+    assert "rgba(" not in html
+    assert not re.search(r"<a\b[^>]*>\s*<table", html)
+
+
+def test_gmail_hybrid_container():
+    """Fluid-hybrid wrapper: width=100% + inline max-width:640px + MSO
+    ghost table, instead of a fixed width=\"640\" attribute."""
+    html = _render()
+    assert "[if mso]" in html
+    assert re.search(r'class="wrap"[^>]*width="100%"[^>]*max-width:640px', html)
+    assert 'width="640"' not in html.replace(
+        '<table role="presentation" align="center" width="640"', ""
+    )  # only the MSO ghost keeps a fixed 640
+
+
+def test_gmail_uniform_column_groups():
+    """Podi #2-3 and the 3-up territorial/novetats groups use
+    table-layout:fixed + explicit percentage widths so Gmail renders
+    uniform columns regardless of content length."""
+    html = _render()
+    assert html.count("table-layout:fixed") >= 3
+    assert html.count('width="33%"') >= 2  # territorial + novetats cells
+
+
 # ── no top 1-40 section + management block ───────────────────────────
 
 

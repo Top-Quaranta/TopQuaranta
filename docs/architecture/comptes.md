@@ -123,23 +123,26 @@ business write isn't blocked.
 newsletter per week** (no territorial editions). `_build_top_context`
 assembles a recipient-independent context once per run:
 
-1. **Header** — raster logo (`logo_email.png`) on ink + "Setmana N ·
-   Top Global" + "Veure al navegador".
+1. **Header** — raster logo (`logo_email.png`) + "Setmana N · Top
+   Global" + "Veure al navegador".
 2. **Podi** — #1 hero (500 px cover) + #2-3 sub-cards.
-3. **Editorial** — the narrative paragraphs from the social newsletter
-   composer (Step 1β).
-4. **Top 4-10** — hybrid: 4-5 list rows, 6-9 a 2×2 grid, 10 centred.
-5. **CTA** — "Veure el top complet".
-6. **Territorials** — CAT/VAL/BAL current #1 mini-cards.
-7. **Novetats** — 2-3 of the week's releases.
-8. **Share** — IG/Mastodon/Bluesky/Telegram buttons.
-9. **Footer** — unsubscribe + backup link.
+3. **Editorial** — narrative paragraphs (Step 1β composer).
+4. **Top 4-10** — uniform full-width list rows.
+5. **CTA** · 6. **Territorials** (CAT/VAL/BAL #1 mini-cards) ·
+   7. **Novetats** (2-3 releases) · 8. **Share** buttons ·
+   9. **Footer** (unsubscribe + browser link).
 
 Template `comptes/templates/comptes/email_newsletter_top.html` is
-self-contained (640 px, light `#fafafa` body + ink header, system
-sans, `@media` responsive + dark mode), no longer extends
-`email_base.html`. The `_trend_badge.html` partial renders the
-per-entry movement.
+self-contained (dark `#060608` surface, no `email_base.html`) and
+follows the **Gmail-compatibility pattern** (2026-07-05): fluid-hybrid
+640 px container (`width="100%"` + inline `max-width:640px` + MSO ghost
+table), inline styles on every element (the `<style>` block is
+enhancement only — Gmail can drop it), redundant `bgcolor` on every
+cell + `meta color-scheme: dark` so Gmail never inverts the dark
+surfaces, solid-hex borders (no `rgba()`), `table-layout:fixed` +
+explicit widths for uniform column groups, and no `<a>` wrapping a
+`<table>`. The `_trend_badge.html` partial renders the per-entry
+movement.
 
 **Name links (Slice 1 2026-06-08; Slice 2 2026-06-09).** Song titles
 render in italic and link to `/canco/{slug}`; artist names render in bold,
@@ -167,35 +170,29 @@ applied to BOTH the engine narrative and the injected/override narrative
 Helpers:
 - **`newsletter_utm.build_newsletter_url(base, content, setmana)`** —
   every body link gets `utm_source=newsletter`, `utm_medium=email`,
-  `utm_campaign=top_<setmana>_global`, `utm_content=<block>`
-  (`podi_1`, `top_4`, `cta_top`, `territorial_cat`, `novetat_1`,
-  `compartir_telegram`, …).
+  `utm_campaign=top_<setmana>_global`, `utm_content=<block>` (`podi_1`,
+  `top_4`, `cta_top`, `territorial_cat`, `novetat_1`, …).
 - **`newsletter_covers.album_cover_url(deezer_id, mida)`** — local JPG
   at `/portades/album/<id>-{250,500}.jpg` (filesystem check via
   `ingesta.portades.manager`, no network) else the committed
   placeholder.
 - **`newsletter_covers.ensure_cover_downloaded(deezer_id, source_url)`**
-  — called from `_build_top_context` for every cover slot (podi, resta,
-  territorials, novetats) BEFORE composing. If the local JPG is missing
-  it pulls it synchronously via the SAME portades pipeline
-  (`manager.download_and_convert`), so the policy stays self-hosting-only
-  (no Deezer hotlink in the email) yet the logo fallback only shows for
-  albums genuinely without a Deezer cover. Best-effort: never raises;
-  an album with no `source_url` stays on the placeholder. Closes the
-  2026-06-07 gap where a long-standing #1 (Rosalía · "Divinize") showed
-  the logo because the nightly `descarregar_portades` cron — unordered,
-  200/run, no ranking priority — had never generated its cover.
+  — called from `_build_top_context` for every cover slot BEFORE
+  composing: a missing local JPG is pulled synchronously via the SAME
+  portades pipeline (`manager.download_and_convert`) — self-hosting
+  only, no Deezer hotlink in the email. Best-effort: never raises; no
+  `source_url` → placeholder. Closes the 2026-06-07 gap (Rosalía's #1
+  showed the logo: the nightly cron had never generated its cover).
 - **`newsletter_meta.trend_indicator(pos, pos_anterior, is_return)`** —
-  ↑N / ↓N / → / DEBUT / TORNA (a13) with mm-design colours. Deltas
-  come from `payload.build_top`'s `posicio_anterior` (no extra query).
+  ↑N / ↓N / → / DEBUT / TORNA (a13) with mm-design colours; deltas from
+  `payload.build_top`'s `posicio_anterior` (no extra query).
 - **`newsletter_meta.derive_subject(hero, week)`** — short editorial
   subject (≤60 chars) from a per-scenario_code phrase bank.
 
 Raster assets (email clients don't render SVG) are committed PNGs
-under `web/static/web/img/newsletter/`, regenerable run-once via
-`manage.py generar_assets_newsletter` (rasterises the vendored brand
-SVG through `social.svg_assets`): `cover_placeholder.png` (500×500,
-ink + white logo) and `logo_email.png` (full-colour header mark).
+under `web/static/web/img/newsletter/` (`cover_placeholder.png` 500×500
+ink + white logo; `logo_email.png` header mark), regenerable run-once
+via `manage.py generar_assets_newsletter` (via `social.svg_assets`).
 
 ### Opt-out review flow (2026-06-07)
 
@@ -246,12 +243,14 @@ will send), `font`, `editat`.
      Idempotent; **can never** set approved/sent (any non-`pendent`
      `estat` rejected; an already `enviat`/`cancellat` week is terminal →
      409). It reads/leaves only; it never sends. On a successful upsert it
-     emails `settings.ADMINS` (`newsletter.notify_admins_draft_preview`,
-     best-effort) the **full newsletter preview** rendered through the
-     shared `render_newsletter_preview`, plus an admin-only management
-     block (link to `/staff/social/esborrany` to edit or cancel). The
-     management block is added only when `gestio_url` is set, so the
-     subscriber copy never carries it. Deliverability headers (`List-Id`,
+     emails `settings.ADMINS` — plus, when set, the render-testing
+     address `ConfiguracioGlobal.newsletter_desti_prova` (blank default =
+     ADMINS only, byte-identical; NEVER used for the subscriber send) —
+     the **full newsletter preview** (`notify_admins_draft_preview`,
+     best-effort, shared `render_newsletter_preview`), plus an admin-only
+     management block (link to `/staff/social/esborrany` to edit or
+     cancel; added only when `gestio_url` is set, so the subscriber copy
+     never carries it). Deliverability headers (`List-Id`,
      `List-Unsubscribe`, `Auto-Submitted`) keep the automated mail out of
      spam. Every parada/error (not_ready, 400, 409) returns before the
      notify, so no mail fires on those paths.
@@ -259,7 +258,9 @@ will send), `font`, `editat`.
    composes `subject` + `narrative_html` via `newsletter.build_draft_text`
    (wraps `_build_top_context`, side-effect-free — no `mark_used`),
    persists a `pendent` draft **only if none exists for the week**
-   (idempotent), emails staff a link to `/staff/social/esborrany`. Runs
+   (idempotent), emails staff a link to `/staff/social/esborrany`; when
+   `newsletter_desti_prova` is set it ALSO sends the full rendered
+   preview to that address only. Runs
    LATE (16:00) so the routine has had its turn first; if the routine
    failed, the engine still leaves a draft. An **anti-stale guard**
    refuses to generate unless the TopSetmanal for THIS week

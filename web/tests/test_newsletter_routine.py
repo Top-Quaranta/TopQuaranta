@@ -380,6 +380,33 @@ def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
     # Deliverability headers present.
     assert m.extra_headers.get("List-Unsubscribe")
     assert m.extra_headers.get("Auto-Submitted") == "auto-generated"
+    # Default recipients: settings.ADMINS only (newsletter_desti_prova buit).
+    from django.conf import settings as dj_settings
+
+    assert m.to == list(dj_settings.ADMINS)
+
+
+@pytest.mark.django_db
+def test_post_llm_preview_adds_desti_prova_when_set(client_with_token, mailoutbox):
+    """`ConfiguracioGlobal.newsletter_desti_prova` set → the routine's
+    admin preview carries the extra render-testing recipient too."""
+    from django.conf import settings as dj_settings
+
+    from ranking.models import ConfiguracioGlobal
+
+    cfg = ConfiguracioGlobal.load()
+    cfg.newsletter_desti_prova = "prova.render@example.com"
+    cfg.save()
+    _seed_topN(12, prev=True)
+    r = client_with_token.post(
+        DRAFT_URL,
+        {"subject": "Subj LLM", "narrative_html": "<p>n</p>"},
+        format="json",
+        **_auth(),
+    )
+    assert r.status_code == 201, r.content
+    assert len(mailoutbox) == 1
+    assert mailoutbox[0].to == list(dj_settings.ADMINS) + ["prova.render@example.com"]
 
 
 @pytest.mark.django_db

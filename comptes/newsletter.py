@@ -516,13 +516,33 @@ def _admin_notice_headers() -> dict:
     }
 
 
-def notify_admins_draft_preview(draft) -> None:
+def preview_extra_recipient() -> str:
+    """Optional EXTRA draft-preview recipient from
+    `ConfiguracioGlobal.newsletter_desti_prova` (email-client render
+    testing). Returns "" when unset — the caller then keeps the exact
+    pre-field behaviour. Read defensively so a config hiccup can never
+    break the notification path."""
+    try:
+        from ranking.models import ConfiguracioGlobal
+
+        return (ConfiguracioGlobal.load().newsletter_desti_prova or "").strip()
+    except Exception:  # noqa: BLE001
+        logger.exception("preview_extra_recipient: config read failed")
+        return ""
+
+
+def notify_admins_draft_preview(draft, recipients: list[str] | None = None) -> None:
     """Best-effort: email `settings.ADMINS` the FULL newsletter preview for a
     pending draft — byte-for-byte the body subscribers will receive, plus the
     admin-only management block linking to the staff editor. Rendered through
     the shared `render_newsletter_preview`. Deliverability headers (List-Id,
     List-Unsubscribe, Auto-Submitted) are attached so the automated message
     scores low with spam filters.
+
+    `recipients` overrides the default list (`settings.ADMINS` plus, when
+    set, `ConfiguracioGlobal.newsletter_desti_prova` — the render-testing
+    address). This is a DRAFT preview path only; it never touches the
+    subscriber send in `send_top_newsletter`.
 
     Never raises: any failure (build, render, mail) logs and is swallowed so
     it cannot block the draft write that triggered it."""
@@ -531,6 +551,11 @@ def notify_admins_draft_preview(draft) -> None:
     from social import payload
 
     try:
+        if recipients is None:
+            recipients = list(settings.ADMINS)
+            extra = preview_extra_recipient()
+            if extra:
+                recipients.append(extra)
         data = payload.build_top(draft.territori, draft.setmana)
         entries = (data or {}).get("entries") or []
         publish_date = draft.setmana + datetime.timedelta(days=5)
@@ -557,7 +582,7 @@ def notify_admins_draft_preview(draft) -> None:
             subject=f"[TopQuaranta] Esborrany newsletter setmana {draft.setmana}",
             body=text,
             from_email=FROM_EMAIL,
-            to=list(settings.ADMINS),
+            to=recipients,
             headers=_admin_notice_headers(),
         )
         msg.attach_alternative(html, "text/html")

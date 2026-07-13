@@ -1,6 +1,6 @@
 # ADR-0015 — Instagram collaborator invitations for feed posts
 
-- **Status:** Proposed (all tranches merged; flag switched ON in prod and first supervised batch sent 2026-07-06. The programmatic acceptance-read path was closed empirically on 2026-07-13 — see §5.5 — so the definitive cycle is: invite via API; acceptances marked manually from staff; `caducada` at 14 days covers everything else. Stays Proposed until that design is implemented in the poller + staff panel)
+- **Status:** Accepted (2026-07-13 — all tranches merged; flag ON in prod; first supervised batch 2026-07-06. The programmatic acceptance-read path was closed empirically — see §5.5 — and the definitive cycle is implemented: invite via API; acceptances marked manually from the staff panel; `caducada` at 14 days covers everything else)
 - **Date:** 2026-07-03
 - **Authors:** Miquel Matoses (+ Claude Opus 4.8)
 
@@ -222,30 +222,21 @@ New management command `social/management/commands/pollar_colaboracions_ig.py`:
   14d` are set to `caducada` (with `data_resolucio`) — IG acceptance is
   immediate-or-never, so an un-resolved invite past the window is a soft
   decline. This closes the eternal-pending hole (such rows used to sit
-  `pendent` forever, blocking the artist's re-invitation).
-- Reconcile pass: selects the still-fresh `estat="pendent"` rows
-  (`data_invitacio >= now - 14d`), groups by `ig_media_id`, calls
-  `GET /<media>/collaborators` once per media, and reconciles each:
-  present + accepted → `acceptada`; present + declined / absent →
-  `rebutjada`; stamps `data_resolucio`. **Fail-safe (2026-07-05) +
-  temporary brake (2026-07-06):** raw Graph body logged before any
-  parsing; a response that is empty or contains none of the media's
-  pending invitees resolves nothing, and — until the endpoint's
-  behaviour with pending invitees is verified live — an ABSENT invitee
-  stays `pendent` too (only an explicit non-accepted `invite_status`
-  resolves to `rebutjada`). The final absent→rebutjada mapping stays in
-  `reconcile_estat`, tested. Note: the 14-day window is currently a
-  module constant (`WINDOW_DIES`), not a `ConfiguracioGlobal` field —
-  the one §5.4 tunable that is still hardcoded.
+  `pendent` forever, blocking the artist's re-invitation). Note: the
+  14-day window is currently a module constant (`WINDOW_DIES`), not a
+  `ConfiguracioGlobal` field — the one §5.4 tunable that is still
+  hardcoded.
 - Writes a **`MetricaPipeline`** row per run with the rolling acceptance
   rate (`acceptades / (acceptades + rebutjades + caducades)` — `caducada`
-  is a non-acceptance) so the acceptance trend is visible on the pipeline
-  dashboard.
-- Best-effort and idempotent: a Graph hiccup logs and leaves the row
-  `pendent` for the next tick; re-running never double-counts (state is
-  derived from the API, not incremented).
-- Cron cadence: hourly is plenty (invites resolve fast); gated on
-  `ig_collaboradors_actiu` so it no-ops while the flag is off.
+  is a non-acceptance), derived from registry state (idempotent per day)
+  so the acceptance trend is visible on the pipeline dashboard.
+- Cron cadence: hourly; gated on `ig_collaboradors_actiu` so it no-ops
+  while the flag is off.
+- *History:* the command originally also carried a reconcile pass
+  (`GET /<media>/collaborators` per media, with a 2026-07-05 fail-safe
+  and a 2026-07-06 temporary brake after the first live poll errored).
+  That whole path was removed on 2026-07-13 when the empirical closure
+  below proved programmatic acceptance reads unviable.
 
 **Empirical closure of programmatic acceptance reads (2026-07-13).**
 Verified against the first live batch's media (`18094840829027683`,
@@ -286,8 +277,12 @@ empty for pending invitations, and the Page token is inaccessible).
 3. **`caducada` is the only automatic terminal** — the poller keeps
    the expiry pass and the acceptance-rate metric, now read directly
    from the registry (`acceptades / resoltes`); the
-   reconcile-against-Graph pass (and with it the temporary brake) is
-   dead weight to be removed. Implementation pending.
+   reconcile-against-Graph pass (and with it the temporary brake and
+   `instagram_client.get_collaborators`) was removed when this cycle
+   was implemented (same day). Staff endpoints:
+   `GET /staff/social/invitacions/` +
+   `POST /staff/social/invitacions/acceptar/` (audit action
+   `collab_invitacio_acceptada`); UI on `/staff/social/instagram`.
 
 For the record: as of 2026-07-13 none of the 3 invitations of the
 2026-07-06 batch is accepted; they stay `pendent` until marked

@@ -342,10 +342,12 @@ Detail moved to [`social-collaboradors.md`](social-collaboradors.md)
 (2026-07-06, docs-size split — same pattern as `social-narrative.md`).
 In one line: artists invited as IG **collaborators** on feed posts
 (never stories), gated on `ConfiguracioGlobal.ig_collaboradors_actiu`,
-policy in `social/collaboradors.py`, acceptance poller
-`pollar_colaboracions_ig` (hourly), non-blocking substitution guard at
-publish. First real batch 2026-07-06; polling cycle not yet verified
-end-to-end (temporary brake active — see the split doc).
+policy in `social/collaboradors.py`, non-blocking substitution guard at
+publish. Acceptances are marked **manually from staff**
+(`/staff/social/instagram`); the hourly `pollar_colaboracions_ig` is a
+pure expiry cron (`caducada` at 14 days + registry-derived acceptance
+rate — no Graph reads; the read path is unviable, ADR-0015 §5.5).
+First real batch 2026-07-06; definitive cycle since 2026-07-13.
 
 ## Related
 

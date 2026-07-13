@@ -110,7 +110,11 @@ channels have their own page at `/staff/social/<canal>` (`instagram`,
 `pages/staff/social/ChannelView.jsx`
 template that paints from `channelDescriptors.jsx` — adding a channel or
 a credential field means extending the descriptor, not writing a new
-page. The **unified publications table** lives at
+page. The Instagram view (`InstagramSection.jsx`) also carries the
+**collaborator-invitation registry** (ADR-0015 §5.5): a house-kit table
+(artista, username, post, tipus, data, estat) with a single "Marcar
+acceptada" action per non-accepted row — the only manual resolution;
+expiry is automatic. The **unified publications table** lives at
 `/staff/social/publicacions` (`StaffSocialPublicacionsPage` →
 `PublicacionsTable`, fed by the paginated `social_list`): one house-kit
 table with search, a FilterPanel (canal/estat/tipus/setmana), deep-link

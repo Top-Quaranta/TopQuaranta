@@ -77,8 +77,11 @@ programmatic acceptance-read path was closed empirically on 2026-07-13
 Facebook-Login user token returns it empty for pending invitations, and a
 Page token is inaccessible to the app type). Definitive design: invitation
 via API, **manual resolution from staff**, `caducada` at 14 days as the
-only automatic terminal. The poller's reconcile pass (and the temporary
-brake) are pending removal; ADR-0015 stays **Proposed** until that lands.
+only automatic terminal. Acceptances are marked manually from the staff
+social panel (single "Marcar acceptada" action; deliberately no manual
+reject — `caducada` covers silence and rejection alike). The poller's
+reconcile pass (and the temporary brake) are pending removal; ADR-0015
+stays **Proposed** until that lands.
 
 ## Related
 

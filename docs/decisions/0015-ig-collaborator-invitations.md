@@ -1,6 +1,6 @@
 # ADR-0015 — Instagram collaborator invitations for feed posts
 
-- **Status:** Proposed (all tranches merged; flag switched ON in prod and first supervised batch sent 2026-07-06. The programmatic acceptance-read path was closed empirically on 2026-07-13 — see §5.5 — so the definitive design is: invitation via API, manual resolution from staff, `caducada` as the only automatic terminal. Stays Proposed until that design is implemented in the poller)
+- **Status:** Proposed (all tranches merged; flag switched ON in prod and first supervised batch sent 2026-07-06. The programmatic acceptance-read path was closed empirically on 2026-07-13 — see §5.5 — so the definitive cycle is: invite via API; acceptances marked manually from staff; `caducada` at 14 days covers everything else. Stays Proposed until that design is implemented in the poller + staff panel)
 - **Date:** 2026-07-03
 - **Authors:** Miquel Matoses (+ Claude Opus 4.8)
 
@@ -271,15 +271,27 @@ Conclusion: programmatic acceptance reading is unviable with the
 current app for **two independent reasons** (Instagram Login lacks the
 edge; Facebook Login with a user token has the edge but returns it
 empty for pending invitations, and the Page token is inaccessible).
-**Definitive design:** invitation via API at publish time (unchanged);
-resolution is **manual from staff**, by observation in the Instagram
-app; `caducada` at 14 days stays as the **only automatic terminal**.
-The reconcile-against-Graph pass (and with it the temporary brake) is
-dead weight to be removed from the poller — implementation pending;
-the expiry pass and the acceptance-rate metric remain. For the
-record: as of 2026-07-13 none of the 3 invitations of the 2026-07-06
-batch is accepted; they stay `pendent` until resolved manually or
-expiring on 2026-07-20.
+
+**Definitive cycle (decided 2026-07-13):**
+
+1. **Invite via API** at publish time (unchanged — §5.2/§5.3).
+2. **Acceptances are marked manually from staff**, when Miquel
+   observes them in the Instagram app. Minimal UI on the staff social
+   panel: the invitation list with each row's estat and a single
+   **"Marcar acceptada"** button that writes `estat=acceptada` +
+   `data_resolucio`. There is deliberately **no "mark as rejected"
+   action**: the automatic `pendent → caducada` pass at 14 days
+   already covers both silence and rejection, which are the same
+   thing to the policy (category C, 90-day cooldown).
+3. **`caducada` is the only automatic terminal** — the poller keeps
+   the expiry pass and the acceptance-rate metric, now read directly
+   from the registry (`acceptades / resoltes`); the
+   reconcile-against-Graph pass (and with it the temporary brake) is
+   dead weight to be removed. Implementation pending.
+
+For the record: as of 2026-07-13 none of the 3 invitations of the
+2026-07-06 batch is accepted; they stay `pendent` until marked
+accepted manually or expiring on 2026-07-20.
 
 ### 5.6 Story pagination + per-story mentions as permanent pipeline behaviour
 

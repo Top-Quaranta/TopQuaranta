@@ -86,7 +86,13 @@
     "frequency_label": "Cada nit 03:00",
     "max_age_hours": 26,
     "skip_concern": 1,
-    "description": "Còpia de seguretat diària de PostgreSQL amb retenció escalonada (daily 7d / weekly 4w / monthly 12m). Script bash a `/home/topquaranta/bin/`, corre com a usuari postgres. Caçat 2026-06-07: el backup corria fora del contracte tq-run i no el vigilava res."
+    "description": "Còpia de seguretat diària de PostgreSQL amb retenció escalonada (daily 7d / weekly 4w / monthly-pii 90d / monthly-safe 12m sense PII). Script bash a `/home/topquaranta/bin/`, corre com a usuari postgres. Caçat 2026-06-07: el backup corria fora del contracte tq-run i no el vigilava res."
+  },
+  "tq-backup-offsite": {
+    "frequency_label": "Cada nit 03:30",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "description": "Capa 2 de backup: restic xifrat en origen cap a Backblaze B2 amb key append-only. Gated per OFFSITE_BACKUP_ACTIU al .env — DISABLED (gris) és l'estat legítim mentre no s'active. Script bash a `/home/topquaranta/bin/`. Vegeu docs/ops/backup-offsite.md."
   },
   "tq-recover": {
     "frequency_label": "Cada 30 min",
@@ -148,6 +154,12 @@
     "frequency_label": "Cada nit 22:30",
     "max_age_hours": 26,
     "skip_concern": 1
+  },
+  "pollar_colaboracions_ig": {
+    "frequency_label": "Cada hora",
+    "max_age_hours": 2,
+    "skip_concern": 3,
+    "description": "Reconcilia invitacions de col·laboració IG pendents (ADR-0015); dorment fins que s'activa el flag mestre."
   },
   "enviar_digest_setmanal": {
     "frequency_label": "Cada dilluns 08:00",

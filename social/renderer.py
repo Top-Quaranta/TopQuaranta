@@ -1431,36 +1431,91 @@ def _story_hero(
     return img
 
 
+def _novetats_fit(cap: int, band_top: int) -> tuple[int, int, int]:
+    """Cover size, inter-item gap and stack top for `cap` novetats items
+    on one story page. Keeps the full-size cover of the legacy 3-item
+    slide and only tightens the vertical gap; drops to a smaller cover
+    solely if the gap floor is reached (5+ per page). Returns
+    (cover, gap, top0). The stack is sized for `cap` (the page maximum)
+    so every page in a set shares the same item scale and start Y —
+    a short last page just leaves empty space at the bottom."""
+    t = _ST["novetats"]
+    text_add = sum(t["entry_h_add"])
+    footer_band = _ST["common"]["footer_url"]["y_from_bottom"]
+    band_bottom = STORY_H - footer_band - 24
+    avail = band_bottom - band_top
+    cover = t["cover"]
+    gap = t["gap"]
+    if cap > 1:
+        # Gap that would let `cap` full-size covers fill the band.
+        gap = (avail - cap * (cover + text_add)) / (cap - 1)
+        if gap > t["gap"]:
+            gap = t["gap"]  # never stretch beyond the design gap
+        elif gap < 40:
+            gap = 40  # gap floor → shrink the covers instead
+            cover = (avail - cap * text_add - (cap - 1) * gap) // cap
+    gap = int(gap)
+    cover = int(cover)
+    block = cap * (cover + text_add) + (cap - 1) * gap
+    top0 = band_top + max(0, (avail - block) // 2)
+    return cover, gap, int(top0)
+
+
 def _story_novetats(
-    setmana, items: list[dict], *, territori: str = "PPCC"
+    setmana,
+    items: list[dict],
+    *,
+    territori: str = "PPCC",
+    page: int | None = None,
+    total_pages: int | None = None,
+    per_page: int | None = None,
 ) -> Image.Image:
-    """Slide 6 — 2-3 recent releases stacked: centred cover + Bricolage
-    title + Roboto artist, no number badge."""
+    """One novetats story page: recent releases stacked (centred cover +
+    Bricolage title + Roboto artist, no number badge).
+
+    Two modes:
+      • Single-page (page/total_pages None) — legacy behaviour, capped at
+        `display_cap` (3), byte-identical to before. Used by the weekly
+        PPCC/territorial story sets.
+      • Paginated (page + total_pages given) — a discreet "· page/total"
+        suffix on the kicker; geometry is sized for `per_page` (the page
+        maximum) via `_novetats_fit` so every page shares the same scale.
+        Used by `render_stories_novetats`."""
     t = _ST["novetats"]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana)
-    _section_header(
+    paginated = page is not None and total_pages is not None
+    kicker = "FORA DEL TOP · ESTRENES"
+    if paginated and total_pages > 1:
+        kicker = f"{kicker} · {page}/{total_pages}"
+    body_top = _section_header(
         img,
         "NOVETATS",
         t["section_y"],
-        kicker="FORA DEL TOP · ESTRENES",
+        kicker=kicker,
         title_color=colors.COLOR_YELLOW,
         rule_color=pal["light"],
         kicker_color=pal["light"],
     )
 
     d = ImageDraw.Draw(img)
-    cover = t["cover"]
     ti, ar = t["title"], t["artist"]
     f_title = fonts.bricolage_xbold(ti["size"])
     f_artist = fonts.sans_regular(ar["size"])
     subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, ar["mix"])
-    items = items[: t["display_cap"]]
-    entry_h = cover + sum(t["entry_h_add"])
-    gap = t["gap"]
-    block_h = len(items) * entry_h + (len(items) - 1) * gap if items else 0
-    top0 = max(t["top0_min"], (STORY_H - block_h) // 2)
+    text_add = sum(t["entry_h_add"])
+    if paginated:
+        cap = max(1, per_page or len(items))
+        items = items[:cap]
+        cover, gap, top0 = _novetats_fit(cap, body_top + 40)
+    else:
+        cover = t["cover"]
+        gap = t["gap"]
+        items = items[: t["display_cap"]]
+        block_h = len(items) * (cover + text_add) + (len(items) - 1) * gap
+        top0 = max(t["top0_min"], (STORY_H - (block_h if items else 0)) // 2)
+    entry_h = cover + text_add
     for idx, it in enumerate(items):
         y = top0 + idx * (entry_h + gap)
         x = (STORY_W - cover) // 2
@@ -1485,9 +1540,8 @@ def _story_novetats(
                 center_w=STORY_W,
             )
             ty += ti["lh"]
-        artist = _truncate(
-            d, it.get("artista_nom") or "—", f_artist, STORY_W - ar["wrap_margin"]
-        )
+        names = it.get("artistes_noms") or [it.get("artista_nom") or "—"]
+        artist = _truncate(d, ", ".join(names), f_artist, STORY_W - ar["wrap_margin"])
         _draw_tracked(
             d, 0, ty + ar["gap_above"], artist, f_artist, subtle, center_w=STORY_W
         )
@@ -1660,6 +1714,41 @@ def render_stories_territorial(
     if novetats_items:
         _emit(_story_novetats(setmana, novetats_items[:3], territori=territori))
     _emit(_story_outro_ppcc(setmana))
+    return out
+
+
+def render_stories_novetats(
+    setmana,
+    items: list[dict],
+    *,
+    per_page: int,
+    territori: str = "PPCC",
+) -> list[Path]:
+    """Paginated novetats story SET: split `items` into pages of
+    `per_page` releases so every release appears (was a single 3-item
+    slide). Returns one 1080×1920 JPEG path per page, in order; each
+    page carries a discreet "· k/M" indicator on the kicker. `per_page`
+    is clamped to 1..8 (the geometry `_novetats_fit` degrades past 4 by
+    shrinking covers; beyond 8 the titles collide). Empty items → []."""
+    per_page = max(1, min(8, int(per_page)))
+    items = [it for it in (items or []) if it]
+    if not items:
+        return []
+    pages = [items[i : i + per_page] for i in range(0, len(items), per_page)]
+    total = len(pages)
+    out: list[Path] = []
+    for i, chunk in enumerate(pages, start=1):
+        img = _story_novetats(
+            setmana,
+            chunk,
+            territori=territori,
+            page=i,
+            total_pages=total,
+            per_page=per_page,
+        )
+        p = _path("nous_novetats", territori, setmana, i - 1, story=True)
+        img.save(p, "JPEG", quality=90)
+        out.append(p)
     return out
 
 

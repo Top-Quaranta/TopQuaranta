@@ -136,7 +136,7 @@ def test_canco_destacada_picks_biggest_climber(db, anon):
 
 def test_descoberta_filters_to_distinct_territoris(db, anon):
     """The diversity rule prefers one artist per primary territori."""
-    from music.models import Municipi, Territori
+    from music.models import Territori
 
     cat = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Catalunya"})[0]
     val = Territori.objects.get_or_create(

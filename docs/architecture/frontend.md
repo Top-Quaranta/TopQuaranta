@@ -43,10 +43,12 @@ web-react/
     ├── components/         Cross-page UI (Layout, AdminRoute,
     │                       editorial primitives, MmIcon, ...)
     │   ├── ui/             Buttons, inputs, modals
-    │   └── staff/          Staff-only widgets. `StaffTable.jsx` is the
-    │                       house kit: Table/TableCard, Btn, Pill, Input,
-    │                       Select, Pagination, and `Callout` (tone-driven
-    │                       wide banner, the counterpart of Pill).
+    │   └── staff/          Staff-only widgets (FilterPanel, panels, …).
+    │                       The table/form house kit moved to
+    │                       `components/rd/surface.jsx`; `StaffTable.jsx`
+    │                       is now a back-compat shim re-exporting it
+    │                       (Table/TableCard, Btn, Pill, Input, Select,
+    │                       Pagination, Callout, …).
     ├── context/            React contexts:
     │                       - AuthContext (profile, login, refresh)
     │                       - FeedbackContext (toast bus)
@@ -108,7 +110,11 @@ channels have their own page at `/staff/social/<canal>` (`instagram`,
 `pages/staff/social/ChannelView.jsx`
 template that paints from `channelDescriptors.jsx` — adding a channel or
 a credential field means extending the descriptor, not writing a new
-page. The **unified publications table** lives at
+page. The Instagram view (`InstagramSection.jsx`) also carries the
+**collaborator-invitation registry** (ADR-0015 §5.5): a house-kit table
+(artista, username, post, tipus, data, estat) with a single "Marcar
+acceptada" action per non-accepted row — the only manual resolution;
+expiry is automatic. The **unified publications table** lives at
 `/staff/social/publicacions` (`StaffSocialPublicacionsPage` →
 `PublicacionsTable`, fed by the paginated `social_list`): one house-kit
 table with search, a FilterPanel (canal/estat/tipus/setmana), deep-link
@@ -167,6 +173,11 @@ Not to be confused with `/staff/publicacions` (community posts).
 - ETag + Last-Modified on the hot read endpoints
   (`/ranking`, `/artistes`, `/mapa/artistes-top`) means re-fetches
   return 304 in a few ms.
+- `StaffRankingPage` (`/staff/top`) renders both raw and effective
+  weekly plays — the `escoltes_setmanals` and `escoltes_efectives` /
+  `soft_cap_aplicat` fields from `/staff/top/` (post per-territori
+  soft-cap, reconciled with the per-cançó `TopBreakdownPanel`). See
+  `docs/architecture/staff.md`.
 
 ## Build, dev, deploy
 
@@ -252,14 +263,26 @@ flip; never deployed mid-way.
   `index.css @theme` (`--color-tq-ink-2`, the `--color-terr-*` table,
   `--font-crit`/`--font-whisper`/`--font-body`); the `.rd-*` utility
   surface (bands, glass, grain, header/footer) is scoped under `.rd-root`.
+- **Light mode (staff-unification option B, 2026-06-23):** `primitives.jsx`
+  offers light-surface variants — `Glass tone="light"` (white card) and
+  `Btn tone=primary|secondary|outline|danger|ghost` + `size` (sm|md) —
+  whose class strings mirror the old `StaffTable` byte-for-byte. The staff
+  table/form kit now lives at `components/rd/surface.jsx` (built on those
+  variants); **all 36 staff pages consume it**, and
+  `components/staff/StaffTable.jsx` is a back-compat shim re-exporting
+  `rd/surface` (so public `Field`/`Select` + the shared `FilterPanel`/
+  panels still resolve). The retrofit was an import-path swap, pixel-
+  identical by construction — staff stays white.
 - **PERF (hard rule):** glass blur + the fractal-noise grain are layered
   on **only at `@media (min-width:901px)`**, with a
   `prefers-reduced-transparency` fallback — phones get flat solid
   surfaces, no blur, no grain. Never JS sniffing.
 - **Shell split** (`Layout.jsx`): public routes get the dark rd shell
   (full-bleed `<main>`, bands compose full width); `/staff/*` keeps the
-  **legacy yellow shell, byte-unchanged**. This is the permanent
-  public/staff boundary — the redisseny is public-web only.
+  **legacy yellow shell, byte-unchanged**. The staff *pages* now consume
+  the rd canon via the light mode (`rd/surface`, above) — pixel-identical,
+  staff stays white — but the shell/layout is still the legacy yellow one;
+  it is not on the dark rd `.rd-root` surface.
 - **Vocabulary veto:** "rànquing" is banned from user-facing copy → "el
   top" / "el top complet" / "la llista". Repo-wide grep is clean.
 - **Conserved:** all URLs (incl. SEO-nested) + `?t=`/`?s=` params, every

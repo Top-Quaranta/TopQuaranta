@@ -8,71 +8,23 @@ module and let the shim handle the re-export.
 
 from __future__ import annotations
 
-import datetime
-
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
-from django.db import IntegrityError, transaction
-from django.db.models import (
-    Avg,
-    Case,
-    Count,
-    Exists,
-    F,
-    IntegerField,
-    Max,
-    Min,
-    OuterRef,
-    Q,
-    Value,
-    When,
-)
-from django.db.models.functions import Lower
-from django.shortcuts import get_object_or_404
-from django.utils.dateparse import parse_date
-from django_otp.plugins.otp_static.models import StaticDevice
-from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
 from music.audit import log_staff_action
-from music.constants import MOTIUS_REBUIG, MOTIUS_VALIDS, TERRITORI_NOMS
-from music.ml import recalcular_ml_si_cal
-from music.models import (
-    Album,
-    Artista,
-    ArtistaDeezer,
-    ArtistaLocalitat,
-    Canco,
-    HistorialRevisio,
-    Municipi,
-    StaffAuditLog,
-)
-from music.services import (
-    aprovar_canco,
-    rebutjar_album,
-    rebutjar_artista,
-    rebutjar_canco,
-)
 from ranking.models import (
     ConfiguracioGlobal,
-    SenyalDiari,
-    TopProvisional,
-    TopSetmanal,
 )
 
 # Accent + apostrophe insensitive search helpers shared with the
 # public endpoints — see `web/api/search_utils.py`.
-from web.api.search_utils import normalize_search_term as _normalize_search_term
-from web.api.search_utils import unaccent_field as _unaccent_field
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.
-from web.api.staff._common import IsStaff, _paginate
+from web.api.staff._common import IsStaff
 
 # ═════════════════════════════════════════════════════════════════════════
 # Configuració global
@@ -107,6 +59,7 @@ SECTION_RANKINGS = "Rànquing i fórmules"
 SECTION_SOFTCAP = "Soft cap (outliers)"
 SECTION_EDITORIAL = "Editorial"
 SECTION_DISTRIBUCIO = "Distribució i canals"
+SECTION_COLABORADORS = "Col·laboradors IG"
 SECTION_ALTRES = "Altres"
 
 _SECTION_MAP = {
@@ -126,6 +79,7 @@ _SECTION_MAP = {
     # D — editorial
     "editorial_veu": SECTION_EDITORIAL,
     "landing_editorial_veu": SECTION_EDITORIAL,
+    "novetats_stories_per_pagina": SECTION_EDITORIAL,
     # B — distribution / channels (managed primarily in the distribution
     # cockpit; surfaced here read/write because the model is reflected).
     "newsletter_publicacio_pont_actiu": SECTION_DISTRIBUCIO,
@@ -141,6 +95,14 @@ _SECTION_MAP = {
     "delay_bluesky_min": SECTION_DISTRIBUCIO,
     "delay_telegram_min": SECTION_DISTRIBUCIO,
     "delay_newsletter_min": SECTION_DISTRIBUCIO,
+    # IG collaborator invitations (ADR-0015). Own visible section (the
+    # distribution section is hidden here, so these live separately so
+    # staff can flip the master flag + tune slots/cooldowns).
+    "ig_collaboradors_actiu": SECTION_COLABORADORS,
+    "ig_collab_slots_total": SECTION_COLABORADORS,
+    "ig_collab_slots_acceptats": SECTION_COLABORADORS,
+    "ig_collab_cooldown_a_dies": SECTION_COLABORADORS,
+    "ig_collab_cooldown_c_dies": SECTION_COLABORADORS,
 }
 
 # Stable display order of the sections in the SPA.
@@ -148,6 +110,7 @@ SECTION_ORDER = [
     SECTION_RANKINGS,
     SECTION_SOFTCAP,
     SECTION_EDITORIAL,
+    SECTION_COLABORADORS,
     SECTION_DISTRIBUCIO,
     SECTION_ALTRES,
 ]

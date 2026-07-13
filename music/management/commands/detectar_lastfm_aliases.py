@@ -40,7 +40,6 @@ import unicodedata
 from typing import Optional
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from ingesta.clients import lastfm
 from music.models import Artista, ArtistaLastfmAlias

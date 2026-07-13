@@ -20,7 +20,6 @@ import logging
 import time
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Q
 
 from ingesta.clients import deezer
 from music.models import Album, ArtistaDeezer

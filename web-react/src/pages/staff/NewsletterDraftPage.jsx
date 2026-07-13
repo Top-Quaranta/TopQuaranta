@@ -7,7 +7,7 @@
  * /staff/social/newsletter (the Newsletter channel view, llesca 3).
  */
 import { useSearchParams } from 'react-router-dom'
-import { PageHeader } from '../../components/staff/StaffTable'
+import { PageHeader } from '../../components/rd/surface'
 import NewsletterDraftEditor from './social/NewsletterDraftEditor'
 
 export default function NewsletterDraftPage() {

@@ -59,8 +59,9 @@ Every doc lives under `docs/` organised by audience. Quick map:
 - **`docs/post-mortems/`** — incident write-ups.
 - **`docs/product/`** — `definition.md` (què compta com a música en català).
 - **`docs/ops/`** — `runbook.md`, `retention.md`, `deprecation.md`,
-  `ssh-keys.md`. Things you read when something breaks or has to be
-  decommissioned.
+  `ssh-keys.md`, `backup-offsite.md` (capa 2 implementada GATED —
+  restic→B2 append-only, esperant activació del Miquel; procediment §9).
+  Things you read when something breaks or has to be decommissioned.
 - **`docs/history/`** — `roadmap.md` (estat + sprints), `changelog.md`.
 
 Also at the repo root:
@@ -126,7 +127,7 @@ the SPA palette but has no dependency on mm-design.
 ## 3. Infrastructure
 
 - **Server:** Hetzner CX22 (`188.245.60.20`), Ubuntu 22.04.
-- **Runtime:** Python 3.12, Django 6.0.4, PostgreSQL 14. Node 22 + Vite 8
+- **Runtime:** Python 3.12, Django 6.0.6, PostgreSQL 14. Node 22 + Vite 8
   for the SPA.
 - **Reverse proxy:** Caddy (auto TLS). The shared box hosts TopQuaranta
   alongside other projects (e.g. cercol-api), so Caddy's config is
@@ -203,24 +204,56 @@ to refresh the dist bundle that Caddy serves.
 1. Colors / fonts / spacing / shadows come from `var(--mm-*)` or Tailwind's
    `tq-*` tokens. Never hardcode hex values in templates or components.
 2. Fonts: Playfair Display (headings), Roboto (body).
-3. Territory accent: a single brand mapping lives at
-   `web-react/src/components/editorial.jsx::TERR_COLORS`. Public-page
-   labels use `TERRITORI_NOM` (visible) — note that "PPCC" is shown as
-   **"Global"** to visitors but stays as the legacy code in DB and API
-   query params.
+3. Territory accent: the canonical public mapping is the CSS custom
+   properties `--color-terr-*` in `web-react/src/index.css`, mirrored
+   in JS by `web-react/src/components/rd/terr.js::PAL` (consumed by the
+   `rd/` primitives). Public-page labels use `TERRITORI_NOM` (visible) —
+   note that "PPCC" is shown as **"Global"** to visitors but stays as the
+   legacy code in DB and API query params. **Territory palette (Fase 1
+   unified, 2026-06-23):** the single source is
+   `web-react/src/components/rd/terr.js` — `PAL` (deep/accent pairs,
+   mirrored by `index.css --color-terr-*`), plus `terrChart(code)` =
+   the canonical **deep**, the one value every territory *chart* series
+   uses. Both chart consumers read it: `CancoChart.jsx` (line stroke) and
+   `StaffAnalyticsPage.jsx` (`<Cell fill>`). The earlier divergent copies
+   (`editorial.jsx::TERR_COLORS` — removed PR A; the per-chart
+   `TERR_COLORS`/`TERRITORI_COLORS` — removed PR B) are gone. Fase 2
+   (promote the palette to `ConfiguracioGlobal` + a staff-editable API)
+   is not done yet; it is all in code. See
+   `docs/audits/2026-06-23-recon-disseny-unificacio.md`.
 
-**Editorial primitives** (Sprint J bis, `components/editorial.jsx`):
-shared by HomePage, TopPage, ArtistesPage, MapaPage and the
-`/comunitat` pages.
-- `<Section tone="ink|white">` — alternating full-bleed band.
-- `<SectionHeader kicker title>` — kicker auto-recolours per band
-  (yellow on ink, ink/60 on white) so a kicker can never re-introduce
-  the 1.53:1 yellow-on-white violation caught at the Sprint F audit.
-- `<TerritoriBadge codi>` — monochrome SVG via mask (inherits
-  `currentColor`).
-- `<TrendCue posicio posicio_anterior>` — top-list arrow icon used
-  by every weekly-top surface; its colours are tone-safe on both
-  ink and white.
+**Design layers (real state, 2026-06-23).** There is no single shared
+primitive set across the SPA; public and staff run on separate systems
+on top of the common `index.css` `@theme` tokens:
+
+- **Public** → `components/rd/primitives.jsx` (`Band`, `Glass`, `Btn`,
+  `Kicker`, `Crit`, `TerrLogo`, …) + the `.rd-*` CSS in `index.css`.
+  This is the live public design system (the "redisseny", introduced
+  2026-06-13); ~14 pages consume it.
+- **Staff** → the **rd light canon**. The staff table/form kit lives at
+  `components/rd/surface.jsx` (`TableCard`, `Table`, `Th`/`Td`/`Tr`,
+  `Pill`, `Input`, `Select`, `Pagination`, `PageHeader`, `Field`,
+  `Callout`, `EmptyState`, `Btn`); `TableCard` delegates to `Glass
+  tone="light"` and `Btn` to the unified canon `Btn` (staff `primary`
+  default preserved). The 36 staff pages import from `rd/surface` + use
+  `components/StaffLayout.jsx`. Staff stays **white/data-dense** (option
+  B: rd gained a light mode rather than staff going dark). The retrofit
+  was **pixel-identical by construction** (the rd light variants mirror
+  the old `StaffTable` byte-for-byte). `components/staff/StaffTable.jsx`
+  is now a **back-compat shim** re-exporting `rd/surface` so public pages
+  (`Field`/`Select`) and the shared `FilterPanel`/panels keep working.
+
+- **`components/editorial.jsx` is LEGACY, pending retirement.** It was
+  the original public primitive set (Sprint J bis: `Section`,
+  `SectionHeader`, `TerritoriBadge`, `TrendCue`, `TERRITORI_NOM`) but the
+  public pages migrated to `rd/primitives` in the 2026-06-13 redisseny.
+  It is now stranded with only **2 importers** (`CancoChart.jsx`,
+  `rd/terr.js`), both pulling only `TERRITORI_NOM`. (Its dead
+  `TERR_COLORS` export was removed in PR A; `StaffAnalyticsPage.jsx` does
+  **not** import editorial — it has its own local chart palette.) Do
+  **not** build new UI on it; prefer `rd/primitives` (public) or `staff/*`
+  (staff). Retirement is a tracked follow-up
+  (`docs/audits/2026-06-23-auditoria-dry-modular.md` §2.2).
 
 **A11y baseline** (Sprint F + J bis): WCAG AA across the public
 SPA. Re-audited via puppeteer + axe-core on every redesign sprint
@@ -315,7 +348,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **575 passed, 8 skipped** (May 2026).
+Mock all external HTTP — no real API calls. Current suite: **1481 passed, 10 skipped** (July 2026, CI on main 98e1d00).
 Run: `.venv/bin/python -m pytest -q`.
 
 `pytest.ini` pins `addopts = --ds=topquaranta.settings.test`, so env-var
@@ -360,8 +393,10 @@ shared with the planned pre-commit hook).
 
 - **`docs-coherence`** is a HARD gate: a PR that touches a mapped
   subsystem without updating its doc fails. Test files
-  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`) and
-  Django migrations (`*/migrations/*`) are filtered out before
+  (`*/tests/*`, `test_*.py`, `*_test.py`, `conftest.py`), Django
+  migrations (`*/migrations/*`) and dependency manifests/lockfiles
+  (`package.json`, `package-lock.json`, `requirements*.txt` —
+  2026-07-13, unblocks dependabot) are filtered out before
   resolution: they are implementation churn, not architecture, and
   do not trigger the gate.
 - Override (excepcional): one line in the PR body, format

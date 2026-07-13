@@ -110,3 +110,43 @@ User account data lives in `comptes_usuari`, with its own deletion
 path (account deletion request → hard delete; existing CASCADE on
 UserArtista/PropostaArtista rows; StaffAuditLog references the user
 by snapshot rather than FK).
+
+## Backups (2026-07-05 — PII split)
+
+The DB now carries community PII (profiles, DMs), so backup retention
+is split by content. Decided by Miquel 2026-07-05; implemented in
+`bin/tq-backup` + `bin/tq-backup-offsite` and mirrored offsite
+(`docs/ops/backup-offsite.md`).
+
+| Series | Contents | Where | Retention |
+|---|---|---|---|
+| `daily/tq-*` | full dump (with PII) | local + offsite tag `pii` | 7 days local; ≤90 days offsite |
+| `weekly/tq-week-*` | full dump (with PII) | local | 30 days |
+| `monthly/tq-month-pii-*` | full dump (with PII) | local | **90 days** |
+| `monthly-safe/tq-month-safe-*` | sanitized dump — full schema, DATA of PII tables excluded | local + offsite tag `safe` | **12 months** |
+| `.env` + `data/` | secrets, ad-hoc CSVs | offsite tag `pii` | ≤90 days |
+| portades | cover images (no PII) | offsite tag `safe` | 12 months |
+
+**Rule: no dump containing personal data outlives 90 days**, local or
+offsite. The 12-month series is the sanitized dump: `--exclude-table-data`
+on all of `comptes_*`, `auth_user*` (the custom user model keeps the
+legacy table name), `music_staffauditlog`, `music_artistalastfmalias`
+and `social_*auth` (channel tokens), plus `django_session` / `axes_*` /
+`otp_*` / `django_admin_log`. The exclusion set is CI-guarded:
+`topquaranta/tests/test_backup_offsite.py` fails when a new model with
+a user FK is not covered.
+
+Offsite retention is enforced **from the Mac** (quarterly
+`restic forget --tag pii --keep-within 90d` + prune with the privileged
+key) because the server-side B2 key is append-only and cannot delete.
+
+**Legacy full monthlies** (`monthly/tq-month-2*.sql.gz`, created before
+the split — currently May/June/July 2026) contain PII but keep their
+original 365-day window: the 90-day policy applies forward only, and
+deleting them earlier requires Miquel's explicit OK.
+
+**GDPR consequence, stated plainly**: a deleted account persists in
+full dumps for up to 90 days after deletion (backup exemption with a
+declared maximum, standard practice); it never enters the 12-month
+series. Offsite copies are restic-encrypted at origin — Backblaze only
+ever stores ciphertext, which also covers the extra-EU transfer nuance.

@@ -8,61 +8,30 @@ module and let the shim handle the re-export.
 
 from __future__ import annotations
 
-import datetime
-
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import (
-    Avg,
     Case,
     Count,
-    Exists,
     F,
     IntegerField,
-    Max,
-    Min,
-    OuterRef,
     Q,
     Value,
     When,
 )
-from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
-from django.utils.dateparse import parse_date
-from django_otp.plugins.otp_static.models import StaticDevice
-from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
+from comptes.models import PropostaArtista
 from music.audit import log_staff_action
-from music.constants import MOTIUS_REBUIG, MOTIUS_VALIDS, TERRITORI_NOMS
 from music.ml import recalcular_ml_si_cal
 from music.models import (
-    Album,
     Artista,
     ArtistaDeezer,
     ArtistaLocalitat,
-    Canco,
-    HistorialRevisio,
     Municipi,
-    StaffAuditLog,
-)
-from music.services import (
-    aprovar_canco,
-    rebutjar_album,
-    rebutjar_artista,
-    rebutjar_canco,
-)
-from ranking.models import (
-    ConfiguracioGlobal,
-    SenyalDiari,
-    TopProvisional,
-    TopSetmanal,
 )
 
 # Accent + apostrophe insensitive search helpers shared with the
@@ -178,6 +147,10 @@ def _artista_card(a, homset=None) -> dict:
         # two numbers match, but they're kept named per use case for
         # clarity at the call site.
         "n_top": getattr(a, "n_top", None),
+        # Distinct live cançons (verificada+activa) where the artist is
+        # principal or collaborator. Surfaced with `?include_n_top=1`
+        # (same gate as `n_top`); None otherwise.
+        "n_cancons_vives": getattr(a, "n_cancons_vives", None),
         "instagram_url": a.instagram_url or "",
         # Last.fm artist metadata — surfaced everywhere the card is used
         # (artistes list, pendents, edit page) so staff can spot

@@ -8,37 +8,13 @@ module and let the shim handle the re-export.
 
 from __future__ import annotations
 
-import datetime
-
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
-from django.db import IntegrityError, transaction
-from django.db.models import (
-    Avg,
-    Case,
-    Count,
-    Exists,
-    F,
-    IntegerField,
-    Max,
-    Min,
-    OuterRef,
-    Q,
-    Value,
-    When,
-)
-from django.db.models.functions import Lower
+from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.utils.dateparse import parse_date
-from django_otp.plugins.otp_static.models import StaticDevice
-from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
 from music.audit import log_staff_action
 from music.constants import (
     MOTIUS_REBUIG,
@@ -50,37 +26,30 @@ from music.constants import (
 )
 from music.ml import recalcular_ml_si_cal
 from music.models import (
-    Album,
     Artista,
-    ArtistaDeezer,
-    ArtistaLocalitat,
     Canco,
-    HistorialRevisio,
-    Municipi,
-    StaffAuditLog,
 )
 from music.services import (
-    aprovar_canco,
-    rebutjar_album,
     rebutjar_artista,
     rebutjar_canco,
 )
 from ranking.models import (
-    ConfiguracioGlobal,
-    SenyalDiari,
     TopProvisional,
-    TopSetmanal,
 )
 
 # Accent + apostrophe insensitive search helpers shared with the
 # public endpoints — see `web/api/search_utils.py`.
-from web.api.search_utils import normalize_search_term as _normalize_search_term
-from web.api.search_utils import unaccent_field as _unaccent_field
 
 Usuari = get_user_model()
+# Effective (post soft-cap) plays are derived from the persisted score the
+# SAME way the per-cançó transparency panel does. Reuse that exact function
+# so the staff list reconciles to the byte with `TopBreakdownPanel`
+# (web/api/canco_views.py::canco_top_breakdown). No re-implementation of the
+# adaptive knee, no gate touch, no write.
+from web.api.canco_views import _derive_plays_eff
+
 # Shared helpers from the staff package.
-from web.api.staff._common import IsStaff, _paginate
-from web.api.staff.cancons import _canco_row
+from web.api.staff._common import IsStaff
 
 # ═════════════════════════════════════════════════════════════════════════
 # Ranking provisional
@@ -141,32 +110,41 @@ def top_list(request: Request) -> Response:
         .select_related("canco", "canco__artista")
         .order_by("posicio")
     )
+    entries = []
+    for rp in qs:
+        # Derived from the persisted score (score / age·past_top·monopoli),
+        # NOT recomputed — so it matches the breakdown panel exactly and is
+        # read-only. Equals `escoltes_setmanals` when the soft-cap left the
+        # row uncompressed.
+        plays_eff, soft_cap_aplicat = _derive_plays_eff(rp)
+        entries.append(
+            {
+                "pk": rp.pk,
+                "posicio": rp.posicio,
+                "canco_pk": rp.canco_id,
+                "canco_nom": rp.canco.nom if rp.canco else "",
+                "canco_slug": rp.canco.slug if rp.canco else None,
+                "artista_nom": (
+                    rp.canco.artista.nom if rp.canco and rp.canco.artista else ""
+                ),
+                "artista_pk": (
+                    rp.canco.artista_id if rp.canco and rp.canco.artista else None
+                ),
+                "escoltes_setmanals": rp.escoltes_setmanals,
+                "escoltes_efectives": int(round(plays_eff)),
+                "soft_cap_aplicat": soft_cap_aplicat,
+                "age_factor": rp.age_factor,
+                "past_top_factor": rp.past_top_factor,
+                "monopoli_factor": rp.monopoli_factor,
+                "score_final": rp.score_setmanal,
+            }
+        )
     return Response(
         {
             "territori": territori,
             "territoris": [{"codi": c, "nom": n} for c, n in TOP_TERRITORIS],
             "motius": list(MOTIUS_REBUIG),
-            "entries": [
-                {
-                    "pk": rp.pk,
-                    "posicio": rp.posicio,
-                    "canco_pk": rp.canco_id,
-                    "canco_nom": rp.canco.nom if rp.canco else "",
-                    "canco_slug": rp.canco.slug if rp.canco else None,
-                    "artista_nom": (
-                        rp.canco.artista.nom if rp.canco and rp.canco.artista else ""
-                    ),
-                    "artista_pk": (
-                        rp.canco.artista_id if rp.canco and rp.canco.artista else None
-                    ),
-                    "escoltes_setmanals": rp.escoltes_setmanals,
-                    "age_factor": rp.age_factor,
-                    "past_top_factor": rp.past_top_factor,
-                    "monopoli_factor": rp.monopoli_factor,
-                    "score_final": rp.score_setmanal,
-                }
-                for rp in qs
-            ],
+            "entries": entries,
         }
     )
 

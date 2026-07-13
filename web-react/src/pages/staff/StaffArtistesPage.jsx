@@ -24,7 +24,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 import FilterPanel from '../../components/staff/FilterPanel'
 
 const DEFAULTS = {

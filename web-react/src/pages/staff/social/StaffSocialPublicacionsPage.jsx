@@ -11,7 +11,7 @@
  */
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Field, Input, PageHeader, Select } from '../../../components/staff/StaffTable'
+import { Field, Input, PageHeader, Select } from '../../../components/rd/surface'
 import FilterPanel from '../../../components/staff/FilterPanel'
 import PublicacionsTable from './PublicacionsTable'
 import MetricsStrip from './MetricsStrip'

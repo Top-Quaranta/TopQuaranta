@@ -8,45 +8,29 @@ module and let the shim handle the re-export.
 
 from __future__ import annotations
 
-import datetime
 import logging
 
 logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import (
-    Avg,
-    Case,
     Count,
-    Exists,
     F,
     IntegerField,
-    Max,
-    Min,
     OuterRef,
     Q,
-    Value,
-    When,
 )
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.dateparse import parse_date
-from django_otp.plugins.otp_static.models import StaticDevice
-from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
+from comptes.models import UserArtista
 from ingesta.clients.lastfm import to_noredirect_url
 from music.audit import log_staff_action
-from music.constants import MOTIUS_REBUIG, MOTIUS_VALIDS, TERRITORI_NOMS
-from music.ml import recalcular_ml_si_cal
 from music.models import (
     Album,
     Artista,
@@ -55,19 +39,6 @@ from music.models import (
     Canco,
     HistorialRevisio,
     Municipi,
-    StaffAuditLog,
-)
-from music.services import (
-    aprovar_canco,
-    rebutjar_album,
-    rebutjar_artista,
-    rebutjar_canco,
-)
-from ranking.models import (
-    ConfiguracioGlobal,
-    SenyalDiari,
-    TopProvisional,
-    TopSetmanal,
 )
 
 # Accent + apostrophe insensitive search helpers shared with the
@@ -259,6 +230,38 @@ def artistes_list(request: Request) -> Response:
             n_top_collab=Coalesce(collab_n, 0),
         ).annotate(n_top=F("n_top_principal") + F("n_top_collab"))
 
+        # Live approved cançons (verificada=True, activa=True) where the
+        # artist takes part — as principal (FK `artista`) OR as a
+        # collaborator (M2M `artistes_col`). Same distinct-Subquery shape
+        # as `n_top` above: each path is a scalar subquery so the two
+        # never LEFT JOIN together and can't Cartesian-inflate. The two
+        # paths are disjoint PER cançó — the D5 signal
+        # (`music/signals.py`) forbids an artist from being a
+        # collaborator on their own track — so summing them double-counts
+        # nothing; no overlap correction is needed (identical reasoning
+        # to `n_top`). Used as the second sort key so novetats artists
+        # (0 tops, but with live songs) rise to the top of their block.
+        viva = {"verificada": True, "activa": True}
+        vives_principal = Subquery(
+            Canco.objects.filter(artista=OuterRef("pk"), **viva)
+            .order_by()
+            .values("artista")
+            .annotate(n=Count("pk", distinct=True))
+            .values("n")[:1],
+            output_field=IntegerField(),
+        )
+        vives_collab = Subquery(
+            Canco.objects.filter(artistes_col=OuterRef("pk"), **viva)
+            .order_by()
+            .values("artistes_col")
+            .annotate(n=Count("pk", distinct=True))
+            .values("n")[:1],
+            output_field=IntegerField(),
+        )
+        qs = qs.annotate(
+            n_cancons_vives=Coalesce(vives_principal, 0) + Coalesce(vives_collab, 0)
+        )
+
     if sort_raw == "cancons_tops_desc":
         qs = (
             qs.annotate(
@@ -272,7 +275,11 @@ def artistes_list(request: Request) -> Response:
             .order_by("-n_cancons_tops", Lower("nom"))
         )
     elif sort_raw == "-n_top":
-        qs = qs.distinct().order_by("-n_top", Lower("nom"))
+        # Tops first, then live-songs as the tiebreaker (novetats artists
+        # with 0 tops but active songs surface above the 0-top silence),
+        # then alphabetical. `n_cancons_vives` is guaranteed annotated
+        # here (this branch is inside the annotation gate above).
+        qs = qs.distinct().order_by("-n_top", "-n_cancons_vives", Lower("nom"))
     else:
         qs = qs.distinct().order_by(Lower("nom"))
 

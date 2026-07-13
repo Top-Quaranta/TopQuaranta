@@ -18,7 +18,17 @@
  */
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
-import { Btn, Pill, TableCard } from "../../../components/staff/StaffTable";
+import {
+  Btn,
+  EmptyState,
+  Pill,
+  Table,
+  TableCard,
+  Td,
+  Th,
+  THead,
+  Tr,
+} from "../../../components/rd/surface";
 import MatriuCanalToggles from "./MatriuCanalToggles";
 
 function tokenTone(daysLeft) {
@@ -28,12 +38,25 @@ function tokenTone(daysLeft) {
   return "green";
 }
 
+// InvitacioColaboracioIG.estat → house Pill tone.
+const ESTAT_PILL = {
+  pendent: "yellow",
+  acceptada: "green",
+  rebutjada: "red",
+  caducada: "gray",
+};
+
+function fmtDia(iso) {
+  return iso ? iso.slice(0, 10) : "—";
+}
+
 export default function InstagramSection() {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [output, setOutput] = useState("");
   const [tokenDraft, setTokenDraft] = useState("");
   const [userIdDraft, setUserIdDraft] = useState("");
+  const [invitacions, setInvitacions] = useState(null);
 
   function reload() {
     return api
@@ -42,9 +65,39 @@ export default function InstagramSection() {
       .catch(() => setData(null));
   }
 
+  function reloadInvitacions() {
+    return api
+      .get("/staff/social/invitacions/")
+      .then((r) => setInvitacions(r.invitacions || []))
+      .catch(() => setInvitacions(null));
+  }
+
   useEffect(() => {
     reload();
+    reloadInvitacions();
   }, []);
+
+  // ADR-0015 §5.5 definitive cycle: the ONLY manual resolution is
+  // marking an acceptance (observed in the Instagram app). Silence and
+  // rejection both end as `caducada` via the 14-day cron pass.
+  async function marcarAcceptada(inv) {
+    if (
+      !confirm(
+        `Marcar l'acceptació de @${inv.username} (${inv.artista_nom})?\n\n` +
+          "Fes-ho només si l'has vista com a col·laborador al post real.",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await api.post("/staff/social/invitacions/acceptar/", { id: inv.id });
+      await reloadInvitacions();
+    } catch (e) {
+      alert(`Error: ${e.payload?.error || e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (!data) return null;
   const config = data.config || {};
@@ -203,6 +256,82 @@ export default function InstagramSection() {
               {output}
             </pre>
           )}
+        </TableCard>
+      </div>
+
+      {/* ── Invitacions de col·laboració (ADR-0015 §5.5) ─────── */}
+      <div>
+        <h2 className="mb-2 text-base font-bold text-white font-display">
+          Invitacions de col·laboració
+        </h2>
+        <TableCard>
+          {invitacions === null ? (
+            <EmptyState>No s'ha pogut carregar el registre.</EmptyState>
+          ) : invitacions.length === 0 ? (
+            <EmptyState>
+              Cap invitació encara — s'escriuen quan un post de feed surt amb
+              col·laboradors.
+            </EmptyState>
+          ) : (
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Artista</Th>
+                  <Th>Username</Th>
+                  <Th>Post</Th>
+                  <Th>Data</Th>
+                  <Th>Estat</Th>
+                  <Th></Th>
+                </tr>
+              </THead>
+              <tbody>
+                {invitacions.map((inv) => (
+                  <Tr key={inv.id}>
+                    <Td className="font-semibold">{inv.artista_nom}</Td>
+                    <Td>@{inv.username}</Td>
+                    <Td>
+                      {inv.tipus}{" "}
+                      <span className="text-tq-ink/60">
+                        · {inv.ig_media_id}
+                      </span>
+                    </Td>
+                    <Td title={inv.data_invitacio}>
+                      {fmtDia(inv.data_invitacio)}
+                    </Td>
+                    <Td>
+                      <Pill tone={ESTAT_PILL[inv.estat] || "ink"}>
+                        {inv.estat}
+                      </Pill>
+                      {inv.data_resolucio && (
+                        <span
+                          className="text-[10px] text-tq-ink/60 ml-1"
+                          title={inv.data_resolucio}
+                        >
+                          {fmtDia(inv.data_resolucio)}
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      {inv.estat !== "acceptada" && (
+                        <Btn
+                          tone="secondary"
+                          disabled={busy}
+                          onClick={() => marcarAcceptada(inv)}
+                        >
+                          Marcar acceptada
+                        </Btn>
+                      )}
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+          <p className="text-[11px] text-tq-ink/60 px-4 py-2">
+            L'acceptació es marca a mà quan la veus al post (Meta no la deixa
+            llegir per API). No hi ha rebuig manual: una pendent caduca sola
+            als 14 dies i compta com a no-acceptació (cooldown 90 dies).
+          </p>
         </TableCard>
       </div>
 

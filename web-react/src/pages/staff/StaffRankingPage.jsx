@@ -19,7 +19,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 function fmtFactor(v) {
   if (v === null || v === undefined) return '—'
@@ -123,6 +123,7 @@ export default function StaffRankingPage() {
               <Th>Cançó</Th>
               <Th>Artista</Th>
               <Th>Escoltes 7d</Th>
+              <Th title="Escoltes efectives després del sostre suau adaptatiu per territori (genoll = multiplicador × mediana del top). Igual a les brutes quan la fila no es comprimeix.">Escoltes ef.</Th>
               <Th title="Factor d'antiguitat: 1 - (dies/365)^2.5">Antiguitat</Th>
               <Th title="Penalització per setmanes anteriors al top (Σ coef/2^(N-1))">Top passat</Th>
               <Th title="(1-0.25)^cancons_album_abans · (1-0.2)^cancons_artista_abans">Monopoli</Th>
@@ -131,7 +132,7 @@ export default function StaffRankingPage() {
           </THead>
           <tbody>
             {data?.entries?.length === 0 && (
-              <tr><td colSpan={9}><EmptyState>Cap entrada.</EmptyState></td></tr>
+              <tr><td colSpan={10}><EmptyState>Cap entrada.</EmptyState></td></tr>
             )}
             {data?.entries?.map(e => (
               <Tr key={e.pk}>
@@ -152,6 +153,15 @@ export default function StaffRankingPage() {
                   ) : e.artista_nom}
                 </Td>
                 <Td className="text-xs">{e.escoltes_setmanals?.toLocaleString()}</Td>
+                <Td className="text-xs">
+                  {e.escoltes_efectives?.toLocaleString()}
+                  {e.soft_cap_aplicat && (
+                    <span
+                      className="ml-1 text-tq-yellow"
+                      title={`Sostre suau aplicat: ${e.escoltes_setmanals?.toLocaleString()} → ${e.escoltes_efectives?.toLocaleString()}`}
+                    >↓</span>
+                  )}
+                </Td>
                 <Td className="text-xs">{fmtFactor(e.age_factor)}</Td>
                 <Td className="text-xs">{fmtFactor(e.past_top_factor)}</Td>
                 <Td className="text-xs">{fmtFactor(e.monopoli_factor)}</Td>

@@ -78,11 +78,13 @@ def test_build_top_no_regression_on_legacy_keys(top_with_collab):
     data = payload.build_top("PPCC", SETMANA)
     entry = data["entries"][0]
     # Added keys: `artistes_slugs` + `reentrada` (TOP movement) +
-    # `artista_territori` (per-row silhouette); rest is legacy.
+    # `artista_territori` (per-row silhouette) + `artistes_pool`
+    # (collaborator slot policy, ADR-0015); rest is legacy.
     assert set(entry) == LEGACY_ENTRY_KEYS | {
         "artistes_slugs",
         "reentrada",
         "artista_territori",
+        "artistes_pool",
     }
     # Legacy fields keep their exact values (social engine contract).
     assert entry["artista_nom"] == "Ouineta"

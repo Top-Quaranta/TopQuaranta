@@ -20,7 +20,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from comptes.models import Missatge, UserArtista, Usuari
+from comptes.models import UserArtista, Usuari
 from music.models import (
     Artista,
     ArtistaDeezer,

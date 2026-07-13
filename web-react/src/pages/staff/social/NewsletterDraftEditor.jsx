@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../../lib/api'
-import { Input } from '../../../components/staff/StaffTable'
+import { Input } from '../../../components/rd/surface'
 
 const ESTAT_TONE = {
   pendent: 'bg-yellow-100 text-yellow-900',

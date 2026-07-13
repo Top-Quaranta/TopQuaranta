@@ -5,7 +5,6 @@ GET /api/v1/cancons/<slug>/top-breakdown/  — algorithm transparency block.
 """
 
 import datetime
-from collections import defaultdict
 
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
@@ -14,7 +13,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from comptes.models import UserArtista
-from music.constants import DIES_CADUCITAT, TERRITORI_NOMS, TERRITORIS_PPCC_SOURCES
+from music.constants import TERRITORI_NOMS, TERRITORIS_PPCC_SOURCES
 from music.models import Canco
 from ranking.algorisme import (
     _age_factor,

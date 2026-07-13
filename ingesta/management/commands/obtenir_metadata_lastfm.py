@@ -31,7 +31,6 @@ Cron: 05:00 UTC daily, between backup and senyal ingestion.
 from __future__ import annotations
 
 import datetime
-import fcntl
 import logging
 from datetime import timedelta
 

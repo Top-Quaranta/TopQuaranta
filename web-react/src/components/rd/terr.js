@@ -57,6 +57,14 @@ export function terr(code) {
 export function terrAccent(code) { return terr(code).accent }
 export function terrDeep(code) { return terr(code).deep }
 
+/* Chart-series colour for a territory: the DEEP value. Single source
+   for every territory chart (line stroke / bar fill); the accent is too
+   light to read on a white chart surface, so series use deep. Covers
+   all codes incl. CAR via PAL — no per-chart palette, no missing keys.
+   Fase 1 of the palette unification (replaces the divergent per-chart
+   copies in CancoChart + StaffAnalyticsPage). */
+export function terrChart(code) { return terr(code).deep }
+
 /* shade(hex, amt): amt>0 mixes toward white, amt<0 toward black.
    Returns an rgb() string. Mirrors the prototype's shade(). */
 export function shade(hex, amt) {

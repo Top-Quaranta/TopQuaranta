@@ -18,7 +18,6 @@ Behaviour:
 
 from __future__ import annotations
 
-import fcntl
 import logging
 import time
 from datetime import timedelta

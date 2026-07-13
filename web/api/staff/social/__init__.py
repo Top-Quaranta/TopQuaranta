@@ -36,6 +36,10 @@ from .controls import (
     social_matriu_toggle,
     social_toggle,
 )
+from .invitacions import (
+    social_invitacio_acceptar,
+    social_invitacions,
+)
 from .posts import (
     social_eliminar_instagram,
     social_eliminar_remot,
@@ -86,6 +90,8 @@ __all__ = [
     "social_delay",
     "social_matriu",
     "social_matriu_toggle",
+    "social_invitacions",
+    "social_invitacio_acceptar",
     "spotify_estat",
     "spotify_oauth_callback",
     "spotify_oauth_start",

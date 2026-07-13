@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from music.health import (
+    check_instagram_token,
     check_spotify_coverage,
     check_spotify_premium,
 )
@@ -356,3 +357,25 @@ def test_coverage_novetats_per_verificar_outside_alert(unsilence_cron):
     assert payload["no_verif_aggregate"] is None
     codis = {r["codi"] for r in payload["rows"]}
     assert "novetats-per-verificar" in codis
+
+
+# ── check_instagram_token (2026-07 manual-renewal expiry alert) ────────
+
+
+@pytest.mark.parametrize(
+    "days,expected",
+    [
+        (None, "OK"),  # not configured / DRY_RUN
+        (30, "OK"),
+        (11, "OK"),
+        (10, "WARN"),  # boundary: warn at ≤10
+        (6, "WARN"),
+        (5, "CRIT"),  # boundary: crit at ≤5
+        (0, "CRIT"),
+        (-3, "CRIT"),  # already expired
+    ],
+)
+def test_instagram_token_severity(days, expected):
+    with patch("social.instagram_client.days_until_expiry", return_value=days):
+        severity, _msg, _payload = check_instagram_token()
+    assert severity == expected

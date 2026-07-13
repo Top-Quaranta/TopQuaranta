@@ -17,7 +17,7 @@ from datetime import date
 
 import pytest
 
-from music.models import Artista, ArtistaDeezer, Canco, HistorialRevisio
+from music.models import Artista, ArtistaDeezer, Canco
 from music.services import rebutjar_canco
 
 

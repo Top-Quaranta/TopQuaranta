@@ -15,17 +15,15 @@ from __future__ import annotations
 from datetime import timedelta
 
 import requests
-from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
-from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import HTTP_ONLY_URL, Usuari
+from comptes.models import HTTP_ONLY_URL
 from music.models import (
     Artista,
     ArtistaDeezer,

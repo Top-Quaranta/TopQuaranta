@@ -12,7 +12,7 @@ import {
   PageHeader,
   TableCard,
   Textarea,
-} from "../../components/staff/StaffTable";
+} from "../../components/rd/surface";
 
 export default function ConfiguracioPage() {
   const [fields, setFields] = useState(null);

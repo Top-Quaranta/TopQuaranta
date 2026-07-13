@@ -3,7 +3,39 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-06-09.
+> Last updated: 2026-07-13.
+
+---
+
+## Sprint 2026-07-13 — col·laboradors IG: cicle definitiu tancat + mencions a stories
+
+Tancament del cicle ADR-0015 (ara **Accepted**) després de la primera
+tanda real (06-07) i de l'incident del token (07-07 → 11-07, reOAuth
+manual; #319 va afegir exit non-zero + alerta d'expiració):
+
+1. **Tancament empíric de la lectura d'acceptacions** (#320, #321).
+   Inviable per dos motius independents: Instagram Login no té l'edge
+   `/collaborators` (code 100, 29 ticks amb token viu); Facebook Login
+   amb token d'usuari el retorna buit per a invitacions pendents, i el
+   token de pàgina és inaccessible al tipus d'app. Disseny definitiu:
+   convidar per API → acceptacions manuals des de staff → `caducada`
+   als 14 dies com a únic terminal automàtic.
+2. **Implementació del cicle** (#322). `pollar_colaboracions_ig`
+   reduït a expirador (fora reconcile pass, fre temporal i
+   `get_collaborators`); registre d'invitacions + botó únic "Marcar
+   acceptada" a `/staff/social/instagram` (audit
+   `collab_invitacio_acceptada`, migració `music/0092`).
+3. **Mencions `user_tags` a TOTES les stories del cron** (#323).
+   `_story_tags` mirall exacte de l'emissió del renderer (PPCC +
+   territorials amb tiers condicionals): cada story menciona només els
+   artistes de les cançons visibles, ancorats prop del seu ítem; guard
+   de no-bloqueig reutilitzat (`max_slots=20`); una story fallida no
+   bloqueja la resta. Cap canvi d'imatge, cap knob nou.
+
+Suite 1502 passed / 10 skipped. Pendents: marcar (o deixar caducar
+2026-07-20) les 3 invitacions del 06-07; ullada visual a les mencions
+de la primera tanda (dc 15-07); triatge dels 11 PRs oberts (sessió a
+banda).
 
 ---
 

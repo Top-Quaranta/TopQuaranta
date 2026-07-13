@@ -95,10 +95,20 @@ def resolve(file: str, mapping: list[dict], exclude: list[dict]) -> str | None:
 # `scripts/check_spec_paths.py` already does for `migrations/`,
 # and avoids banalising the override (every test PR otherwise
 # would need `docs-reviewed: ...`).
+#
+# Dependency manifests/lockfiles are churn too (2026-07-13): a
+# version bump changes nothing an architecture doc describes, and
+# it blocked every dependabot PR under `web-react/` (dependabot
+# cannot add a `docs-reviewed:` override to its own PR body). A dep
+# change that IS architectural always comes with code changes that
+# still trip the gate on their own.
+_DEP_MANIFESTS = {"package.json", "package-lock.json"}
+
+
 def _is_implementation_churn(path: str) -> bool:
-    """True iff `path` is a test file, a Django migration, or a
-    pytest conftest. Such a file is skipped before the resolver
-    runs."""
+    """True iff `path` is a test file, a Django migration, a pytest
+    conftest, or a dependency manifest/lockfile. Such a file is
+    skipped before the resolver runs."""
     parts = path.split("/")
     filename = parts[-1] if parts else path
     if "tests" in parts or "migrations" in parts:
@@ -108,6 +118,10 @@ def _is_implementation_churn(path: str) -> bool:
     if filename.startswith("test_") and filename.endswith(".py"):
         return True
     if filename.endswith("_test.py"):
+        return True
+    if filename in _DEP_MANIFESTS:
+        return True
+    if filename.startswith("requirements") and filename.endswith(".txt"):
         return True
     return False
 

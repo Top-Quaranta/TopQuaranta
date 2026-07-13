@@ -28,7 +28,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../../components/staff/StaffTable'
+} from '../../../components/rd/surface'
 import { COLUMNS } from './publicacionsColumns'
 
 const PLATFORM_LABEL = {

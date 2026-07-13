@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
-import { Pill } from '../../../components/staff/StaffTable'
+import { Pill } from '../../../components/rd/surface'
 
 const PLATFORM_LABEL = {
   instagram_feed: 'IG feed',

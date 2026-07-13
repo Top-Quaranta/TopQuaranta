@@ -8,8 +8,6 @@ with transaction.atomic() as needed.
 
 import logging
 
-from django.db import transaction
-
 from .models import Album, Artista, Canco, HistorialRevisio
 from .verificacio import crear_historial
 

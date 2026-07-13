@@ -208,8 +208,8 @@ the entire payload; five tabs derive client-side from that one call.
   surface, verification growth, best-performing post); joint
   pageviews + registres line.
 * **Pipeline** — verificades / pendents / rebutjades line, cobertura
-  whisper + MB, per-territori bar (using `TERR_COLORS`), comunitat
-  line.
+  whisper + MB, per-territori bar (using `terrChart`, the canonical
+  territory deep from `rd/terr.js`), comunitat line.
 * **Social** — followers KPI strip, followers daily series per
   platform (using `PLATFORM_COLORS`), publicacions per canal bar,
   top 10 posts table with CSV export.
@@ -318,9 +318,9 @@ watchdog email at the next hourly tick.
 
 Pure-stdlib module (no Django) that owns the PRESENTATION of the
 `tq-health` report. `bin/tq-health` gathers the raw facts in shell and
-pipes them here; this module classifies each cron (OK/STALE/STUCK/
-SKIP/FAIL/WAITING + watchdog/silenced, mirroring the old inline bash so
-the exit code is unchanged), groups them by logical area
+pipes them here; this module classifies each cron (OK/STALE/STUCK/SKIP/
+FAIL/WAITING/DISABLED — the last is a gated-off feature, gray, never an
+anomaly, stale still wins — + watchdog/silenced), groups them by area
 (`CRON_GROUPS`; unknown crons fall into "Altres"), renders an executive
 summary + Anomalies block + Sistema/Spotify sections + a legend, and
 localises timestamps to **CEST** (UTC stays in logs). It lives in the

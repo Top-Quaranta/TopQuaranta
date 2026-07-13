@@ -312,14 +312,57 @@ def check_spotify_coverage() -> tuple[Severity, str, dict]:
     return severity, msg, payload
 
 
+# Instagram long-lived token expiry. The Meta app is in development mode
+# (business verification denied), so renewal is MANUAL — there is no
+# working auto-refresh (renovar_token_instagram only prints, never
+# persists). The real Meta expiry is NOT queryable with our IG-Login
+# token (debug_token 400s), so we alert on the stored `expires_at`
+# (set to paste+60d). This catches a *natural* lapse with runway; it
+# cannot catch an out-of-band invalidation like the 2026-07-07 incident.
+IG_TOKEN_WARN_DAYS = 10
+IG_TOKEN_CRIT_DAYS = 5
+
+
+def check_instagram_token() -> tuple[Severity, str, dict]:
+    """WARN at ≤10 days, CRIT at ≤5 days before the stored IG token
+    expiry, so the operator can re-authorize manually before the cron
+    starts failing. OK when not configured / DRY_RUN (no expiry)."""
+    try:
+        from social.instagram_client import days_until_expiry
+    except Exception as exc:  # noqa: BLE001
+        return "CRIT", f"Django import failed: {exc}", {}
+    days = days_until_expiry()
+    if days is None:
+        return "OK", "IG token: no configurat o DRY_RUN.", {"days": None}
+    payload = {
+        "days": days,
+        "warn_below": IG_TOKEN_WARN_DAYS,
+        "crit_below": IG_TOKEN_CRIT_DAYS,
+    }
+    if days <= IG_TOKEN_CRIT_DAYS:
+        return "CRIT", f"IG token caduca en {days}d — reautoritza JA (manual).", payload
+    if days <= IG_TOKEN_WARN_DAYS:
+        return (
+            "WARN",
+            f"IG token caduca en {days}d — planifica reautorització.",
+            payload,
+        )
+    return "OK", f"IG token OK ({days}d fins l'expiració desada).", payload
+
+
 def main(argv: list[str]) -> int:
     """CLI dispatch so the bash wrappers can `python -m music.health <check>`.
 
     Exit codes match the bash convention used by the rest of
     `bin/tq-health`: 0=OK, 1=WARN, 2=CRIT.
     """
-    if len(argv) < 2 or argv[1] not in ("spotify_premium", "spotify_coverage"):
-        print("usage: python -m music.health {spotify_premium|spotify_coverage}")
+    checks = {
+        "spotify_premium": check_spotify_premium,
+        "spotify_coverage": check_spotify_coverage,
+        "instagram_token": check_instagram_token,
+    }
+    if len(argv) < 2 or argv[1] not in checks:
+        print("usage: python -m music.health {" + "|".join(checks) + "}")
         return 2
 
     import json
@@ -327,12 +370,7 @@ def main(argv: list[str]) -> int:
     import django
 
     django.setup()
-    fn = (
-        check_spotify_premium
-        if argv[1] == "spotify_premium"
-        else check_spotify_coverage
-    )
-    severity, message, payload = fn()
+    severity, message, payload = checks[argv[1]]()
     out = {"severity": severity, "message": message, "payload": payload}
     print(json.dumps(out))
     return {"OK": 0, "WARN": 1, "CRIT": 2}[severity]

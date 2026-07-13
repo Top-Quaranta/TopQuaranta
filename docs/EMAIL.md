@@ -258,7 +258,8 @@ DEFAULT_FROM_EMAIL = "Josep Quaranta <noreply@topquaranta.cat>"
 
 El nom mostrat («Josep Quaranta») s'aplica a **tot** el correu sortint
 de la bústia `noreply@` — es fixa a `DEFAULT_FROM_EMAIL` i `SERVER_EMAIL`
-(aquest últim és el remitent de `mail_admins`, p.ex. el digest setmanal).
+(aquest últim és el remitent de `mail_admins` i també del digest
+setmanal, que l'usa directament via `EmailMultiAlternatives`).
 L'adreça nua segueix autenticant i formant l'envelope via
 `EMAIL_HOST_USER`; el nom només afecta la capçalera `From` visible. Si
 `.env` defineix `DEFAULT_FROM_EMAIL`, ha d'incloure el nom o sobreescriu

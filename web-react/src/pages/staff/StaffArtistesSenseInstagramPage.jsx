@@ -26,7 +26,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 function useDebounced(value, ms = 250) {
   const [v, setV] = useState(value)
@@ -74,7 +74,7 @@ function Row({ a, onSaved }) {
   }
 
   const nTop = a.n_top || 0
-  const nVerificades = a.n_cancons_verificades || a.cancons_count || 0
+  const nVives = a.n_cancons_vives || 0
 
   return (
     <Tr>
@@ -85,11 +85,6 @@ function Row({ a, onSaved }) {
         >
           {a.nom}
         </Link>
-        {nVerificades > 0 && (
-          <p className="text-[11px] text-white/60 mt-0.5">
-            {nVerificades} cançons verificades
-          </p>
-        )}
       </Td>
       <Td>
         {nTop > 0 ? (
@@ -97,6 +92,13 @@ function Row({ a, onSaved }) {
           // signal. `gray` for the rest. Pill tones available:
           // ink/yellow/green/red/gray (StaffTable.jsx:99).
           <Pill tone={nTop >= 3 ? 'yellow' : 'gray'}>{nTop}×</Pill>
+        ) : (
+          <span className="text-white/40">—</span>
+        )}
+      </Td>
+      <Td>
+        {nVives > 0 ? (
+          <Pill tone="gray">{nVives}</Pill>
         ) : (
           <span className="text-white/40">—</span>
         )}
@@ -187,7 +189,7 @@ export default function StaffArtistesSenseInstagramPage() {
   const total = data?.total
   const subtitle = (() => {
     if (total === undefined) return 'Carregant…'
-    return `${total} artistes aprovats sense URL d'Instagram. Ordenats per cançons al top.`
+    return `${total} artistes aprovats sense URL d'Instagram. Ordenats per cançons al top i, a igualtat, per cançons actives.`
   })()
 
   return (
@@ -217,6 +219,7 @@ export default function StaffArtistesSenseInstagramPage() {
             <tr>
               <Th>Artista</Th>
               <Th title="Cançons d'aquest artista que han aparegut al top alguna vegada (distinct TopSetmanal)">Top</Th>
+              <Th title="Cançons vives (verificades i actives) on l'artista és principal o col·laborador">Cançons actives</Th>
               <Th>Instagram URL</Th>
               <Th>Cerca</Th>
               <Th></Th>
@@ -225,7 +228,7 @@ export default function StaffArtistesSenseInstagramPage() {
           <tbody>
             {data?.results?.length === 0 && (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <EmptyState>Cap artista pendent d'Instagram. 🎉</EmptyState>
                 </td>
               </tr>

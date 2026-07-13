@@ -30,10 +30,10 @@ from collections import Counter
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count
 
 from music.audit import log_staff_action
-from music.models import Artista, ArtistaDeezer, Canco
+from music.models import Artista, Canco
 
 logger = logging.getLogger(__name__)
 

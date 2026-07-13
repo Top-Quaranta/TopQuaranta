@@ -258,6 +258,12 @@ def test_is_implementation_churn_unit(script):
     assert script._is_implementation_churn("music/tests_helpers/test_y.py")
     assert script._is_implementation_churn("test_top_level.py")
     assert script._is_implementation_churn("music/factory_test.py")
+    # Dependency manifests/lockfiles (2026-07-13): version bumps are
+    # churn — dependabot PRs must not need a docs override.
+    assert script._is_implementation_churn("web-react/package.json")
+    assert script._is_implementation_churn("web-react/package-lock.json")
+    assert script._is_implementation_churn("requirements.txt")
+    assert script._is_implementation_churn("requirements-dev.txt")
     # negatives: real source under a mapped subsystem must NOT match
     assert not script._is_implementation_churn("music/models.py")
     assert not script._is_implementation_churn("music/ml.py")
@@ -265,6 +271,19 @@ def test_is_implementation_churn_unit(script):
     # `testimoni.py` is not a test file. Filename rule requires
     # `test_` prefix or `_test.py` suffix.
     assert not script._is_implementation_churn("music/testimoni.py")
+    assert not script._is_implementation_churn("web-react/vite.config.js")
+
+
+def test_dependabot_lockfile_bump_is_not_a_miss(script, cfg):
+    """A dependabot bump under web-react/ (package.json +
+    package-lock.json only) must not trip the gate — dependabot
+    cannot add a `docs-reviewed:` override to its own PRs."""
+    misses = script.find_coupled_misses(
+        ["web-react/package.json", "web-react/package-lock.json"],
+        cfg["mapping"],
+        cfg["exclude"],
+    )
+    assert misses == []
 
 
 # ---------------------------------------------------------------------

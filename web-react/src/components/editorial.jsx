@@ -12,30 +12,11 @@
  *   - <Section tone="ink|white" className?> — full-bleed band.
  *   - <SectionHeader kicker title>{subtitle}</SectionHeader>
  *   - <TerritoriBadge codi className/> — monochrome SVG via mask.
- *   - TERR_COLORS, TERRITORI_NOM, FOCUS_TERRITORIS — brand maps.
+ *   - TERRITORI_NOM, FOCUS_TERRITORIS — brand maps.
  *   - <TrendCue posicio posicio_anterior/> — top-list arrow icon.
  */
 import { createContext, useContext } from 'react'
 import MmIcon from './MmIcon'
-
-/* Territory accent palette. Brand colours from mm-design where they
- * exist (mm-color-*); custom amber/teal/orange/violet/pink chosen
- * for ≥4.5:1 contrast on white (Sprint F a11y). Used for badges,
- * focus tiles, descoberta tags. Hex values here are NOT one-off
- * decoration but a long-lived brand mapping that lives in code by
- * design — exposed once so every page reads the same. */
-export const TERR_COLORS = {
-  PPCC: '#427c42', // mm-color-green
-  CAT:  '#8a6900', // dark amber (5.08:1)
-  VAL:  '#cf3339', // mm-color-red
-  BAL:  '#0047ba', // mm-color-blue
-  AND:  '#7c3aed',
-  CNO:  '#0e7490',
-  FRA:  '#c2410c',
-  ALG:  '#db2777',
-  ALT:  '#525252',
-  CAR:  '#525252',
-}
 
 /* User-facing label map. NOTE: territori code stays the legacy
  * `PPCC` (`Territori.codi`) for query-param compatibility — only

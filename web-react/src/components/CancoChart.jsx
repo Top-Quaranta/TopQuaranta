@@ -27,15 +27,10 @@ import {
   YAxis,
 } from 'recharts'
 import { TERRITORI_NOM } from './editorial'
-
-// Chart-only territori palette. Frontend palette centralisation
-// (TopQuaranta audit 2026-05-11, item C3 deferred) is tracked
-// separately in roadmap.md.
-const TERRITORI_COLORS = {
-  PPCC: '#427c42', CAT: '#c99b0c', VAL: '#cf3339', BAL: '#0047ba',
-  AND:  '#7c3aed', CNO: '#0891b2', FRA: '#ea580c', ALG: '#db2777',
-  ALT:  '#6b7280',
-}
+// Territory chart-series colour = canonical deep, from the single
+// territory-token source (rd/terr.js). Fase 1 unification: replaces the
+// old per-chart TERRITORI_COLORS copy (which diverged + lacked CAR).
+import { terrChart } from './rd/terr'
 
 export default function CancoChart({ historial, territoris }) {
   return (
@@ -68,7 +63,7 @@ export default function CancoChart({ historial, territoris }) {
             key={t}
             type="monotone"
             dataKey={t}
-            stroke={TERRITORI_COLORS[t] || '#6b7280'}
+            stroke={terrChart(t)}
             strokeWidth={2}
             dot={{ r: 3 }}
             activeDot={{ r: 5 }}

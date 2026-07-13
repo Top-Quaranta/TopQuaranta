@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { Btn, Input, PageHeader, Pill, Select, TableCard } from '../../components/staff/StaffTable'
+import { Btn, Input, PageHeader, Pill, Select, TableCard } from '../../components/rd/surface'
 import LocationCascade from '../../components/staff/LocationCascade'
 import MusicBrainzPanel from '../../components/staff/MusicBrainzPanel'
 import LastfmPanel from '../../components/staff/LastfmPanel'

@@ -30,7 +30,7 @@ import {
   PageHeader,
   Pill,
   TableCard,
-} from '../../../components/staff/StaffTable'
+} from '../../../components/rd/surface'
 import { CHANNEL_DESCRIPTORS } from './channelDescriptors'
 import MatriuCanalToggles from './MatriuCanalToggles'
 import PublicacionsTable from './PublicacionsTable'

@@ -25,7 +25,7 @@ import {
   Th,
   THead,
   Tr,
-} from '../../components/staff/StaffTable'
+} from '../../components/rd/surface'
 
 function AvisosPanel() {
   const [busy, setBusy] = useState(false)

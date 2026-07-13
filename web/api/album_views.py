@@ -13,7 +13,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from music.models import Album, Canco
+from music.models import Album
 from ranking.models import TopProvisional, TopSetmanal
 from web.api.serializers import album_card, artista_minimal, canco_card
 from web.api.utils import cache_for_anon

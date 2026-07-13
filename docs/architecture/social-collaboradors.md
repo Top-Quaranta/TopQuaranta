@@ -71,9 +71,14 @@ with it off the feed publish path is byte-identical to before (no
 ## Status
 
 Activation: the flag was switched on and the first real invite batch went
-out Monday 2026-07-06 (top_territorial BAL, 09:30 UTC cron). The polling
-cycle is NOT yet verified end-to-end (the first live poll errored — see
-the temporary brake above), so ADR-0015 stays **Proposed** until it is.
+out Monday 2026-07-06 (top_territorial BAL, 09:30 UTC cron). The
+programmatic acceptance-read path was closed empirically on 2026-07-13
+(ADR-0015 §5.5: Instagram Login lacks the `/collaborators` edge; a
+Facebook-Login user token returns it empty for pending invitations, and a
+Page token is inaccessible to the app type). Definitive design: invitation
+via API, **manual resolution from staff**, `caducada` at 14 days as the
+only automatic terminal. The poller's reconcile pass (and the temporary
+brake) are pending removal; ADR-0015 stays **Proposed** until that lands.
 
 ## Related
 

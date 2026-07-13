@@ -218,24 +218,23 @@ sudo systemctl restart topquaranta-web
 
 **⚠ This overwrites current data.** Take a fresh `pg_dump` first.
 
-### Backup scope — single-host, accepted risk
+### Backup layers — local + offsite (capa 2)
 
-Backups land at `/home/topquaranta/backups/{daily,weekly,monthly}/`
-on the same Hetzner CX22. **There is no off-site copy.** If the disk
-fails or the host gets compromised, the backups go with it.
+Backups land at `/home/topquaranta/backups/{daily,weekly,monthly,monthly-safe}/`
+on the same Hetzner CX22 (retention tiers: `docs/ops/retention.md`
+§Backups). The 2026-05-07 "single-host, accepted risk" decision was
+**revisited 2026-07-05** when the DB gained community PII: a second,
+offsite layer now exists — `bin/tq-backup-offsite` (daily 03:30,
+restic → Backblaze B2, append-only server key, encrypted at origin).
+It ships **gated**: until `OFFSITE_BACKUP_ACTIU=1` + the restic vars
+land in the `.env` and restic is installed, it reports `DISABLED`
+(gray in tq-health — a legitimate state, not a failure). Activation
+procedure, threat model and payload: `docs/ops/backup-offsite.md`.
 
-This is an **accepted risk** (decision 2026-05-07): the project's
-data is recoverable conceptually — every signal is re-fetchable from
-Last.fm + Deezer + MusicBrainz, every artiste row is staff-curated
-and could be rebuilt from external sources, and the codebase lives
-in GitHub. What's irreplaceable is the curation history (which
-artiste is approved, which song is verified, the audit log) — for
-that, the on-host backup is the only line of defence.
-
-If the project's audience grows past hobbyist scale or the curation
-trail becomes legally relevant, revisit this decision: add a daily
-`restic` push to a Hetzner Storage Box (~3 €/mo, EU) or B2
-(~0.5 €/mo, off-EU). Encryption first, then push.
+To restore from the offsite layer (box lost entirely): from the Mac,
+with the restic password from the password manager and the B2 admin
+key, `restic -r <repo> restore latest --target /tmp/restore`. The
+quarterly manual drill in `backup-offsite.md` §9 keeps this path warm.
 
 ---
 
@@ -473,7 +472,7 @@ add another `'sha256-...'` to script-src using the same procedure.
 | `LASTFM_API_KEY` + `LASTFM_API_SECRET` | `.env` | Re-issue at `https://www.last.fm/api/account` → update `.env` → reload. Cron picks up the new key on next tick. |
 | `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET` | `.env` | Re-issue at Spotify Developer Dashboard. After update, **re-OAuth** via `/staff/social/spotify/` since the existing refresh_token gets invalidated. |
 | Spotify refresh_token | `SpotifyAuth` row (pk=1) | Re-OAuth from `/staff/social/spotify/` when the daily sync starts failing `invalid_grant`. |
-| `INSTAGRAM_ACCESS_TOKEN` | `.env` | Auto-refreshed by cron `renovar_token_instagram` monthly. Manual override: regenerate at Meta Graph API Explorer (`pages_read_engagement` + `instagram_content_publish` scopes) → update `.env` → reload. |
+| Instagram long-lived token | `InstagramAuth` row (pk=1), **not** `.env` | **Renewal is MANUAL.** The Meta app is in *development mode* (business verification denied), so there is no working auto-refresh — `renovar_token_instagram` only *prints*, it never persists. Regenerate a long-lived **Instagram-Login** token (scope `instagram_business_content_publish`, `graph.instagram.com` flavor) for @topquaranta from the Meta App Dashboard, then paste it at **`/staff/social/instagram`** (writes the DB row, resolves `user_id`, sets `expires_at = now+60d`). `tq-health` alerts **WARN ≤10d / CRIT ≤5d** on that stored expiry (real Meta expiry isn't queryable with our token — `debug_token` 400s). Note: a token can also be **invalidated out-of-band** by Meta before expiry (2026-07-07 incident); that surfaces as `publicar_social`/`publicar_canal` `status=FAIL`, not as the expiry alert. |
 | `BREVO_API_KEY` | Stalwart MTA relay config | Brevo dashboard → API & SMTP → regenerate v3 key → update Stalwart relay → `sudo systemctl restart stalwart-mail`. |
 | `RESEND_API_KEY` | Stalwart MTA relay config | Resend dashboard → API Keys → roll → update Stalwart → restart. |
 | `HETZNER_API_TOKEN` | `.env` | Hetzner Cloud Console → Security → API Tokens → roll → update `.env`. Used by manual scripts only; no restart needed. |

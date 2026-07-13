@@ -22,7 +22,7 @@ from ranking.models import TopSetmanal
 from social.management.commands.publicar_social import Command
 from social.models import SocialPost
 from social.payload import (
-    _album_collab_instagram_urls,
+    _album_collabs,
     _instagram_urls_for_canco,
     build_top,
 )
@@ -132,13 +132,15 @@ def test_build_top_includes_artistes_instagram_urls(trio):
 
 
 @pytest.mark.django_db
-def test_album_collab_instagram_urls(trio):
-    """Per-album collaborator handles, principal not included, deduped,
-    only collaborators with a handle (c2 has none)."""
+def test_album_collabs(trio):
+    """Per-album collaborator artistes (principal excluded, deduped by
+    artist). Both collaborators are returned — including c2 without a
+    handle — so the visible credit (`artistes_noms`) shows every artist;
+    handle filtering happens later when the tag list is derived."""
     p, c1, c2 = trio
     c = _make_canco(p, c1, c2)
-    urls = _album_collab_instagram_urls([c.album_id])
-    assert urls[c.album_id] == ["https://instagram.com/exemple_collab1"]
+    collabs = _album_collabs([c.album_id])
+    assert [a.id for a in collabs[c.album_id]] == [c1.id, c2.id]
 
 
 def test_artist_credit_joins_collaborators():
@@ -150,6 +152,57 @@ def test_artist_credit_joins_collaborators():
     )
     # Legacy fallback when only the single field is present.
     assert _artist_credit({"artista_nom": "Solo"}) == "Solo"
+
+
+def test_feed_redesign_artist_credit_joins_collaborators():
+    """Novetats feed slides (album + singles) must show every artist
+    too — same parity fix as the top rows, applied to feed_redesign."""
+    from social.feed_redesign import _artist_credit as feed_credit
+
+    assert feed_credit({"artistes_noms": ["Main", "Guest"]}) == "Main, Guest"
+    assert feed_credit({"artista_nom": "Solo"}) == "Solo"
+    assert feed_credit({}) == "—"
+
+
+@pytest.mark.django_db
+def test_build_novetats_carries_artistes_noms(trio):
+    """`build_novetats` items expose `artistes_noms` (principal + track
+    collaborators, both handled and un-handled) so the feed/story
+    renderers can show the full credit — while `artistes_instagram_urls`
+    stays handle-only for the tagger."""
+    from social.payload import build_novetats
+
+    p, c1, c2 = trio
+    al = Album.objects.create(
+        artista=p,
+        nom="EXEMPLE Single",
+        tipus="single",
+        data_llancament=date(2026, 5, 20),
+    )
+    c = Canco.objects.create(
+        artista=p,
+        album=al,
+        nom="EXEMPLE Track",
+        isrc="ZZ00IG0000009",
+        verificada=True,
+        activa=True,
+    )
+    c.artistes_col.add(c1, c2)
+    data = build_novetats(
+        "nous_singles", date(2026, 5, 18), publish_date=date(2026, 5, 22)
+    )
+    item = next(i for i in data["items"] if i["slug"] == al.slug)
+    # Every artist visible — including c2 (no handle).
+    assert item["artistes_noms"] == [
+        "EXEMPLE Principal",
+        "EXEMPLE Collab1",
+        "EXEMPLE Collab2",
+    ]
+    # Tagger list stays handle-only, principal first.
+    assert item["artistes_instagram_urls"] == [
+        "https://instagram.com/exemple_principal",
+        "https://instagram.com/exemple_collab1",
+    ]
 
 
 def _entry(urls: list[str]) -> dict:

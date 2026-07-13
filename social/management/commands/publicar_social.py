@@ -25,7 +25,7 @@ import logging
 from pathlib import Path
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from music.audit import log_staff_action
@@ -52,6 +52,123 @@ def _public_url_for(local_path: Path) -> str:
         "https://www.topquaranta.cat/api/v1/social/render",
     )
     return f"{base.rstrip('/')}/{local_path.name}"
+
+
+# ── Instagram user_tags helpers ──────────────────────────────────────
+# Shared by the feed carousel tagger (`_slide_tags`) and the story
+# tagger (`_story_tags`).
+
+USER_TAGS_CAP = 20  # Meta's per-image user_tags limit.
+
+
+def _norm_tag(handle_url: str | None, *, x: float, y: float) -> dict | None:
+    """Meta `user_tags` payload for one handle URL, or None when the
+    entry has no usable handle. Coordinates clamp to (0.05, 0.95) —
+    Meta rejects tags outside that range silently; bubbles render with
+    an offset so we keep them well inside the canvas."""
+    u = instagram_username(handle_url)
+    if not u:
+        return None
+    return {
+        "username": u,
+        "x": max(0.05, min(0.95, x)),
+        "y": max(0.05, min(0.95, y)),
+    }
+
+
+def _entry_urls(entry: dict) -> list[str]:
+    """Resolve the per-entry handle list, accepting both the new
+    payload (`artistes_instagram_urls`) and the legacy single-URL
+    fallback."""
+    urls = entry.get("artistes_instagram_urls")
+    if not urls:
+        single = entry.get("artista_instagram_url")
+        urls = [single] if single else []
+    return [u for u in urls if u]
+
+
+def _tags_for_entries(chunk: list[dict], pos_fn) -> list[dict]:
+    """Tags for one image's entries, IN THE ORDER GIVEN (the caller
+    passes the chunk in the same order the renderer drew it);
+    `pos_fn(i, n) -> (x, y)` anchors entry `i` of `n` on the canvas.
+
+    Principal-first, then round-robin over collabs so a single
+    very-collaborative entry can never monopolise the cap and starve
+    other entries of their principal tag:
+
+      Pass 1: principal of every entry.
+      Pass 2: 1st collab of every entry that has one.
+      Pass 3: 2nd collab of every entry that has one.  …
+
+    Caught at the 2026-05-23 audit on a real worst-case
+    ("La Gent de la Mediterrània", 23 collaborators); without
+    round-robin that one entry would have eaten all 20 slots."""
+    chunk_urls = [_entry_urls(e) for e in chunk]
+    tags: list[dict] = []
+    for i, urls in enumerate(chunk_urls):
+        if len(tags) >= USER_TAGS_CAP:
+            break
+        if not urls:
+            continue
+        bx, by = pos_fn(i, len(chunk))
+        t = _norm_tag(urls[0], x=bx, y=by)
+        if t and t not in tags:
+            tags.append(t)
+    max_extra = max((len(u) - 1 for u in chunk_urls), default=0)
+    for collab_idx in range(1, max_extra + 1):
+        if len(tags) >= USER_TAGS_CAP:
+            break
+        for i, urls in enumerate(chunk_urls):
+            if len(tags) >= USER_TAGS_CAP:
+                break
+            if collab_idx >= len(urls):
+                continue
+            bx, by = pos_fn(i, len(chunk))
+            # Horizontal nudge keyed on collab_idx so adjacent collab
+            # bubbles don't overlap the principal at bx.
+            nudge_dx = (collab_idx % 3) * 0.10 - 0.10
+            t = _norm_tag(urls[collab_idx], x=bx + nudge_dx, y=by)
+            if t and t not in tags:
+                tags.append(t)
+    return tags[:USER_TAGS_CAP]
+
+
+# ── Story-slide anchor functions ─────────────────────────────────────
+# Tappable-bubble anchors mirroring each story slide's grammar
+# (`renderer.render_stories_ppcc` / `_territorial`): approximate
+# normalized centres of the drawn item, NOT pixel-exact — same
+# discipline as the feed tagger's evenly-spaced row anchors. Chunks
+# arrive in DRAW order (the tagger mirrors the renderer's reversal),
+# so index `i` is the i-th drawn item.
+
+
+def _pos_story_mosaic(i: int, n: int) -> tuple[float, float]:
+    """Slide «top 40→11»: 5×6 cover mosaic — column/row centres."""
+    r, c = divmod(i, 5)
+    return 0.13 + c * 0.185, 0.31 + r * 0.098
+
+
+def _pos_story_grid(i: int, n: int) -> tuple[float, float]:
+    """Slide «top 10→4»: 2-column pairs (#10/#9, #8/#7, #6/#5), then
+    #4 centred below."""
+    if i == 6:
+        return 0.5, 0.84
+    return (0.35, 0.65)[i % 2], 0.30 + (i // 2) * 0.185
+
+
+def _pos_story_podi(i: int, n: int) -> tuple[float, float]:
+    """Slide «podi»: #3 on top, #2 below — both centred."""
+    return 0.5, 0.38 + i * 0.30
+
+
+def _pos_story_hero(i: int, n: int) -> tuple[float, float]:
+    """Slide «#1 hero»: single centred entry."""
+    return 0.5, 0.60
+
+
+def _pos_story_novetats(i: int, n: int) -> tuple[float, float]:
+    """Slide «novetats»: ≤3 stacked release rows."""
+    return 0.5, 0.40 + i * 0.17
 
 
 class Command(BaseCommand):
@@ -139,8 +256,18 @@ class Command(BaseCommand):
         # Stash the resolved publication date so per-slot novetats
         # can compute their window without recomputing from scratch.
         opts["_target_date"] = target
+        self._n_errors = 0
         for slot, territori in slots:
             self._handle_slot(slot, territori, setmana, cfg, opts)
+        # A per-slot failure marks the SocialPost ERROR but must NOT be
+        # swallowed: exit non-zero so tq-run records status=FAIL and the
+        # watchdog alerts (the 2026-07 invisible-IG-outage bug). Slots
+        # that already published stay publicat — partial failure is
+        # reported, not rolled back.
+        if self._n_errors:
+            raise CommandError(
+                f"{self._n_errors} slot(s) van fallar; SocialPost en estat ERROR."
+            )
 
     # ── per-slot dispatch ─────────────────────────────────────────
 
@@ -222,6 +349,7 @@ class Command(BaseCommand):
         except Exception as exc:  # noqa: BLE001 — never crash the cron
             logger.exception("publicar_social failed for %s", label)
             self._mark(post, SocialPost.STATUS_ERROR, error_msg=str(exc)[:500])
+            self._n_errors += 1
             # Surface the error in stdout too so the staff cockpit
             # can show it (the panel proxies the captured stdout
             # back to the operator).
@@ -293,6 +421,16 @@ class Command(BaseCommand):
             slot.tipus, territori, setmana, entries_for_alts, len(paths)
         )
 
+        # Collaborator plan (ADR-0015). GATED: with `ig_collaboradors_actiu`
+        # False (the default) this returns an empty plan and every branch
+        # below is byte-identical to the pre-collaborator flow (no
+        # `collaborators` key ever reaches the container). With it on, the
+        # parent container is created inside a non-blocking substitution
+        # guard.
+        collab_pool, collab_slots, collab_id_by_user = self._collaborator_plan(
+            slot.tipus, data, cfg
+        )
+
         # Real publish: upload each as carousel item, then carousel
         # parent + publish. Single-image fallback when only one
         # slide. Meta processes uploads asynchronously, so each
@@ -301,12 +439,21 @@ class Command(BaseCommand):
         # / subcode 2207027 ("Media ID is not available").
         urls = [_public_url_for(p) for p in paths]
         if len(urls) == 1:
-            container = instagram_client.upload_image(
-                urls[0],
-                caption,
-                user_tags=tags_per_slide[0] or None,
-                alt_text=alts_per_slide[0] or None,
-            )
+
+            def _make_parent(collaborators):
+                cid = instagram_client.upload_image(
+                    urls[0],
+                    caption,
+                    user_tags=tags_per_slide[0] or None,
+                    alt_text=alts_per_slide[0] or None,
+                    collaborators=collaborators or None,
+                )
+                # Wait INSIDE the attempt so a collaborator error that
+                # surfaces during async processing (not just at create)
+                # also triggers substitution.
+                instagram_client.wait_until_finished(cid)
+                return cid
+
         else:
             child_ids = []
             for i, u in enumerate(urls):
@@ -317,14 +464,31 @@ class Command(BaseCommand):
                 )
                 instagram_client.wait_until_finished(cid)
                 child_ids.append(cid)
-            container = instagram_client.create_carousel(child_ids, caption)
-        instagram_client.wait_until_finished(container)
+
+            def _make_parent(collaborators):
+                cid = instagram_client.create_carousel(
+                    child_ids, caption, collaborators=collaborators or None
+                )
+                instagram_client.wait_until_finished(cid)
+                return cid
+
+        container, used_collabs = self._create_parent_with_guard(
+            _make_parent, collab_pool, collab_slots
+        )
         media_id = instagram_client.publish_container(container)
+        # Registry: one InvitacioColaboracioIG per effectively-sent
+        # collaborator, ONLY now that the post is published (no orphan
+        # rows if the publish above raised).
+        self._record_invitacions(used_collabs, collab_id_by_user, media_id, slot.tipus)
         self._mark(
             post,
             SocialPost.STATUS_PUBLICAT,
             instagram_media_id=media_id,
-            metadata={"slides": [p.name for p in paths], "caption_len": len(caption)},
+            metadata={
+                "slides": [p.name for p in paths],
+                "caption_len": len(caption),
+                **({"collaborators": used_collabs} if used_collabs else {}),
+            },
             published_at=timezone.now(),
         )
         log_staff_action(
@@ -354,7 +518,208 @@ class Command(BaseCommand):
                 )
         self.stdout.write(f"  · publicat → media_id={media_id}")
 
+    # ── collaborator invitations (ADR-0015 §5.2/§5.3, gated) ─────────
+
+    def _collaborator_plan(self, tipus: str, data: dict, cfg):
+        """Ordered pool + slot count for a feed post. GATED: returns an
+        empty plan (no-op) unless `ig_collaboradors_actiu` is on.
+
+        Returns `(ordered_usernames, slots, id_by_username)`:
+          - `ordered_usernames` = the policy-selected usernames first,
+            then the remaining pool in order (the substitution reserve).
+          - `slots` = len(selected) (already ≤ the module's clamp of 3).
+          - `id_by_username` maps each username back to its artista_id so
+            we can write the registry row after publish."""
+        if not getattr(cfg, "ig_collaboradors_actiu", False):
+            return [], 0, {}
+        from social import collaboradors as C
+
+        entries = data.get("entries") or data.get("items") or []
+        pool: list[tuple[int, str]] = []
+        seen: set[int] = set()
+        for entry in entries:
+            for pa in entry.get("artistes_pool") or []:
+                aid, uname = pa.get("id"), pa.get("username")
+                if aid is None or not uname or aid in seen:
+                    continue
+                seen.add(aid)
+                pool.append((aid, uname))
+        if not pool:
+            return [], 0, {}
+
+        pool_objs = [C.PoolArtist(artista_id=aid, username=u) for aid, u in pool]
+        historic = self._load_historic([aid for aid, _ in pool])
+        config = C.PolicyConfig.from_config(cfg)
+        selected = C.select_collaborators(
+            pool_objs, historic, config, now=timezone.now()
+        )
+        selected_ids = {s.artista_id for s in selected}
+        selected_usernames = [s.username for s in selected]
+        reserve = [u for aid, u in pool if aid not in selected_ids]
+        id_by_username = {u: aid for aid, u in pool}
+        return selected_usernames + reserve, len(selected_usernames), id_by_username
+
+    @staticmethod
+    def _load_historic(artista_ids):
+        """`{artista_id: [InviteRecord, ...]}` from the invite registry."""
+        from collections import defaultdict
+
+        from social.collaboradors import InviteRecord
+        from social.models import InvitacioColaboracioIG
+
+        hist = defaultdict(list)
+        for r in InvitacioColaboracioIG.objects.filter(artista_id__in=artista_ids):
+            hist[r.artista_id].append(
+                InviteRecord(
+                    estat=r.estat,
+                    data_invitacio=r.data_invitacio,
+                    data_resolucio=r.data_resolucio,
+                )
+            )
+        return hist
+
+    @staticmethod
+    def _offending_username(err_text: str, collaborators):
+        """The collaborator handle named in a container error, or None
+        (then the guard leave-one-out identifies it)."""
+        low = (err_text or "").lower()
+        for u in collaborators or []:
+            if u.lower() in low:
+                return u
+        return None
+
+    def _create_parent_with_guard(self, make_parent, pool_usernames, slots):
+        """Create (and FINISH) the parent container, applying the
+        non-blocking substitution guard (§5.3) when there are
+        collaborators to try. Returns `(container_id, used_usernames)`.
+
+        With an empty plan (`slots == 0`) this is exactly
+        `make_parent(None)` — the byte-identical no-collaborator path."""
+        if not pool_usernames or slots <= 0:
+            return make_parent(None), []
+
+        from social import collaboradors as C
+
+        holder: dict = {}
+
+        def _try(collaborators):
+            try:
+                holder["cid"] = make_parent(collaborators)
+                return True, None
+            except Exception as exc:  # noqa: BLE001 — treated as a handle failure
+                logger.warning(
+                    "collaborator container attempt failed (%s): %s",
+                    collaborators,
+                    str(exc)[:200],
+                )
+                return False, self._offending_username(str(exc), collaborators)
+
+        result = C.publish_with_collaborator_guard(pool_usernames, slots, _try)
+        for d in result.dropped:
+            self.stdout.write(
+                f"  · col·laborador descartat: {d['username']} ({d['reason']})"
+            )
+        return holder["cid"], result.used
+
+    @staticmethod
+    def _record_invitacions(used_usernames, id_by_username, media_id, tipus):
+        """One InvitacioColaboracioIG per sent collaborator. Idempotent
+        (UNIQUE(artista, ig_media_id)); called ONLY after the post
+        publishes so a failed publish leaves no orphan rows."""
+        if not used_usernames:
+            return
+        from social.models import InvitacioColaboracioIG
+
+        now = timezone.now()
+        for u in used_usernames:
+            aid = id_by_username.get(u)
+            if aid is None:
+                continue
+            InvitacioColaboracioIG.objects.get_or_create(
+                artista_id=aid,
+                ig_media_id=media_id,
+                defaults={
+                    "username_snapshot": u,
+                    "tipus_publicacio": tipus,
+                    "data_invitacio": now,
+                    "estat": InvitacioColaboracioIG.ESTAT_PENDENT,
+                },
+            )
+
     # ── story flow ───────────────────────────────────────────────
+
+    @staticmethod
+    def _story_tags(
+        territori: str,
+        entries: list[dict],
+        novetats_items: list[dict] | None,
+    ) -> list[list[dict]]:
+        """Per-story `user_tags`, one list per rendered story, mirroring
+        `render_stories_ppcc` / `render_stories_territorial` slide
+        emission EXACTLY — same slices, same conditional tiers, same
+        draw-order reversal — so every mention lands on the story where
+        the song is visible, anchored near its drawn item. Intro and
+        outro carry no entries → no tags. PPCC emits every tier
+        unconditionally; territorial degrades by omission (mosaic n>10,
+        grid n>3, podi n>1, hero if entries)."""
+        novetats_items = [it for it in (novetats_items or []) if it]
+        out: list[list[dict]] = [[]]  # intro
+        n = len(entries)
+        ppcc = territori == "PPCC"
+        if ppcc or n > 10:
+            out.append(
+                _tags_for_entries(list(reversed(entries[10:40])), _pos_story_mosaic)
+            )
+        if ppcc or n > 3:
+            out.append(
+                _tags_for_entries(list(reversed(entries[3:10])), _pos_story_grid)
+            )
+        if ppcc or n > 1:
+            out.append(_tags_for_entries(list(reversed(entries[1:3])), _pos_story_podi))
+        if ppcc or entries:
+            out.append(_tags_for_entries(entries[:1], _pos_story_hero))
+        if novetats_items:
+            out.append(_tags_for_entries(novetats_items[:3], _pos_story_novetats))
+        out.append([])  # outro
+        return out
+
+    def _create_story_with_guard(self, image_url: str, tags: list[dict]) -> str:
+        """Create (and FINISH) one STORIES container, applying the same
+        non-blocking substitution guard as the feed collaborators
+        (§5.3 semantics, reused via `max_slots`): a username Meta
+        rejects is dropped and the story retried, last resort created
+        with no mentions. Only a non-tag failure propagates."""
+        if not tags:
+            container = instagram_client.upload_story(image_url)
+            instagram_client.wait_until_finished(container)
+            return container
+
+        from social import collaboradors as C
+
+        by_user = {t["username"]: t for t in tags}
+        holder: dict = {}
+
+        def _try(usernames):
+            subset = [by_user[u] for u in usernames if u in by_user]
+            try:
+                cid = instagram_client.upload_story(image_url, user_tags=subset or None)
+                instagram_client.wait_until_finished(cid)
+                holder["cid"] = cid
+                return True, None
+            except Exception as exc:  # noqa: BLE001 — treated as a tag failure
+                logger.warning(
+                    "story container attempt failed (%s): %s",
+                    usernames,
+                    str(exc)[:200],
+                )
+                return False, self._offending_username(str(exc), usernames)
+
+        result = C.publish_with_collaborator_guard(
+            list(by_user), len(by_user), _try, max_slots=USER_TAGS_CAP
+        )
+        for d in result.dropped:
+            self.stdout.write(f"  · menció descartada: {d['username']} ({d['reason']})")
+        return holder["cid"]
 
     def _publish_story(self, post, slot, territori, setmana, data, cfg, opts):
         if territori == "PPCC":
@@ -390,6 +755,7 @@ class Command(BaseCommand):
                 hero_headline=hero_headline,
             )
             max_cancons = None
+            novetats_items = None  # the cron passes none to territorial sets
         self.stdout.write(f"  · renderitzades {len(paths)} stories")
 
         if opts["dry_run"]:
@@ -401,25 +767,74 @@ class Command(BaseCommand):
             self.stdout.write("  · --dry-run, no es publica.")
             return
 
+        # Per-story mentions (user_tags) — API payload only, images
+        # untouched. Built to mirror the renderer's emission; on any
+        # count mismatch we publish untagged rather than mis-anchor
+        # (defensive: a renderer change without tagger sync must never
+        # put a mention on the wrong story).
+        tags_per_story = self._story_tags(territori, data["entries"], novetats_items)
+        if len(tags_per_story) != len(paths):
+            logger.warning(
+                "story tags/slides mismatch (%d tag sets vs %d slides) for "
+                "%s %s; publishing without mentions",
+                len(tags_per_story),
+                len(paths),
+                slot.tipus,
+                territori,
+            )
+            tags_per_story = [[] for _ in paths]
+
         story_ids: list[str] = []
-        for p in paths:
+        fallides: list[dict] = []
+        for idx, p in enumerate(paths):
             url = _public_url_for(p)
-            container = instagram_client.upload_story(url)
-            # Same async-readiness gate as the feed flow above.
-            instagram_client.wait_until_finished(container)
-            sid = instagram_client.publish_container(container)
-            story_ids.append(sid)
+            try:
+                # Same async-readiness gate as the feed flow above,
+                # inside the guard (a tag can also fail at FINISH).
+                container = self._create_story_with_guard(url, tags_per_story[idx])
+                sid = instagram_client.publish_container(container)
+                story_ids.append(sid)
+            except Exception as exc:  # noqa: BLE001 — one bad story must not
+                # block the rest of the set (non-blocking, §5.6).
+                logger.exception(
+                    "story %d/%d failed for %s %s",
+                    idx + 1,
+                    len(paths),
+                    slot.tipus,
+                    territori,
+                )
+                fallides.append({"story": p.name, "error": str(exc)[:200]})
+
+        meta = {
+            "stories": [p.name for p in paths],
+            "story_ids": story_ids,
+            "max_cancons": max_cancons,
+            "n_slides": len(paths),
+            "n_mencions": sum(len(t) for t in tags_per_story),
+        }
+        if fallides:
+            meta["stories_fallides"] = fallides
+            if not story_ids:
+                # Nothing went out — plain slot failure (the caller
+                # marks ERROR and counts it; metadata persisted here).
+                self._mark(post, SocialPost.STATUS_ERROR, metadata=meta)
+                raise RuntimeError(
+                    f"cap story publicada ({len(fallides)} pàgines han fallat)"
+                )
+            # Partial: what went out stays out (same discipline as the
+            # slot-level rule, 2026-07-12); the failure is reported —
+            # error_msg + non-zero exit via _n_errors — not rolled back.
+            self._n_errors += 1
+            self.stdout.write(
+                f"  · ⚠ {len(fallides)} de {len(paths)} stories han fallat"
+            )
 
         self._mark(
             post,
             SocialPost.STATUS_PUBLICAT,
             instagram_media_id=story_ids[-1] if story_ids else "",
-            metadata={
-                "stories": [p.name for p in paths],
-                "story_ids": story_ids,
-                "max_cancons": max_cancons,
-                "n_slides": len(paths),
-            },
+            metadata=meta,
+            error_msg=(f"{len(fallides)} stories han fallat" if fallides else ""),
             published_at=timezone.now(),
         )
         log_staff_action(
@@ -522,17 +937,6 @@ class Command(BaseCommand):
         """
         out: list[list[dict]] = [[]]  # cover slide → no tags
 
-        def _tag(handle_url: str | None, *, x: float, y: float) -> dict | None:
-            u = instagram_username(handle_url)
-            if not u:
-                return None
-            # Clamp to (0.05, 0.95) — Meta rejects tags outside that
-            # range silently. Bubbles render with an offset so we keep
-            # them well inside the canvas.
-            x = max(0.05, min(0.95, x))
-            y = max(0.05, min(0.95, y))
-            return {"username": u, "x": x, "y": y}
-
         # Y range for list rows: leaves headroom (top pill area) and
         # footer (page indicator + brand pill).
         Y_TOP, Y_BOTTOM = 0.18, 0.88
@@ -549,60 +953,8 @@ class Command(BaseCommand):
             y = Y_TOP + step * (row_idx + 0.5)
             return XS[row_idx % len(XS)], y
 
-        CAP = 20  # Meta's per-image user_tags limit.
-
-        def _entry_urls(entry: dict) -> list[str]:
-            """Resolve the per-entry handle list, accepting both the
-            new payload (`artistes_instagram_urls`) and the legacy
-            single-URL fallback."""
-            urls = entry.get("artistes_instagram_urls")
-            if not urls:
-                single = entry.get("artista_instagram_url")
-                urls = [single] if single else []
-            return [u for u in urls if u]
-
         def _tags_for_chunk(chunk: list[dict]) -> list[dict]:
-            """Tags for one slide's entries, IN THE ORDER GIVEN (the
-            caller passes the chunk in the same order the renderer drew
-            it). Principal-first, then round-robin over collabs so a
-            single very-collaborative entry can never monopolise the
-            CAP and starve other entries of their principal tag:
-
-              Pass 1: principal of every entry.
-              Pass 2: 1st collab of every entry that has one.
-              Pass 3: 2nd collab of every entry that has one.  …
-
-            Caught at the 2026-05-23 audit on a real worst-case
-            ("La Gent de la Mediterrània", 23 collaborators); without
-            round-robin that one entry would have eaten all 20 slots."""
-            chunk_urls = [_entry_urls(e) for e in chunk]
-            tags: list[dict] = []
-            for i, urls in enumerate(chunk_urls):
-                if len(tags) >= CAP:
-                    break
-                if not urls:
-                    continue
-                bx, by = _row_xy(i, len(chunk))
-                t = _tag(urls[0], x=bx, y=by)
-                if t and t not in tags:
-                    tags.append(t)
-            max_extra = max((len(u) - 1 for u in chunk_urls), default=0)
-            for collab_idx in range(1, max_extra + 1):
-                if len(tags) >= CAP:
-                    break
-                for i, urls in enumerate(chunk_urls):
-                    if len(tags) >= CAP:
-                        break
-                    if collab_idx >= len(urls):
-                        continue
-                    bx, by = _row_xy(i, len(chunk))
-                    # Horizontal nudge keyed on collab_idx so adjacent
-                    # collab bubbles don't overlap the principal at bx.
-                    nudge_dx = (collab_idx % 3) * 0.10 - 0.10
-                    t = _tag(urls[collab_idx], x=bx + nudge_dx, y=by)
-                    if t and t not in tags:
-                        tags.append(t)
-            return tags[:CAP]
+            return _tags_for_entries(chunk, _row_xy)
 
         TOP_TIPUS = (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL)
         if tipus in TOP_TIPUS:

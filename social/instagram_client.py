@@ -172,17 +172,34 @@ def upload_carousel_item(
     return _post(f"{_user_id()}/media", body)["id"]
 
 
-def create_carousel(child_ids: list[str], caption: str) -> str:
-    """Create the parent carousel container. Returns its ID."""
+def create_carousel(
+    child_ids: list[str], caption: str, *, collaborators: list[str] | None = None
+) -> str:
+    """Create the parent carousel container. Returns its ID.
+
+    `collaborators` is Meta's `collaborators` field — up to 3 IG
+    usernames invited as co-authors (the post lands on their grid once
+    they accept). Feed/reels/carousels only. Omitted entirely when falsy,
+    so the byte-for-byte payload is unchanged for the (default) no-collab
+    path. See ADR-0015."""
     if is_dry_run():
         cid = f"dry-carousel-{int(time.time()*1000)}"
-        logger.info("[DRY] create_carousel children=%d → %s", len(child_ids), cid)
+        logger.info(
+            "[DRY] create_carousel children=%d collab=%d → %s",
+            len(child_ids),
+            len(collaborators or []),
+            cid,
+        )
         return cid
     body = {
         "media_type": "CAROUSEL",
         "children": ",".join(child_ids),
         "caption": caption[:2200],
     }
+    if collaborators:
+        import json
+
+        body["collaborators"] = json.dumps(collaborators[:3])
     return _post(f"{_user_id()}/media", body)["id"]
 
 
@@ -192,19 +209,23 @@ def upload_image(
     *,
     user_tags: list[dict] | None = None,
     alt_text: str | None = None,
+    collaborators: list[str] | None = None,
 ) -> str:
     """Single-image feed post. Returns container ID.
 
     `alt_text` is the per-image accessibility label (Meta's `alt_text`
-    field, capped at 1 000 chars).
+    field, capped at 1 000 chars). `collaborators` — up to 3 IG usernames
+    invited as co-authors (see `create_carousel`); omitted when falsy so
+    the no-collab payload is unchanged.
     """
     if is_dry_run():
         cid = f"dry-image-{int(time.time()*1000)}"
         logger.info(
-            "[DRY] upload_image %s tags=%d alt=%dch → %s",
+            "[DRY] upload_image %s tags=%d alt=%dch collab=%d → %s",
             image_url,
             len(user_tags or []),
             len(alt_text or ""),
+            len(collaborators or []),
             cid,
         )
         return cid
@@ -215,16 +236,34 @@ def upload_image(
         body["user_tags"] = json.dumps(user_tags[:20])
     if alt_text:
         body["alt_text"] = alt_text[:1000]
+    if collaborators:
+        import json
+
+        body["collaborators"] = json.dumps(collaborators[:3])
     return _post(f"{_user_id()}/media", body)["id"]
 
 
-def upload_story(image_url: str) -> str:
-    """Story (image, no caption). Returns container ID."""
+def upload_story(image_url: str, *, user_tags: list[dict] | None = None) -> str:
+    """Story (image, no caption). Returns container ID.
+
+    `user_tags` — Meta `user_tags` payload (stories accept mentions
+    since 2025-07-09; NO collaborators/product tags — feed only).
+    Omitted when falsy so the no-mention payload is unchanged.
+    """
     if is_dry_run():
         cid = f"dry-story-{int(time.time()*1000)}-{abs(hash(image_url)) & 0xffff:04x}"
-        logger.info("[DRY] upload_story %s → %s", image_url, cid)
+        logger.info(
+            "[DRY] upload_story %s tags=%d → %s",
+            image_url,
+            len(user_tags or []),
+            cid,
+        )
         return cid
     body = {"image_url": image_url, "media_type": "STORIES"}
+    if user_tags:
+        import json
+
+        body["user_tags"] = json.dumps(user_tags[:20])
     return _post(f"{_user_id()}/media", body)["id"]
 
 
@@ -320,6 +359,14 @@ def get_post_metrics(media_id: str, *, is_story: bool = False) -> dict:
         "impressions": flat.get("impressions", 0),
         "raw": body,
     }
+
+
+# NOTE: there is deliberately no `get_collaborators` here. Reading
+# invite acceptance programmatically is unviable with this app's API
+# flavour (ADR-0015 §5.5, verified 2026-07-13): Instagram Login lacks
+# the `/collaborators` edge, and a Facebook-Login user token returns
+# it empty for pending invitations. Acceptances are marked manually
+# from the staff social panel.
 
 
 def get_account_stats() -> dict:

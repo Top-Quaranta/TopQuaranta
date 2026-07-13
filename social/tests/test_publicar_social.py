@@ -460,3 +460,69 @@ def test_story_set_counts_as_one_publication(db, cfg_ig_on, setmana_with_top):
             f"Story-set incremented counter by {call['n']}, expected 1. "
             "Bug 2 of Fase 3 reintroduced."
         )
+
+
+# ── Exit non-zero on partial failure (2026-07 invisible-outage fix) ────
+
+
+def test_publicar_social_partial_failure_exits_nonzero(db, cfg_ig_on, setmana_with_top):
+    """A per-slot publish failure marks the SocialPost ERROR AND makes the
+    command exit non-zero (CommandError) so tq-run records status=FAIL —
+    the bug that hid the IG outage. Already-attempted slots stay recorded."""
+    from unittest.mock import patch
+
+    from django.core.management.base import CommandError
+
+    from social.management.commands.publicar_social import Command
+
+    with (
+        patch.object(Command, "_publish_feed", side_effect=RuntimeError("boom")),
+        patch.object(Command, "_publish_story", side_effect=RuntimeError("boom")),
+    ):
+        with pytest.raises(CommandError):
+            call_command("publicar_social", "--data", "2026-04-25")  # Saturday
+    errs = SocialPost.objects.filter(
+        setmana=setmana_with_top, status=SocialPost.STATUS_ERROR
+    )
+    assert errs.count() == 2  # feed + story, both recorded as ERROR
+
+
+def test_publicar_social_all_ok_exits_zero(db, cfg_ig_on, setmana_with_top):
+    """No slot failure → no CommandError (exit 0), unchanged behaviour."""
+    from unittest.mock import patch
+
+    from social.management.commands.publicar_social import Command
+
+    with (
+        patch.object(Command, "_publish_feed"),
+        patch.object(Command, "_publish_story"),
+    ):
+        call_command("publicar_social", "--data", "2026-04-25")  # must NOT raise
+
+
+def test_publicar_canal_channel_failure_exits_nonzero(db, cfg_ig_on, setmana_with_top):
+    """Same guarantee on the multi-channel command: a failing channel
+    exits non-zero + leaves the SocialPost ERROR."""
+    from unittest.mock import patch
+
+    from django.core.management.base import CommandError
+
+    from ranking.models import MatriuPublicacio
+    from social.management.commands.publicar_canal import Command
+
+    cfg_ig_on.distribucio_activa = True
+    cfg_ig_on.mastodon_actiu = True
+    cfg_ig_on.save()
+    with (
+        patch.object(MatriuPublicacio, "actiu_per", return_value=True),
+        patch.object(Command, "_publish_mastodon", side_effect=RuntimeError("boom")),
+    ):
+        with pytest.raises(CommandError):
+            call_command(
+                "publicar_canal", "--channel", "mastodon", "--data", "2026-04-25"
+            )
+    assert SocialPost.objects.filter(
+        setmana=setmana_with_top,
+        platform="mastodon",
+        status=SocialPost.STATUS_ERROR,
+    ).exists()

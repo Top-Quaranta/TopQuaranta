@@ -272,6 +272,54 @@ class ConfiguracioGlobal(models.Model):
         ),
     )
 
+    # How many novetats releases fit on each Instagram novetats story
+    # before it spills to the next one. The novetats set is paginated
+    # into ceil(N/per_page) stories so every release surfaces (was a
+    # single 3-item slide). Staff-editable from Configuració. Clamped to
+    # 1..8 by the renderer (`social/renderer.py::render_stories_novetats`);
+    # 4 keeps the item scale close to the old 3-per-slide look.
+    novetats_stories_per_pagina = models.PositiveSmallIntegerField(
+        default=4,
+        help_text=(
+            "Novetats per story d'Instagram abans de passar a la següent "
+            "(paginació). Les novetats es reparteixen en diverses stories "
+            "perquè apareguen totes. Inicial 4; el renderer el limita a 1-8."
+        ),
+    )
+
+    # ── IG collaborator invitations (ADR-0015, tranche 1 — INERT) ────
+    # All dormant until `ig_collaboradors_actiu` is switched on. The
+    # slot policy (`social/collaboradors.py`) and the acceptance poller
+    # (`pollar_colaboracions_ig`) read these; nothing is wired into the
+    # publisher yet. See docs/decisions/0015-ig-collaborator-invitations.md.
+    ig_collaboradors_actiu = models.BooleanField(
+        default=False,
+        help_text=(
+            "Flag mestre del sistema d'invitacions de col·laboradors "
+            "d'Instagram (feed). Apagat = capa dormida: cap invitació, "
+            "cap fila escrita, el poller fa no-op."
+        ),
+    )
+    ig_collab_slots_total = models.PositiveSmallIntegerField(
+        default=3,
+        help_text=(
+            "Slots de col·laborador per publicació de feed. Límit dur de "
+            "la Graph API = 3; la política aplica min(valor, 3)."
+        ),
+    )
+    ig_collab_slots_acceptats = models.PositiveSmallIntegerField(
+        default=2,
+        help_text="Slots reservats a artistes que ja han acceptat abans (categoria A).",
+    )
+    ig_collab_cooldown_a_dies = models.PositiveSmallIntegerField(
+        default=15,
+        help_text="Dies abans de reinvitar un artista de categoria A (ja acceptador).",
+    )
+    ig_collab_cooldown_c_dies = models.PositiveSmallIntegerField(
+        default=90,
+        help_text="Dies abans de reinvitar un artista rebutjat (categoria C).",
+    )
+
     # Channel arg → its per-channel `*_actiu` field. Single source of
     # truth for the set of distribution channels the master gates.
     CHANNEL_SWITCH_FIELDS = {

@@ -658,7 +658,9 @@ No external services. Everything is file-based on the server.
   `cron-meta.json`, disk, web smoke, Spotify sub-checks, pending migrations,
   today's Django errors) in shell, then delegates the PRESENTATION to
   `analytics/health_report.py` (pure stdlib, runs without Django). Exits
-  non-zero if any command is FAIL/STALE/STUCK past its cadence, disk ≥90%,
+  non-zero if any command is FAIL/STALE/STUCK past its cadence (a gated
+  feature reporting `status=DISABLED` — e.g. `tq-backup-offsite` before
+  activation — renders gray and never escalates), disk ≥90%,
   a web check fails, a Spotify sub-check is WARN/CRIT, a migration is
   pending, or there are Django ERRORs today. The rendered report has:
   a one-line **executive summary** (🟢 Tot OK / 🔴 N anomalies), an

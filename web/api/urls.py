@@ -449,6 +449,16 @@ urlpatterns = [
     ),
     path("staff/social/toggle/", staff_views.social_toggle, name="staff_social_toggle"),
     path(
+        "staff/social/invitacions/",
+        staff_views.social_invitacions,
+        name="staff_social_invitacions",
+    ),
+    path(
+        "staff/social/invitacions/acceptar/",
+        staff_views.social_invitacio_acceptar,
+        name="staff_social_invitacio_acceptar",
+    ),
+    path(
         "staff/social/matriu/",
         staff_views.social_matriu,
         name="staff_social_matriu",

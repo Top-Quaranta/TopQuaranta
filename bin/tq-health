@@ -120,6 +120,13 @@ if [[ -n "$SP_DIR" && -x "$SP_DIR/spotify_playlist_coverage.sh" ]]; then
     [[ "$sc" == 0 ]] && COVERAGE_OK=1 || COVERAGE_OK=0
 fi
 
+IGTOKEN_SEV="?"; IGTOKEN_MSG="(check no disponible)"; IGTOKEN_OK=1
+if [[ -n "$SP_DIR" && -x "$SP_DIR/instagram_token.sh" ]]; then
+    out=$("$SP_DIR/instagram_token.sh" 2>&1); sc=$?
+    IGTOKEN_SEV=$(_sev "$sc"); IGTOKEN_MSG=$(printf '%s' "$out" | _msg)
+    [[ "$sc" == 0 ]] && IGTOKEN_OK=1 || IGTOKEN_OK=0
+fi
+
 # ── Pending Django migrations ──────────────────────────────────────────
 if (cd "$APP_DIR" && DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
     "$PY" manage.py migrate --check >/dev/null 2>&1); then
@@ -174,6 +181,7 @@ EXTRAS=$(
     WEB_STATS_OK="$WEB_STATS_OK" WEB_STATS_DETAIL="$WEB_STATS_DETAIL" \
     PREMIUM_SEV="$PREMIUM_SEV" PREMIUM_MSG="$PREMIUM_MSG" PREMIUM_OK="$PREMIUM_OK" \
     COVERAGE_SEV="$COVERAGE_SEV" COVERAGE_MSG="$COVERAGE_MSG" COVERAGE_OK="$COVERAGE_OK" \
+    IGTOKEN_SEV="$IGTOKEN_SEV" IGTOKEN_MSG="$IGTOKEN_MSG" IGTOKEN_OK="$IGTOKEN_OK" \
     MIGRATIONS_OK="$MIGRATIONS_OK" ERRORS_COUNT="$ERRORS_COUNT" ERRORS_LAST="$ERRORS_LAST" \
     GIT_OK="$GIT_OK" GIT_DETAIL="$GIT_DETAIL" \
     "$PY" -c '
@@ -189,6 +197,9 @@ print(json.dumps({
     "spotify": {
         "premium": {"severity": os.environ.get("PREMIUM_SEV", ""), "message": os.environ.get("PREMIUM_MSG", ""), "ok": b("PREMIUM_OK")},
         "coverage": {"severity": os.environ.get("COVERAGE_SEV", ""), "message": os.environ.get("COVERAGE_MSG", ""), "ok": b("COVERAGE_OK")},
+    },
+    "instagram": {
+        "token": {"severity": os.environ.get("IGTOKEN_SEV", ""), "message": os.environ.get("IGTOKEN_MSG", ""), "ok": b("IGTOKEN_OK")},
     },
     "migrations_ok": b("MIGRATIONS_OK"),
     "errors": {"count": int(os.environ.get("ERRORS_COUNT") or 0),

@@ -230,6 +230,38 @@ def artistes_list(request: Request) -> Response:
             n_top_collab=Coalesce(collab_n, 0),
         ).annotate(n_top=F("n_top_principal") + F("n_top_collab"))
 
+        # Live approved cançons (verificada=True, activa=True) where the
+        # artist takes part — as principal (FK `artista`) OR as a
+        # collaborator (M2M `artistes_col`). Same distinct-Subquery shape
+        # as `n_top` above: each path is a scalar subquery so the two
+        # never LEFT JOIN together and can't Cartesian-inflate. The two
+        # paths are disjoint PER cançó — the D5 signal
+        # (`music/signals.py`) forbids an artist from being a
+        # collaborator on their own track — so summing them double-counts
+        # nothing; no overlap correction is needed (identical reasoning
+        # to `n_top`). Used as the second sort key so novetats artists
+        # (0 tops, but with live songs) rise to the top of their block.
+        viva = {"verificada": True, "activa": True}
+        vives_principal = Subquery(
+            Canco.objects.filter(artista=OuterRef("pk"), **viva)
+            .order_by()
+            .values("artista")
+            .annotate(n=Count("pk", distinct=True))
+            .values("n")[:1],
+            output_field=IntegerField(),
+        )
+        vives_collab = Subquery(
+            Canco.objects.filter(artistes_col=OuterRef("pk"), **viva)
+            .order_by()
+            .values("artistes_col")
+            .annotate(n=Count("pk", distinct=True))
+            .values("n")[:1],
+            output_field=IntegerField(),
+        )
+        qs = qs.annotate(
+            n_cancons_vives=Coalesce(vives_principal, 0) + Coalesce(vives_collab, 0)
+        )
+
     if sort_raw == "cancons_tops_desc":
         qs = (
             qs.annotate(
@@ -243,7 +275,11 @@ def artistes_list(request: Request) -> Response:
             .order_by("-n_cancons_tops", Lower("nom"))
         )
     elif sort_raw == "-n_top":
-        qs = qs.distinct().order_by("-n_top", Lower("nom"))
+        # Tops first, then live-songs as the tiebreaker (novetats artists
+        # with 0 tops but active songs surface above the 0-top silence),
+        # then alphabetical. `n_cancons_vives` is guaranteed annotated
+        # here (this branch is inside the annotation gate above).
+        qs = qs.distinct().order_by("-n_top", "-n_cancons_vives", Lower("nom"))
     else:
         qs = qs.distinct().order_by(Lower("nom"))
 

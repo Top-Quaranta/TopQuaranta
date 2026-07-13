@@ -243,13 +243,27 @@ def upload_image(
     return _post(f"{_user_id()}/media", body)["id"]
 
 
-def upload_story(image_url: str) -> str:
-    """Story (image, no caption). Returns container ID."""
+def upload_story(image_url: str, *, user_tags: list[dict] | None = None) -> str:
+    """Story (image, no caption). Returns container ID.
+
+    `user_tags` — Meta `user_tags` payload (stories accept mentions
+    since 2025-07-09; NO collaborators/product tags — feed only).
+    Omitted when falsy so the no-mention payload is unchanged.
+    """
     if is_dry_run():
         cid = f"dry-story-{int(time.time()*1000)}-{abs(hash(image_url)) & 0xffff:04x}"
-        logger.info("[DRY] upload_story %s → %s", image_url, cid)
+        logger.info(
+            "[DRY] upload_story %s tags=%d → %s",
+            image_url,
+            len(user_tags or []),
+            cid,
+        )
         return cid
     body = {"image_url": image_url, "media_type": "STORIES"}
+    if user_tags:
+        import json
+
+        body["user_tags"] = json.dumps(user_tags[:20])
     return _post(f"{_user_id()}/media", body)["id"]
 
 

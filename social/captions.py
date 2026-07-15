@@ -68,6 +68,7 @@ HASHTAGS_BASE = ["musicaencatala", "topquaranta"]
 # posts' bank (`social/narrative/banks/hashtags.py`). Audit #2: the old
 # lowercase set (#musicaencatala …) clashed with the tops' #TopQuaranta.
 HASHTAGS_NOVETATS = ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+HASHTAGS_MOVIMENT = ["#TopQuaranta", "#MúsicaEnCatalà", "#ElMoviment"]
 
 MES_CA = [
     "gener",
@@ -667,3 +668,33 @@ def caption_novetats(tipus: str, setmana: datetime.date, entries: list[dict]) ->
         max_body = 2200 - len(header) - len(footer) - 10
         text = header + body[:max_body] + "…" + footer
     return text
+
+
+def caption_moviment(setmana: datetime.date, sel: dict) -> str:
+    """Instagram caption for the Thursday «moviment» post — same
+    header/body/hashtag shape as the other feed captions."""
+    label = _setmana_label(setmana)
+    if sel["kind"] == "entrada":
+        title = "L'entrada de la setmana"
+        line = (
+            f"{sel['artist']} entra {sel['phrase']} del Top Global "
+            f"amb «{sel['title']}»."
+        )
+    else:
+        title = "La pujada de la setmana"
+        line = (
+            f"{sel['artist']} puja {sel['phrase']} (+{sel['delta']}) al "
+            f"Top Global amb «{sel['title']}»."
+        )
+    header = f"{title} · {label}\n\n"
+    footer = "\n\n" + " ".join(HASHTAGS_MOVIMENT)
+    return header + line + footer
+
+
+def alt_moviment(sel: dict) -> str:
+    """Screen-reader alt for the single moviment cover."""
+    kind = "Entrada" if sel["kind"] == "entrada" else "Pujada"
+    return (
+        f"{kind} de la setmana al Top Global: {sel['artist']} — "
+        f"{sel['title']} ({sel['phrase']})."
+    )

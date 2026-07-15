@@ -21,6 +21,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from social import feed_redesign as F
+from social import fonts as Fonts
 from social import render_core as R
 
 _TOKENS_PATH = Path(__file__).resolve().parent / "top_design" / "top-tokens.json"
@@ -440,23 +441,76 @@ def _list_palette(variant):
     return acc, acc[:3] + (31,), False, t["name"], ft, fb
 
 
-def build_top_cover(setmana, variant: str = "ppcc") -> Image.Image:
-    """Carousel cover — green/territory field, EL TOP / 40, week pill."""
+def _draw_credit(img, d, candidates: list, cr) -> None:
+    """Credit line above the footer rule (artwork mode only). Tries each
+    candidate (longest first) and uses the first that fits, else
+    ellipsises the shortest — so the 40-name megacollab degrades to just
+    the title. Roboto (brand body font); a small offset shadow for
+    legibility on top of the veil."""
+    f = Fonts.sans_bold(cr["size"])
+    text = candidates[0]
+    for cand in candidates:
+        if R.tracked_width(d, cand, f, cr["ls"]) <= cr["max_w"]:
+            text = cand
+            break
+    else:
+        text = candidates[-1]
+        while text and R.tracked_width(d, text + "…", f, cr["ls"]) > cr["max_w"]:
+            text = text[:-1]
+        text = (text + "…") if text else candidates[-1]
+    R.draw_text(
+        img,
+        W / 2 + cr["shadow_dx"],
+        0,
+        text,
+        f,
+        F._col(cr["shadow"]),
+        align="center",
+        tracking=cr["ls"],
+        ink_center=cr["cy"] + cr["shadow_dy"],
+    )
+    R.draw_text(
+        img,
+        W / 2,
+        0,
+        text,
+        f,
+        F._col(cr["color"]),
+        align="center",
+        tracking=cr["ls"],
+        ink_center=cr["cy"],
+    )
+
+
+def build_top_cover(
+    setmana, variant: str = "ppcc", *, artwork=None, credit: tuple | None = None
+) -> Image.Image:
+    """Carousel cover — green/territory field, EL TOP / 40, week pill.
+
+    `artwork` (a PIL cover image) switches the background to the duotone
+    treatment (2026-07, gated by `feed_artwork_actiu`); `credit` =
+    `(prefix, artist, title)` adds the credit line above the footer rule.
+    Both None → byte-identical to the pre-artwork typographic cover."""
     C = tokens()["top_cover"]
     acc, _hi, _chip, name, ftop, fbot = _list_palette(variant)
     white = (255, 255, 255, 255)
     g = C["gradient"]
-    img = R.radial_bg(
-        (W, H),
-        ftop,
-        fbot,
-        g["at"],
-        g["extent"],
-        stop=g["stop"],
-        dtype="float64",
-        mode="RGBA",
-    )
-    R.apply_grain(img, C["grain"], seed=F._GRAIN_SEED)
+    if artwork is not None:
+        from . import duotone
+
+        img = duotone.duotone_photo(artwork, acc, ftop, (W, H))
+    else:
+        img = R.radial_bg(
+            (W, H),
+            ftop,
+            fbot,
+            g["at"],
+            g["extent"],
+            stop=g["stop"],
+            dtype="float64",
+            mode="RGBA",
+        )
+        R.apply_grain(img, C["grain"], seed=F._GRAIN_SEED)
     d = ImageDraw.Draw(img)
     F._paste_logo(img, h=C["logo_h"], x=W / 2, y=C["logo_y"], align="center")
     sub = C["subtitle"]
@@ -549,6 +603,144 @@ def build_top_cover(setmana, variant: str = "ppcc") -> Image.Image:
         F._col(cad["color"]),
         ink_center=pl["cy"],
     )
+    if credit is not None:
+        cr = C["credit"]
+        prefix, artist, title = credit
+        sep = cr["sep"]
+        cands = [sep.join(x for x in (prefix, artist, title) if x)]
+        if artist and title:
+            cands.append(sep.join((prefix, title)))
+        _draw_credit(img, d, cands, cr)
+    return F._finish(img)
+
+
+def build_moviment_cover(setmana, sel: dict, *, artwork=None) -> Image.Image:
+    """Thursday «moviment» cover (2026-07). Duotoned protagonist artwork
+    (global palette), LA PUJADA / +delta or L'ENTRADA / Nº pos, and a
+    three-part credit (artist · title · movement phrase). Reuses the
+    top-cover logo/rule/star/pill/credit geometry; `sel` = the
+    `payload.build_moviment` selection dict."""
+    C = tokens()["top_cover"]
+    M = tokens()["moviment"]
+    acc, _hi, _chip, _name, ftop, fbot = _list_palette("ppcc")
+    white = (255, 255, 255, 255)
+    g = C["gradient"]
+    if artwork is not None:
+        from . import duotone
+
+        img = duotone.duotone_photo(artwork, acc, ftop, (W, H))
+    else:
+        img = R.radial_bg(
+            (W, H),
+            ftop,
+            fbot,
+            g["at"],
+            g["extent"],
+            stop=g["stop"],
+            dtype="float64",
+            mode="RGBA",
+        )
+        R.apply_grain(img, C["grain"], seed=F._GRAIN_SEED)
+    d = ImageDraw.Draw(img)
+    F._paste_logo(img, h=C["logo_h"], x=W / 2, y=C["logo_y"], align="center")
+    sub = M["subtitle"]
+    R.draw_text(
+        img,
+        W / 2,
+        sub["y"],
+        sub["text"],
+        F._font("instrument", sub["size"]),
+        F._col(sub["color"]),
+        align="center",
+    )
+    if sel["kind"] == "entrada":
+        l1_text, l2_text = "L'ENTRADA", f"Nº{sel['pos']}"
+    else:
+        l1_text, l2_text = "LA PUJADA", f"+{sel['delta']}"
+    l1, l2 = M["l1"], M["l2"]
+    R.draw_text(
+        img,
+        W / 2,
+        0,
+        l1_text,
+        F._font("anton", l1["size"]),
+        white,
+        align="center",
+        cap_top=l1["cap_top"],
+    )
+    R.draw_text(
+        img,
+        W / 2,
+        0,
+        l2_text,
+        F._font("anton", l2["size"]),
+        acc,
+        align="center",
+        tracking=l2["ls"],
+        cap_top=l2["cap_top"],
+    )
+    ru = C["rule"]
+    R.rect(
+        img,
+        (ru["left"][0], ru["y"], ru["left"][1], ru["y"] + 2),
+        fill=F._col(ru["color"]),
+    )
+    R.rect(
+        img,
+        (ru["right"][0], ru["y"], ru["right"][1], ru["y"] + 2),
+        fill=F._col(ru["color"]),
+    )
+    st = C["star"]
+    R.star(
+        img,
+        st["cx"],
+        st["cy"],
+        st["outer"],
+        acc,
+        inner_ratio=st["inner_ratio"],
+        composite=True,
+    )
+    from .captions import _setmana_label
+
+    pl = C["pill"]
+    f_p = F._font("anton", pl["size"])
+    label = _setmana_label(setmana).upper()
+    pw = R.tracked_width(d, label, f_p, pl["ls"]) + 2 * pl["pad_x"]
+    cad_text = M["cadencia_text"]
+    f_c = F._font("instrument", C["cadencia"]["size"])
+    cw = R.tracked_width(d, cad_text, f_c, 0)
+    gap = 22
+    x0 = (W - (pw + gap + cw)) / 2
+    py = pl["cy"] - pl["h"] / 2
+    R.rect(img, (x0, py, x0 + pw, py + pl["h"]), fill=acc)
+    R.draw_text(
+        img,
+        x0 + pl["pad_x"],
+        0,
+        label,
+        f_p,
+        F._col(F.tokens()["brand"]["ink"]),
+        tracking=pl["ls"],
+        ink_center=pl["cy"],
+    )
+    R.draw_text(
+        img,
+        x0 + pw + gap,
+        0,
+        cad_text,
+        f_c,
+        F._col(C["cadencia"]["color"]),
+        ink_center=pl["cy"],
+    )
+    cr = C["credit"]
+    sep = cr["sep"]
+    artist, title, phrase = sel["artist"], sel["title"], sel["phrase"]
+    cands = [
+        sep.join(x for x in (artist, title, phrase) if x),
+        sep.join(x for x in (title, phrase) if x),
+        phrase,
+    ]
+    _draw_credit(img, d, cands, cr)
     return F._finish(img)
 
 

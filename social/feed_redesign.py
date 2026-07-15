@@ -226,13 +226,28 @@ def _star(img, s):
 # ── slide 1 · cover ──────────────────────────────────────────────────
 
 
-def build_cover(tipus: str, setmana) -> Image.Image:
+def build_cover(tipus: str, setmana, *, covers: list | None = None) -> Image.Image:
+    """Novetats cover. `covers` (raw cover images, ≥2) switches the
+    background to the duotone mosaic (2026-07, gated by
+    `feed_artwork_actiu`); the novetats palette (yellow accent, green
+    field hue) comes from the tokens. None → byte-identical typographic
+    cover. The caller guarantees ≥2 covers (fewer falls back to None)."""
     from .captions import _setmana_label
 
     C = tokens()["cover"]
     is_alb = tipus == "nous_albums"
-    img = _radial(C["gradient"])
-    _apply_grain(img, tokens()["grain"]["cover"])
+    if covers:
+        from . import duotone
+
+        img = duotone.duotone_mosaic(
+            covers,
+            C["etiqueta"]["color"],  # yellow accent
+            C["gradient"]["stops"][0][1],  # green field top = edition hue
+            (CANVAS_W, CANVAS_H),
+        )
+    else:
+        img = _radial(C["gradient"])
+        _apply_grain(img, tokens()["grain"]["cover"])
 
     _paste_logo(
         img, h=C["logo"]["h"], x=C["logo"]["cx"], y=C["logo"]["y"], align="center"

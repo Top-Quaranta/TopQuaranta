@@ -36,11 +36,13 @@ class SocialPost(models.Model):
     TIPUS_TOP_TERRITORIAL = "top_territorial"
     TIPUS_NOUS_ALBUMS = "nous_albums"
     TIPUS_NOUS_SINGLES = "nous_singles"
+    TIPUS_MOVIMENT = "moviment"
     TIPUS_CHOICES = [
         (TIPUS_TOP_PPCC, "Top global"),
         (TIPUS_TOP_TERRITORIAL, "Top territorial"),
         (TIPUS_NOUS_ALBUMS, "Nous àlbums"),
         (TIPUS_NOUS_SINGLES, "Nous singles"),
+        (TIPUS_MOVIMENT, "Moviment de la setmana"),
     ]
 
     STATUS_PENDENT = "pendent"

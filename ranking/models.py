@@ -301,6 +301,44 @@ class ConfiguracioGlobal(models.Model):
         ),
     )
 
+    # ── Feed artwork covers + moviment tipus (2026-07 — INERT) ──────
+    # Both gated OFF by default so the merge changes nothing that goes
+    # out. See docs/decisions/0016-feed-artwork-i-moviment.md and
+    # docs/architecture/social.md.
+    feed_artwork_actiu = models.BooleanField(
+        default=False,
+        help_text=(
+            "Portades de feed amb l'artwork duotonat del protagonista "
+            "(tops: portada del nº1; novetats: mosaic). Apagat = portada "
+            "tipogràfica actual, render idèntic. Font de portada = la "
+            "mateixa cadena del pipeline (local jpg → Deezer → placeholder)."
+        ),
+    )
+    feed_artwork_mosaic_max = models.PositiveSmallIntegerField(
+        default=6,
+        help_text=(
+            "Màxim de portades al mosaic de novetats. El renderer el "
+            "limita a 4-6: amb <4 disponibles cau a la portada tipogràfica; "
+            "4-5 → graella 2×2; 6+ → 2×3 (retallat a aquest màxim)."
+        ),
+    )
+    moviment_actiu = models.BooleanField(
+        default=False,
+        help_text=(
+            "Tipus de publicació «moviment» (dijous, sobre el Top Global). "
+            "Apagat = capa dormida: `publicar_social` no crea cap fila ni "
+            "intenta res per al slot de dijous."
+        ),
+    )
+    moviment_pujada_minima = models.PositiveSmallIntegerField(
+        default=5,
+        help_text=(
+            "Delta mínim de posicions per a publicar «la pujada» quan no hi "
+            "ha cap entrada directa al top 10. Si la millor pujada no hi "
+            "arriba, el post s'omet (mateix mecanisme que les novetats buides)."
+        ),
+    )
+
     # ── IG collaborator invitations (ADR-0015, tranche 1 — INERT) ────
     # All dormant until `ig_collaboradors_actiu` is switched on. The
     # slot policy (`social/collaboradors.py`) and the acceptance poller

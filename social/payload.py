@@ -228,6 +228,66 @@ def build_top(territori: str, setmana: datetime.date) -> Optional[dict]:
     }
 
 
+def build_moviment(setmana: datetime.date, min_pujada: int) -> Optional[dict]:
+    """Selection for the Thursday «moviment» post over the Global (PPCC)
+    top, reusing `build_top`'s `posicio_anterior` + `reentrada`.
+
+    Rule (mock): a NEW/RE entry that lands directly in the top 10 wins
+    (`entrada`, highest position); otherwise the strongest rise
+    (`pujada`); if the best rise is below `min_pujada`, returns None so
+    the slot is omitted (same as an empty novetats window). Returns a
+    dict the renderer + caption both read."""
+    data = build_top("PPCC", setmana)
+    if not data or not data["entries"]:
+        return None
+    entries = data["entries"]
+
+    def _credit(e):
+        return ", ".join(n for n in (e.get("artistes_noms") or []) if n) or (
+            e.get("artista_nom") or "—"
+        )
+
+    def _base(e, **extra):
+        return {
+            "artist": _credit(e),
+            "title": e.get("canco_nom") or "—",
+            "pos": e["posicio"],
+            "pos_ant": e.get("posicio_anterior"),
+            "cover_url": e.get("cover_url"),
+            "album_deezer_id": e.get("album_deezer_id"),
+            "reentrada": bool(e.get("reentrada")),
+            **extra,
+        }
+
+    # 1) direct entry into the top 10 (absent last week).
+    entrades = [
+        e for e in entries if e["posicio"] <= 10 and e.get("posicio_anterior") is None
+    ]
+    if entrades:
+        e = min(entrades, key=lambda e: e["posicio"])
+        verb = "reentra al" if e.get("reentrada") else "directa al"
+        return _base(e, kind="entrada", delta=None, phrase=f"{verb} {e['posicio']}")
+
+    # 2) strongest rise (present both weeks, moved up).
+    rises = [
+        (e["posicio_anterior"] - e["posicio"], e)
+        for e in entries
+        if e.get("posicio_anterior") is not None
+        and e["posicio_anterior"] > e["posicio"]
+    ]
+    if not rises:
+        return None
+    delta, e = max(rises, key=lambda t: t[0])
+    if delta < min_pujada:
+        return None
+    return _base(
+        e,
+        kind="pujada",
+        delta=delta,
+        phrase=f"del {e['posicio_anterior']} al {e['posicio']}",
+    )
+
+
 def _last_publication_date(tipus: str) -> Optional[datetime.date]:
     """Most recent successful publication date for `tipus`, used as
     the lower bound of the next window. Returns None on first ever

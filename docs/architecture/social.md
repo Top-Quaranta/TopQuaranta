@@ -177,7 +177,9 @@ Driven by `social/calendari.py`. Slots per weekday (the `min_fase`
 rollout gate was removed 2026-06 — see the matrix section). Sat 09:30
 UTC is the canonical `top_ppcc` cycle; territorials Mon (ROTATORI_B)
 and Wed (ROTATORI_A) 09:30 UTC; novetats Tue (`nous_albums`) and Fri
-(`nous_singles`) 10:00 UTC.
+(`nous_singles`) 10:00 UTC. **Thu** is the `moviment` slot (feed only,
+over the Global top) — INERT until `moviment_actiu` (see below). Sun
+is the newsletter's own cron, not `CALENDARI`.
 
 ## Renderer image format + PPCC feed cover (Step 3a, 2026-06-01)
 
@@ -348,6 +350,37 @@ publish. Acceptances are marked **manually from staff**
 pure expiry cron (`caducada` at 14 days + registry-derived acceptance
 rate — no Graph reads; the read path is unviable, ADR-0015 §5.5).
 First real batch 2026-07-06; definitive cycle since 2026-07-13.
+
+## Feed artwork covers + `moviment` (2026-07, gated OFF)
+
+Two additions, both **inert by default** (`ConfiguracioGlobal` flags,
+staff-editable in Configuració → Editorial; ADR-0016):
+
+- **Artwork covers** (`feed_artwork_actiu`): the feed **cover slide**
+  (list slides untouched) is backed by the duotoned artwork of the
+  edition's #1 (tops) or a mosaic of the week's novetats. The duotone
+  treatment lives in `social/duotone.py` (greyscale+contrast+brightness
+  → accent multiply → edition-hue veil 0.30 → readability gradient),
+  normative values transcribed from the approved mocks. Cover source =
+  the SAME chain as the pipeline (`_artwork_cover`: local `/portades`
+  jpg → Deezer → None → typographic fallback). Tops add a `Nº1 · artist
+  · title` credit above the rule (the 40-name megacollab degrades to
+  just the title). Novetats mosaic: 2×2 (≥4) / 2×3 (≥6, capped by
+  `feed_artwork_mosaic_max`); <2 covers → typographic. Palette from the
+  existing `top-tokens`/`feed-tokens` (never hardcoded).
+- **`moviment` tipus** (`moviment_actiu`): Thursday feed post over the
+  Global top. `payload.build_moviment` reuses `build_top`'s
+  `posicio_anterior`/`reentrada`: a NEW/RE entry into the top 10 wins
+  (`entrada`), else the strongest rise (`pujada`); a best rise below
+  `moviment_pujada_minima` → omitted like an empty novetats window.
+  `top_redesign.build_moviment_cover` renders LA PUJADA/+delta or
+  L'ENTRADA/Nº pos over the protagonist's duotoned artwork; caption via
+  `captions.caption_moviment`. With the flag off the Thursday slot
+  creates **no SocialPost row** (full no-op, unlike the matrix 'omès').
+
+Stories are untouched. No-regression: with both flags off the covers
+never call `duotone` and are byte-identical (pinned in
+`social/tests/test_feed_artwork_moviment.py`).
 
 ## Related
 

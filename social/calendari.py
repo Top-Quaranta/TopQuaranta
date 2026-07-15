@@ -101,6 +101,17 @@ CALENDARI: list[CalendarSlot] = [
         SocialPost.TIPUS_NOUS_ALBUMS,
         "",
     ),
+    # Thursday — moviment de la setmana (over the Global/PPCC top). Feed
+    # only; no story (stories untouched this cycle). GATED by
+    # `moviment_actiu` in `publicar_social` — with the flag off the slot
+    # is a full no-op (no SocialPost row created), so this calendar entry
+    # is inert until staff enable it. See docs/architecture/social.md.
+    CalendarSlot(
+        3,
+        SocialPost.PLATFORM_INSTAGRAM_FEED,
+        SocialPost.TIPUS_MOVIMENT,
+        "PPCC",
+    ),
 ]
 
 

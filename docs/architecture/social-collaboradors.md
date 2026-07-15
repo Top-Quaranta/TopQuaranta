@@ -62,6 +62,14 @@ with it off the feed publish path is byte-identical to before (no
   processing triggers substitution. On a successful publish it writes one
   `InvitacioColaboracioIG` per sent handle (idempotent `get_or_create`);
   if `media_publish` raises, no rows are written (no orphans).
+  - **`moviment` parity (2026-07-16).** The Thursday `moviment` post
+    joins this path at parity with the tops: `_collaborator_plan(
+    "moviment", {"entries": [sel]}, cfg)` runs the identical policy over
+    the winning entry's `artistes_pool` (single-song pool → principal +
+    any track collaborators). It stays gated on `ig_collaboradors_actiu`
+    like the rest — `moviment_actiu` only gates the post existing, so the
+    invite fires only when BOTH are on. Registry rows carry
+    `tipus_publicacio="moviment"`. No poller/acceptance change.
 - **`simular_colaboradors_ig`** — read-only dry-run command: builds the real
   pool for the latest top + novetats, applies the policy against the live
   registry, and prints per-post the pool, each artist's category +

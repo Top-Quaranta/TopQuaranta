@@ -377,6 +377,10 @@ staff-editable in Configuració → Editorial; ADR-0016):
   L'ENTRADA/Nº pos over the protagonist's duotoned artwork; caption via
   `captions.caption_moviment`. With the flag off the Thursday slot
   creates **no SocialPost row** (full no-op, unlike the matrix 'omès').
+  - **Tags + collaborator parity (2026-07-16):** protagonist tagged on
+    its cover via `_tags_for_entries` (not `_slide_tags`; the moviment IS
+    the cover) + ADR-0015 invite via `_collaborator_plan`, gated by
+    `ig_collaboradors_actiu` **not** `moviment_actiu`. See `social-collaboradors.md`.
 
 Stories are untouched. No-regression: with both flags off the covers
 never call `duotone` and are byte-identical (pinned in

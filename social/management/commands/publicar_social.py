@@ -171,6 +171,13 @@ def _pos_story_novetats(i: int, n: int) -> tuple[float, float]:
     return 0.5, 0.40 + i * 0.17
 
 
+def _pos_moviment(i: int, n: int) -> tuple[float, float]:
+    """Feed «moviment»: single artwork cover, one protagonist entry.
+    Anchor low-centre, near the credit line where the artist reads —
+    unlike the tops, whose cover carries no tag (this IS the cover)."""
+    return 0.5, 0.80
+
+
 class Command(BaseCommand):
     help = "Publica el contingut social del calendari per al dia indicat."
 
@@ -438,12 +445,22 @@ class Command(BaseCommand):
         # rest carry the artists whose entries appear on that slide.
         # Coordinates are spread across the canvas so the bubbles
         # don't all clump at the centre — see `_slide_tags` docstring.
-        # Moviment is a single artwork cover: no tags, one alt, no
-        # collaborators (it isn't part of the collaborator programme).
+        # Moviment is a single artwork cover carrying its ONE protagonist
+        # entry. Unlike the tops (cover untagged, tags on the list slides),
+        # the tag + invitation belong ON this cover — so we reuse the SAME
+        # primitives at the entry level rather than `_slide_tags`
+        # (multi-slide-coupled): `_tags_for_entries` tags the protagonist
+        # (+ any track collaborators with a handle; no handle → no tag, no
+        # error), and `_collaborator_plan` runs the ADR-0015 policy over the
+        # entry's `artistes_pool`. The collaborator behaviour is gated by
+        # `ig_collaboradors_actiu` (inside `_collaborator_plan`), exactly
+        # like the tops — `moviment_actiu` only gates the post existing.
         if slot.tipus == SocialPost.TIPUS_MOVIMENT:
-            tags_per_slide = [[]]
+            tags_per_slide = [_tags_for_entries([data], _pos_moviment)]
             alts_per_slide = [captions.alt_moviment(data)]
-            collab_pool, collab_slots, collab_id_by_user = [], 0, {}
+            collab_pool, collab_slots, collab_id_by_user = self._collaborator_plan(
+                slot.tipus, {"entries": [data]}, cfg
+            )
         else:
             tags_per_slide = self._slide_tags(slot.tipus, len(paths), data)
             # Per-slide alt text — same chunking as _slide_tags so each

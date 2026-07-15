@@ -378,20 +378,12 @@ staff-editable in Configuració → Editorial; ADR-0016):
   `captions.caption_moviment`. With the flag off the Thursday slot
   creates **no SocialPost row** (full no-op, unlike the matrix 'omès').
   - **Tags + collaborator parity (2026-07-16).** The protagonist is
-    tagged on its cover and is an invitation candidate, at parity with
-    the tops — reusing the SAME primitives, not a parallel path. Tags:
-    `_tags_for_entries([sel], _pos_moviment)` (the shared primitive
-    `_slide_tags` is built on; `_slide_tags` itself is unused here, being
-    multi-slide-coupled — its cover carries no tag, whereas the moviment
-    IS the cover). No handle → no tag, no error. Invitation:
-    `_collaborator_plan("moviment", {"entries": [sel]}, cfg)` runs the
-    full ADR-0015 policy (categories A/B/C, cooldowns, per-post slots)
-    over the winning entry's `artistes_pool`. **The invitation is gated
-    by `ig_collaboradors_actiu`, not `moviment_actiu`**: `moviment_actiu`
-    gates the post existing, `ig_collaboradors_actiu` whether it invites
-    — exactly like every top. `build_moviment` now propagates the
-    winning entry's `artistes_instagram_urls` + `artistes_pool` so both
-    primitives consume it. Registry rows carry `tipus_publicacio="moviment"`.
+    tagged on its cover via `_tags_for_entries` (the shared primitive
+    `_slide_tags` builds on; `_slide_tags` itself is multi-slide-coupled
+    and unused here — the moviment IS the cover) and is an ADR-0015
+    invitation candidate via `_collaborator_plan`, gated by
+    `ig_collaboradors_actiu` **not** `moviment_actiu` (the latter only
+    gates the post existing). Detail in `social-collaboradors.md`.
 
 Stories are untouched. No-regression: with both flags off the covers
 never call `duotone` and are byte-identical (pinned in

@@ -66,7 +66,8 @@
     "star": { "cx": 540, "cy": 1158, "outer": 17, "inner_ratio": 0.42 },
     "rule": { "y": 1157, "left": [80, 510], "right": [570, 1000], "color": "rgba(255, 255, 255, 0.34)" },
     "pill": { "font": "anton", "size": 38, "ls": 2, "pad_x": 20, "pad_y": 7, "h": 72, "cy": 1234 },
-    "cadencia": { "font": "instrument", "size": 40, "ppcc_text": "cada dissabte", "color": "rgb(255, 255, 255)" }
+    "cadencia": { "font": "instrument", "size": 40, "ppcc_text": "cada dissabte", "color": "rgb(255, 255, 255)" },
+    "credit": { "size": 38, "cy": 1112, "max_w": 900, "ls": 1.1, "sep": " · ", "color": "rgb(255, 255, 255)", "shadow": "rgba(0, 0, 0, 0.45)", "shadow_dx": 2, "shadow_dy": 2 }
   },
   "top_list": {
     "ppcc": { "accent": "rgb(250, 204, 21)", "chip": true },
@@ -84,5 +85,11 @@
       "artist": { "x": 344, "font": "bricolage", "weight": 500, "size": 23, "dy": 51, "color": "rgba(255, 255, 255, 0.64)" },
       "move": { "right": 990, "size": 24, "variant": "full" } },
     "footer": { "url": { "font": "instrument", "size": 30, "x": 70, "y": 1251, "color": "rgba(255, 255, 255, 0.55)" } }
+  },
+  "moviment": {
+    "subtitle": { "font": "instrument", "size": 48, "y": 166, "text": "el moviment de la setmana", "color": "rgb(243, 236, 221)" },
+    "l1": { "font": "anton", "size": 122, "cap_top": 480 },
+    "l2": { "font": "anton", "size": 384, "ls": 1.9, "cap_top": 566 },
+    "cadencia_text": "cada dijous"
   }
 }

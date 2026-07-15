@@ -294,6 +294,16 @@ class Command(BaseCommand):
         setmana_dissabte = setmana + datetime.timedelta(days=5)
         self.stdout.write(f"\n[setmana del {setmana_dissabte}] {label}")
 
+        # Moviment master gate: with `moviment_actiu` off (the default) the
+        # Thursday slot is a full no-op — NO SocialPost row, no attempt —
+        # so the merge is inert until staff enable it (unlike the matrix
+        # gate below, which records an 'omès' row).
+        if slot.tipus == SocialPost.TIPUS_MOVIMENT and not getattr(
+            cfg, "moviment_actiu", False
+        ):
+            self.stdout.write("  · moviment desactivat (dorment) → cap fila")
+            return
+
         # Distribution-matrix gate (the per-(canal × tipus) toggle, on top
         # of the master + per-channel switches checked at command entry).
         # The legacy Instagram-only "phase" rollout gate was removed
@@ -324,6 +334,10 @@ class Command(BaseCommand):
         # Build the payload.
         if slot.tipus in (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL):
             data = payload.build_top(territori, setmana)
+        elif slot.tipus == SocialPost.TIPUS_MOVIMENT:
+            data = payload.build_moviment(
+                setmana, getattr(cfg, "moviment_pujada_minima", 5)
+            )
         else:
             # Novetats use a publication-date-anchored window so two
             # consecutive runs can't double-count a boundary release.
@@ -363,9 +377,10 @@ class Command(BaseCommand):
         # We stash it on `post.metadata` after a successful publish
         # via `registry.mark_used` so future weeks pick fresh copy.
         phrase_ids: list[str] = []
+        artwork = getattr(cfg, "feed_artwork_actiu", False)
         if slot.tipus == SocialPost.TIPUS_TOP_PPCC:
             paths = renderer.render_feed_top(
-                "top_ppcc", territori, setmana, data["entries"]
+                "top_ppcc", territori, setmana, data["entries"], artwork=artwork
             )
             result = captions.compose_for_channel(
                 "instagram_feed", "top_ppcc", territori, setmana, data["entries"]
@@ -374,7 +389,7 @@ class Command(BaseCommand):
             phrase_ids = result.get("phrase_ids") or []
         elif slot.tipus == SocialPost.TIPUS_TOP_TERRITORIAL:
             paths = renderer.render_feed_top(
-                "top_territorial", territori, setmana, data["entries"]
+                "top_territorial", territori, setmana, data["entries"], artwork=artwork
             )
             result = captions.compose_for_channel(
                 "instagram_feed",
@@ -385,8 +400,18 @@ class Command(BaseCommand):
             )
             caption = result["text"]
             phrase_ids = result.get("phrase_ids") or []
+        elif slot.tipus == SocialPost.TIPUS_MOVIMENT:
+            paths = renderer.render_feed_moviment(setmana, data)
+            caption = captions.caption_moviment(setmana, data)
+            phrase_ids = []
         else:  # nous_*
-            paths = renderer.render_feed_novetats(slot.tipus, setmana, data["items"])
+            paths = renderer.render_feed_novetats(
+                slot.tipus,
+                setmana,
+                data["items"],
+                artwork=artwork,
+                mosaic_max=getattr(cfg, "feed_artwork_mosaic_max", 6),
+            )
             # Novetats now run through the narrative engine (audit #5).
             result = captions.compose_for_channel(
                 "instagram_feed", slot.tipus, "", setmana, data["items"]
@@ -413,23 +438,30 @@ class Command(BaseCommand):
         # rest carry the artists whose entries appear on that slide.
         # Coordinates are spread across the canvas so the bubbles
         # don't all clump at the centre — see `_slide_tags` docstring.
-        tags_per_slide = self._slide_tags(slot.tipus, len(paths), data)
-        # Per-slide alt text — same chunking as _slide_tags so each
-        # alt describes the slide the screen-reader user is on.
-        entries_for_alts = data.get("entries") or data.get("items") or []
-        alts_per_slide = captions.slide_alts(
-            slot.tipus, territori, setmana, entries_for_alts, len(paths)
-        )
+        # Moviment is a single artwork cover: no tags, one alt, no
+        # collaborators (it isn't part of the collaborator programme).
+        if slot.tipus == SocialPost.TIPUS_MOVIMENT:
+            tags_per_slide = [[]]
+            alts_per_slide = [captions.alt_moviment(data)]
+            collab_pool, collab_slots, collab_id_by_user = [], 0, {}
+        else:
+            tags_per_slide = self._slide_tags(slot.tipus, len(paths), data)
+            # Per-slide alt text — same chunking as _slide_tags so each
+            # alt describes the slide the screen-reader user is on.
+            entries_for_alts = data.get("entries") or data.get("items") or []
+            alts_per_slide = captions.slide_alts(
+                slot.tipus, territori, setmana, entries_for_alts, len(paths)
+            )
 
-        # Collaborator plan (ADR-0015). GATED: with `ig_collaboradors_actiu`
-        # False (the default) this returns an empty plan and every branch
-        # below is byte-identical to the pre-collaborator flow (no
-        # `collaborators` key ever reaches the container). With it on, the
-        # parent container is created inside a non-blocking substitution
-        # guard.
-        collab_pool, collab_slots, collab_id_by_user = self._collaborator_plan(
-            slot.tipus, data, cfg
-        )
+            # Collaborator plan (ADR-0015). GATED: with `ig_collaboradors_actiu`
+            # False (the default) this returns an empty plan and every branch
+            # below is byte-identical to the pre-collaborator flow (no
+            # `collaborators` key ever reaches the container). With it on, the
+            # parent container is created inside a non-blocking substitution
+            # guard.
+            collab_pool, collab_slots, collab_id_by_user = self._collaborator_plan(
+                slot.tipus, data, cfg
+            )
 
         # Real publish: upload each as carousel item, then carousel
         # parent + publish. Single-image fallback when only one

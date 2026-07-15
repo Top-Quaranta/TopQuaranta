@@ -338,6 +338,23 @@ def _story_cover(
     return img.resize((size, size), Image.LANCZOS)
 
 
+def _artwork_cover(deezer_id, url: str | None) -> Image.Image | None:
+    """Raw square cover for a feed duotone background (2026-07): the SAME
+    source chain as `_story_cover` — local self-hosted portada (500) first,
+    then the Deezer CDN — MINUS the placeholder. None → the caller keeps the
+    typographic cover (a full-canvas placeholder tile is worse than the
+    branded field). Returned unresized; `duotone_photo` cover-fits it."""
+    return _portada_local(deezer_id, 500) or (fetch_cover(url) if url else None)
+
+
+def _credit_artist(entry: dict) -> str:
+    """Full credit (principal + collaborators) for the cover credit line,
+    same list the caption/tagger use. The too-long megacollab case is
+    trimmed downstream in `build_top_cover`."""
+    noms = entry.get("artistes_noms") or []
+    return ", ".join(n for n in noms if n) or (entry.get("artista_nom") or "")
+
+
 def _logo_block(
     img_or_draw,
     x: int,
@@ -472,17 +489,30 @@ def _top_variant(territori: str) -> str:
 
 
 def render_feed_top(
-    tipus: str, territori: str, setmana, entries: list[dict]
+    tipus: str, territori: str, setmana, entries: list[dict], *, artwork: bool = False
 ) -> list[Path]:
     """Instagram TOP carousel (editorial redesign, 2026-06): cover + up to 4
     list slides of 10, COUNTING DOWN to #1 (40→31, 30→21, 20→11, 10→1) so the
-    climax lands on the last slide. `entries` in chart order (posicio 1..N)."""
+    climax lands on the last slide. `entries` in chart order (posicio 1..N).
+
+    `artwork` (gated by `feed_artwork_actiu`) backs the cover slide with the
+    #1's duotoned cover + a credit line; the list slides are unchanged. When
+    off (default) the cover is byte-identical to before."""
     from . import top_redesign as TR
 
     variant = _top_variant(territori)
+    art_img = None
+    credit = None
+    if artwork and entries:
+        e0 = entries[0]
+        art_img = _artwork_cover(e0.get("album_deezer_id"), e0.get("cover_url"))
+        if art_img is not None:
+            credit = ("Nº1", _credit_artist(e0), e0.get("canco_nom") or "")
     out: list[Path] = []
     p = _path(tipus, territori, setmana, 0)
-    TR.build_top_cover(setmana, variant).save(p, "JPEG", quality=90)
+    TR.build_top_cover(setmana, variant, artwork=art_img, credit=credit).save(
+        p, "JPEG", quality=90
+    )
     out.append(p)
 
     blocks = [(30, 40), (20, 30), (10, 20), (0, 10)]
@@ -522,7 +552,14 @@ def render_albums_mosaic(setmana, items: list[dict]) -> Path:
 # ── FEED · novetats (album/single carousel) ──────────────────────────
 
 
-def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
+def render_feed_novetats(
+    tipus: str,
+    setmana,
+    items: list[dict],
+    *,
+    artwork: bool = False,
+    mosaic_max: int = 6,
+) -> list[Path]:
     """The three novetats slides (cover, single-album, singles grid) via the
     editorial redesign in `social/feed_redesign.py` — the ONLY path since
     2026-06-11 (the gated legacy layout + `feed_redisseny_actiu` flag were
@@ -532,9 +569,24 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
     `tipus` is `nous_albums` (1 per slide) or `nous_singles` (≤10 per slide)."""
     from . import feed_redesign
 
+    # Duotone mosaic cover (gated): resolve up to `mosaic_max` covers via
+    # the SAME source chain as the tops (local jpg → Deezer). Clamp 4..6;
+    # <2 resolved → typographic cover (mock's <2 fallback). The 2×2 vs 2×3
+    # grid is picked from the resolved count by `duotone.duotone_mosaic`.
+    covers = None
+    if artwork:
+        cap = max(4, min(6, mosaic_max))
+        raw = [
+            c
+            for it in items[:cap]
+            if (c := _artwork_cover(it.get("album_deezer_id"), it.get("cover_url")))
+            is not None
+        ]
+        covers = raw if len(raw) >= 2 else None
+
     out: list[Path] = []
     p = _path(tipus, "", setmana, 0)
-    feed_redesign.build_cover(tipus, setmana).save(p, "JPEG", quality=90)
+    feed_redesign.build_cover(tipus, setmana, covers=covers).save(p, "JPEG", quality=90)
     out.append(p)
 
     if tipus == "nous_albums":
@@ -563,6 +615,18 @@ def render_feed_novetats(tipus: str, setmana, items: list[dict]) -> list[Path]:
             out.append(p)
             offset += chunk_size
     return out[:10]
+
+
+def render_feed_moviment(setmana, sel: dict) -> list[Path]:
+    """Single-cover Thursday «moviment» feed post (2026-07). Always
+    artwork-backed: the protagonist's cover via the same source chain as
+    the tops (local jpg → Deezer → None → plain global field)."""
+    from . import top_redesign as TR
+
+    art = _artwork_cover(sel.get("album_deezer_id"), sel.get("cover_url"))
+    p = _path("moviment", "", setmana, 0)
+    TR.build_moviment_cover(setmana, sel, artwork=art).save(p, "JPEG", quality=90)
+    return [p]
 
 
 # ── STORIES · PPCC editorial set (Step 3b redesign) ──────────────────

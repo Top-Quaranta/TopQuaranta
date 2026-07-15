@@ -80,6 +80,10 @@ _SECTION_MAP = {
     "editorial_veu": SECTION_EDITORIAL,
     "landing_editorial_veu": SECTION_EDITORIAL,
     "novetats_stories_per_pagina": SECTION_EDITORIAL,
+    "feed_artwork_actiu": SECTION_EDITORIAL,
+    "feed_artwork_mosaic_max": SECTION_EDITORIAL,
+    "moviment_actiu": SECTION_EDITORIAL,
+    "moviment_pujada_minima": SECTION_EDITORIAL,
     # B — distribution / channels (managed primarily in the distribution
     # cockpit; surfaced here read/write because the model is reflected).
     "newsletter_publicacio_pont_actiu": SECTION_DISTRIBUCIO,

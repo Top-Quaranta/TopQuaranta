@@ -222,3 +222,201 @@ def test_moviment_flag_on_no_content_omits(cfg):
         )
     post = SocialPost.objects.get(tipus=SocialPost.TIPUS_MOVIMENT)
     assert post.status == SocialPost.STATUS_OMES
+
+
+# ── moviment tags + collaborator invitation (parity with tops) ───────
+# The protagonist is tagged on its cover via the SAME primitive as the
+# tops (`_tags_for_entries`) and is an invitation candidate via the SAME
+# ADR-0015 policy (`_collaborator_plan`, gated by `ig_collaboradors_actiu`).
+
+
+class _CapUpload:
+    """Captures the single-image upload's user_tags + collaborators."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def __call__(
+        self, url, caption, *, user_tags=None, alt_text=None, collaborators=None
+    ):
+        self.calls.append({"user_tags": user_tags, "collaborators": collaborators})
+        return "img-cid"
+
+    @property
+    def tag_usernames(self):
+        return [t["username"] for t in (self.calls[-1]["user_tags"] or [])]
+
+    @property
+    def collaborators(self):
+        return list(self.calls[-1]["collaborators"] or [])
+
+
+def _sel(**over):
+    """A realistic `build_moviment` result (a 'pujada'); override at will."""
+    sel = {
+        "kind": "pujada",
+        "artist": "Maria Jaume",
+        "title": "Es Teus Besos",
+        "pos": 10,
+        "pos_ant": 38,
+        "delta": 28,
+        "phrase": "del 38 al 10",
+        "cover_url": None,
+        "album_deezer_id": None,
+        "reentrada": False,
+        "artistes_instagram_urls": [],
+        "artistes_pool": [],
+    }
+    sel.update(over)
+    return sel
+
+
+def _run_moviment(sel, cfg):
+    """Run the Thursday moviment publish with build_moviment→sel and the
+    IG client mocked. Returns the capturing upload fake."""
+    import pathlib
+
+    fake = _CapUpload()
+    with (
+        patch("social.payload.build_moviment", return_value=sel),
+        patch(
+            "social.management.commands.publicar_social.renderer.render_feed_moviment",
+            return_value=[pathlib.Path("moviment.jpg")],
+        ),
+        patch(
+            "social.management.commands.publicar_social._public_url_for",
+            side_effect=lambda p: f"https://x/{p.name}",
+        ),
+        patch(
+            "social.management.commands.publicar_social.instagram_client.upload_image",
+            new=fake,
+        ),
+        patch(
+            "social.management.commands.publicar_social.instagram_client.wait_until_finished",
+            return_value=None,
+        ),
+        patch(
+            "social.management.commands.publicar_social.instagram_client.publish_container",
+            side_effect=lambda cid: "media-mov",
+        ),
+    ):
+        call_command(
+            "publicar_social",
+            "--data",
+            THURSDAY,
+            "--tipus",
+            "moviment",
+            "--platform",
+            "instagram_feed",
+        )
+    return fake
+
+
+def _artista(handle="maria"):
+    from music.models import Artista
+
+    return Artista.objects.create(
+        nom="Maria Jaume",
+        slug="maria-jaume",
+        aprovat=True,
+        instagram_url=f"https://instagram.com/{handle}/",
+    )
+
+
+def test_moviment_flag_off_no_invitation(cfg):
+    """The existing no-row pin, extended: no invitation either."""
+    from social.models import InvitacioColaboracioIG
+
+    assert not cfg.moviment_actiu
+    call_command(
+        "publicar_social",
+        "--data",
+        THURSDAY,
+        "--tipus",
+        "moviment",
+        "--platform",
+        "instagram_feed",
+    )
+    assert not SocialPost.objects.filter(tipus=SocialPost.TIPUS_MOVIMENT).exists()
+    assert not InvitacioColaboracioIG.objects.exists()
+
+
+def test_moviment_tags_and_invites_with_username(cfg):
+    """Protagonist with a handle + collab system on → tag on the cover,
+    invitation candidate, and one registry row (tipus=moviment)."""
+    from social.models import InvitacioColaboracioIG
+
+    art = _artista("maria")
+    cfg.moviment_actiu = True
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    sel = _sel(
+        artistes_instagram_urls=["https://instagram.com/maria/"],
+        artistes_pool=[{"id": art.id, "username": "maria"}],
+    )
+    fake = _run_moviment(sel, cfg)
+
+    post = SocialPost.objects.get(tipus=SocialPost.TIPUS_MOVIMENT)
+    assert post.status == SocialPost.STATUS_PUBLICAT
+    assert fake.tag_usernames == ["maria"]  # tagged on the cover
+    assert fake.collaborators == ["maria"]  # invited
+    inv = InvitacioColaboracioIG.objects.get(artista=art)
+    assert inv.tipus_publicacio == SocialPost.TIPUS_MOVIMENT
+    assert inv.estat == InvitacioColaboracioIG.ESTAT_PENDENT
+
+
+def test_moviment_no_username_clean(cfg):
+    """No handle → no tag, no invitation, but the post still publishes."""
+    from social.models import InvitacioColaboracioIG
+
+    cfg.moviment_actiu = True
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    fake = _run_moviment(_sel(), cfg)  # empty urls + pool
+
+    post = SocialPost.objects.get(tipus=SocialPost.TIPUS_MOVIMENT)
+    assert post.status == SocialPost.STATUS_PUBLICAT
+    assert fake.calls[-1]["user_tags"] is None
+    assert fake.calls[-1]["collaborators"] is None
+    assert not InvitacioColaboracioIG.objects.exists()
+
+
+def test_moviment_cooldown_no_invite_but_tagged(cfg):
+    """Protagonist in category-A cooldown (recent acceptance): still
+    tagged, but NOT re-invited; post publishes clean."""
+    from django.utils import timezone
+
+    from social.models import InvitacioColaboracioIG
+
+    art = _artista("maria")
+    # A recent acceptance → category A. Cooldown A is measured from the
+    # last invite vs `timezone.now()` (NOT --data), so seed it 2 days ago
+    # to sit safely inside the 15-day window.
+    recent = timezone.now() - datetime.timedelta(days=2)
+    InvitacioColaboracioIG.objects.create(
+        artista=art,
+        username_snapshot="maria",
+        ig_media_id="old-media",
+        tipus_publicacio=SocialPost.TIPUS_TOP_PPCC,
+        data_invitacio=recent,
+        estat=InvitacioColaboracioIG.ESTAT_ACCEPTADA,
+        data_resolucio=recent,
+    )
+    cfg.moviment_actiu = True
+    cfg.ig_collaboradors_actiu = True
+    cfg.save()
+    sel = _sel(
+        artistes_instagram_urls=["https://instagram.com/maria/"],
+        artistes_pool=[{"id": art.id, "username": "maria"}],
+    )
+    fake = _run_moviment(sel, cfg)
+
+    post = SocialPost.objects.get(tipus=SocialPost.TIPUS_MOVIMENT)
+    assert post.status == SocialPost.STATUS_PUBLICAT
+    assert fake.tag_usernames == ["maria"]  # tag never depends on cooldown
+    assert fake.collaborators == []  # in cooldown → not invited
+    # No NEW registry row for the moviment post (only the seeded one stays).
+    assert InvitacioColaboracioIG.objects.count() == 1
+    assert not InvitacioColaboracioIG.objects.filter(
+        tipus_publicacio=SocialPost.TIPUS_MOVIMENT
+    ).exists()

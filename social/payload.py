@@ -256,6 +256,14 @@ def build_moviment(setmana: datetime.date, min_pujada: int) -> Optional[dict]:
             "cover_url": e.get("cover_url"),
             "album_deezer_id": e.get("album_deezer_id"),
             "reentrada": bool(e.get("reentrada")),
+            # Carried from the winning top entry so the feed publisher can
+            # reuse the SAME tag primitive (`_tags_for_entries`) and the
+            # SAME collaborator policy (`_collaborator_plan`) as the tops —
+            # no parallel path. `artistes_instagram_urls` feeds the slide
+            # tag (principal + collabs with a handle); `artistes_pool`
+            # feeds the ADR-0015 invitation candidate pool.
+            "artistes_instagram_urls": e.get("artistes_instagram_urls") or [],
+            "artistes_pool": e.get("artistes_pool") or [],
             **extra,
         }
 

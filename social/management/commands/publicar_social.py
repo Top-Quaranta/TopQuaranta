@@ -794,6 +794,20 @@ class Command(BaseCommand):
                 container = self._create_story_with_guard(url, tags_per_story[idx])
                 sid = instagram_client.publish_container(container)
                 story_ids.append(sid)
+                # Per-story mention audit trail: makes a mention
+                # verification a `grep "story .* tags="` instead of a
+                # reconstruction (the built list is the ground truth; a
+                # guard drop still surfaces on its own `menció descartada`
+                # line). Usernames only — no coordinates, no payload.
+                logger.info(
+                    "story %d/%d %s %s media=%s tags=[%s]",
+                    idx + 1,
+                    len(paths),
+                    slot.tipus,
+                    territori,
+                    sid,
+                    ",".join(t["username"] for t in tags_per_story[idx]),
+                )
             except Exception as exc:  # noqa: BLE001 — one bad story must not
                 # block the rest of the set (non-blocking, §5.6).
                 logger.exception(

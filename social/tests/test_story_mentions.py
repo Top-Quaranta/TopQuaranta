@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import logging
 import pathlib
 from contextlib import redirect_stdout
 from unittest.mock import patch
@@ -339,6 +340,27 @@ def test_story_slot_sends_per_story_tags(top_ppcc):
     assert fake.calls[3][1] == ["p3", "p2"]  # podi
     assert fake.calls[4][1] == ["p1"]  # hero
     assert post.metadata["n_mencions"] == 4
+
+
+def test_per_story_tags_logged(top_ppcc, caplog):
+    # Each published story emits one INFO audit line with its media id
+    # and the mentioned usernames, so a mention verification is a grep
+    # (`story .* tags=`) instead of a reconstruction. Lines appear both
+    # for stories that carry mentions and for those that don't.
+    fake = _CapturingUpload()
+    with caplog.at_level(
+        logging.INFO, logger="social.management.commands.publicar_social"
+    ):
+        _out, err = _run_story(fake)
+    assert err is None
+    lines = [
+        r.getMessage() for r in caplog.records if r.getMessage().startswith("story ")
+    ]
+    # 6 stories published → 6 audit lines, in order.
+    assert len(lines) == 6
+    assert lines[3] == "story 4/6 top_ppcc PPCC media=pub-cid-4 tags=[p3,p2]"  # podi
+    assert lines[4] == "story 5/6 top_ppcc PPCC media=pub-cid-5 tags=[p1]"  # hero
+    assert lines[0].endswith("tags=[]")  # intro carries no mentions
 
 
 def test_one_failed_story_never_blocks_the_rest(top_ppcc):

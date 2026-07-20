@@ -833,17 +833,14 @@ class Command(BaseCommand):
             )
             tags_per_story = [[] for _ in paths]
 
-        # Resumable story sets (2026-07-20 story-3 post-mortem, gated).
-        # With `ig_stories_resumibles_actiu` OFF the whole block below is
-        # byte-identical to the legacy flow. ON: a prior partial run left
-        # the row in ERROR with `metadata.published_slides` (idx+name+sid
-        # per slide that went out); we skip those and publish only the
-        # gap. `--force` starts fresh (ignores prior slides) so it re-
-        # publishes the whole set exactly as before — it never reads the
-        # resume state, so it can't half-skip.
-        resumibles = bool(getattr(cfg, "ig_stories_resumibles_actiu", False))
+        # Resumable story sets (2026-07-20 story-3 post-mortem). A prior
+        # partial run left the row in ERROR with `metadata.published_slides`
+        # (idx+name+sid per slide that went out); we skip those and publish
+        # only the gap. `--force` starts fresh (ignores prior slides) so it
+        # re-publishes the whole set — it never reads the resume state, so
+        # it can't half-skip.
         done_by_idx: dict[int, dict] = {}
-        if resumibles and not opts.get("force"):
+        if not opts.get("force"):
             for d in (post.metadata or {}).get("published_slides") or []:
                 if isinstance(d, dict) and "idx" in d:
                     done_by_idx[d["idx"]] = d
@@ -899,9 +896,8 @@ class Command(BaseCommand):
             "max_cancons": max_cancons,
             "n_slides": len(paths),
             "n_mencions": sum(len(t) for t in tags_per_story),
+            "published_slides": published_slides,
         }
-        if resumibles:
-            meta["published_slides"] = published_slides
         if fallides:
             meta["stories_fallides"] = fallides
             if not story_ids:
@@ -911,35 +907,25 @@ class Command(BaseCommand):
                 raise RuntimeError(
                     f"cap story publicada ({len(fallides)} pàgines han fallat)"
                 )
-            if resumibles:
-                # Incomplete set: keep it ERROR (not PUBLICAT) with the
-                # published slides persisted, so tq-run's retry re-enters
-                # `_publish_story` and backfills only the gap. Counted so
-                # handle() raises CommandError → non-zero exit (honours the
-                # PR #319 discipline until the set is truly complete).
-                self._mark(
-                    post,
-                    SocialPost.STATUS_ERROR,
-                    metadata=meta,
-                    error_msg=(
-                        f"{len(fallides)} de {len(paths)} stories pendents "
-                        "(resumible)"
-                    ),
-                )
-                self._n_errors += 1
-                self.stdout.write(
-                    f"  · ⚠ {len(fallides)} de {len(paths)} stories pendents; "
-                    "re-intent al proper run"
-                )
-                return
-            # Legacy partial (flag off): what went out stays out (same
-            # discipline as the slot-level rule, 2026-07-12); the failure
-            # is reported — error_msg + non-zero exit via _n_errors — not
-            # rolled back.
+            # Incomplete set: keep it ERROR (not PUBLICAT) with the
+            # published slides persisted, so tq-run's retry re-enters
+            # `_publish_story` and backfills only the gap. Counted so
+            # handle() raises CommandError → non-zero exit (honours the
+            # PR #319 discipline until the set is truly complete).
+            self._mark(
+                post,
+                SocialPost.STATUS_ERROR,
+                metadata=meta,
+                error_msg=(
+                    f"{len(fallides)} de {len(paths)} stories pendents " "(resumible)"
+                ),
+            )
             self._n_errors += 1
             self.stdout.write(
-                f"  · ⚠ {len(fallides)} de {len(paths)} stories han fallat"
+                f"  · ⚠ {len(fallides)} de {len(paths)} stories pendents; "
+                "re-intent al proper run"
             )
+            return
 
         self._mark(
             post,

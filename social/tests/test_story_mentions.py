@@ -364,18 +364,20 @@ def test_per_story_tags_logged(top_ppcc, caplog):
 
 
 def test_one_failed_story_never_blocks_the_rest(top_ppcc):
-    # Page 3 (podi) dies even untagged → guard exhausts, page is
-    # skipped, the other 5 publish; slot stays publicat but the run
-    # exits non-zero (partial failure is reported, not rolled back).
+    # Page 3 (podi) dies even untagged → guard exhausts, page is skipped,
+    # the other 5 publish. The set is incomplete so the slot is ERROR
+    # (resumable: tq-run's retry backfills the gap) and the run exits
+    # non-zero — the 5 that went out are NOT rolled back.
     fake = _CapturingUpload(fail_url="story_3.jpg")
     _out, err = _run_story(fake)
     assert err is not None  # CommandError → exit non-zero
     post = SocialPost.objects.get(platform="instagram_story", tipus="top_ppcc")
-    assert post.status == SocialPost.STATUS_PUBLICAT
+    assert post.status == SocialPost.STATUS_ERROR
     assert len(post.metadata["story_ids"]) == 5
+    assert {d["idx"] for d in post.metadata["published_slides"]} == {0, 1, 2, 4, 5}
     fallides = post.metadata["stories_fallides"]
     assert len(fallides) == 1 and fallides[0]["story"] == "story_3.jpg"
-    assert "stories han fallat" in post.error_msg
+    assert "pendents" in post.error_msg
 
 
 def test_tag_slide_mismatch_publishes_untagged(top_ppcc):

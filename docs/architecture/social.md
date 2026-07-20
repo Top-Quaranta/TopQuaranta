@@ -205,8 +205,8 @@ a2 → "5A SETMANA AL CIM"). Created in 3a; wired into the renderer in 3b.
 ## Story sets — see `social-stories.md`
 
 The Instagram **story** renderers (PPCC 7-slide editorial set, the
-paginated novetats story set, the territorial port) plus the gated
-publish-robustness fixes (resumable story sets + the 9007 readiness
+paginated novetats story set, the territorial port) plus the standard
+publish-robustness behaviour (resumable story sets + the 9007 readiness
 retry, 2026-07-20) live in **`docs/architecture/social-stories.md`**
 (split out per docs-maintenance Rule 3). Feed renderers stay below.
 

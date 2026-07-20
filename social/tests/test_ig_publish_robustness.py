@@ -1,13 +1,13 @@
-"""Gated IG publish-robustness fixes (2026-07-20 story-3 post-mortem).
+"""IG publish-robustness — the default, unconditional behaviour
+(2026-07-20 story-3 post-mortem; gating flags retired once prod ran on
+them):
 
-Two independent, default-off mitigations, each behind its own
-`ConfiguracioGlobal` flag:
-
-  1. `ig_retry_9007_actiu` — `publish_container` re-polls + retries on the
-     Graph API media-readiness race (code 9007 / subcode 2207027).
-  2. `ig_stories_resumibles_actiu` — a partially-published story set stays
-     ERROR (not PUBLICAT) with the sent slides persisted, so tq-run's
-     retry re-enters and backfills only the gap.
+  1. `publish_container` re-polls + retries on the Graph API media-
+     readiness race (code 9007 / subcode 2207027), up to the
+     `ig_retry_9007_intents` tunable (0 = single-shot).
+  2. A partially-published story set stays ERROR (not PUBLICAT) with the
+     sent slides persisted, so tq-run's retry re-enters and backfills
+     only the gap.
 
 Every test mocks the Instagram client — no real API calls.
 """
@@ -64,9 +64,8 @@ def _live(monkeypatch):
     monkeypatch.setattr(ic.time, "sleep", lambda s: None)
 
 
-def _cfg_retry(*, actiu, intents=2):
+def _cfg_retry(*, intents=2):
     cfg = ConfiguracioGlobal.load()
-    cfg.ig_retry_9007_actiu = actiu
     cfg.ig_retry_9007_intents = intents
     cfg.ig_retry_9007_backoff_s = 0
     cfg.save()
@@ -74,7 +73,7 @@ def _cfg_retry(*, actiu, intents=2):
 
 
 def test_9007_transient_recovers_with_retry(db, _live, monkeypatch):
-    _cfg_retry(actiu=True, intents=2)
+    _cfg_retry(intents=2)
     fake = _FakePost(err=_9007, fail_times=1)
     monkeypatch.setattr(ic, "_post", fake)
     assert ic.publish_container("cid-1") == "media-final"
@@ -82,7 +81,7 @@ def test_9007_transient_recovers_with_retry(db, _live, monkeypatch):
 
 
 def test_9007_gives_up_after_intents(db, _live, monkeypatch):
-    _cfg_retry(actiu=True, intents=2)
+    _cfg_retry(intents=2)
     fake = _FakePost(err=_9007, fail_times=99)  # never recovers
     monkeypatch.setattr(ic, "_post", fake)
     with pytest.raises(RuntimeError):
@@ -90,17 +89,19 @@ def test_9007_gives_up_after_intents(db, _live, monkeypatch):
     assert fake.calls == 3  # 1 initial + 2 retries
 
 
-def test_9007_flag_off_is_single_shot(db, _live, monkeypatch):
-    _cfg_retry(actiu=False)
+def test_9007_intents_zero_is_single_shot(db, _live, monkeypatch):
+    # The retry is default behaviour, but `intents=0` still degrades to a
+    # single publish attempt (the tunable, not a removed on/off flag).
+    _cfg_retry(intents=0)
     fake = _FakePost(err=_9007, fail_times=99)
     monkeypatch.setattr(ic, "_post", fake)
     with pytest.raises(RuntimeError):
         ic.publish_container("cid-1")
-    assert fake.calls == 1  # byte-identical legacy: no retry
+    assert fake.calls == 1  # no retry
 
 
 def test_non_9007_error_not_retried(db, _live, monkeypatch):
-    _cfg_retry(actiu=True, intents=3)
+    _cfg_retry(intents=3)
     fake = _FakePost(err="IG API 400: some other permanent error", fail_times=99)
     monkeypatch.setattr(ic, "_post", fake)
     with pytest.raises(RuntimeError):
@@ -160,11 +161,8 @@ class _StoryUpload:
         return f"cid-{self.tag}-{self._n}"
 
 
-def _run_story(upload_fake, *, resumibles, force=False, n_paths=6):
+def _run_story(upload_fake, *, force=False, n_paths=6):
     """Run the Saturday PPCC story slot with renderer + client mocked."""
-    cfg = ConfiguracioGlobal.load()
-    cfg.ig_stories_resumibles_actiu = resumibles
-    cfg.save()
     paths = [pathlib.Path(f"story_{i}.jpg") for i in range(n_paths)]
     argv = [
         "publicar_social",
@@ -215,10 +213,10 @@ def _post():
 
 
 def test_resumable_partial_leaves_error_and_exits_nonzero(top_ppcc):
-    # Slide index 3 (story_3.jpg) fails → set incomplete. With resumibles
-    # ON the row is ERROR (not PUBLICAT) and the run exits non-zero.
+    # Slide index 3 (story_3.jpg) fails → set incomplete. The row is ERROR
+    # (not PUBLICAT) and the run exits non-zero.
     fake = _StoryUpload(fail_names={"story_3.jpg"})
-    _out, err = _run_story(fake, resumibles=True)
+    _out, err = _run_story(fake)
     assert err is not None  # CommandError → tq-run retries
     post = _post()
     assert post.status == SocialPost.STATUS_ERROR
@@ -230,11 +228,11 @@ def test_resumable_partial_leaves_error_and_exits_nonzero(top_ppcc):
 def test_resumable_reentry_backfills_only_the_gap(top_ppcc):
     # Run 1: idx 3 fails. Run 2: everything works → only idx 3 retried,
     # the other 5 skipped (no duplicate publish), set completes.
-    _out, err = _run_story(_StoryUpload(fail_names={"story_3.jpg"}), resumibles=True)
+    _out, err = _run_story(_StoryUpload(fail_names={"story_3.jpg"}))
     assert err is not None and _post().status == SocialPost.STATUS_ERROR
 
     fake2 = _StoryUpload(tag="b")  # healthy, distinct id namespace
-    _out2, err2 = _run_story(fake2, resumibles=True)
+    _out2, err2 = _run_story(fake2)
     assert err2 is None
     post = _post()
     assert post.status == SocialPost.STATUS_PUBLICAT
@@ -251,7 +249,7 @@ def test_resumable_reentry_backfills_only_the_gap(top_ppcc):
 
 def test_resumable_full_success_marks_publicat(top_ppcc):
     fake = _StoryUpload()  # all healthy
-    _out, err = _run_story(fake, resumibles=True)
+    _out, err = _run_story(fake)
     assert err is None
     post = _post()
     assert post.status == SocialPost.STATUS_PUBLICAT
@@ -259,26 +257,13 @@ def test_resumable_full_success_marks_publicat(top_ppcc):
     assert len(post.metadata["published_slides"]) == 6
 
 
-def test_flag_off_keeps_legacy_partial_publicat(top_ppcc):
-    # Same failure, resumibles OFF: legacy behaviour — partial set is
-    # marked PUBLICAT with `stories_fallides`, run still exits non-zero.
-    fake = _StoryUpload(fail_names={"story_3.jpg"})
-    _out, err = _run_story(fake, resumibles=False)
-    assert err is not None
-    post = _post()
-    assert post.status == SocialPost.STATUS_PUBLICAT  # legacy: not ERROR
-    assert "published_slides" not in (post.metadata or {})
-    assert len(post.metadata["stories_fallides"]) == 1
-    assert len(post.metadata["story_ids"]) == 5
-
-
 def test_resumable_force_republishes_all_without_skipping(top_ppcc):
     # A completed set re-run with --force must NOT read the resume state
     # and skip slides: it re-publishes the whole set (legacy --force).
-    _out, err = _run_story(_StoryUpload(), resumibles=True)
+    _out, err = _run_story(_StoryUpload())
     assert err is None and _post().status == SocialPost.STATUS_PUBLICAT
 
     fake2 = _StoryUpload()
-    _out2, err2 = _run_story(fake2, resumibles=True, force=True)
+    _out2, err2 = _run_story(fake2, force=True)
     assert err2 is None
     assert len(fake2.calls) == 6  # all six re-published, none skipped

@@ -372,41 +372,22 @@ class ConfiguracioGlobal(models.Model):
         help_text="Dies abans de reinvitar un artista rebutjat (categoria C).",
     )
 
-    # ── IG publish robustness (2026-07-20 story-3 post-mortem, INERT) ──
-    # Two independent, default-off mitigations for the failure mode
-    # analysed on 2026-07-20 (top_territorial VAL story 3/6): the Graph
-    # API readiness race + the exit-code laundering it exposed. Both
-    # gated so the merge is inert until staff switch them on. See
-    # docs/architecture/social.md §"Publish robustness (gated)".
-    ig_retry_9007_actiu = models.BooleanField(
-        default=False,
-        help_text=(
-            "Reintenta `publish_container` quan la Graph API respon amb "
-            "codi 9007/subcode 2207027 («Media ID is not available»), una "
-            "carrera d'async-processing: re-polleja l'estat del contenidor "
-            "i reintenta. Apagat = comportament actual (una sola crida)."
-        ),
-    )
+    # ── IG publish robustness (2026-07-20 story-3 post-mortem) ──
+    # The 9007 publish retry + resumable story sets are now the DEFAULT,
+    # unconditional behaviour (`instagram_client.publish_container` +
+    # `publicar_social._publish_story`); the gating flags were retired
+    # after prod ran on them. These two remain as TUNABLES of the retry.
+    # See docs/architecture/social-stories.md §"Publish robustness".
     ig_retry_9007_intents = models.PositiveSmallIntegerField(
         default=2,
         help_text=(
-            "Nombre de reintents de publicació després del primer 9007 "
-            "(només si `ig_retry_9007_actiu`). 0 = cap reintent."
+            "Nombre de reintents de publicació després d'un 9007/2207027 "
+            "(«Media ID is not available»). 0 = cap reintent (una sola crida)."
         ),
     )
     ig_retry_9007_backoff_s = models.PositiveSmallIntegerField(
         default=3,
         help_text="Segons d'espera entre reintents 9007 (backoff curt fix).",
-    )
-    ig_stories_resumibles_actiu = models.BooleanField(
-        default=False,
-        help_text=(
-            "Story sets resumibles: en un fallo parcial, la fila queda en "
-            "ERROR (no PUBLICAT) amb les slides ja publicades desades a "
-            "`metadata.published_slides`; el reintent de tq-run reentra i "
-            "publica només les que falten, marcant PUBLICAT quan el set és "
-            "complet. Apagat = comportament actual (partial → PUBLICAT)."
-        ),
     )
 
     # Channel arg → its per-channel `*_actiu` field. Single source of

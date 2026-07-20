@@ -267,22 +267,21 @@ def upload_story(image_url: str, *, user_tags: list[dict] | None = None) -> str:
     return _post(f"{_user_id()}/media", body)["id"]
 
 
-def _publish_retry_cfg() -> tuple[bool, int, int]:
-    """`(enabled, intents, backoff_s)` for the 9007 publish retry, read
-    from ConfiguracioGlobal. Defaults to disabled on any load failure so
-    a config/DB hiccup never breaks the publish path (and so this stays
-    a no-op in contexts without the DB row)."""
+def _publish_retry_cfg() -> tuple[int, int]:
+    """`(intents, backoff_s)` for the 9007 publish retry, read from
+    ConfiguracioGlobal. Defaults to no-retry on any load failure so a
+    config/DB hiccup degrades to a single-shot publish (and so this stays
+    safe in contexts without the DB row)."""
     try:
         from ranking.models import ConfiguracioGlobal
 
         cfg = ConfiguracioGlobal.load()
         return (
-            bool(getattr(cfg, "ig_retry_9007_actiu", False)),
             int(getattr(cfg, "ig_retry_9007_intents", 0) or 0),
             int(getattr(cfg, "ig_retry_9007_backoff_s", 0) or 0),
         )
     except Exception:  # noqa: BLE001 — never let config break publishing
-        return (False, 0, 0)
+        return (0, 0)
 
 
 def _is_9007_not_ready(exc: Exception) -> bool:
@@ -294,18 +293,18 @@ def _is_9007_not_ready(exc: Exception) -> bool:
 
 
 def publish_container(container_id: str) -> str:
-    """Publish a media container. Returns the final media ID."""
+    """Publish a media container. Returns the final media ID.
+
+    `wait_until_finished` already saw FINISHED, but Meta's publish
+    endpoint can still race a few hundred ms behind and answer
+    9007/2207027 ("not ready"). We re-poll the container and retry up to
+    `ig_retry_9007_intents` times (0 = single-shot). Any non-9007 error
+    propagates immediately."""
     if is_dry_run():
         mid = f"dry-published-{int(time.time()*1000)}"
         logger.info("[DRY] publish_container %s → %s", container_id, mid)
         return mid
-    enabled, intents, backoff_s = _publish_retry_cfg()
-    if not enabled or intents <= 0:
-        # Flag off → byte-identical to the legacy single-shot publish.
-        return _post(f"{_user_id()}/media_publish", {"creation_id": container_id})["id"]
-    # Gated retry: `wait_until_finished` already saw FINISHED, but Meta's
-    # publish endpoint can still race a few hundred ms behind and answer
-    # 9007/2207027 ("not ready"). Re-poll the container and retry.
+    intents, backoff_s = _publish_retry_cfg()
     attempt = 0
     while True:
         try:

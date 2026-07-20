@@ -133,7 +133,7 @@ brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
 below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
 loud. PPCC byte-identical.
 
-## Publish robustness — gated (2026-07-20 story-3 post-mortem)
+## Publish robustness — standard (2026-07-20 story-3 post-mortem)
 
 On 2026-07-20 the top_territorial VAL story 3/6 failed with Graph API
 code **9007 / subcode 2207027** ("Media ID is not available"): a
@@ -141,25 +141,25 @@ readiness race where `wait_until_finished` saw `FINISHED` but
 `media_publish` raced a few hundred ms behind. The partial set was
 still marked `PUBLICAT`, so tq-run's retry found it published, skipped
 it, and the status file recorded exit 0 — the failure went green and
-the missing page was never re-attempted. Two independent, **default-off**
-`ConfiguracioGlobal` flags address the two halves:
+the missing page was never re-attempted. Two mitigations, first shipped
+gated then promoted to the **unconditional default** (the gating flags
+were retired once prod ran on them):
 
-- **`ig_retry_9007_actiu`** — `instagram_client.publish_container`
-  re-polls the container (`wait_until_finished`) and retries the publish
-  on a 9007/2207027 error. Tunables: `ig_retry_9007_intents`
-  (retries after the first failure, default 2) and
-  `ig_retry_9007_backoff_s` (seconds between retries, default 3). Only
-  9007/2207027 is retried; any other error propagates unchanged. Flag
-  off ⇒ byte-identical single-shot publish.
-- **`ig_stories_resumibles_actiu`** — a partially-published story set is
-  kept in `STATUS_ERROR` (not `PUBLICAT`), with the sent slides
-  persisted at `metadata.published_slides` (`{idx, name, sid}` each,
-  alongside the existing `story_ids`). The slot counts as an error so
-  `handle()` raises `CommandError` (non-zero exit), and tq-run's retry
-  re-enters `_publish_story`, skips the recorded slides and publishes
-  only the gap; `PUBLICAT` is set only when the whole set is out.
-  `--force` ignores the resume state and re-publishes the full set (the
-  legacy force semantics), so it never half-skips. Flag off ⇒ legacy
-  behaviour (partial ⇒ `PUBLICAT` + `stories_fallides`). No new status
-  and no data migration: `STATUS_ERROR` is the natural resume marker.
+- **9007 publish retry** — `instagram_client.publish_container` re-polls
+  the container (`wait_until_finished`) and retries the publish on a
+  9007/2207027 error. Tunables (still in `ConfiguracioGlobal`):
+  `ig_retry_9007_intents` (retries after the first failure, default 2;
+  **0 = single-shot**) and `ig_retry_9007_backoff_s` (seconds between
+  retries, default 3). Only 9007/2207027 is retried; any other error
+  propagates unchanged.
+- **Resumable story sets** — a partially-published story set is kept in
+  `STATUS_ERROR` (not `PUBLICAT`), with the sent slides persisted at
+  `metadata.published_slides` (`{idx, name, sid}` each, alongside the
+  existing `story_ids`). The slot counts as an error so `handle()` raises
+  `CommandError` (non-zero exit), and tq-run's retry re-enters
+  `_publish_story`, skips the recorded slides and publishes only the gap;
+  `PUBLICAT` is set only when the whole set is out. `--force` ignores the
+  resume state and re-publishes the full set (the legacy force
+  semantics), so it never half-skips. No dedicated status and no data
+  migration: `STATUS_ERROR` is the natural resume marker.
 

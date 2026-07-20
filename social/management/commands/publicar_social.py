@@ -833,9 +833,33 @@ class Command(BaseCommand):
             )
             tags_per_story = [[] for _ in paths]
 
+        # Resumable story sets (2026-07-20 story-3 post-mortem, gated).
+        # With `ig_stories_resumibles_actiu` OFF the whole block below is
+        # byte-identical to the legacy flow. ON: a prior partial run left
+        # the row in ERROR with `metadata.published_slides` (idx+name+sid
+        # per slide that went out); we skip those and publish only the
+        # gap. `--force` starts fresh (ignores prior slides) so it re-
+        # publishes the whole set exactly as before — it never reads the
+        # resume state, so it can't half-skip.
+        resumibles = bool(getattr(cfg, "ig_stories_resumibles_actiu", False))
+        done_by_idx: dict[int, dict] = {}
+        if resumibles and not opts.get("force"):
+            for d in (post.metadata or {}).get("published_slides") or []:
+                if isinstance(d, dict) and "idx" in d:
+                    done_by_idx[d["idx"]] = d
+
         story_ids: list[str] = []
+        published_slides: list[dict] = []
         fallides: list[dict] = []
         for idx, p in enumerate(paths):
+            if idx in done_by_idx:
+                d = done_by_idx[idx]
+                story_ids.append(d["sid"])
+                published_slides.append(d)
+                self.stdout.write(
+                    f"  · story {idx + 1}/{len(paths)} ja publicada, salta"
+                )
+                continue
             url = _public_url_for(p)
             try:
                 # Same async-readiness gate as the feed flow above,
@@ -843,6 +867,7 @@ class Command(BaseCommand):
                 container = self._create_story_with_guard(url, tags_per_story[idx])
                 sid = instagram_client.publish_container(container)
                 story_ids.append(sid)
+                published_slides.append({"idx": idx, "name": p.name, "sid": sid})
                 # Per-story mention audit trail: makes a mention
                 # verification a `grep "story .* tags="` instead of a
                 # reconstruction (the built list is the ground truth; a
@@ -875,6 +900,8 @@ class Command(BaseCommand):
             "n_slides": len(paths),
             "n_mencions": sum(len(t) for t in tags_per_story),
         }
+        if resumibles:
+            meta["published_slides"] = published_slides
         if fallides:
             meta["stories_fallides"] = fallides
             if not story_ids:
@@ -884,9 +911,31 @@ class Command(BaseCommand):
                 raise RuntimeError(
                     f"cap story publicada ({len(fallides)} pàgines han fallat)"
                 )
-            # Partial: what went out stays out (same discipline as the
-            # slot-level rule, 2026-07-12); the failure is reported —
-            # error_msg + non-zero exit via _n_errors — not rolled back.
+            if resumibles:
+                # Incomplete set: keep it ERROR (not PUBLICAT) with the
+                # published slides persisted, so tq-run's retry re-enters
+                # `_publish_story` and backfills only the gap. Counted so
+                # handle() raises CommandError → non-zero exit (honours the
+                # PR #319 discipline until the set is truly complete).
+                self._mark(
+                    post,
+                    SocialPost.STATUS_ERROR,
+                    metadata=meta,
+                    error_msg=(
+                        f"{len(fallides)} de {len(paths)} stories pendents "
+                        "(resumible)"
+                    ),
+                )
+                self._n_errors += 1
+                self.stdout.write(
+                    f"  · ⚠ {len(fallides)} de {len(paths)} stories pendents; "
+                    "re-intent al proper run"
+                )
+                return
+            # Legacy partial (flag off): what went out stays out (same
+            # discipline as the slot-level rule, 2026-07-12); the failure
+            # is reported — error_msg + non-zero exit via _n_errors — not
+            # rolled back.
             self._n_errors += 1
             self.stdout.write(
                 f"  · ⚠ {len(fallides)} de {len(paths)} stories han fallat"

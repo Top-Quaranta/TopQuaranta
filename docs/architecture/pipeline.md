@@ -45,6 +45,15 @@ from `music/constants.py`. Never raise — return `None` on any failure.
   that stops further calls until next day (`quota_exhausted()`).
 - Functions: `search_artist`, `get_artist_info`, `get_artist_albums`,
   `get_album_tracks`. Returns dict or `None`.
+- **Title handling (2026-07-21):** `Album.nom` / `Canco.nom` are stored
+  with Deezer's casing **verbatim** — only `normalize_apostrophes` runs
+  (orphan grave/acute accents + fancy quotes → ASCII `'`). The former
+  `titlecase_catala` pass was dropped at ingestion because it mangled
+  deliberate all-caps stylings (`QUE JO EM NEGUI` → `QUE JO EM Negui`:
+  2–3-letter words survived as false acronyms while longer words were
+  lowered). Applies going forward only; pre-existing rows were not
+  backfilled. `titlecase_catala` + the `retitlecase` command remain for
+  manual use but are no longer wired into the pipeline.
 
 ### `lastfm.py` — daily signal
 - Endpoint: `track.getInfo?autocorrect=1`.

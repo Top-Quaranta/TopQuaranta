@@ -73,6 +73,24 @@ class TestIngestarMetadataDeezer:
         assert canco.deezer_id == 500
 
     @patch("ingesta.management.commands.obtenir_metadata.deezer")
+    def test_titles_stored_raw_apostrophes_normalized(self, mock_deezer):
+        # Titles keep Deezer's casing verbatim (no more titlecase mangling
+        # of the artist's stylised caps); only orphan accents / fancy
+        # quotes are normalised to an ASCII apostrophe.
+        artista = _make_artista(deezer_id=98469)
+        mock_deezer.get_artist_albums.return_value = [
+            {**MOCK_ALBUM, "title": "QUE JO EM NEGUI (feat. Joan Pujol)"}
+        ]
+        mock_deezer.get_album_tracks.return_value = [
+            {**MOCK_TRACK, "title": "L´Estiu que VE"}
+        ]
+
+        call_command("obtenir_metadata", artista_id=artista.pk)
+
+        assert Album.objects.first().nom == "QUE JO EM NEGUI (feat. Joan Pujol)"
+        assert Canco.objects.first().nom == "L'Estiu que VE"
+
+    @patch("ingesta.management.commands.obtenir_metadata.deezer")
     def test_resolves_deezer_id_via_search_and_isrc(self, mock_deezer):
         artista = _make_artista(deezer_id=None)
         # Create a known track with ISRC for validation

@@ -11,7 +11,7 @@ from ingesta.caducitat import caducitat_cutoff, is_caducat
 from ingesta.clients import deezer
 from music.constants import DIES_CADUCITAT
 from music.models import Album, Artista, ArtistaDeezer, Canco, HistorialRevisio
-from music.titlecase_catala import titlecase_catala
+from music.titlecase_catala import normalize_apostrophes
 
 logger = logging.getLogger(__name__)
 
@@ -365,7 +365,7 @@ class Command(BaseCommand):
         tipus = RECORD_TYPE_MAP.get(data.get("record_type", "album"), "album")
 
         defaults = {
-            "nom": data["title"],
+            "nom": normalize_apostrophes(data["title"]),
             "artista": artista,
             "data_llancament": data.get("release_date"),
             "tipus": tipus,
@@ -448,7 +448,7 @@ class Command(BaseCommand):
         real_artista, deferred_main = self._resolve_main_artist(artista, contributors)
 
         defaults = {
-            "nom": titlecase_catala(data["title"]),
+            "nom": normalize_apostrophes(data["title"]),
             "album": album,
             "artista": real_artista,
             "durada_ms": (

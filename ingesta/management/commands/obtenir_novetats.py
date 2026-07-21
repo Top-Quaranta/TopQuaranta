@@ -12,7 +12,7 @@ from ingesta.clients.deezer import _parse_date
 from music.constants import DIES_CADUCITAT
 from music.ml import classificar_i_guardar
 from music.models import Album, Artista, ArtistaDeezer, Canco, HistorialRevisio
-from music.titlecase_catala import titlecase_catala
+from music.titlecase_catala import normalize_apostrophes
 
 logger = logging.getLogger(__name__)
 
@@ -607,7 +607,7 @@ class Command(BaseCommand):
         try:
             canco = Canco.objects.create(
                 deezer_id=dz_id,
-                nom=titlecase_catala(track_data["title"]),
+                nom=normalize_apostrophes(track_data["title"]),
                 album=album,
                 artista=artista,
                 durada_ms=(
@@ -676,7 +676,7 @@ class Command(BaseCommand):
         try:
             Album.objects.create(
                 deezer_id=dz_id,
-                nom=titlecase_catala(album_data["title"]),
+                nom=normalize_apostrophes(album_data["title"]),
                 artista=artista,
                 data_llancament=album_data.get("release_date"),
                 tipus=tipus,

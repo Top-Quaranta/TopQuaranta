@@ -397,6 +397,62 @@ new or cleared problem re-alerts. (Before 2026-06-07 the signature
 grep'd the report, which embedded the summary timestamp, the "fa Xh"
 ages and the daily error count, so every hourly tick re-spammed.)
 
+**TLS certificate expiry watch** (added 2026-07-27): `tq-health` emits
+a `CERTIFICATS TLS` block that opens a real TLS connection to every
+configured endpoint, with explicit SNI, and reads `notAfter` from the
+certificate **actually served**. It never reads a PEM from disk. That
+is the entire lesson of the July 2026 incident: `/etc/stalwart/certs`
+held a valid certificate from 26 June onwards while Stalwart kept
+serving an April one that expired on 26 July, so a file-based check
+would have reported healthy for a month. See
+`docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`.
+
+Wired as `scripts/health/tls_certs.sh` → `music.health.check_tls_certs`,
+the same sub-check pattern as the Spotify and Instagram-token rows.
+
+Per endpoint there are three states:
+
+| State | Meaning | Severity |
+|---|---|---|
+| `ok` | more than the threshold in days of runway | OK |
+| `expiring` | inside the threshold — or already past it | WARN, CRIT once expired |
+| `error` | could not connect, handshake, or parse | CRIT |
+
+An endpoint that cannot be reached is **never** reported as `ok`, and
+one failing endpoint does not stop the others from being measured. The
+handshake deliberately does not verify the chain: verification raises
+on an expired certificate, which would surface the one case we care
+about as "unreachable" instead of "expired". Timeout is 5 s per
+endpoint.
+
+Configuration lives in `ConfiguracioGlobal`, editable from
+`/staff/configuracio` under **Fiabilitat i certificats**:
+
+- `tls_endpoints_vigilats` — one `host:port` per line. Blank lines and
+  `#` comments are ignored, so a candidate can be parked without being
+  enabled. Ports 25 and 587 negotiate STARTTLS; everything else is
+  direct TLS.
+- `tls_avis_dies` — days of runway below which it warns. Default 21,
+  which sits above Let's Encrypt's ~30-day renewal window, so a
+  renewal that never lands is noticed before it is urgent.
+
+**The list ships EMPTY.** Deploying the check changes nothing until an
+operator opts in. Recommended entries when you do:
+
+```
+mail.topquaranta.cat:993
+mail.topquaranta.cat:465
+mail.topquaranta.cat:25
+topquaranta.cat:443
+api.cercol.team:443
+autoconfig.topquaranta.cat:443
+```
+
+A failing endpoint escalates `overall`, so the hourly
+`tq-health --email-on-fail` cron mails admin@ within the hour, and it
+contributes `tls:certs` to the dedup signature — one mail per distinct
+problem, not one per hour.
+
 **Git-tree drift detection** (added 2026-06-02): `tq-health` also
 emits a `Git tree: ...` row, delegating the classification to
 `bin/tq-git-drift` (a standalone helper so the logic is unit-tested —

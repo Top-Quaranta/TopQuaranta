@@ -22,6 +22,7 @@ from music.health import (
     check_instagram_token,
     check_spotify_coverage,
     check_spotify_premium,
+    check_tls_certs,
 )
 
 # ── check_spotify_premium ─────────────────────────────────────────
@@ -379,3 +380,136 @@ def test_instagram_token_severity(days, expected):
     with patch("social.instagram_client.days_until_expiry", return_value=days):
         severity, _msg, _payload = check_instagram_token()
     assert severity == expected
+
+
+# ── check_tls_certs (2026-07 expiry watch, measured on the wire) ───────
+#
+# The certificate is synthesised in-process and only `_fetch_peer_cert_der`
+# is substituted, so the real DER parsing and the real day arithmetic run.
+# No socket is ever opened: these pass in CI with no network.
+
+
+def _der_cert(days_from_now: int) -> bytes:
+    """A throwaway self-signed certificate expiring in `days_from_now`."""
+    from datetime import datetime, timedelta, timezone
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test.example")])
+    not_after = datetime.now(timezone.utc) + timedelta(days=days_from_now)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        # Anchored to `not_after` so an already-expired fixture still has
+        # a validity window that makes sense.
+        .not_valid_before(not_after - timedelta(days=90))
+        .not_valid_after(not_after)
+        .sign(key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.DER)
+
+
+def _set_tls_config(endpoints: str, dies: int = 21):
+    from ranking.models import ConfiguracioGlobal
+
+    config = ConfiguracioGlobal.load()
+    config.tls_endpoints_vigilats = endpoints
+    config.tls_avis_dies = dies
+    config.save()
+    return config
+
+
+@pytest.mark.django_db
+def test_tls_certs_no_endpoints_is_ok_and_noop():
+    """Ships empty: the check must be inert until the operator opts in."""
+    _set_tls_config("")
+    severity, _msg, payload = check_tls_certs()
+    assert severity == "OK"
+    assert payload["configured"] is False
+    assert payload["endpoints"] == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "days,expected_sev,expected_state",
+    [
+        (90, "OK", "ok"),
+        # Boundary. `(not_after - now).days` truncates, so a cert minted
+        # `n` days out reports `n - 1` whole days of runway: 23 → 22 > 21
+        # is still OK, 22 → 21 is not, and trips the threshold.
+        (23, "OK", "ok"),
+        (22, "WARN", "expiring"),
+        (3, "WARN", "expiring"),
+        # Already expired is the extreme of `expiring`, but it is an
+        # outage, not a heads-up — it has to escalate to CRIT.
+        (-5, "CRIT", "expiring"),
+    ],
+)
+def test_tls_certs_states_from_the_served_certificate(
+    days, expected_sev, expected_state
+):
+    _set_tls_config("host.example:993", dies=21)
+    with patch("music.health._fetch_peer_cert_der", return_value=_der_cert(days)):
+        severity, _msg, payload = check_tls_certs()
+    assert severity == expected_sev
+    assert payload["endpoints"][0]["state"] == expected_state
+
+
+@pytest.mark.django_db
+def test_tls_certs_unreachable_endpoint_is_never_ok():
+    """The whole point: 'I could not look' must not read as 'healthy'."""
+    _set_tls_config("unreachable.example:993")
+    with patch("music.health._fetch_peer_cert_der", side_effect=OSError("refused")):
+        severity, _msg, payload = check_tls_certs()
+    assert severity == "CRIT"
+    assert payload["endpoints"][0]["state"] == "error"
+    assert payload["endpoints"][0]["days"] is None
+
+
+@pytest.mark.django_db
+def test_tls_certs_one_failure_does_not_stop_the_others():
+    _set_tls_config("bad.example:993\ngood.example:443")
+
+    def fake(host, port, timeout):
+        if host == "bad.example":
+            raise OSError("connection refused")
+        return _der_cert(90)
+
+    with patch("music.health._fetch_peer_cert_der", side_effect=fake):
+        severity, _msg, payload = check_tls_certs()
+    assert severity == "CRIT"
+    states = {r["endpoint"]: r["state"] for r in payload["endpoints"]}
+    assert states == {"bad.example:993": "error", "good.example:443": "ok"}
+
+
+@pytest.mark.django_db
+def test_tls_certs_malformed_line_is_an_error_not_a_silent_skip():
+    """Blank lines and `#` comments are parked entries; a malformed one
+    is a configuration mistake and must be visible."""
+    _set_tls_config("mail.example\n# mail.topquaranta.cat:993\n\nok.example:443")
+    with patch("music.health._fetch_peer_cert_der", return_value=_der_cert(90)):
+        severity, _msg, payload = check_tls_certs()
+    assert severity == "CRIT"
+    states = {r["endpoint"]: r["state"] for r in payload["endpoints"]}
+    assert states["mail.example"] == "error"
+    assert states["ok.example:443"] == "ok"
+    assert "# mail.topquaranta.cat:993" not in states
+
+
+@pytest.mark.django_db
+def test_tls_certs_probes_the_configured_host_and_port():
+    _set_tls_config("mail.example:465")
+    with patch(
+        "music.health._fetch_peer_cert_der", return_value=_der_cert(90)
+    ) as fetch:
+        check_tls_certs()
+    (host, port, timeout), _kwargs = fetch.call_args
+    assert (host, port) == ("mail.example", 465)
+    assert timeout > 0

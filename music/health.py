@@ -1,7 +1,7 @@
-"""Health checks for the Spotify playlist subsystem.
+"""Health checks run by `bin/tq-health` via `scripts/health/*.sh`.
 
-Two checks, both invoked from `scripts/health/spotify_*.sh` (and
-transitively from `bin/tq-health`).
+Spotify playlist checks, the Instagram token expiry check, and the TLS
+certificate expiry watch.
 
   * `check_spotify_premium()` — confirms that the OAuth refresh
     token still works AND that the account is on a Premium tier.
@@ -350,6 +350,193 @@ def check_instagram_token() -> tuple[Severity, str, dict]:
     return "OK", f"IG token OK ({days}d fins l'expiració desada).", payload
 
 
+# ── TLS certificate expiry ────────────────────────────────────────────
+# Measured ON THE WIRE, never from a PEM on disk. The July 2026 incident
+# is the whole reason this exists: /etc/stalwart/certs held a valid
+# certificate from 26 June onwards while the mail server kept serving an
+# April one that expired on 26 July. Any check that read the file would
+# have reported healthy for a month. See
+# `docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`.
+#
+# The connection deliberately does NOT verify the chain (CERT_NONE +
+# check_hostname off). Verification raises on an expired certificate —
+# precisely the case we exist to report — and we would then surface it
+# as an unreachable endpoint instead of an expiry. So we take the peer
+# certificate in DER form and read `notAfter` ourselves.
+TLS_TIMEOUT_SECONDS = 5
+
+# Ports where TLS is negotiated with STARTTLS rather than being implicit.
+# 25 matters: it is the port that carries inbound mail.
+_STARTTLS_SMTP_PORTS = {25, 587}
+
+
+def _parse_tls_endpoints(raw: str) -> tuple[list[tuple[str, int]], list[str]]:
+    """Split the `host:port` lines of `tls_endpoints_vigilats`.
+
+    Returns `(endpoints, bad_lines)`. Blank lines and `#` comments are
+    skipped so the operator can park a recommended endpoint in the field
+    without enabling it. `rpartition` on the last colon keeps IPv6
+    literals in brackets working.
+    """
+    endpoints: list[tuple[str, int]] = []
+    bad: list[str] = []
+    for line in (raw or "").splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        host, sep, port = entry.rpartition(":")
+        if not sep or not host or not port.isdigit() or not 0 < int(port) < 65536:
+            bad.append(entry)
+            continue
+        endpoints.append((host, int(port)))
+    return endpoints, bad
+
+
+def _fetch_peer_cert_der(host: str, port: int, timeout: float) -> bytes:
+    """Open a TLS connection with explicit SNI; return the served cert (DER).
+
+    Separated from `check_tls_certs` so tests can substitute it and run
+    the real parsing path against a synthetic certificate, with no
+    network in CI.
+    """
+    import socket
+    import ssl
+
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    if port in _STARTTLS_SMTP_PORTS:
+        import smtplib
+
+        with smtplib.SMTP(host, port, timeout=timeout) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ctx)
+            der = smtp.sock.getpeercert(binary_form=True)
+    else:
+        with socket.create_connection((host, port), timeout=timeout) as raw:
+            # server_hostname is the SNI sent on the wire. A vhost that
+            # serves several names returns the wrong certificate without it.
+            with ctx.wrap_socket(raw, server_hostname=host) as tls:
+                der = tls.getpeercert(binary_form=True)
+    if not der:
+        raise ValueError("the peer returned no certificate")
+    return der
+
+
+def _not_after_utc(der: bytes):
+    """`notAfter` of a DER certificate, as an aware UTC datetime."""
+    from cryptography import x509
+
+    cert = x509.load_der_x509_certificate(der)
+    try:
+        return cert.not_valid_after_utc
+    except AttributeError:  # pragma: no cover - cryptography < 42
+        from datetime import timezone
+
+        return cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+
+def check_tls_certs() -> tuple[Severity, str, dict]:
+    """Report the expiry of the certificate each endpoint actually serves.
+
+    Per-endpoint state is one of:
+
+      * ``ok``       — more than `tls_avis_dies` days of runway
+      * ``expiring`` — inside the threshold, or already past it
+      * ``error``    — could not connect, handshake, or parse
+
+    An unreachable endpoint is never reported as ``ok``, and one bad
+    endpoint never stops the others from being measured. Severity is
+    CRIT when something is already expired or unreachable (both mean the
+    operator has to act now), WARN when something is merely approaching
+    its threshold, OK otherwise.
+
+    With no endpoints configured the check is a no-op that returns OK —
+    the list ships empty on purpose, so deploying this changes nothing
+    until the operator opts in.
+    """
+    from datetime import datetime, timezone
+
+    try:
+        from ranking.models import ConfiguracioGlobal
+    except Exception as exc:  # noqa: BLE001
+        return "CRIT", f"Django import failed: {exc}", {}
+
+    config = ConfiguracioGlobal.load()
+    warn_days = int(config.tls_avis_dies)
+    endpoints, bad_lines = _parse_tls_endpoints(config.tls_endpoints_vigilats)
+
+    if not endpoints and not bad_lines:
+        return (
+            "OK",
+            "TLS: cap endpoint configurat.",
+            {"endpoints": [], "warn_below": warn_days, "configured": False},
+        )
+
+    now = datetime.now(timezone.utc)
+    results: list[dict] = []
+
+    for entry in bad_lines:
+        results.append(
+            {
+                "endpoint": entry,
+                "state": "error",
+                "days": None,
+                "detail": "format invàlid, s'espera host:port",
+            }
+        )
+
+    for host, port in endpoints:
+        label = f"{host}:{port}"
+        try:
+            der = _fetch_peer_cert_der(host, port, TLS_TIMEOUT_SECONDS)
+            not_after = _not_after_utc(der)
+        except Exception as exc:  # noqa: BLE001
+            # Deliberately broad: socket, ssl, smtplib and the DER parser
+            # raise from different hierarchies, and any of them means the
+            # same operational thing — we could not measure this endpoint.
+            results.append(
+                {
+                    "endpoint": label,
+                    "state": "error",
+                    "days": None,
+                    "detail": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            continue
+        days = (not_after - now).days
+        results.append(
+            {
+                "endpoint": label,
+                "state": "ok" if days > warn_days else "expiring",
+                "days": days,
+                "detail": not_after.strftime("%Y-%m-%d"),
+            }
+        )
+
+    payload = {"endpoints": results, "warn_below": warn_days, "configured": True}
+    errors = [r for r in results if r["state"] == "error"]
+    expiring = [r for r in results if r["state"] == "expiring"]
+    expired = [r for r in expiring if r["days"] is not None and r["days"] <= 0]
+
+    if errors or expired:
+        bits = []
+        if expired:
+            bits.append("caducat: " + ", ".join(r["endpoint"] for r in expired))
+        if errors:
+            bits.append("inabastable: " + ", ".join(r["endpoint"] for r in errors))
+        return "CRIT", "TLS — " + "; ".join(bits) + ".", payload
+    if expiring:
+        bits = ", ".join(f"{r['endpoint']} ({r['days']}d)" for r in expiring)
+        return "WARN", f"TLS caduca aviat: {bits}.", payload
+    return (
+        "OK",
+        f"TLS OK ({len(results)} endpoints, llindar {warn_days}d).",
+        payload,
+    )
+
+
 def main(argv: list[str]) -> int:
     """CLI dispatch so the bash wrappers can `python -m music.health <check>`.
 
@@ -360,6 +547,7 @@ def main(argv: list[str]) -> int:
         "spotify_premium": check_spotify_premium,
         "spotify_coverage": check_spotify_coverage,
         "instagram_token": check_instagram_token,
+        "tls_certs": check_tls_certs,
     }
     if len(argv) < 2 or argv[1] not in checks:
         print("usage: python -m music.health {" + "|".join(checks) + "}")

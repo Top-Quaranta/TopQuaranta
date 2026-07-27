@@ -390,6 +390,46 @@ class ConfiguracioGlobal(models.Model):
         help_text="Segons d'espera entre reintents 9007 (backoff curt fix).",
     )
 
+    # ── TLS certificate expiry watch (2026-07-27) ──
+    # Added after the Stalwart certificate expired unnoticed on
+    # 2026-07-26. `tq-health` opens a TLS connection to each endpoint
+    # and reads the certificate ACTUALLY SERVED; a PEM on disk proves
+    # nothing, which is exactly how that incident stayed invisible for
+    # a month. See docs/post-mortems/2026-07-26-stalwart-cert-expirat.md.
+    #
+    # Default EMPTY so deploying this changes nothing — the operator
+    # opts in per endpoint. Recommended entries, one per line:
+    #     mail.topquaranta.cat:993
+    #     mail.topquaranta.cat:465
+    #     mail.topquaranta.cat:25
+    #     topquaranta.cat:443
+    #     api.cercol.team:443
+    #     autoconfig.topquaranta.cat:443
+    tls_endpoints_vigilats = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Endpoints TLS a vigilar, un per línia en format «host:port» "
+            "(p. ex. mail.topquaranta.cat:993). Les línies buides i les "
+            "que comencen amb # s'ignoren, així pots deixar-hi candidats "
+            "apuntats sense activar-los. Buit = cap vigilància. Els ports "
+            "25 i 587 es negocien amb STARTTLS; la resta és TLS directe. "
+            "Es mesura el certificat servit per la xarxa, mai un fitxer "
+            "del disc."
+        ),
+    )
+    tls_avis_dies = models.PositiveSmallIntegerField(
+        default=21,
+        validators=[MinValueValidator(1), MaxValueValidator(365)],
+        help_text=(
+            "Dies de marge abans de la caducitat a partir dels quals "
+            "tq-health avisa. Per defecte 21: deixa tres setmanes de "
+            "reacció i queda per damunt de la finestra de renovació de "
+            "Let's Encrypt (~30 dies), de manera que una renovació que "
+            "no arriba es nota abans no siga urgent."
+        ),
+    )
+
     # Channel arg → its per-channel `*_actiu` field. Single source of
     # truth for the set of distribution channels the master gates.
     CHANNEL_SWITCH_FIELDS = {

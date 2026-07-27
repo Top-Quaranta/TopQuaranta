@@ -28,7 +28,6 @@ jobs:
           key: ${{ secrets.HETZNER_DEPLOY_KEY }}
           port: 22
           command_timeout: 10m
-          script_stop: true
           # tq-deploy is the single entry point. It runs:
           #   1. git pull --ff-only
           #   2. bin/tq-sync-infra (Caddyfile, cron, systemd, logrotate)
@@ -36,7 +35,26 @@ jobs:
           #   4. npm run build (only when web-react/ changed)
           #   5. sudo systemctl reload topquaranta-web
           #   6. smoke test against / and /api/v1/top/?territori=PPCC
-          # Any non-zero exit aborts the deploy and the workflow fails.
+          #
+          # `script_stop: true` used to sit here. It WAS a valid input at
+          # v1.2.0 (declared in that tag's action.yml) and is GONE from
+          # v1.2.5, so the Dependabot bump in #32 — a one-line version
+          # change — silently dropped it, and every run since has logged
+          # "Unexpected input(s) 'script_stop'". v1.2.5 offers no
+          # replacement input.
+          #
+          # So the guarantee is enforced HERE instead of being delegated
+          # to the action: `set -e` aborts the remote shell on the first
+          # failure, and the absolute path means a failed `cd` cannot
+          # resolve `bin/tq-deploy` against the login directory. Beyond
+          # that, `bin/tq-deploy` propagates its own documented exit
+          # codes (see its header).
+          #
+          # NOT verified: whether a non-zero remote exit turns this job
+          # red. v1.2.5's action.yml documents nothing about exit-status
+          # propagation, and we have not read the drone-ssh binary it
+          # downloads. Do not assume the chain holds end to end.
           script: |
+            set -e
             cd /home/topquaranta/app
-            bin/tq-deploy
+            /home/topquaranta/app/bin/tq-deploy

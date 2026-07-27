@@ -73,6 +73,35 @@ artists are off-limits.
 Until the fixture is created (open backlog item), the operator
 manually documents every smoke side-effect and reverts it.
 
+## Ops scripts
+
+An ops script must assert the **externally observable outcome** it
+claims to produce, not the exit codes of the commands it ran. Its own
+exit code has to reflect that assertion: green means the world
+changed, not that every step returned 0.
+
+Concretely, a script that installs a certificate checks what is being
+served on the port afterwards; one that reloads a service checks the
+service answers; one that publishes checks the item is visible. If
+the observable check cannot be done, say so in the log rather than
+exiting 0.
+
+Two corollaries:
+
+- **Be idempotent, and let a no-op be a no-op.** If the desired state
+  already holds, log it and exit 0 without restarting or rewriting
+  anything. Restarting a production service "just in case" on every
+  trigger is a cost with no benefit.
+- **Log to a durable file.** journald on this host does not persist;
+  a script whose only trace is journald will have no evidence left by
+  the time anyone investigates. Timestamp each line and cap the size.
+
+This rule was added after
+`docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`, where a sync
+script reported success for a month while the mail server served a
+certificate that eventually expired. Every command it ran did return
+0; none of them observed the certificate actually in use.
+
 ## Captures and screenshots
 
 When showing captured output of a system (status panels, API

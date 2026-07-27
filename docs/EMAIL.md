@@ -182,26 +182,35 @@ respon `550 The cercol.team domain is not verified`.
 ## TLS de Stalwart (cert Let's Encrypt via Caddy)
 
 Caddy gestiona el cert per a `mail.topquaranta.cat`. Stalwart no parla
-ACME directament, però llegeix el cert de fitxer:
+ACME directament.
 
-```
-/etc/stalwart/certs/mail.topquaranta.cat.{crt,key}
-```
+⚠️ **Stalwart NO llegeix el cert de cap fitxer.** Des de la 0.16 la
+configuració viu dins de RocksDB i el certificat és una propietat
+inline de l'objecte `x:Certificate`. Les variables
+`STALWART_CERTIFICATE_*` de `/etc/stalwart/stalwart.env` apunten a
+`/etc/stalwart/certs/…` amb la macro `%{file:…}%`, estan carregades al
+procés i **no s'avaluen mai**: eixa sintaxi és anterior a la 0.16.
+Escriure PEM en eixe directori no té cap efecte.
 
-Aquests fitxers són còpia dels de Caddy a
-`/var/lib/caddy/.local/share/caddy/certificates/.../mail.topquaranta.cat/`.
-
-**Sync automàtic**: hi ha una systemd `path` unit que vigila el cert
-de Caddy i, quan canvia (renovacions cada ~60 dies), copia els fitxers
-a `/etc/stalwart/certs/` + reinicia Stalwart:
+**Sync automàtic**: una systemd `path` unit vigila el cert de Caddy i,
+quan canvia, empeny el cert nou a la config viva per JMAP i reinicia
+Stalwart (el reinici cal: escriure la config no intercanvia el context
+TLS ja carregat en memòria):
 
 * `/etc/systemd/system/stalwart-cert-sync.path`
 * `/etc/systemd/system/stalwart-cert-sync.service`
-* `/usr/local/sbin/stalwart-cert-sync.sh`
+* `/usr/local/sbin/stalwart-cert-sync.sh` — versionat a
+  [`deploy/stalwart-cert-sync.sh`](../deploy/stalwart-cert-sync.sh)
 
-La primera vegada el cert s'ha de carregar manualment via panell
-Stalwart → TLS → Certificates (admet path o paste de PEM). Després el
-sync automàtic n'agafa les renovacions.
+El script és idempotent: compara el serial del cert de Caddy al disc
+amb el que realment se serveix al 993 i, si coincideixen, no fa res i
+no reinicia. Té `--dry-run`. El mecanisme complet, i per què el camí
+de fitxer no funciona, a [`docs/ops/infra.md`](ops/infra.md).
+
+Quan cal fer-ho a mà, no toques fitxers: `sudo
+/usr/local/sbin/stalwart-cert-sync.sh`. El panell web de Stalwart
+(→ TLS → Certificates) fa el mateix, però ara mateix el bundle del
+webadmin no està desplegat en este servidor i `/` respon 404.
 
 ## BIMI (avatar a clients de correu)
 

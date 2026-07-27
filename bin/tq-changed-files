@@ -1,0 +1,50 @@
+#!/bin/bash
+# List the files that changed between two refs, one per line.
+#
+# Exists so `tq-deploy` can compute that list ONCE, outside any `if`
+# condition, and fail loudly when git cannot answer.
+#
+# Why it is a separate script (2026-07-27): inside an `if` condition
+# `set -e` does not apply, so `git diff --name-only A B | grep -q X`
+# collapsed a *failure to compute the diff* into "X did not change".
+# `tq-deploy` then skipped the venv sync and the SPA build and still
+# printed `✓ Deploy complete` with exit 0 — the same shape of defect as
+# the certificate sync script that reported success for a month while
+# the mail server served an expired certificate. "I could not look" and
+# "nothing changed" must never share an exit path. Extracting it also
+# makes the behaviour unit-testable, which it was not while inline
+# (`tq-deploy` refuses to run as anyone but `topquaranta` and needs
+# sudo + network). Tested at
+# `topquaranta/tests/test_deploy_safety.py::test_tq_changed_files_*`.
+#
+# Usage:
+#   tq-changed-files <from-ref> <to-ref>
+#
+# Exit codes:
+#   0  list printed on stdout (empty when the refs are identical)
+#   7  git could not compute the diff
+#  64  wrong usage
+
+set -euo pipefail
+
+if [ "$#" -ne 2 ]; then
+    echo "usage: $(basename "$0") <from-ref> <to-ref>" >&2
+    exit 64
+fi
+
+FROM=$1
+TO=$2
+
+# Identical refs: nothing changed, and git is not consulted at all.
+if [ "$FROM" = "$TO" ]; then
+    exit 0
+fi
+
+if ! out=$(git diff --name-only "$FROM" "$TO" 2>&1); then
+    echo "tq-changed-files: git diff failed for ${FROM}..${TO}: $out" >&2
+    exit 7
+fi
+
+if [ -n "$out" ]; then
+    printf '%s\n' "$out"
+fi

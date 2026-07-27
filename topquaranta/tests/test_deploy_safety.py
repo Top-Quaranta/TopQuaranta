@@ -508,3 +508,121 @@ def test_tq_git_drift_classifies_doc_only_vs_code(tmp_path):
     (prod / "app" / "hack.py").write_text("hack\n")
     r = run()
     assert r.returncode == 1, f"dirty tree not flagged: {r.stdout}"
+
+
+# ── bin/tq-changed-files (2026-07-27) ─────────────────────────────────
+#
+# Regression guard for the defect described in the script's own header:
+# the changed-file detection used to live inside an `if` condition, where
+# `set -e` does not apply, so a git failure collapsed into "that path did
+# not change" and the deploy skipped work while still exiting 0.
+# "I could not look" must never share an exit path with "nothing changed".
+
+
+def _changed_files_script():
+    script = PROJECT_ROOT / "bin" / "tq-changed-files"
+    if not script.is_file():
+        pytest.skip("tq-changed-files not present")
+    return script
+
+
+def _run_changed_files(repo, *args):
+    return subprocess.run(
+        [str(_changed_files_script()), *args],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+
+
+def _repo_with_two_commits(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "-c", "init.defaultBranch=main", "init", "-q")
+    (repo / "keep.txt").write_text("one\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "first")
+    first = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    (repo / "requirements.txt").write_text("django==6.0.6\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "second")
+    return repo, first
+
+
+def test_tq_changed_files_lists_the_changed_paths(tmp_path):
+    repo, first = _repo_with_two_commits(tmp_path)
+    result = _run_changed_files(repo, first, "HEAD")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == ["requirements.txt"]
+
+
+def test_tq_changed_files_identical_refs_is_empty_and_ok(tmp_path):
+    repo, _first = _repo_with_two_commits(tmp_path)
+    result = _run_changed_files(repo, "HEAD", "HEAD")
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_tq_changed_files_fails_loudly_when_the_diff_is_not_computable(tmp_path):
+    """THE test. A git failure must exit non-zero with a message, never
+    return an empty list that downstream reads as 'nothing changed'."""
+    repo, _first = _repo_with_two_commits(tmp_path)
+    result = _run_changed_files(repo, "no-such-ref", "HEAD")
+    assert result.returncode == 7, result.stdout
+    assert result.stdout.strip() == ""
+    assert "git diff failed" in result.stderr
+
+
+def test_tq_changed_files_rejects_wrong_usage(tmp_path):
+    repo, _first = _repo_with_two_commits(tmp_path)
+    assert _run_changed_files(repo, "only-one-ref").returncode == 64
+
+
+def test_tq_deploy_computes_the_diff_once_outside_any_condition():
+    """Static guard: `tq-deploy` must not go back to piping `git diff`
+    into `grep` inside an `if`, which is what made a failure silent."""
+    script = PROJECT_ROOT / "bin" / "tq-deploy"
+    if not script.is_file():
+        pytest.skip("tq-deploy not present")
+    body = script.read_text()
+    code = "\n".join(
+        line for line in body.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "git diff --name-only" not in code, (
+        "bin/tq-deploy must not compute the diff inline; delegate to "
+        "bin/tq-changed-files so a git failure is loud. See that script's "
+        "header and docs/ops/runbook.md."
+    )
+    assert "tq-changed-files" in code
+    assert "exit 7" in code, "the not-computable path must have its own exit code"
+
+
+def test_tq_deploy_documents_every_exit_code_it_uses():
+    """Codes drifted once already: 6 was in use and undocumented."""
+    script = PROJECT_ROOT / "bin" / "tq-deploy"
+    if not script.is_file():
+        pytest.skip("tq-deploy not present")
+    body = script.read_text()
+    header = body.split("set -euo pipefail")[0]
+    used = {
+        line.split("exit ")[1].split()[0]
+        for line in body.splitlines()
+        if line.lstrip().startswith("exit ")
+    }
+    documented = set()
+    for line in header.splitlines():
+        if not line.startswith("#"):
+            continue
+        parts = line[1:].split()
+        if parts and parts[0].isdigit():
+            documented.add(parts[0])
+    undocumented = {c for c in used if c.isdigit()} - documented
+    assert (
+        not undocumented
+    ), f"exit codes used but not documented: {sorted(undocumented)}"

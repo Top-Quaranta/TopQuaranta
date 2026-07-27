@@ -479,10 +479,83 @@ closed a false-🔴 that fired after every doc-only merge (surfaced
 deploy). The helper's `paths-ignore` regex MUST mirror `deploy.yml`.
 The token `DRIFT` is included in the email-alert grep.
 
+### Where the deploy's "it failed, so it went red" guarantee lives
+
+**Audited 2026-07-27.** `deploy.yml` used to carry `script_stop: true`
+and a comment promising "any non-zero exit aborts the deploy and the
+workflow fails". That promise rested on an input the action no longer
+accepts.
+
+Established by reading `action.yml` at both tags via `gh api`:
+
+- **v1.2.0** declared `script_stop` as an input (and passed it through
+  as `INPUT_SCRIPT_STOP`). It was a real parameter.
+- **v1.2.5** does not declare it at all. The Dependabot bump in **#32**
+  changed exactly one line — the version — so the input was dropped
+  silently and every run since has logged
+  `Unexpected input(s) 'script_stop'`.
+- v1.2.5 adds `capture_stdout`, `curl_insecure` and `version`; **none**
+  of them replaces `script_stop`, and its `action.yml` says nothing
+  about how the remote exit status is propagated.
+
+**Still unverified, deliberately**: whether a non-zero remote exit turns
+the GitHub job red. That behaviour lives in the `drone-ssh` binary the
+action downloads at run time, which we have not read. Do not infer it
+from a deploy that succeeded — a green run says nothing about the
+failure path. Treat the chain as unproven end to end.
+
+What we did instead of trusting the action:
+
+- `set -e` in the workflow's `script` block, so the remote shell aborts
+  on the first failure without needing any input from the action.
+- The **absolute** path `/home/topquaranta/app/bin/tq-deploy`. With the
+  old relative `bin/tq-deploy`, a failed `cd` would have resolved it
+  against the SSH login directory. `/home/topquaranta/bin/tq-deploy`
+  does exist — but it is a **symlink to the same repo file** (verified
+  2026-07-27, identical sha256), so the hazard was latent, not live.
+  The absolute path removes it regardless.
+- `bin/tq-deploy` propagates its own documented exit codes, now
+  including every code it actually uses (6 and 64 were in use and
+  undocumented).
+
+### The changed-file list is computed once, and loudly
+
+`tq-deploy` used to detect what changed with
+`git diff --name-only A B | grep -q X` **inside an `if` condition**,
+once for `requirements.txt` and once for `web-react/`. Inside a
+condition `set -e` does not apply, so a git failure made the condition
+false — indistinguishable from "that path did not change". The deploy
+then skipped the venv sync and the SPA build, printed
+`✓ Deploy complete` and exited 0.
+
+That is the same shape as the certificate sync script that reported
+success for a month while the mail server served an expiring
+certificate: **a check that cannot tell "nothing changed" from "I could
+not look"**. See `docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`
+and the Ops-scripts rule in `docs/policies/conventions.md`.
+
+The list is now computed once, before any condition, by
+`bin/tq-changed-files <from-ref> <to-ref>`, which exits **7** with a
+message on stderr when git cannot answer. `tq-deploy` aborts on that
+code before taking any action. The helper is separate so the failure
+path is unit-testable — `tq-deploy` itself refuses to run as anyone but
+`topquaranta` and needs sudo and network, so the logic could not be
+exercised while it was inline. Tests:
+`topquaranta/tests/test_deploy_safety.py::test_tq_changed_files_*`,
+plus a static guard that the inline `git diff --name-only` form does not
+come back.
+
+Smoke-test failures are also split now: **4** means the endpoint
+answered with something other than 200, **8** means it could not be
+reached at all (DNS, connection, TLS). Previously a network-level
+`curl` failure aborted with curl's own status, and curl's 6
+("couldn't resolve host") collided with the venv/pip 6.
+
 **Pytest gates**: `topquaranta/tests/test_deploy_safety.py` asserts
 (a) `makemigrations --check` is clean (every model change has a
 committed migration), (b) `tq-deploy` and `tq-health` parse with
-`bash -n`, (c) `tq-health` still emits the migration-status row.
+`bash -n`, (c) `tq-health` still emits the migration-status row, and
+(d) the changed-file detection fails loudly instead of skipping.
 A future refactor that drops any of these silently breaks a test.
 
 ## 9.5. CSP inline-style hash regeneration

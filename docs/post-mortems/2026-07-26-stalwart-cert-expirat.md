@@ -105,6 +105,40 @@ that assertion.
   observable outcome
 - Related: `docs/ops/infra.md` § Stalwart TLS
 
+## Follow-up: the same shape, found in the deploy pipeline
+
+Auditing this incident's failure shape — *a check that cannot tell
+"nothing changed" from "I could not look"* — turned up the same defect
+in `bin/tq-deploy` (fixed 2026-07-27, separate PR).
+
+It detected what changed with `git diff --name-only A B | grep -q X`
+**inside an `if` condition**, where `set -e` does not apply. A git
+failure made the condition false, which reads as "that path did not
+change": the deploy skipped the venv sync and the SPA build, printed
+`✓ Deploy complete` and exited 0. Now computed once, up front, by
+`bin/tq-changed-files`, which exits 7 when git cannot answer.
+
+Two related findings from the same audit:
+
+- `deploy.yml` carried `script_stop: true` and a comment promising that
+  any non-zero exit fails the workflow. Reading `action.yml` at both
+  tags with `gh api` establishes that `script_stop` **was** a valid
+  input at `appleboy/ssh-action@v1.2.0` and is **absent** from v1.2.5;
+  the Dependabot bump in #32 changed only the version line, so the
+  parameter was dropped silently. v1.2.5 offers no replacement. The
+  guarantee now lives in the script block itself (`set -e` + absolute
+  path) rather than in an action input.
+- `/home/topquaranta/bin/tq-deploy` exists and is a **symlink to the
+  same repo file** (identical sha256, verified 2026-07-27), so the
+  relative-path hazard from a failed `cd` was latent rather than live.
+
+**What is still not established**, and is recorded here so nobody
+assumes otherwise: whether a non-zero remote exit actually turns the
+GitHub job red. v1.2.5's `action.yml` documents nothing about
+exit-status propagation, and the `drone-ssh` binary it downloads has
+not been read. A deploy that succeeded proves nothing about the failure
+path.
+
 ## Lessons learned
 
 Three things stand out.

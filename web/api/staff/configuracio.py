@@ -60,9 +60,13 @@ SECTION_SOFTCAP = "Soft cap (outliers)"
 SECTION_EDITORIAL = "Editorial"
 SECTION_DISTRIBUCIO = "Distribució i canals"
 SECTION_COLABORADORS = "Col·laboradors IG"
+SECTION_FIABILITAT = "Fiabilitat i certificats"
 SECTION_ALTRES = "Altres"
 
 _SECTION_MAP = {
+    # F — reliability watches (tq-health)
+    "tls_endpoints_vigilats": SECTION_FIABILITAT,
+    "tls_avis_dies": SECTION_FIABILITAT,
     # A — ranking / formula
     "exponent_penalitzacio_antiguitat": SECTION_RANKINGS,
     "penalitzacio_album_per_canco": SECTION_RANKINGS,
@@ -115,6 +119,7 @@ SECTION_ORDER = [
     SECTION_SOFTCAP,
     SECTION_EDITORIAL,
     SECTION_COLABORADORS,
+    SECTION_FIABILITAT,
     SECTION_DISTRIBUCIO,
     SECTION_ALTRES,
 ]

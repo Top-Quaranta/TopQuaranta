@@ -127,6 +127,17 @@ if [[ -n "$SP_DIR" && -x "$SP_DIR/instagram_token.sh" ]]; then
     [[ "$sc" == 0 ]] && IGTOKEN_OK=1 || IGTOKEN_OK=0
 fi
 
+# ── TLS certificate expiry (measured on the wire, never from disk) ─────
+# Endpoints + threshold live in ConfiguracioGlobal and ship EMPTY, so
+# this is a no-op until the operator opts in. See
+# docs/post-mortems/2026-07-26-stalwart-cert-expirat.md.
+TLSCERT_SEV="?"; TLSCERT_MSG="(check no disponible)"; TLSCERT_OK=1
+if [[ -n "$SP_DIR" && -x "$SP_DIR/tls_certs.sh" ]]; then
+    out=$("$SP_DIR/tls_certs.sh" 2>&1); sc=$?
+    TLSCERT_SEV=$(_sev "$sc"); TLSCERT_MSG=$(printf '%s' "$out" | _msg)
+    [[ "$sc" == 0 ]] && TLSCERT_OK=1 || TLSCERT_OK=0
+fi
+
 # ── Pending Django migrations ──────────────────────────────────────────
 if (cd "$APP_DIR" && DJANGO_SETTINGS_MODULE=topquaranta.settings.production \
     "$PY" manage.py migrate --check >/dev/null 2>&1); then
@@ -171,6 +182,7 @@ EXTRAS=$(
     PREMIUM_SEV="$PREMIUM_SEV" PREMIUM_MSG="$PREMIUM_MSG" PREMIUM_OK="$PREMIUM_OK" \
     COVERAGE_SEV="$COVERAGE_SEV" COVERAGE_MSG="$COVERAGE_MSG" COVERAGE_OK="$COVERAGE_OK" \
     IGTOKEN_SEV="$IGTOKEN_SEV" IGTOKEN_MSG="$IGTOKEN_MSG" IGTOKEN_OK="$IGTOKEN_OK" \
+    TLSCERT_SEV="$TLSCERT_SEV" TLSCERT_MSG="$TLSCERT_MSG" TLSCERT_OK="$TLSCERT_OK" \
     MIGRATIONS_OK="$MIGRATIONS_OK" ERRORS_COUNT="$ERRORS_COUNT" ERRORS_LAST="$ERRORS_LAST" \
     GIT_OK="$GIT_OK" GIT_DETAIL="$GIT_DETAIL" \
     "$PY" -c '
@@ -189,6 +201,9 @@ print(json.dumps({
     },
     "instagram": {
         "token": {"severity": os.environ.get("IGTOKEN_SEV", ""), "message": os.environ.get("IGTOKEN_MSG", ""), "ok": b("IGTOKEN_OK")},
+    },
+    "tls": {
+        "certs": {"severity": os.environ.get("TLSCERT_SEV", ""), "message": os.environ.get("TLSCERT_MSG", ""), "ok": b("TLSCERT_OK")},
     },
     "migrations_ok": b("MIGRATIONS_OK"),
     "errors": {"count": int(os.environ.get("ERRORS_COUNT") or 0),

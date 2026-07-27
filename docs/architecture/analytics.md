@@ -330,6 +330,7 @@ a STABLE dedup key over the anomaly identity (escalating crons by
 `(name, state)` + per-threshold booleans, no ages/timestamps/counters)
 that `tq-health` uses so a persistent failure emails once (2026-06-07).
 See `pipeline.md` §7. Tested at `analytics/tests/test_health_report.py`.
+Also renders a `CERTIFICATS TLS` block (2026-07-27) — see `docs/ops/runbook.md`.
 
 Two coverage states beyond the bash original (auditoria 2026-06-07):
 

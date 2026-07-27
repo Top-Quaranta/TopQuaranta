@@ -386,6 +386,9 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     premium = spotify.get("premium", {})
     coverage = spotify.get("coverage", {})
     igtoken = extras.get("instagram", {}).get("token", {})
+    # TLS certificate expiry, measured on the wire by tq-health.
+    # Absent in dev/CI and whenever no endpoint is configured → OK.
+    tlscerts = extras.get("tls", {}).get("certs", {})
     migrations_ok = bool(extras.get("migrations_ok", True))
     errors = extras.get("errors", {})
     errors_count = int(errors.get("count") or 0)
@@ -407,6 +410,8 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     if not coverage.get("ok", True):
         overall = 1
     if not igtoken.get("ok", True):
+        overall = 1
+    if not tlscerts.get("ok", True):
         overall = 1
     if not migrations_ok:
         overall = 1
@@ -434,6 +439,10 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     if not igtoken.get("ok", True):
         sys_anomalies.append(
             f"IG token {igtoken.get('severity', '?')}: {igtoken.get('message', '')}"
+        )
+    if not tlscerts.get("ok", True):
+        sys_anomalies.append(
+            f"TLS {tlscerts.get('severity', '?')}: {tlscerts.get('message', '')}"
         )
 
     n_crons = len(crons)
@@ -527,6 +536,17 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     )
     out.append("")
 
+    # ── TLS certificates ──
+    # Only rendered when tq-health supplied the block, so dev/CI reports
+    # (and every existing test fixture) stay byte-identical.
+    if tlscerts:
+        out.append(f"{_SEP}\n CERTIFICATS TLS\n{_SEP}")
+        out.append(
+            f"{_ok_emoji(tlscerts.get('ok', True))} Caducitat: "
+            f"{tlscerts.get('severity', '?')} — {tlscerts.get('message', '')}"
+        )
+        out.append("")
+
     # ── legend ──
     out.append(f"{_SEP}\n LLEGENDA\n{_SEP}")
     out.append("🟢 OK(Xh)   darrer run fa X h, dins del llindar de freqüència")
@@ -579,6 +599,8 @@ def anomaly_signature(crons: list[dict], extras: dict) -> str:
         parts.append("migrations:pending")
     if not bool(extras.get("git", {}).get("ok", True)):
         parts.append("git:drift")
+    if not extras.get("tls", {}).get("certs", {}).get("ok", True):
+        parts.append("tls:certs")
     if int(extras.get("errors", {}).get("count") or 0) > 0:
         parts.append("errors:present")
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()

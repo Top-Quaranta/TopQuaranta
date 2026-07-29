@@ -119,6 +119,16 @@ def artistes_list(request: Request) -> Response:
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
 
+    # Companion filter to `instagram=no`: narrows the backfill queue to
+    # the rows that already carry a candidate handle. Without it the
+    # suggestions are scattered across ~260 rows of the sense-instagram
+    # list and the one-click approval never gets found.
+    suggeriment = request.GET.get("suggeriment", "")
+    if suggeriment == "si":
+        qs = qs.exclude(instagram_url_suggerit="")
+    elif suggeriment == "no":
+        qs = qs.filter(instagram_url_suggerit="")
+
     # "Al top" workflow (Fase 2 D2): artistes appearing in the latest
     # weekly PPCC top, for the social tagging flow. `te_gestor_email` in
     # the payload tells staff whether the artist has a reachable
@@ -442,6 +452,14 @@ def artista_detail(request: Request, pk: int) -> Response:
             )
             if new_mbid and new_mbid != old_mbid and artista.mb_auto_match_disabled:
                 artista.mb_auto_match_disabled = False
+            # Filling the canonical Instagram URL consumes the suggestion
+            # buffer, whatever the staff finally typed: keeping it would
+            # re-offer the same candidate under `suggeriment=si` forever.
+            # Clearing an Instagram URL does NOT resurrect it — the
+            # candidate was already judged.
+            if (data.get("instagram_url") or "").strip():
+                artista.instagram_url_suggerit = ""
+                artista.instagram_suggerit_nota = ""
             # The `aprovat=True` flip is DEFERRED until after the
             # localitat + Deezer writes below, so approving + adding the
             # Deezer in one PATCH passes the gate. An unapprove applies now.

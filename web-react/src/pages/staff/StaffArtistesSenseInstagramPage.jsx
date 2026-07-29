@@ -51,7 +51,11 @@ function googleInstagramSearchUrl(nom) {
 }
 
 function Row({ a, onSaved }) {
-  const [url, setUrl] = useState('')
+  // Prefilled with the candidate handle when the backfill has one, so
+  // approving is a single "Desa" click. The candidate is only ever a
+  // suggestion: the note below the input carries the evidence, and the
+  // profile link lets staff eyeball it before committing.
+  const [url, setUrl] = useState(a.instagram_url_suggerit || '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -113,20 +117,37 @@ function Row({ a, onSaved }) {
             onChange={e => { setUrl(e.target.value); setErr('') }}
             className="w-80"
           />
+          {a.instagram_suggerit_nota && (
+            <p className="text-[11px] text-white/60">
+              {a.instagram_suggerit_nota}
+            </p>
+          )}
           {err && (
             <p className="text-[11px] text-red-400">{err}</p>
           )}
         </div>
       </Td>
       <Td>
-        <a
-          href={googleInstagramSearchUrl(a.nom)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-tq-yellow underline hover:text-tq-yellow-deep whitespace-nowrap"
-        >
-          Cercar a Google ↗
-        </a>
+        <div className="flex flex-col gap-1">
+          {a.instagram_url_suggerit && (
+            <a
+              href={a.instagram_url_suggerit}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-tq-yellow underline hover:text-tq-yellow-deep whitespace-nowrap"
+            >
+              Obrir perfil ↗
+            </a>
+          )}
+          <a
+            href={googleInstagramSearchUrl(a.nom)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-tq-yellow underline hover:text-tq-yellow-deep whitespace-nowrap"
+          >
+            Cercar a Google ↗
+          </a>
+        </div>
       </Td>
       <Td className="text-right">
         <Btn onClick={desa} disabled={!canSave}>
@@ -142,9 +163,10 @@ export default function StaffArtistesSenseInstagramPage() {
   const [page, setPage] = useState(1)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
+  const [nomesSuggerits, setNomesSuggerits] = useState(false)
   const dq = useDebounced(q)
 
-  function load(p = page, cerca = dq) {
+  function load(p = page, cerca = dq, suggerits = nomesSuggerits) {
     setData(null)
     const params = new URLSearchParams({
       aprovat: '1',
@@ -153,6 +175,7 @@ export default function StaffArtistesSenseInstagramPage() {
       sort: '-n_top',
       page: String(p),
     })
+    if (suggerits) params.set('suggeriment', 'si')
     if (cerca) params.set('q', cerca)
     api
       .get(`/staff/artistes/?${params}`)
@@ -161,15 +184,15 @@ export default function StaffArtistesSenseInstagramPage() {
   }
 
   useEffect(() => {
-    load(page, dq)
+    load(page, dq, nomesSuggerits)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, dq])
+  }, [page, dq, nomesSuggerits])
 
-  // Reset to page 1 when the search changes so the user doesn't land
-  // on an empty page 3.
+  // Reset to page 1 when the search or the filter changes so the user
+  // doesn't land on an empty page 3.
   useEffect(() => {
     setPage(1)
-  }, [dq])
+  }, [dq, nomesSuggerits])
 
   function onSaved(pk) {
     // Optimistic remove: after the PATCH the row no longer matches
@@ -189,6 +212,9 @@ export default function StaffArtistesSenseInstagramPage() {
   const total = data?.total
   const subtitle = (() => {
     if (total === undefined) return 'Carregant…'
+    if (nomesSuggerits) {
+      return `${total} artistes amb un perfil candidat pendent de revisar. Comprova el perfil i, si és correcte, prem Desa.`
+    }
     return `${total} artistes aprovats sense URL d'Instagram. Ordenats per cançons al top i, a igualtat, per cançons actives.`
   })()
 
@@ -211,6 +237,14 @@ export default function StaffArtistesSenseInstagramPage() {
             neteja
           </button>
         )}
+        <label className="flex items-center gap-2 text-xs text-white/70">
+          <input
+            type="checkbox"
+            checked={nomesSuggerits}
+            onChange={e => setNomesSuggerits(e.target.checked)}
+          />
+          Només amb suggeriment
+        </label>
       </div>
       {error && <p className="text-sm text-red-300 mb-4">{error}</p>}
       <TableCard>

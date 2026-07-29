@@ -276,6 +276,25 @@ class Artista(models.Model):
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)
 
+    # ── Instagram suggestion buffer ─────────────────────────────────────
+    # Staff-review buffer for the Instagram backfill workflow at
+    # `/staff/artistes/sense-instagram`. A candidate handle found by an
+    # out-of-band search lands HERE, never straight into `instagram_url`:
+    # that field drives public IG tagging (`user_tags`) and collaborator
+    # invitations, so a wrong handle publicly tags a stranger. Nothing
+    # else in the codebase reads these two fields — they are inert until
+    # staff promotes the candidate, and the PATCH that writes
+    # `instagram_url` clears them.
+    instagram_url_suggerit = models.URLField(blank=True)
+    instagram_suggerit_nota = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text=(
+            "Evidència que sosté el suggeriment (per què creiem que "
+            "aquest perfil és d'aquest artista). Es mostra a l'staff."
+        ),
+    )
+
     last_checked_deezer = models.DateTimeField(
         null=True,
         blank=True,

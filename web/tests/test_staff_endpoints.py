@@ -328,6 +328,43 @@ def test_staff_artistes_list_instagram_no_filter(staff_client, db):
     assert "WithIG" not in noms
 
 
+def test_staff_artistes_suggeriment_filter_and_promotion(staff_client, db):
+    """The suggestion buffer round-trip: `suggeriment=si` narrows the
+    sense-instagram queue to rows carrying a candidate, the card exposes
+    the candidate + its evidence, and promoting it via PATCH clears the
+    buffer so it can't be re-offered."""
+    from music.models import Artista
+
+    amb = Artista.objects.create(
+        nom="AmbSuggeriment",
+        slug="amb-suggeriment",
+        aprovat=True,
+        instagram_url_suggerit="https://www.instagram.com/candidat/",
+        instagram_suggerit_nota="cançó nostra citada a la bio",
+    )
+    Artista.objects.create(nom="SenseSuggeriment", slug="sense-sug", aprovat=True)
+
+    r = staff_client.get(
+        "/api/v1/staff/artistes/?aprovat=1&instagram=no&suggeriment=si"
+    )
+    assert r.status_code == 200, r.content
+    rows = r.json()["results"]
+    assert {row["nom"] for row in rows} == {"AmbSuggeriment"}
+    assert rows[0]["instagram_url_suggerit"] == "https://www.instagram.com/candidat/"
+    assert rows[0]["instagram_suggerit_nota"] == "cançó nostra citada a la bio"
+
+    r = staff_client.patch(
+        f"/api/v1/staff/artistes/{amb.pk}/",
+        {"instagram_url": "https://www.instagram.com/candidat/"},
+        format="json",
+    )
+    assert r.status_code == 200, r.content
+    amb.refresh_from_db()
+    assert amb.instagram_url == "https://www.instagram.com/candidat/"
+    assert amb.instagram_url_suggerit == ""
+    assert amb.instagram_suggerit_nota == ""
+
+
 def test_legacy_staff_views_shim_still_exposes_names():
     """Anything that did `from web.api import staff_views` must keep
     finding the old names. Guards against a future cleanup that

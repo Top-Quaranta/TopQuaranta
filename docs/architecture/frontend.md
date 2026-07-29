@@ -102,6 +102,17 @@ two lists were hand-mirrored and had drifted — the sidebar carried the
 social sub-channels + Spotify while the panell didn't, and Instagram had
 a route in neither.
 
+**`/staff/artistes/sense-instagram`** (`StaffArtistesSenseInstagramPage`)
+is the Instagram backfill queue: one row per approved artista with no
+`instagram_url`, ordered by `sort=-n_top`. Since 2026-07-29 a row whose
+`instagram_url_suggerit` is set prefills its input with the candidate and
+renders `instagram_suggerit_nota` under it as the evidence plus an
+"Obrir perfil ↗" link, so approving is the existing **Desa** button — no
+separate approve action, and no automatic write (see `models.md` for why
+the canonical field is staff-only). A "Només amb suggeriment" checkbox
+maps to `?suggeriment=si`; without it the ~29 candidates would be lost
+among ~260 rows.
+
 The **distribution area** under `/staff/social` is being split from a
 single monolithic page into homogeneous house-style views. `/staff/social`
 is the cockpit (master switch + the six-channel grid); most

@@ -152,6 +152,11 @@ def _artista_card(a, homset=None) -> dict:
         # (same gate as `n_top`); None otherwise.
         "n_cancons_vives": getattr(a, "n_cancons_vives", None),
         "instagram_url": a.instagram_url or "",
+        # Suggestion buffer for the sense-instagram workflow. Inert
+        # data: the SPA prefills the input with it and shows the note
+        # as the evidence, but promoting it is always a staff click.
+        "instagram_url_suggerit": a.instagram_url_suggerit or "",
+        "instagram_suggerit_nota": a.instagram_suggerit_nota or "",
         # Last.fm artist metadata — surfaced everywhere the card is used
         # (artistes list, pendents, edit page) so staff can spot
         # high-affinity discoveries without an extra fetch.

@@ -159,6 +159,13 @@ the cockpit. An off cell renders inactive (never hidden); non-seeded
 combos paint a blank dash.
 Not to be confused with `/staff/publicacions` (community posts).
 
+`StaffAnalyticsPage` carries a GoAccess card whose blurb describes what
+the reader actually consumes — the live Caddy access log **plus** its
+rotated `.log.gz` segments — and warns that the report states the
+interval it really covered, which can be shorter than the 30 days
+requested when rotation has eaten the tail. Keep that copy in step with
+`docs/architecture/analytics-goaccess.md`.
+
 ## Backend seam
 
 - All data goes through `lib/api.js` which prefixes `/api/v1/` and

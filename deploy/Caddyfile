@@ -223,10 +223,19 @@ www.topquaranta.cat {
 		# inherits the strict baseline below.
 		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-Wu+kU5EkXi0rgxBYNZgraQVbF2AN72hbhCSUJEGoGu8=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
 	}
+	# Access log retention. Rotation is by size; a rotated segment is
+	# gzipped ~15x, so 10 MiB of log costs ~640 KiB on disk. With
+	# roll_keep 5 the window collapsed under crawler load: a ClaudeBot
+	# sweep on 2026-07-30 burned a whole segment in 2 h 11, leaving
+	# generar_goaccess 1 h 32 min of history to report on. 30 segments
+	# cost ~19 MiB gzipped and buy ~34 days at the observed baseline.
+	# roll_keep_for caps the tail so a quiet period cannot hoard
+	# segments indefinitely. See docs/architecture/analytics-goaccess.md.
 	log {
 		output file /var/log/caddy/topquaranta_access.log {
 			roll_size 10MiB
-			roll_keep 5
+			roll_keep 30
+			roll_keep_for 90d
 		}
 	}
 }

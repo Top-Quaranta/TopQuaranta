@@ -82,6 +82,35 @@ project its own write surface. TopQuaranta keeps the global block
 and its own sites; other projects ship snippets that survive any
 TQ deploy because TQ never reads or writes the conf.d directory.
 
+## Access log retention
+
+The TopQuaranta vhost writes JSON access logs to
+`/var/log/caddy/topquaranta_access.log` and rotates **by size**:
+
+```
+roll_size 10MiB
+roll_keep 30
+roll_keep_for 90d
+```
+
+Raised from `roll_keep 5` on 2026-07-31. Keep the two costs apart —
+they differ by ~15×, and conflating them overstates the disk bill by
+an order of magnitude:
+
+- **On disk**, a rotated segment is gzipped to ~640 KiB. Thirty of
+  them is **~19 MiB**, plus up to 10 MiB for the live file.
+- **Read back**, each segment is 10 MiB of JSON. Thirty of them is
+  **~300 MiB** — the figure that sets how far back
+  `generar_goaccess` can see, not the disk bill.
+
+Because rotation is by size, the days that fit depend on traffic:
+~34 days at the 0.37 MiB/h baseline, ~2.7 days under a sustained
+crawler sweep. `roll_keep_for 90d` caps the quiet end.
+
+Other vhosts (`cercol_api_access*`) own their own `log` blocks and
+are not covered by this. Detail and the measurements behind these
+numbers: `docs/architecture/analytics-goaccess.md`.
+
 ## Project configuration (`topquaranta/`)
 
 The Django project package at `topquaranta/` is not "infra" in the

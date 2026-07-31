@@ -40,8 +40,9 @@ rotated files reachable for traversal.
 ## Reading the whole corpus (2026-07-31)
 
 Until 2026-07-31 the command read **only** the live file. Caddy
-rotates at 10 MiB and keeps 5 (`roll_size`/`roll_keep`,
-`deploy/Caddyfile`), so the report silently covered whatever slice
+rotates at 10 MiB and kept 5 segments at the time (`roll_size`/
+`roll_keep`, `deploy/Caddyfile`), so the report silently covered
+whatever slice
 happened to be un-rotated at 23:30. On 2026-07-30 that was **1 h
 32 min and 4240 of 32746 available lines**, reported as exit 0 under a
 "last 30 days" label. Reading the rotated segments took the same run
@@ -97,11 +98,37 @@ decision, not the reader's.
 fixture corpus), `--dry-run` (measures coverage, writes nothing —
 useful for checking the corpus without clobbering the good report).
 
-**Retention is by size, not by time.** With `roll_size 10MiB` and
-`roll_keep 5` and no `roll_keep_for`, the ceiling on disk is ~60 MiB,
-so the days that fit depend entirely on traffic: ~6.7 days at the
-observed 0.37 MiB/h baseline, but ~13 h under a crawler sweep (a
-ClaudeBot pass on 2026-07-30 burned a full 10 MiB segment in 2 h 11).
+**Retention: `roll_size 10MiB`, `roll_keep 30`, `roll_keep_for 90d`**
+(`deploy/Caddyfile`, raised from `roll_keep 5` on 2026-07-31).
+
+Two different numbers, and conflating them is what produced the wrong
+"~60 MiB" figure in the first draft of this doc:
+
+| | Per segment | × 30 segments | What it is good for |
+|---|---|---|---|
+| **On disk (gzipped)** | ~640 KiB | **~19 MiB** | sizing the disk |
+| **Read back (uncompressed)** | 10 MiB | **~300 MiB** | sizing the coverage |
+
+Caddy gzips a rotated segment at ~15× (measured 14.3–21.9× across the
+five segments live on 2026-07-31). So the disk cost of the whole
+window is ~19 MiB gzipped plus up to 10 MiB for the un-rotated live
+file — under 30 MiB total, against 5.3 GB free at the time of the
+change. The 300 MiB figure is what the reader streams, and it is the
+one that sets how far back the report can see.
+
+How far back that actually is still depends on traffic, because
+rotation is by size: ~34 days at the observed 0.37 MiB/h baseline, but
+only ~2.7 days under a sustained crawler sweep (a ClaudeBot pass on
+2026-07-30 burned a full 10 MiB segment in 2 h 11 — that is precisely
+what collapsed the window to 1 h 32 min under the old `roll_keep 5`).
+`roll_keep_for 90d` caps the other end so a quiet stretch cannot hoard
+segments indefinitely.
+
+The `--days` default on the cron stays at 30 and is deliberately
+independent: it is the window we *ask* for, while the paragraphs above
+are the window the disk can *supply*. When they diverge, the summary
+and the report title say so — see "Coverage is reported, never
+asserted" above.
 
 **ACLs on the rotated files.** The `default:` ACL on `/var/log/caddy`
 (`default:user:topquaranta:r--`) is what makes reading the rotated

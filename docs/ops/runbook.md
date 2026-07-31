@@ -453,6 +453,48 @@ A failing endpoint escalates `overall`, so the hourly
 contributes `tls:certs` to the dedup signature — one mail per distinct
 problem, not one per hour.
 
+**SPA asset check** (hardened 2026-07-31): the `Web SPA shell` row is
+produced by `scripts/health/spa_assets.sh`, same sub-check pattern as
+the TLS and Spotify rows. It fetches `/`, asserts `<div id="root">`,
+extracts the two hashed paths the shell references, and probes both.
+
+It asserts **content-type, not just the status code**. The SPA vhost
+ends in `try_files {path} /index.html` (`deploy/Caddyfile`), so a
+missing asset is served as the SPA shell with HTTP 200 — never a 404.
+Measured on prod 2026-07-31:
+
+```
+/assets/index-Cmw8JJjD.css    200  [text/css; charset=utf-8]
+/assets/index-7Kggo81f.js     200  [text/javascript; charset=utf-8]
+/assets/index-NOEXISTEIX.css  200  [text/html; charset=utf-8]   <-- fallback
+```
+
+The status-only check this replaced was therefore unfalsifiable: its
+`(dist stale?)` branch could not be reached by a stale dist. The module
+script was not probed at all; now it is, expecting
+`text/javascript` or `application/javascript`.
+
+Three failure branches, each naming its own cause:
+
+| Branch | Detail says | Where to look |
+|---|---|---|
+| No HTTP response | `000 cap resposta HTTP (transport: …)` | network, TLS, Caddy up? |
+| Unexpected status | `HTTP <code> (el servidor respon…)` | Caddy routing, backend |
+| Wrong content-type | `200 però content-type '…' (fallback try_files)` | the dist — asset genuinely absent |
+
+A transport failure is retried once after a short wait before it goes
+red. A probe that recovers stays green and appends `— reintent OK: …`
+to the detail, so a flapping edge stays visible instead of being
+swallowed. This is why the hourly tick of 2026-07-31 11:15 paged: one
+dropped connection, no dist problem, and the detail read `000000`
+because `%{http_code}` already emits `000` and the old
+`|| echo 000` appended a second one.
+
+Tested at `topquaranta/tests/test_health_spa_assets.py`, which runs the
+real script against a stub server that emulates the `try_files`
+fallback. Env overrides for a manual run: `TQ_HEALTH_WEB_PUBLIC`,
+`TQ_HEALTH_ASSET_TIMEOUT`, `TQ_HEALTH_RETRY_WAIT`.
+
 **Git-tree drift detection** (added 2026-06-02): `tq-health` also
 emits a `Git tree: ...` row, delegating the classification to
 `bin/tq-git-drift` (a standalone helper so the logic is unit-tested —

@@ -363,38 +363,9 @@ headroom. When (and if) we ever need a retention cron, key it on
 
 ### GoAccess (Caddy log analysis)
 
-`generar_goaccess` (cron 23:30 daily) reads
-`/var/log/caddy/topquaranta_access.log`, converts the per-line Caddy
-JSON into Combined Log Format with a small Python preprocessor, and
-runs `goaccess` to produce
-`/var/cache/topquaranta/goaccess/report.html`.
-
-The HTML is **never served by Caddy directly** — only through the
-Django proxy at `/api/v1/staff/analytics/goaccess/`, which requires
-`IsStaff` (session + 2FA). That keeps Caddy access analytics behind
-the same auth as the rest of the staff panel.
-
-Complements the Django dashboard:
-
-* The Django side measures **what people do** (events, conversions,
-  funnel deltas).
-* GoAccess measures **how the server responds** (404 leaderboard,
-  bot traffic, hot files, geo distribution, asset-cache hit ratios).
-
-GoAccess never writes to the Django DB; it's pure log analytics.
-
-**Filesystem setup** (one-time, on a fresh box):
-
-```bash
-sudo apt install -y goaccess
-sudo setfacl -m u:topquaranta:rx /var/log/caddy
-sudo setfacl -m u:topquaranta:r  /var/log/caddy/topquaranta_access.log
-sudo mkdir -p /var/cache/topquaranta/goaccess
-sudo chown topquaranta:topquaranta /var/cache/topquaranta/goaccess
-```
-
-Caddy rotates the log automatically on size (10 MiB) into
-`topquaranta_access-<ts>.log.gz`; the ACL needs to be re-applied to
-the live file after a Caddy package upgrade if the file is recreated
-from scratch (rare). The default ACL on the parent dir keeps new
-rotated files reachable for traversal.
+Moved to [`analytics-goaccess.md`](analytics-goaccess.md) (2026-07-31,
+docs-size split — same pattern as `social-narrative.md`). In one line:
+`generar_goaccess` (cron 23:30 daily) converts the Caddy JSON access
+logs to Combined Log Format and runs `goaccess` into
+`/var/cache/topquaranta/goaccess/report.html`, served only behind
+`IsStaff` at `/api/v1/staff/analytics/goaccess/`.

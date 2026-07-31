@@ -48,6 +48,12 @@ mapping:
     doc: docs/architecture/models.md
   - prefix: ranking/
     doc: docs/architecture/algorithm.md
+  # GoAccess log analysis split out of analytics.md (2026-07-31,
+  # docs-size headroom — analytics.md was at 400/400). The reader
+  # command resolves to the narrower doc; the Django event pipeline,
+  # middleware and metrics collectors stay with the generic entry.
+  - prefix: analytics/management/commands/generar_goaccess.py
+    doc: docs/architecture/analytics-goaccess.md
   - prefix: analytics/
     doc: docs/architecture/analytics.md
 

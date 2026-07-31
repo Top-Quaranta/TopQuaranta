@@ -503,7 +503,7 @@ the hour whenever the prod tree is dirty (excluding `data/`) or
 
 **When you DO still need to SSH to the Hetzner box** (these are
 operational, not deploy paths):
-- Tail live logs: `tail -f /var/log/caddy/access.log`,
+- Tail live logs: `tail -f /var/log/caddy/topquaranta_access.log`,
   `journalctl -u topquaranta-web -f`,
   `tail -f /var/log/topquaranta/*.log`.
 - Debug a cron that failed: `sudo -u topquaranta tq-run <command>`

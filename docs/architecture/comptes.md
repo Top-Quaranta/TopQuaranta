@@ -133,16 +133,16 @@ assembles a recipient-independent context once per run:
    9. **Footer** (unsubscribe + browser link).
 
 Template `comptes/templates/comptes/email_newsletter_top.html` is
-self-contained (dark `#060608` surface, no `email_base.html`) and
-follows the **Gmail-compatibility pattern** (2026-07-05): fluid-hybrid
-640 px container (`width="100%"` + inline `max-width:640px` + MSO ghost
-table), inline styles on every element (the `<style>` block is
-enhancement only — Gmail can drop it), redundant `bgcolor` on every
-cell + `meta color-scheme: dark` so Gmail never inverts the dark
-surfaces, solid-hex borders (no `rgba()`), `table-layout:fixed` +
-explicit widths for uniform column groups, and no `<a>` wrapping a
-`<table>`. The `_trend_badge.html` partial renders the per-entry
-movement.
+self-contained (dark `#060608` surface, no `email_base.html`;
+`_trend_badge.html` renders the movement) and follows the
+**Gmail-compatibility pattern** (2026-07-05; hybrid columns 2026-08-01),
+every rule pinned by a `test_gmail_*`: fluid-hybrid 640 px container, inline
+styles everywhere (`<style>` is enhancement only — Gmail can drop it),
+`bgcolor` on structural cells + `meta color-scheme: dark` against inversion,
+solid-hex borders, no `<a>` around a `<table>`, card surfaces on `<div>`s
+(nested `<table>`s are shrink-to-fit in Gmail), columns that are full-width
+`<div>`s by default with the row-forming `max-width` caps in `<style>`, and
+no inline padding on a `width:100%` element.
 
 **Name links (Slice 1 2026-06-08; Slice 2 2026-06-09).** Song titles
 render in italic and link to `/canco/{slug}`; artist names render in bold,

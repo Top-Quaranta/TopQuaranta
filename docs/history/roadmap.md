@@ -3,7 +3,47 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-07-13.
+> Last updated: 2026-08-01.
+
+---
+
+## Sprint 2026-08-01 — newsletter: columnes híbrides (Gmail mòbil)
+
+Segona passada de compatibilitat Gmail del template de la newsletter,
+després que la de 2026-07-13 (#312) arreglara la inversió de colors i
+l'Outlook però no el mòbil. Símptoma reportat des de Gmail Android (a
+Spark es veia bé): cap card no s'estirava a l'amplada de la fila —
+files 4-10 irregulars (cadascuna amb l'amplada del seu text), podi #2/#3
+a mitja amplada, cards territorials encongides a la caràtula de 64 px, i
+les dues meitats del hero acabant en x diferents.
+
+Causa: el mòbil s'apilava amb `.gridcell { display:block; width:100% }`
+sobre `<td>`s amb amplada percentual en línia. Gmail aplica el
+`display:block` però no el `width:100%`, i cada card cau a *shrink-to-fit*
+(a Gmail una taula niuada no s'estira: només ho semblen les que tenen
+text llarg, com el bloc de gestió o el footer). A sobre, `width:100%` +
+`padding:5px` al mateix `<td>` feia l'email de 410 px en un viewport de
+393 px — desbordament mesurat en local, i probablement el que dispara la
+re-maquetació de Gmail.
+
+Arreglat amb el patró híbrid: cada columna és un `<div>` d'amplada
+completa **per defecte** i el `<style>` només afegeix els topalls
+`max-width` que la converteixen en fila en pantalles amples (reset a
+100 % dins del `@media`, classe-sobre-classe: guanya per ordre encara
+que un client lleve els `!important`). El fons/vora/radi de cada card
+passa a un `<div>`; les taules que queden són només de maquetació
+interna. Outlook manté columnes en píxels via ghost tables. Verificat
+en local amb Chromium a 393 px (desbordament 410 → 393 px, cards
+uniformes), amb el `<style>` sencer llevat (degrada a una columna neta)
+i a 786 px (desktop idèntic al d'abans). 6 tests `test_gmail_*`.
+
+**Pendent de confirmació visual del Miquel a Gmail Android.** El
+mecanisme intern de Gmail no es pot reproduir des del repo. Si encara
+falla, el següent pas és llevar la taula interna de les files 4-10
+(la insígnia de tendència passaria a continuació del text). Nota: el
+digest d'analytics (`analytics/templates/analytics/digest_setmanal.html`
++ `_kpi.html`) encara fa servir el `.gridcell` antic i té el mateix
+defecte — fora d'abast d'aquesta passada.
 
 ---
 

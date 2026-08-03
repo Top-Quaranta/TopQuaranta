@@ -6,4 +6,4 @@ factory-boy==3.3.3
 responses==0.26.2
 black==26.5.1
 isort==8.0.1
-pre-commit==4.6.0  # C1: local hooks — see .pre-commit-config.yaml
+pre-commit==4.6.1  # C1: local hooks — see .pre-commit-config.yaml

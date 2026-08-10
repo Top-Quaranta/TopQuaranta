@@ -227,7 +227,13 @@ needed, downloads in the browser without a server round-trip.
 
 ### Weekly admin digest — "Setmanari" *(K4, redesigned 2026-06)*
 
-Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the `ADMINS`
+Every Monday at 08:00 UTC, `enviar_digest_setmanal` reports the **last
+complete calendar week, Mon → Sun** (`today.weekday() + 7` back) against
+the seven days before it. A rolling "last 7 days" would have ended on a
+few hours of the current Monday and split the weekend publishing block
+across two mails. Gauges read the *Sunday* snapshot; "Setmana N" is the
+project week of the reported Monday, not of the send date. It emails
+the `ADMINS`
 recipients a **brand-coherent HTML** summary in the "redisseny" email
 language (#060608, 640px, Anton/Bricolage/Instrument Serif; mirrors
 `email_newsletter_top.html`), plus a text fallback. Sent via
@@ -241,9 +247,31 @@ decisions grouped from `StaffAuditLog`, Whisper/MB coverage, backlog
 alert; (4) **Ranking per territori** — `TopSetmanal` entries per
 territory; (5) **SEO i enllaços externs** — GSC impressions/clicks/
 position, Bing inbound links, Core Web Vitals; (6) **Distribució
-social** — publications, followers + deltas, top post. A "frescor de
-dades" line flags a stale snapshot. `--dry-run` prints text;
-`--html-out PATH` renders the HTML for local preview without sending.
+social** — publications, followers + deltas, top post, plus a
+**calendari** grid (channel × day of the window, cell = content type,
+`✕` = failed, dashed = omitted) built from `SocialPost`, the canonical
+one-row-per-slot ledger — the headline count is derived from the same
+grid so the two can't disagree; (7) **Incidències** — failed
+`SocialPost` slots, crons in a bad state and the week's Django ERROR
+records, gathered by `analytics/incidents.py`. A "frescor de dades"
+line flags a stale snapshot. `--dry-run` prints text; `--html-out PATH`
+renders the HTML for local preview without sending.
+
+**Deltas are not always percentages.** `_delta()` reports the absolute
+move (`+7`, `−4`) when the change rounds under 1 % or the base is under
+10, an unchanged metric shows the `=` arrow with no number, and a
+0-click SEO query falls back to its impressions. Before 2026-08 the
+percentage was rounded *first* and a real change that rounded to 0 %
+was then classified as "flat" — the KPI grid reported a week of
+moderation work as a metric that hadn't moved.
+
+**`analytics/incidents.py`** reads two files on the box, best-effort
+(missing file → empty result, never an exception): `errors.log` (+
+`errors.log.1`, logrotate is weekly with `delaycompress`), grouping
+repeats by logger + digit-masked message; and the `tq-run` status tags,
+classified by `health_report.gather_crons` — the function `tq-health`
+runs hourly, so mail and watchdog can't disagree. Cron state is
+point-in-time ("what is broken now"), not a history of the week.
 
 ## What we deliberately don't measure
 

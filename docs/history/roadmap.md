@@ -3,9 +3,62 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-01.
+> Last updated: 2026-08-10.
 
 ---
+
+## Sprint 2026-08-10 — Setmanari: calendari, incidències i finestra Dl–Dg
+
+Tres queixes del Miquel sobre el correu setmanal, i una que va aparèixer
+mentre s'arreglaven.
+
+**Finestra.** El digest reportava `today-6 … today`: enviant-se dilluns
+al matí, la setmana anava de dimarts a dilluns i el darrer dia eren tres
+hores comptades com un dia sencer, amb el bloc de publicació del cap de
+setmana partit entre dos correus. Ara reporta la **darrera setmana
+natural completa, dilluns → diumenge** (`today.weekday() + 7`) contra
+els set dies anteriors. Els gauges es llegeixen al snapshot de diumenge
+i «Setmana N» és la del dilluns reportat, no la de la data d'enviament
+(per això el número baixa un cop, de 49 a 48, i després continua).
+
+**Calendari de publicacions.** Graella canal × dia dins de «Distribució
+social»: sis files fixes (IG feed, IG stories, Mastodon, Bluesky,
+Telegram, Newsletter) i set columnes amb el nom del dia. La cel·la porta
+el tipus (`Top`, `Terr`, `Àlb`, `Sing`, `Mov`, `×N`), `✕N` si alguna ha
+fallat i caixa discontínua si es va ometre. Un canal buit tota la
+setmana continua tenint fila: el silenci és el senyal. La font és
+`SocialPost` — el titular «Publicacions aquesta setmana» es deriva de la
+mateixa graella, així que ja no poden discrepar (el comptador
+`social_publicat` era append-only i depenia de cada call site).
+
+**Incidències.** Secció nova amb tres fonts: slots de `SocialPost` en
+error amb el missatge, crons en mal estat i els errors Django de la
+setmana. El mòdul nou `analytics/incidents.py` llegeix `errors.log`
+(+ `errors.log.1`, perquè el logrotate és setmanal amb `delaycompress`)
+agrupant repeticions per logger + missatge amb els dígits emmascarats, i
+delega la classificació de crons a `health_report.gather_crons` — la
+mateixa funció que corre `tq-health` cada hora, així que el correu
+setmanal i el watchdog no poden discrepar. Tot best-effort: fitxer que
+falta → resultat buit, mai una excepció.
+
+**Els zeros per cent.** `_delta()` arrodonia el percentatge *primer* i
+després llegia aquell 0 com «sense canvi»: 3.905 → 3.912 cançons
+verificades es reportava com «= 0%». Ara un canvi per sota de l'1% o amb
+base menor de 10 mostra el moviment absolut (`+7`, `−4`), una mètrica
+realment igual mostra només `=`, i una cerca amb 0 clics mostra les
+impressions. De propina, les barres de «D'on venen» dibuixaven totes el
+100% (una cel·la `width:N%` sola s'estira): ara la fila porta la resta
+com a segona cel·la.
+
+**`docs-novelty` honra el `.gitignore`.** El gate fallava només a la
+màquina del Miquel per un export DYI d'Instagram a l'arrel — gitignorat
+i invisible a CI. Un gate dur que només es posa roig en local és un gate
+que s'aprèn a ignorar.
+
+Pendent: el `_kpi.html` del Setmanari encara fa servir el
+`.gridcell { display:block; width:100% }` que #354 acaba de substituir a
+la newsletter pel patró híbrid. Mateix bug latent a Gmail Android, no
+tocat en aquest sprint.
 
 ## Sprint 2026-08-01 — newsletter: columnes híbrides (Gmail mòbil)
 

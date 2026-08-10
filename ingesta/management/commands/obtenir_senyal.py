@@ -123,10 +123,18 @@ class Command(BaseCommand):
 
         # Fetch eligible tracks
         cancons = (
+            # Gated on the CANÇÓ, not on who signs it. `artista__aprovat=True`
+            # used to be here and silently starved 23 verified, active,
+            # in-window tracks of signal forever — 22 of them collaborations
+            # whose primary credit is a pending artist but which reached the
+            # catalogue through an approved one. They are eligible for the
+            # ranking (`_top_for_territoris` ORs artista/artistes_col
+            # territoris and doesn't check approval either), so excluding
+            # them here only guaranteed they could never chart. Verification
+            # is the editorial gate; approval of the primary credit is not.
             Canco.objects.filter(
                 activa=True,
                 verificada=True,
-                artista__aprovat=True,
                 data_llancament__gte=cutoff,
             )
             .select_related("artista")

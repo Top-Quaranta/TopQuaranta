@@ -17,6 +17,7 @@ Definition of "top-level code directory":
   - is not hidden (`.git`, `.github`, `.claude`, ...),
   - is not in the static skip-list of build/cache directories
     (`node_modules`, `.venv`, `dist`, ...),
+  - is not gitignored (a local artefact isn't a subsystem),
   - either contains an `apps.py` at the top (Django app marker) OR
     contains at least one `*.py` anywhere recursively (Python
     package).
@@ -35,6 +36,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -94,21 +96,58 @@ def is_covered(topdir: str, entries: list[dict]) -> bool:
     return False
 
 
+def gitignored(repo_root: Path, names: list[str]) -> set[str]:
+    """Of `names`, the ones git is told to ignore.
+
+    A gitignored directory is not part of the repo, so it cannot be a
+    subsystem that needs a doc: it's a local artefact (a downloaded DYI
+    export, a scratch tree). CI checks out a clean tree and never sees
+    them, so without this filter the gate goes red *only* on the
+    operator's laptop — which is exactly how a hard gate gets trained
+    into background noise. No git available (a tarball, a sandbox) →
+    empty set, i.e. the old stricter behaviour.
+    """
+    if not names:
+        return set()
+    try:
+        proc = subprocess.run(
+            ["git", "check-ignore", "--stdin"],
+            cwd=repo_root,
+            input="\n".join(names),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    # 0 = at least one ignored, 1 = none ignored. Anything else (128 =
+    # not a git repo) means we can't tell, so we don't filter.
+    if proc.returncode not in (0, 1):
+        return set()
+    return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+
+
 def find_uncovered_code_dirs(
     repo_root: Path, mapping: list[dict], exclude: list[dict]
 ) -> list[str]:
     entries = mapping + exclude
-    uncovered: list[str] = []
-    for child in sorted(repo_root.iterdir(), key=lambda p: p.name):
-        if not child.is_dir():
-            continue
-        if child.name.startswith(".") or child.name in SKIP_DIRS:
-            continue
-        if not is_code_dir(child):
-            continue
-        if not is_covered(child.name, entries):
-            uncovered.append(child.name)
-    return uncovered
+    candidates = [
+        child.name
+        for child in sorted(repo_root.iterdir(), key=lambda p: p.name)
+        if child.is_dir()
+        and not child.name.startswith(".")
+        and child.name not in SKIP_DIRS
+    ]
+    # Filtered before `is_code_dir`, which recurses: no point walking a
+    # directory git has already told us isn't ours.
+    ignored = gitignored(repo_root, candidates)
+    return [
+        name
+        for name in candidates
+        if name not in ignored
+        and is_code_dir(repo_root / name)
+        and not is_covered(name, entries)
+    ]
 
 
 def main(repo_root: Path = REPO_ROOT) -> int:

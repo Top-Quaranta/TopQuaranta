@@ -356,15 +356,31 @@ class TestObtenirSenyalCommand:
 
         assert m.call_count == 0
 
-    def test_unapproved_artist_not_processed(self, base_canco, base_artist):
-        """`artista.aprovat=False` tracks must not be ingested."""
+    def test_verified_track_of_an_unapproved_artist_is_processed(
+        self, base_canco, base_artist
+    ):
+        """The gate is the cançó, not who signs it.
+
+        `artista__aprovat=True` used to sit in the queryset and starved 23
+        verified, active, in-window tracks of signal forever — 22 of them
+        collaborations whose primary credit is a pending artist. They are
+        eligible for the ranking, so excluding them here only guaranteed
+        they could never chart (2026-08-10).
+        """
         base_artist.aprovat = False
         base_artist.save(update_fields=["aprovat"])
 
         with patch("ingesta.management.commands.obtenir_senyal.get_track_info") as m:
+            m.return_value = {
+                "playcount": 40,
+                "listeners": 9,
+                "returned_track": base_canco.nom,
+                "returned_artist": base_artist.nom,
+            }
             call_command("obtenir_senyal", stdout=StringIO())
 
-        assert m.call_count == 0
+        assert m.call_count == 1
+        assert SenyalDiari.objects.get(canco=base_canco).lastfm_playcount == 40
 
 
 @pytest.mark.django_db

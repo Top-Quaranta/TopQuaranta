@@ -86,13 +86,22 @@ from `music/constants.py`. Never raise — return `None` on any failure.
 ```bash
 python manage.py obtenir_senyal [--data YYYY-MM-DD] [--limit N] [--dry-run]
 ```
-Selects `verificada=True AND activa=True AND artista.aprovat=True AND
+Selects `verificada=True AND activa=True AND
 data_llancament ≥ today - DIES_CADUCITAT` tracks, calls Last.fm per
 track, writes raw cumulative `lastfm_playcount` + `lastfm_listeners`
 into `SenyalDiari`. Skips tracks already ingested for that date
 (idempotent). No post-processing — the former `score_entrada`
 normalisation was removed in algorithm v2.0 (2026-04-23); the
 ranking consumes the raw counts directly.
+
+**The gate is the cançó, not who signs it.** `artista.aprovat=True` sat
+in that filter until 2026-08-10 and starved 23 verified, active, in-window
+tracks of signal forever — 22 of them collaborations whose primary credit
+is a pending artist but which reached the catalogue through an approved
+one. They are eligible for the ranking (`_top_for_territoris` ORs
+`artista`/`artistes_col` territoris and doesn't check approval either), so
+excluding them here only guaranteed they could never chart. Verification
+is the editorial gate; approval of the primary credit is not.
 
 **Two fallbacks keep a failed lookup from becoming permanent silence**
 (both added 2026-08-10; every failure lands in the same `error=True`

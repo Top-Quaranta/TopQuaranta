@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 _ARTIST_DRIFT_THRESHOLD = 0.90
 _TRACK_DRIFT_THRESHOLD = 0.80
 
+# How many collaborators to try when the primary artist's lookup fails.
+# ponytail: flat cap, not a smart ordering — the fallback only runs on
+# failures (~700/day) and almost every track has ≤3 credits, so bounding
+# the worst case is worth more than picking the likeliest name first.
+MAX_COL_FALLBACK = 3
+
 
 def _normalize_for_match(s: str) -> str:
     """Lowercase, strip accents + punctuation for fuzzy comparison."""
@@ -124,6 +130,7 @@ class Command(BaseCommand):
                 data_llancament__gte=cutoff,
             )
             .select_related("artista")
+            .prefetch_related("artistes_col")
             .order_by("pk")
         )
 
@@ -186,7 +193,9 @@ class Command(BaseCommand):
         ).values("artista_id", "nom"):
             aliases_by_artist.setdefault(a["artista_id"], []).append(a["nom"])
 
-        for i, canco in enumerate(cancons.iterator(), 1):
+        # `chunk_size` is required once the queryset prefetches
+        # `artistes_col` (Django refuses to guess how much to hold).
+        for i, canco in enumerate(cancons.iterator(chunk_size=BULK_BATCH), 1):
             if canco.pk in already_ingested:
                 skipped += 1
                 continue
@@ -220,6 +229,42 @@ class Command(BaseCommand):
                 track_mbid=canco.mb_recording_id or None,
                 artist_mbid=canco.artista.musicbrainz_id or None,
             )
+            # The name the answer actually came back under. Everything
+            # downstream (alias summing, drift detection) has to compare
+            # against THIS, not against the primary artist we started from.
+            asked_artist = artist_name
+
+            # Collaborations are frequently filed on Last.fm under a credit
+            # that isn't our `artista`: Deezer names Poetas Puestos as the
+            # main artist of "Tu Contra el Món" while we store it under
+            # Auxili, so every lookup asked the wrong name and the track
+            # read as "nobody scrobbles this" for three months. Try the
+            # collaborators we already store before recording a failure.
+            # Measured 2026-08-10: recovers 25 of the 150 failing tracks
+            # that have collaborators (17%), one of them worth 1.784 plays.
+            # This does NOT touch attribution — only which name we ask.
+            if result is None:
+                for col in list(canco.artistes_col.all())[:MAX_COL_FALLBACK]:
+                    col_name = col.lastfm_nom or col.nom
+                    if not col_name or col_name == artist_name:
+                        continue
+                    # No `track_mbid`: the recording MBID belongs to our own
+                    # attribution and is the other way this lookup breaks.
+                    result = get_track_info(
+                        col_name,
+                        track_name,
+                        artist_mbid=col.musicbrainz_id or None,
+                    )
+                    if result is not None:
+                        asked_artist = col_name
+                        logger.info(
+                            "Last.fm recovered canco pk=%s under collaborator "
+                            "'%s' (primary artist is '%s')",
+                            canco.pk,
+                            col_name,
+                            artist_name,
+                        )
+                        break
 
             # Sum playcounts/listeners across confirmed aliases of this
             # artist — the Last.fm fragmentation fix (2026-05-01). For
@@ -227,8 +272,11 @@ class Command(BaseCommand):
             # Aliases are queried with autocorrect=0 (literal page),
             # otherwise Last.fm redirects them all to the canonical and
             # we'd double-count.
+            # Only when the answer came under the primary artist: the
+            # aliases belong to `canco.artista`, so summing them onto a
+            # collaborator's playcount would mix two different acts.
             alias_names = aliases_by_artist.get(canco.artista_id, [])
-            if result is not None and alias_names:
+            if result is not None and asked_artist == artist_name and alias_names:
                 for alias in alias_names:
                     # Pass canonical_artist so the literal lookup can
                     # detect Last.fm case-folding the alias into the
@@ -246,8 +294,13 @@ class Command(BaseCommand):
                 # opt-out for tracks where the autocorrect is known-good.
                 returned_artist = result.get("returned_artist", "")
                 returned_track = result.get("returned_track", "")
+                # `asked_artist`, not `artist_name`: a row recovered under
+                # a collaborator legitimately returns that collaborator's
+                # name. Comparing it against the primary would flag drift,
+                # set `corregit=True`, and the ranking filters those out —
+                # the recovery would restore the row and still lose it.
                 is_drift = not canco.lastfm_confirmed and _detect_drift(
-                    artist_name, track_name, returned_artist, returned_track
+                    asked_artist, track_name, returned_artist, returned_track
                 )
                 if is_drift:
                     drifts += 1

@@ -94,6 +94,36 @@ into `SenyalDiari`. Skips tracks already ingested for that date
 normalisation was removed in algorithm v2.0 (2026-04-23); the
 ranking consumes the raw counts directly.
 
+**Two fallbacks keep a failed lookup from becoming permanent silence**
+(both added 2026-08-10; every failure lands in the same `error=True`
+row reading "lookup failed", which staff correctly read as "nobody
+scrobbles this" and nobody re-checked):
+
+- **Drop the recording MBID.** Last.fm resolves `mbid` *instead of*
+  artist+track: an MBID it hasn't indexed answers error 6 and the
+  names sent alongside are never consulted. So a **successful**
+  MusicBrainz match silently deleted a track's signal — the better
+  the MB cron got, the more tracks went dark. `get_track_info` now
+  retries once without the MBID and clears it for the rest of the
+  ladder. 128 eligible tracks were affected; 25/25 sampled recovered.
+- **Try the collaborators.** A collaboration is often filed on Last.fm
+  under a credit that isn't our `Canco.artista` (Deezer names Poetas
+  Puestos the main artist of "Tu Contra el Món"; we store it under
+  Auxili), so we asked the wrong name every day. On failure
+  `obtenir_senyal` retries under up to `MAX_COL_FALLBACK` (3)
+  `artistes_col` names. Recovered 25 of the 150 failing tracks that
+  have collaborators. **This changes only which name we ask** —
+  attribution, territory and monopoly are untouched, since the
+  ranking pool already ORs `artista__territoris` with
+  `artistes_col__territoris`.
+
+The name that answered is tracked as `asked_artist` and drives both
+the alias summing (skipped on the collaborator path — aliases belong
+to `canco.artista`) and `_detect_drift`. Comparing a collaborator's
+legitimate response against the *primary* artist would flag drift, set
+`corregit=True`, and `_top_for_territoris` filters those rows out —
+the recovery would restore the row and lose it again.
+
 ### 3.2 `calcular_top`
 ```bash
 python manage.py calcular_top [--setmana YYYY-MM-DD] [--territori CODE]

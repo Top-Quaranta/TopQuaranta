@@ -365,3 +365,118 @@ class TestObtenirSenyalCommand:
             call_command("obtenir_senyal", stdout=StringIO())
 
         assert m.call_count == 0
+
+
+@pytest.mark.django_db
+class TestCollaboratorFallback:
+    """A collaboration filed on Last.fm under a credit that isn't our
+    `Canco.artista` used to record `error=True` forever — the lookup only
+    ever asked the primary artist. Caught 2026-08-10 on "Tu Contra el Món"
+    (Deezer's main artist is Poetas Puestos; we store it under Auxili)."""
+
+    @pytest.fixture
+    def collab_canco(self):
+        principal = Artista.objects.create(
+            nom="Auxili", lastfm_nom="Auxili", aprovat=True
+        )
+        col = Artista.objects.create(
+            nom="Poetas Puestos", lastfm_nom="Poetas Puestos", aprovat=False
+        )
+        album = Album.objects.create(
+            artista=principal,
+            nom="Tu Contra el Món",
+            data_llancament=date.today() - timedelta(days=10),
+        )
+        c = Canco.objects.create(
+            artista=principal,
+            album=album,
+            nom="Tu Contra el Món",
+            lastfm_nom="Tu Contra el Món",
+            data_llancament=date.today() - timedelta(days=10),
+            verificada=True,
+            activa=True,
+        )
+        c.artistes_col.add(col)
+        return c
+
+    def test_recovers_under_a_collaborator(self, collab_canco):
+        def fake(artist, track, **kw):
+            if artist != "Poetas Puestos":
+                return None
+            return {
+                "playcount": 116,
+                "listeners": 66,
+                "returned_track": "Tu contra el Món",
+                "returned_artist": "Poetas Puestos",
+            }
+
+        with patch(
+            "ingesta.management.commands.obtenir_senyal.get_track_info",
+            side_effect=fake,
+        ):
+            call_command("obtenir_senyal", stdout=StringIO())
+
+        row = SenyalDiari.objects.get(canco=collab_canco)
+        assert row.error is False
+        assert row.lastfm_playcount == 116
+        # The whole point: the row must stay usable by the ranking. Drift is
+        # judged against the name we actually asked (the collaborator), not
+        # against the primary — otherwise `corregit=True` and
+        # `_top_for_territoris` filters the recovered row straight back out.
+        assert row.corregit is False
+
+    def test_no_collaborator_match_still_records_the_error(self, collab_canco):
+        with patch(
+            "ingesta.management.commands.obtenir_senyal.get_track_info",
+            return_value=None,
+        ):
+            call_command("obtenir_senyal", stdout=StringIO())
+
+        row = SenyalDiari.objects.get(canco=collab_canco)
+        assert row.error is True
+        assert "Auxili" in row.error_msg
+
+    def test_primary_artist_is_tried_first(self, collab_canco):
+        """The fallback must not fire when the primary answers."""
+        with patch("ingesta.management.commands.obtenir_senyal.get_track_info") as m:
+            m.return_value = {
+                "playcount": 9,
+                "listeners": 3,
+                "returned_track": "Tu Contra el Món",
+                "returned_artist": "Auxili",
+            }
+            call_command("obtenir_senyal", stdout=StringIO())
+
+        assert m.call_count == 1
+        assert m.call_args[0][0] == "Auxili"
+
+    def test_aliases_are_not_summed_onto_a_collaborator(self, collab_canco):
+        """Aliases belong to `canco.artista`. Summing them onto a
+        collaborator's playcount would mix two different acts."""
+        ArtistaLastfmAlias.objects.create(
+            artista=collab_canco.artista, nom="Auxili Sound", confirmat=True
+        )
+
+        def fake(artist, track, **kw):
+            if artist != "Poetas Puestos":
+                return None
+            return {
+                "playcount": 116,
+                "listeners": 66,
+                "returned_track": "Tu contra el Món",
+                "returned_artist": "Poetas Puestos",
+            }
+
+        with (
+            patch(
+                "ingesta.management.commands.obtenir_senyal.get_track_info",
+                side_effect=fake,
+            ),
+            patch(
+                "ingesta.management.commands.obtenir_senyal.get_track_info_literal"
+            ) as lit,
+        ):
+            call_command("obtenir_senyal", stdout=StringIO())
+
+        lit.assert_not_called()
+        assert SenyalDiari.objects.get(canco=collab_canco).lastfm_playcount == 116

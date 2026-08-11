@@ -23,12 +23,14 @@ has no channel" stay distinct, and only a human writes the second.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import re
 
 from django.core.management.base import BaseCommand
 
 from ingesta.clients import youtube as yt
+from music.constants import DIES_CADUCITAT
 from music.models import Artista
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,19 @@ class Command(BaseCommand):
             action="store_true",
             help="Resol també els /@handle amb una cerca (100 unitats cadascun).",
         )
+        parser.add_argument(
+            "--nomes-finestra",
+            action="store_true",
+            help="Només artistes amb cançons dins dels 365 dies.",
+        )
+        parser.add_argument(
+            "--budget",
+            type=int,
+            default=4_000,
+            help="Sostre de quota per a --resolve. 655 handles a 100 unitats "
+            "són 65.500: set dies de quota per una passada. El sostre fa "
+            "que la comanda pare, no que es mengi el pressupost del senyal.",
+        )
         parser.add_argument("--dry-run", action="store_true")
 
     def handle(self, *args, **opts) -> None:
@@ -56,9 +71,17 @@ class Command(BaseCommand):
             .exclude(youtube_url="")
             .exclude(youtube_url__isnull=True)
         )
+        if opts["nomes_finestra"]:
+            cutoff = datetime.date.today() - datetime.timedelta(days=DIES_CADUCITAT)
+            pendents = pendents.filter(
+                cancons__verificada=True,
+                cancons__activa=True,
+                cancons__data_llancament__gte=cutoff,
+            ).distinct()
         directes = 0
         resolts = 0
         pendents_handle = 0
+        gastat = 0
 
         for a in pendents:
             m = _CHANNEL_URL.search(a.youtube_url)
@@ -71,6 +94,10 @@ class Command(BaseCommand):
                 if not opts["resolve"]:
                     pendents_handle += 1
                     continue
+                if gastat + yt.COST_SEARCH > opts["budget"]:
+                    pendents_handle += 1
+                    continue
+                gastat += yt.COST_SEARCH
                 nom = next(g for g in h.groups() if g)
                 channel = self._resolve(nom) or self._resolve(a.nom)
                 if not channel:
@@ -88,7 +115,8 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Directes des de la URL: {directes} · resolts amb cerca: {resolts}"
+                f"Directes des de la URL: {directes} · resolts amb cerca: "
+                f"{resolts} ({gastat} unitats)"
                 + (
                     f" · {pendents_handle} amb handle sense resoldre (--resolve)"
                     if pendents_handle

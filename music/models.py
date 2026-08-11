@@ -282,6 +282,28 @@ class Artista(models.Model):
         help_text="Last time Deezer was queried for new albums.",
     )
 
+    # ── YouTube "Topic" channel ─────────────────────────────────────────
+    # Auto-generated channel YouTube creates for anything a distributor
+    # delivers, holding the "Art Tracks" (cover art + audio). That is the
+    # YouTube Music catalogue, and it exists even for acts nobody has ever
+    # scrobbled — 30/30 sampled VAL/BAL artists had one. Distinct from
+    # `youtube_url`, which is the band's own human channel (videoclips,
+    # decorated titles) and is NOT usable for track matching.
+    youtube_channel_id = models.CharField(
+        max_length=32,
+        blank=True,
+        db_index=True,
+        help_text="UC… id of the '<nom> - Topic' channel. Costs 100 quota "
+        "units to discover, so it is resolved once and cached here.",
+    )
+    youtube_uploads_playlist = models.CharField(max_length=34, blank=True)
+    youtube_checked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last discovery attempt. Set even when nothing was found, "
+        "so the quota budget doesn't re-spend 100 units on the same miss.",
+    )
+
     # ── MusicBrainz metadata ────────────────────────────────────────────
     # Populated by obtenir_metadata_musicbrainz (rate-limited to 1 req/s).
     # All fields optional — artists below MB's coverage stay empty.
@@ -1085,6 +1107,26 @@ class Canco(models.Model):
         help_text="Work.language from MusicBrainz ('cat' = strong Catalan signal).",
     )
     mbrainz_confirmed = models.BooleanField(null=True, blank=True)
+
+    # ── YouTube cross-reference ─────────────────────────────────────────
+    # The Art Track on the artist's Topic channel. `youtube_match` records
+    # HOW we got there, because a blind match is worse than no match: the
+    # same title can be a cover, a live take or a different act entirely.
+    MATCH_EXACTE = "exacte"
+    MATCH_DURADA = "durada"
+    MATCH_MANUAL = "manual"
+    MATCH_CHOICES = [
+        (MATCH_EXACTE, "Títol normalitzat exacte"),
+        (MATCH_DURADA, "Títol aproximat + durada"),
+        (MATCH_MANUAL, "Revisat per staff"),
+    ]
+    youtube_video_id = models.CharField(max_length=16, blank=True, db_index=True)
+    youtube_match = models.CharField(max_length=10, blank=True, choices=MATCH_CHOICES)
+    # When the link was made. Without it the daily bootstrap report has no
+    # honest way to say "connected today" and would have to approximate —
+    # which is precisely the class of guess this whole exercise exists to
+    # stop shipping.
+    youtube_matched_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     # SEO Sprint S (2026-05-06). See Artista.updated_at note. No

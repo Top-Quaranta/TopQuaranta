@@ -1,0 +1,145 @@
+{% load static %}{% load digest_extras %}<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>{{ subject }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bricolage+Grotesque:wght@400;700;800&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; padding:0; width:100%; background:#060608; }
+  table { border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }
+  img { border:0; outline:none; text-decoration:none; display:block; }
+  a { text-decoration:none; }
+  .wrap { width:640px; max-width:640px; }
+  .px { padding-left:28px; padding-right:28px; }
+  .crit { font-family:'Anton','Arial Black','Helvetica Neue',Arial,sans-serif; }
+  .whisper { font-family:'Instrument Serif',Georgia,'Times New Roman',serif; font-style:italic; }
+  .body-font { font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif; }
+  @media (max-width:640px) {
+    .wrap { width:100% !important; }
+    .px { padding-left:18px !important; padding-right:18px !important; }
+    .gridcell { display:block !important; width:100% !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    body, .body-bg { background:#060608 !important; }
+    .card { background:#141319 !important; }
+    .ink { color:#ffffff !important; }
+    .muted { color:#b7b7be !important; }
+  }
+</style>
+</head>
+<body class="body-bg body-font" style="margin:0;padding:0;background:#060608;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;color:#ffffff;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="body-bg" style="background:#060608;">
+<tr><td align="center" style="padding:0;">
+<table role="presentation" class="wrap" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;background:#060608;">
+
+{% comment %} HEADER {% endcomment %}
+<tr><td class="px" style="background:#060608;padding:26px 28px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td align="left" valign="middle">
+      <img src="{{ site_url }}{% static 'web/img/newsletter/logo_email.png' %}" width="170" alt="TopQuaranta" style="width:170px;height:auto;">
+      <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#facc15;font-size:17px;margin-top:10px;">Connexió amb YouTube &middot; informe diari</div>
+    </td>
+    <td align="right" valign="top" class="muted" style="font-size:12px;color:#9aa0a6;">{{ avui|date:"d/m/Y" }}</td>
+  </tr></table>
+</td></tr>
+
+{% comment %} A. DESCOBRIMENT {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Descobriment de canals</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      {% include "analytics/_kpi.html" with label="Artistes amb canal Topic" value=descobriment.amb_canal_n delta=descobriment.amb_canal suffix=None %}
+      {% include "analytics/_kpi.html" with label="Cobertura d'artistes" value=descobriment.pct suffix="%" delta=None %}
+    </tr>
+  </table>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;margin-top:6px;"><tr><td style="padding:14px 16px;">
+    {% comment %} Barra de progrés: cel·la plena + resta, perquè una cel·la sola s'estira al 100% al client de correu. {% endcomment %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;background:rgba(255,255,255,0.08);border-radius:999px;margin-bottom:12px;"><tr>
+      <td width="{{ descobriment.pct }}%" style="background:#facc15;height:10px;border-radius:999px;font-size:0;line-height:0;">&nbsp;</td>
+      <td style="font-size:0;line-height:0;">&nbsp;</td>
+    </tr></table>
+    <div class="muted" style="font-size:13px;color:#b7b7be;line-height:1.8;">
+      Provats ahir: <strong style="color:#ffffff;">{{ descobriment.ahir }}</strong> artistes<br>
+      Provats sense trobar canal: <strong style="color:#ffffff;">{{ descobriment.sense_canal }}</strong><br>
+      Queden per provar: <strong style="color:#ffffff;">{{ descobriment.queden|milers }}</strong>{% if descobriment.eta_dies %} &middot; <span style="color:#facc15;">~{{ descobriment.eta_dies }} dies al ritme actual</span>{% endif %}
+    </div>
+  </td></tr></table>
+</td></tr>
+
+{% comment %} B. APARELLAMENT {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Cançons connectades</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      {% include "analytics/_kpi.html" with label="Cançons amb vídeo" value=aparellament.total_n delta=aparellament.total suffix=None %}
+      {% include "analytics/_kpi.html" with label="Elegibles al catàleg" value=aparellament.elegibles delta=None suffix=None %}
+    </tr>
+  </table>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;margin-top:6px;"><tr><td style="padding:12px 16px;">
+    {% for t in aparellament.territoris %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:5px 0;"><tr>
+      <td width="46" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#facc15;">{{ t.codi }}</td>
+      <td valign="middle" style="padding:0 8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;background:rgba(255,255,255,0.08);border-radius:999px;"><tr>
+          <td width="{{ t.pct }}%" style="background:#facc15;height:8px;border-radius:999px;font-size:0;line-height:0;">&nbsp;</td>
+          <td style="font-size:0;line-height:0;">&nbsp;</td>
+        </tr></table>
+      </td>
+      <td width="96" align="right" class="muted" style="font-size:12px;color:#b7b7be;white-space:nowrap;"><strong style="color:#ffffff;">{{ t.fetes }}</strong>/{{ t.total }} &middot; {{ t.pct }}%</td>
+    </tr></table>
+    {% endfor %}
+  </td></tr></table>
+</td></tr>
+
+{% comment %} C. EL PUNT CEC {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">El punt cec</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Cançons que Last.fm no veu — la raó de tot això</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid #facc15;border-radius:12px;"><tr><td style="padding:16px;">
+    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:32px;color:#facc15;line-height:1;">{{ punt_cec.fetes|milers }}<span style="font-size:17px;color:#9aa0a6;">&nbsp;/&nbsp;{{ punt_cec.total|milers }}</span></div>
+    <div class="muted" style="font-size:13px;color:#b7b7be;margin-top:6px;">ja tenen vídeo de YouTube &middot; <strong style="color:#ffffff;">{{ punt_cec.pct }}%</strong> del punt cec cobert</div>
+  </td></tr></table>
+</td></tr>
+
+{% comment %} D. SENYAL {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Senyal recollit</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      {% include "analytics/_kpi.html" with label="Snapshots d'avui" value=senyal.avui delta=None suffix=None %}
+      {% include "analytics/_kpi.html" with label="Ja poden puntuar" value=senyal.amb_historial delta=None suffix=None %}
+    </tr>
+  </table>
+  <div class="muted" style="font-size:12px;color:#9aa0a6;padding:4px 5px 0;line-height:1.7;">
+    «Ja poden puntuar» = tenen línia base de 4 dies o més; sense això l'increment setmanal és 0.<br>
+    Cost d'avui: ~{{ senyal.cost_estimat }} unitats de {{ senyal.quota|milers }}{% if senyal.errors %} &middot; <span style="color:#f87171;">{{ senyal.errors }} vídeos sense estadístiques</span>{% endif %}
+  </div>
+</td></tr>
+
+{% if incidencies %}
+<tr><td class="px" style="padding:20px 28px 0;background:#060608;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:12px 16px;">
+    <div class="muted" style="font-size:11px;color:#9aa0a6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Incidències</div>
+    {% for i in incidencies %}
+    <div style="font-size:12px;color:#b7b7be;line-height:1.6;"><span style="color:#f87171;">&#10005;</span> {{ i.label }} <span style="color:#6b6b73;">— {{ i.msg }}</span></div>
+    {% endfor %}
+  </td></tr></table>
+</td></tr>
+{% endif %}
+
+<tr><td align="center" class="px" style="padding:26px 28px 22px;background:#060608;">
+  <a href="{{ dashboard_url }}" class="crit" style="display:inline-block;padding:13px 30px;background:#facc15;color:#0a0a0a;font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;text-transform:uppercase;letter-spacing:0.5px;border-radius:999px;">Obre l'estat del sistema</a>
+</td></tr>
+
+<tr><td class="px" style="padding:22px 28px;background:#060608;border-top:1px solid rgba(255,255,255,0.07);color:#7c7c84;font-size:11px;line-height:1.7;text-align:center;">
+  Informe temporal de la fase d'implementació. Quan acabe, s'esborra la línia del cron.<br>
+  <a href="{{ site_url }}" style="color:#facc15;">topquaranta.cat</a>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

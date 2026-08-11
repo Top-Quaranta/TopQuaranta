@@ -100,6 +100,19 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # weekly delta of playcount directly).
 0 6 * * *   topquaranta   /home/topquaranta/bin/tq-run obtenir_senyal >> /var/log/topquaranta/senyal.log 2>&1
 
+# ── YouTube (segona font de senyal, fase d'implementació 2026-08) ──────
+# El descobriment és el car: search.list val 100 de les 10.000 unitats
+# diàries, o siga ~90 artistes per execució. Va a les 03:00 UTC perquè
+# la quota de Google es reinicia a mitjanit del Pacífic (09:00 CEST a
+# l'estiu) — així el pressupost del dia ja està sencer.
+0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run descobrir_youtube >> /var/log/topquaranta/youtube.log 2>&1
+# La recollida diària costa ~60 unitats: després del descobriment, i
+# abans que arribe l'informe.
+30 6 * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_senyal_youtube >> /var/log/topquaranta/youtube.log 2>&1
+# TEMPORAL — informe de progrés mentre dura la fase d'implementació.
+# Per a apagar-lo: esborra aquesta línia i torna a executar tq-sync-infra.
+0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run enviar_informe_youtube >> /var/log/topquaranta/analytics.log 2>&1
+
 # 06:45 → Anomaly detector. Reads today's SenyalDiari and flags
 # `corregit=True` on any row whose day-over-day delta is wildly
 # outside the cançó's recent baseline (default: floor=100 plays,

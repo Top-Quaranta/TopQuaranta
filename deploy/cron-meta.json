@@ -210,5 +210,20 @@
     "frequency_label": "Cada dilluns 02:30",
     "max_age_hours": 170,
     "skip_concern": 1
+  },
+  "descobrir_youtube": {
+    "frequency_label": "Cada nit 03:00",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "obtenir_senyal_youtube": {
+    "frequency_label": "Cada nit 06:30",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "enviar_informe_youtube": {
+    "frequency_label": "Cada dia 07:00 (temporal)",
+    "max_age_hours": 26,
+    "skip_concern": 1
   }
 }

@@ -47,6 +47,12 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 ✦ = `db_index=True`.
 
+**YouTube (2026-08).** `youtube_channel_id` + `youtube_uploads_playlist`
+apunten al canal auto-generat «`<nom>` - Topic», no al canal humà de la
+banda que ja guarda `youtube_url` — són coses distintes i confondre-les
+trenca l'aparellament. `youtube_checked_at` es marca també quan NO se'n
+troba cap, perquè reintentar-ho costa 100 unitats de quota.
+
 ### Approval state machine (since migration 0042)
 
 `aprovat` and `pendent_review` are orthogonal and ENFORCED by
@@ -185,6 +191,10 @@ into the RF classifier as 4 features (`whisper_p_ca`, `whisper_p_es`,
 set (ADR-0014, `docs/decisions/0014-whisper-lid-eval.md`): precision(ca) = 100 %,
 recall(ca) = 81 %, specificity = 100 %.
 
+**YouTube (2026-08).** `youtube_video_id` és l'Art Track del canal Topic;
+`youtube_match` diu COM s'hi ha arribat (`exacte` / `durada` / `manual`) i
+`youtube_matched_at` quan. Vegeu `pipeline.md` §3.1 bis.
+
 ### External-anchor invariant (2026-04-22, relaxed)
 Signal `unapprove_on_last_deezer_removed` (post_delete on ArtistaDeezer)
 enforces: `aprovat=True ⇒ ≥ 1 external anchor` (Deezer ID OR non-empty
@@ -310,6 +320,13 @@ Daily Last.fm signal per track. One row per `(canco, data)`.
 - Indexes: `(canco, data)` unique, `(data, error)`, `(data, corregit)`
 - **No normalisation** since 2026-04-23. Algorithm v2.0 reads
   `lastfm_playcount` directly and computes weekly deltas at ranking time.
+
+### `SenyalYouTube` — `ranking_senyalyoutube` (2026-08)
+
+Bessona de `SenyalDiari` per a la segona font: `views` (acumulatiu) +
+`likes` + `video_id`, únic per `(canco, data)`. Taula separada a posta —
+una visualització no és un scrobble, i unir-les ací forçaria una decisió
+que ha de ser editorial. Vegeu `pipeline.md` §3.1 bis.
 
 ### `TopSetmanal` — `ranking_topsetmanal`
 Weekly official ranking. `setmana` = Monday of the ranking ISO week.

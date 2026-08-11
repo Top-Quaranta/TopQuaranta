@@ -534,6 +534,54 @@ class SenyalDiari(models.Model):
         return f"{self.canco} — {self.data}"
 
 
+class SenyalYouTube(models.Model):
+    """Daily YouTube snapshot per track — the second signal source.
+
+    Deliberately a separate table rather than columns on `SenyalDiari`:
+    the two sources have different coverage, different failure modes and
+    different semantics (a view is not a scrobble), so joining them at
+    the storage layer would force a decision we want to keep editorial.
+    Same shape otherwise, so the weekly-delta machinery transfers.
+
+    Cheap to fill: `videos.list?part=statistics` returns 50 ids for one
+    quota unit, so the whole catalogue costs ~60 of the 10.000 daily.
+    """
+
+    canco = models.ForeignKey(
+        Canco,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="senyals_youtube",
+    )
+    data = models.DateField()
+
+    # Cumulative, exactly like `lastfm_playcount` — the ranking reads the
+    # 7-day delta, never the absolute value.
+    views = models.BigIntegerField(null=True)
+    likes = models.IntegerField(null=True)
+    # The id actually polled. Kept per row so a re-match (or a staff
+    # correction) leaves the old series attributable instead of silently
+    # re-labelling history.
+    video_id = models.CharField(max_length=16, blank=True)
+
+    error = models.BooleanField(default=False)
+    error_msg = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Senyal de YouTube"
+        verbose_name_plural = "Senyals de YouTube"
+        unique_together = [("canco", "data")]
+        ordering = ["-data"]
+        indexes = [
+            models.Index(fields=["canco", "data"]),
+            models.Index(fields=["data", "error"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.canco} — {self.data} (YouTube)"
+
+
 class TopSetmanal(models.Model):
     """Weekly ranking result. setmana = Monday of the ranking week (ISO).
 

@@ -259,11 +259,10 @@ renders the HTML for local preview without sending.
 
 **Deltas are not always percentages.** `_delta()` reports the absolute
 move (`+7`, `−4`) when the change rounds under 1 % or the base is under
-10, an unchanged metric shows the `=` arrow with no number, and a
-0-click SEO query falls back to its impressions. Before 2026-08 the
-percentage was rounded *first* and a real change that rounded to 0 %
-was then classified as "flat" — the KPI grid reported a week of
-moderation work as a metric that hadn't moved.
+10; an unchanged metric shows `=` with no number; a 0-click SEO query
+falls back to impressions. Before 2026-08 the percentage was rounded
+*first* and a real change rounding to 0 % was then read as "flat" — the
+grid reported a week of moderation work as a metric that hadn't moved.
 
 **`analytics/incidents.py`** reads two files on the box, best-effort
 (missing file → empty result, never an exception): `errors.log` (+
@@ -272,6 +271,8 @@ repeats by logger + digit-masked message; and the `tq-run` status tags,
 classified by `health_report.gather_crons` — the function `tq-health`
 runs hourly, so mail and watchdog can't disagree. Cron state is
 point-in-time ("what is broken now"), not a history of the week.
+
+> **Informe diari de YouTube** (temporal, 2026-08): [`analytics-youtube.md`](analytics-youtube.md).
 
 ## What we deliberately don't measure
 

@@ -54,6 +54,10 @@ mapping:
   # middleware and metrics collectors stay with the generic entry.
   - prefix: analytics/management/commands/generar_goaccess.py
     doc: docs/architecture/analytics-goaccess.md
+  # Informe temporal de la connexió amb YouTube (2026-08). Doc propi pel
+  # mateix motiu que GoAccess: analytics.md ja frega el llindar de mida.
+  - prefix: analytics/management/commands/enviar_informe_youtube.py
+    doc: docs/architecture/analytics-youtube.md
   - prefix: analytics/
     doc: docs/architecture/analytics.md
 

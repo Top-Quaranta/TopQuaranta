@@ -133,6 +133,48 @@ legitimate response against the *primary* artist would flag drift, set
 `corregit=True`, and `_top_for_territoris` filters those rows out —
 the recovery would restore the row and lose it again.
 
+### 3.1 bis YouTube — segona font de senyal *(2026-08)*
+
+Last.fm només veu el que els seus usuaris escrobblen, i per a la música
+valenciana i balear eixa mostra és quasi buida (116 de 400 cançons VAL
+elegibles sense cap senyal). YouTube crea automàticament un canal
+**«<artista> - Topic»** per a tot el que entrega un distribuïdor, amb
+les «Art Tracks» (caràtula + àudio). Existeix encara que ningú no haja
+escrobblat mai el grup: **30 de 30** artistes VAL/BAL mostrejats en
+tenien.
+
+La quota mana tot el disseny. 10.000 unitats/dia, gratis i sense tarifa
+de pagament (ampliar-la exigeix una auditoria manual de Google):
+
+| Endpoint | Cost | Ús |
+|---|---|---|
+| `search.list` | **100** | descobrir el canal — la meitat cara |
+| `channels.list` | 1 | playlist d'uploads |
+| `playlistItems.list` | 1 / 50 vídeos | enumerar Art Tracks |
+| `videos.list` | 1 / 50 vídeos | estadístiques diàries |
+
+Per tant `descobrir_youtube` (03:00) només pot resoldre ~90 artistes al
+dia i **l'ordre importa més que la velocitat**: primer els artistes amb
+cançons sense senyal de Last.fm, després la resta de VAL/BAL, i al final
+CAT. `obtenir_senyal_youtube` (06:30) fotografia tot el catàleg per ~60
+unitats i escriu `SenyalYouTube`, bessona de `SenyalDiari` — taula a
+part a posta, perquè una visualització no és un scrobble i unir-les a
+la capa d'emmagatzematge forçaria una decisió que volem mantindre
+editorial.
+
+**El sufix `- Topic` no és opcional.** Cercar «Auxili - Topic» retorna
+primer el canal humà de la banda («AUXILI»), ple de videoclips titulats
+«AUXILI - TARRINETES AL SOL ft DJ Trapella», que no aparellen amb res.
+Exigir el sufix literal va pujar l'encert de la mostra del 63% al 76%.
+
+L'aparellament és conservador a posta: només títol normalitzat exacte
+(`_normalize_track`, compartit amb Last.fm). Un aparellament erroni no
+sembla erroni — sembla una cançó que ningú no escolta.
+
+Com entra al rànquing **encara no està decidit**: primer calen tres o
+quatre setmanes de dades. Vegeu `docs/architecture/analytics.md` per a
+l'informe diari de progrés.
+
 ### 3.2 `calcular_top`
 ```bash
 python manage.py calcular_top [--setmana YYYY-MM-DD] [--territori CODE]

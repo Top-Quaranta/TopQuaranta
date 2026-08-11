@@ -181,6 +181,14 @@ l'artista**. Per això el senyal d'una cançó és la **suma** de:
 2. el **canal oficial** — zero o molts vídeos, a `CancoYouTubeVideo`,
    i el canal el tria **una persona** a `/staff/artistes/sense-youtube`.
 
+`sembrar_canals_youtube` agafa gratis els enllaços curats de
+MusicBrainz. Els `/channel/UC…` no costen res; els `/@handle` necessiten
+una cerca (100 unitats), i per això `--resolve` va amb `--budget` i
+`--nomes-finestra`: 655 handles serien set dies de quota, i el sostre fa
+que la comanda pare en lloc de menjar-se el pressupost del senyal.
+L'absència d'enllaç **no** marca l'artista com a revisat — «ningú no ho
+ha mirat» i «revisat, no en té» només els distingeix una persona.
+
 El canal oficial no s'endevina mai. Sondejar «Malalts» automàticament
 retorna un canal de pàdel i una empresa d'esdeveniments; «Guerra» o
 «Montenegro» són pitjors. `Artista.youtube_canal_revisat` dona el tercer

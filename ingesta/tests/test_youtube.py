@@ -291,3 +291,48 @@ class TestDuesLlanes:
 
         row = SenyalYouTube.objects.get(canco=canco)
         assert row.error is True and row.n_videos == 0
+
+
+@pytest.mark.django_db
+class TestSembrarCanals:
+    def test_reads_the_channel_id_straight_off_a_musicbrainz_url(self):
+        a = Artista.objects.create(
+            nom="A",
+            lastfm_nom="A",
+            aprovat=True,
+            youtube_url="https://www.youtube.com/channel/UCego8MWd7DkJXnGl9WQAbTQ",
+        )
+        call_command("sembrar_canals_youtube", stdout=StringIO())
+        a.refresh_from_db()
+        assert a.youtube_canal_oficial == "UCego8MWd7DkJXnGl9WQAbTQ"
+        assert a.youtube_canal_revisat is True
+
+    def test_a_handle_needs_resolve_and_respects_the_budget(self):
+        """655 handles × 100 units is seven days of quota. The cap must
+        stop the run, not eat the budget the daily signal needs."""
+        for i in range(3):
+            Artista.objects.create(
+                nom=f"A{i}",
+                lastfm_nom=f"A{i}",
+                aprovat=True,
+                youtube_url=f"https://www.youtube.com/@handle{i}",
+            )
+        with patch.object(yt, "_get") as m:
+            m.return_value = {"items": [{"snippet": {"channelId": "UC" + "x" * 20}}]}
+            call_command(
+                "sembrar_canals_youtube",
+                "--resolve",
+                "--budget",
+                "100",
+                stdout=StringIO(),
+            )
+        assert m.call_count == 1
+        assert Artista.objects.exclude(youtube_canal_oficial="").count() == 1
+
+    def test_absence_of_a_link_never_marks_the_artist_reviewed(self):
+        """ "Nobody looked yet" is not "looked, has none" — only a human
+        writes the second."""
+        a = Artista.objects.create(nom="B", lastfm_nom="B", aprovat=True)
+        call_command("sembrar_canals_youtube", stdout=StringIO())
+        a.refresh_from_db()
+        assert a.youtube_canal_revisat is False

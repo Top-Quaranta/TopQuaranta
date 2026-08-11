@@ -47,6 +47,13 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 ✦ = `db_index=True`.
 
+**Canal oficial (2026-08).** `youtube_canal_oficial` és el canal PROPI
+de l'artista (videoclips), segon carril de senyal i sovint el més gran.
+El tria **una persona** a `/staff/artistes/sense-youtube`; no s'endevina
+mai, perquè sondejar «Malalts» retorna un canal de pàdel.
+`youtube_canal_revisat` aporta el tercer estat: «revisat, no en té» és
+final i vàlid, distint de «ningú no ho ha mirat».
+
 **YouTube (2026-08).** `youtube_channel_id` + `youtube_uploads_playlist`
 apunten al canal auto-generat «`<nom>` - Topic», no al canal humà de la
 banda que ja guarda `youtube_url` — són coses distintes i confondre-les
@@ -320,6 +327,13 @@ Daily Last.fm signal per track. One row per `(canco, data)`.
 - Indexes: `(canco, data)` unique, `(data, error)`, `(data, corregit)`
 - **No normalisation** since 2026-04-23. Algorithm v2.0 reads
   `lastfm_playcount` directly and computes weekly deltas at ranking time.
+
+### `CancoYouTubeVideo` — `music_cancoyoutubevideo` (2026-08)
+
+Vídeos del **canal oficial** aparellats a una cançó. Taula filla perquè
+una banda pot penjar videoclip, directe i lyric del mateix tema i sota
+una lectura de «ressò» compten els tres. L'Art Track, que és un per
+cançó, es queda a `Canco.youtube_video_id`.
 
 ### `SenyalYouTube` — `ranking_senyalyoutube` (2026-08)
 

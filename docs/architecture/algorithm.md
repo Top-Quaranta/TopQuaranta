@@ -18,7 +18,10 @@
 
 For each territori the algorithm looks at:
 
-> **`SenyalYouTube` (2026-08) no entra en aquest càlcul.** La segona font
+> **`SenyalYouTube` (2026-08) no entra en aquest càlcul.** Des de
+> l'agost suma dos carrils (Art Track + canal oficial) i `n_videos` diu
+> sobre quants, perquè afegir un carril fa saltar la sèrie per motius
+> que no són l'audiència. La segona font
 > recull dades des de l'agost del 2026, però com es combina amb Last.fm
 > és una decisió editorial pendent que necessita setmanes d'històric
 > abans de prendre's. L'algorisme d'ací baix llig NOMÉS Last.fm.

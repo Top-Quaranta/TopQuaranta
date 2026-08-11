@@ -24,6 +24,19 @@ backend; for the visual design system see
 - Node 22 is the build target. CI uses `npm ci` against
   `package-lock.json`; the server only consumes `dist/`.
 
+### `/staff/artistes/sense-youtube` *(2026-08)*
+
+Decisió humana sobre **un** canal oficial de YouTube per artista, el
+segon carril de senyal. Clon de `sense-instagram` amb una diferència que
+importa: la resposta té **tres** sortides, no dues — un id de canal, «no
+en té» (final i vàlid: Malalts no en té), o pendent. Sense el botó de
+«no en té», els artistes sense canal es quedarien a la cua per sempre.
+
+Per què una persona i no una heurística: sondejar «Malalts»
+automàticament retorna un canal de pàdel i una empresa d'esdeveniments.
+Un canal equivocat no es veu equivocat aigües avall — es veu com una
+cançó amb sospitosament moltes reproduccions.
+
 ## Directory layout
 
 ```

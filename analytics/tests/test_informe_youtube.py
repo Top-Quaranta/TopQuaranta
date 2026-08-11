@@ -76,3 +76,23 @@ def test_snapshot_errors_surface_as_incidents():
 
     assert "INCIDÈNCIES" in out.getvalue()
     assert "vídeo esborrat" in out.getvalue()
+
+
+@pytest.mark.django_db
+def test_eta_uses_capacity_until_there_is_real_history():
+    """Day one has run once, so the 7-day average says "145 days" when the
+    budget actually covers it in a week. Projecting from capacity — and
+    saying so — beats a precise-looking wrong number."""
+    for i in range(30):
+        a = Artista.objects.create(nom=f"a{i}", lastfm_nom=f"a{i}", aprovat=True)
+        _canco(f"t{i}", artista=a)
+        if i < 3:
+            a.youtube_checked_at = timezone.now()
+            a.youtube_channel_id = "UC1"
+            a.save()
+
+    out = StringIO()
+    call_command("enviar_informe_youtube", "--dry-run", stdout=out)
+
+    assert "capacitat diària" in out.getvalue()
+    assert "ritme actual" not in out.getvalue()

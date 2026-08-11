@@ -63,7 +63,7 @@
     <div class="muted" style="font-size:13px;color:#b7b7be;line-height:1.8;">
       Provats ahir: <strong style="color:#ffffff;">{{ descobriment.ahir }}</strong> artistes<br>
       Provats sense trobar canal: <strong style="color:#ffffff;">{{ descobriment.sense_canal }}</strong><br>
-      Queden per provar: <strong style="color:#ffffff;">{{ descobriment.queden|milers }}</strong>{% if descobriment.eta_dies %} &middot; <span style="color:#facc15;">~{{ descobriment.eta_dies }} dies al ritme actual</span>{% endif %}
+      Queden per provar: <strong style="color:#ffffff;">{{ descobriment.queden|milers }}</strong>{% if descobriment.eta_dies %} &middot; <span style="color:#facc15;">~{{ descobriment.eta_dies }} dies &middot; {{ descobriment.eta_base }}</span>{% endif %}
     </div>
   </td></tr></table>
 </td></tr>

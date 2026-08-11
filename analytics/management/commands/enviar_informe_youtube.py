@@ -32,6 +32,7 @@ from django.utils import timezone
 
 from analytics.management.commands.enviar_digest_setmanal import _delta, _mov
 from ingesta.clients import youtube as yt
+from ingesta.management.commands.descobrir_youtube import DEFAULT_BUDGET
 from music.constants import DIES_CADUCITAT
 from music.models import Artista, Canco
 from ranking.models import SenyalDiari, SenyalYouTube
@@ -73,12 +74,28 @@ def build_context(today: datetime.date) -> dict:
         .count()
     )
 
-    # Ritme dels últims 7 dies → ETA. Un ritme de 0 no dona ETA en lloc
-    # de dividir per zero o inventar-se una data.
+    # ETA. Els primers dies el ritme observat és mentida: el dia u només
+    # ha corregut una execució (i potser amb pressupost retallat), així que
+    # dividir per la mitjana de 7 dies dona «145 dies» quan la capacitat
+    # real són ~90 artistes/dia. Fins que hi haja història de debò,
+    # projectem amb la capacitat del pressupost i ho diem.
     fa7 = today - datetime.timedelta(days=7)
-    ritme = artistes.filter(youtube_checked_at__date__gte=fa7).count() / 7
+    dies_amb_dades = (
+        artistes.filter(youtube_checked_at__date__gte=fa7)
+        .dates("youtube_checked_at", "day")
+        .count()
+    )
     queden = tot_art - provats
-    eta = round(queden / ritme) if ritme >= 1 and queden > 0 else None
+    capacitat = DEFAULT_BUDGET // yt.COST_SEARCH
+    if dies_amb_dades >= 3:
+        ritme = artistes.filter(youtube_checked_at__date__gte=fa7).count() / 7
+        eta_base = "ritme actual"
+    else:
+        ritme = capacitat
+        eta_base = "capacitat diària"
+    # max(1, …): si el que queda cap en una execució, «~1 dia» informa
+    # més que un 0 que el template tracta com a «sense ETA» i amaga.
+    eta = max(1, round(queden / ritme)) if ritme >= 1 and queden > 0 else None
 
     # ── Aparellament ────────────────────────────────────────────────
     per_territori = []
@@ -127,6 +144,7 @@ def build_context(today: datetime.date) -> dict:
             "pct": round(amb_canal / tot_art * 100) if tot_art else 0,
             "queden": queden,
             "eta_dies": eta,
+            "eta_base": eta_base,
             "ahir": ahir_provats,
         },
         "aparellament": {
@@ -170,7 +188,7 @@ def render_text(ctx: dict) -> str:
         f"  Provats sense trobar-ne   {d['sense_canal']}",
         f"  Ahir se'n van provar      {d['ahir']}",
         f"  Queden                    {d['queden']}"
-        + (f"  (~{d['eta_dies']} dies al ritme actual)" if d["eta_dies"] else ""),
+        + (f"  (~{d['eta_dies']} dies · {d['eta_base']})" if d["eta_dies"] else ""),
         "",
         "APARELLAMENT",
         f"  Cançons connectades       {a['total_n']}/{a['elegibles']}",

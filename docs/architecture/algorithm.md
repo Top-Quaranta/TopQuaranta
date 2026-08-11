@@ -18,6 +18,11 @@
 
 For each territori the algorithm looks at:
 
+> **`SenyalYouTube` (2026-08) no entra en aquest càlcul.** La segona font
+> recull dades des de l'agost del 2026, però com es combina amb Last.fm
+> és una decisió editorial pendent que necessita setmanes d'històric
+> abans de prendre's. L'algorisme d'ací baix llig NOMÉS Last.fm.
+
 1. **`SenyalDiari.lastfm_playcount`** — the raw cumulative Last.fm play
    count per (cançó, data). Ingested daily by `obtenir_senyal`
    (06:00 UTC). No normalisation; we consume it as-is.

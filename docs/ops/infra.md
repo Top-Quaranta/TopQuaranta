@@ -166,6 +166,14 @@ SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET / SPOTIFY_REDIRECT_URI
 Plus optional service keys for Brevo, Resend, Hetzner Cloud, CDMON
 DNS, Google Search Console, etc. (see `CLAUDE.md §8`).
 
+Optional, **`YOUTUBE_API_KEY`** (2026-08): API key of the same Google
+Cloud project as `PSI_API_KEY` (the two quotas are independent), with
+YouTube Data API v3 enabled. Empty default, so the three YouTube crons
+log a warning and exit 0 rather than going red. Quota is 10.000
+units/day per *project* and has no paid tier — `descobrir_youtube`
+budgets against it explicitly. See `docs/architecture/pipeline.md`
+§3.1 bis.
+
 Outbound mail from the `noreply@` mailbox carries the display name
 **`Josep Quaranta`** (`DEFAULT_FROM_EMAIL` / `SERVER_EMAIL` in
 `settings/base.py`, overridable via the `DEFAULT_FROM_EMAIL` env var in

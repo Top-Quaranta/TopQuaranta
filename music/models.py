@@ -304,6 +304,35 @@ class Artista(models.Model):
         "so the quota budget doesn't re-spend 100 units on the same miss.",
     )
 
+    # ── Canal oficial (decisió humana) ──────────────────────────────────
+    # The artist's OWN channel: videoclips, live sessions. Distinct lane
+    # from the Topic channel above, and for many artists the bigger one —
+    # Maria del Mar Bonet has 97 views on the "S'aigo No" Art Track and
+    # 55.091 on her channel.
+    #
+    # Chosen by a HUMAN, never guessed. Automatic identification is what
+    # creates the "Guerra"/"Montenegro" exploit surface: a generic name
+    # resolves to a padel channel or an events company (both real hits
+    # while probing "Malalts"). Same reasoning as the project's founding
+    # rule that every auto-discovered artist needs human approval.
+    #
+    # THREE states, not two — `youtube_canal_revisat` is what separates
+    # "nobody has looked yet" from "looked, this act has no own channel".
+    # Malalts genuinely has none, and an artist with one lane measured
+    # fully is NOT under-measured; an artist with a pending decision is.
+    # Only the first kind may feed a territory-level average.
+    youtube_canal_oficial = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="UC… id del canal propi de l'artista. El tria una persona.",
+    )
+    youtube_canal_revisat = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Algú ho ha mirat. Amb `youtube_canal_oficial` buit vol "
+        "dir «revisat: no en té», que és un estat vàlid i final.",
+    )
+
     # ── MusicBrainz metadata ────────────────────────────────────────────
     # Populated by obtenir_metadata_musicbrainz (rate-limited to 1 req/s).
     # All fields optional — artists below MB's coverage stay empty.
@@ -1120,6 +1149,9 @@ class Canco(models.Model):
         (MATCH_DURADA, "Títol aproximat + durada"),
         (MATCH_MANUAL, "Revisat per staff"),
     ]
+    # Kept as the Art Track pointer (one per song by construction). The
+    # official-channel lane can hold several videos for the same song
+    # (videoclip + live + lyric), so it lives in `CancoYouTubeVideo`.
     youtube_video_id = models.CharField(max_length=16, blank=True, db_index=True)
     youtube_match = models.CharField(max_length=10, blank=True, choices=MATCH_CHOICES)
     # When the link was made. Without it the daily bootstrap report has no
@@ -1710,3 +1742,35 @@ class SpotifyMetadata(models.Model):
 
     def __str__(self) -> str:
         return f"SpotifyMetadata({self.canco_id}, {self.enrichment_status})"
+
+
+class CancoYouTubeVideo(models.Model):
+    """A video on the artist's OFFICIAL channel matched to a cançó.
+
+    The Art Track lane is one video per song and lives on `Canco`
+    directly. This lane isn't: a band can post a videoclip, a live take
+    and a lyric video of the same song, and under a "ressò" reading all
+    three count. Hence a child table.
+
+    **Invariant that matters more than it looks:** an artist's whole
+    YouTube signal must always be summed over the SAME set of lanes.
+    Mixing an artist measured on one lane with one measured on two makes
+    any cross-artist conversion meaningless — see
+    `docs/architecture/pipeline.md` §3.1 bis.
+    """
+
+    canco = models.ForeignKey(
+        "Canco", on_delete=models.CASCADE, related_name="youtube_videos"
+    )
+    video_id = models.CharField(max_length=16)
+    titol = models.CharField(max_length=300, blank=True)
+    matched_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Vídeo de YouTube d'una cançó"
+        verbose_name_plural = "Vídeos de YouTube de cançons"
+        unique_together = [("canco", "video_id")]
+        indexes = [models.Index(fields=["canco"])]
+
+    def __str__(self) -> str:
+        return f"{self.canco} — {self.video_id}"

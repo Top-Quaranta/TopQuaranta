@@ -126,6 +126,13 @@ def _artista_card(a, homset=None) -> dict:
             if homset is not None
             else a.homonims().exists()
         ),
+        # YouTube lanes: the Topic channel is resolved automatically, the
+        # official one is a human decision. Both surface so the staff page
+        # can show what is already known before asking for a click.
+        "youtube_channel_id": a.youtube_channel_id or "",
+        "youtube_canal_oficial": a.youtube_canal_oficial or "",
+        "youtube_canal_revisat": a.youtube_canal_revisat,
+        "youtube_url": a.youtube_url or "",
         "auto_descobert": a.auto_descobert,
         "font_descoberta": a.font_descoberta or "",
         # Read from the prefetch cache (`.values_list()` would bypass it

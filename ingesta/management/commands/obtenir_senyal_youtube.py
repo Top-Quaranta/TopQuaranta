@@ -28,7 +28,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from ingesta.clients import youtube as yt
 from music.constants import DIES_CADUCITAT
-from music.models import Canco
+from music.models import Canco, CancoYouTubeVideo
 from ranking.models import SenyalYouTube
 
 logger = logging.getLogger(__name__)
@@ -60,58 +60,85 @@ class Command(BaseCommand):
         ja = set(
             SenyalYouTube.objects.filter(data=target).values_list("canco_id", flat=True)
         )
-        pendents = list(
-            Canco.objects.filter(
-                activa=True, verificada=True, data_llancament__gte=cutoff
-            )
-            .exclude(youtube_video_id="")
-            .exclude(pk__in=ja)
-            .values_list("pk", "youtube_video_id")
-        )
+        # Two lanes per song: the Art Track (one video, on the Canco) and
+        # the official channel (zero or many, in `CancoYouTubeVideo`). A
+        # song counts if it has EITHER — an artist reviewed as having no
+        # own channel is complete with one lane, not under-measured.
+        elegibles = Canco.objects.filter(
+            activa=True, verificada=True, data_llancament__gte=cutoff
+        ).exclude(pk__in=ja)
+        per_canco: dict[int, list[str]] = {}
+        for pk, vid in elegibles.exclude(youtube_video_id="").values_list(
+            "pk", "youtube_video_id"
+        ):
+            per_canco.setdefault(pk, []).append(vid)
+        for pk, vid in CancoYouTubeVideo.objects.filter(
+            canco__in=elegibles
+        ).values_list("canco_id", "video_id"):
+            per_canco.setdefault(pk, []).append(vid)
+        # Flat list of (canco_pk, video_id) so batching stays trivial.
+        pendents = [(pk, v) for pk, vids in per_canco.items() for v in vids]
         self.stdout.write(
-            f"Cançons aparellades pendents per a {target}: {len(pendents)} "
+            f"Vídeos pendents per a {target}: {len(pendents)} "
+            f"({len(per_canco)} cançons) "
             f"(cost estimat {max(1, (len(pendents) + BATCH - 1) // BATCH)} unitats)"
         )
         if opts["dry_run"] or not pendents:
             self.stdout.write(f"WORK_DONE={0}")
             return
 
-        ok = 0
-        errors = 0
-        files: list[SenyalYouTube] = []
+        recollit: dict[int, dict] = {}
+        morts: dict[int, list[str]] = {}
         try:
             for i in range(0, len(pendents), BATCH):
                 tros = pendents[i : i + BATCH]
                 stats = yt.video_stats([vid for _, vid in tros])
                 for pk, vid in tros:
-                    s = stats.get(vid)
-                    if s is None:
-                        # The video is gone (takedown, re-upload) or the id
-                        # is stale. Recorded, not silently dropped, so the
-                        # daily report can surface a rising count.
-                        files.append(
-                            SenyalYouTube(
-                                canco_id=pk,
-                                data=target,
-                                video_id=vid,
-                                error=True,
-                                error_msg=f"cap estadística per al vídeo {vid}",
-                            )
-                        )
-                        errors += 1
+                    st = stats.get(vid)
+                    if st is None:
+                        # Gone (takedown, re-upload) or a stale id. Recorded,
+                        # not silently dropped, so the daily report can
+                        # surface a rising count.
+                        morts.setdefault(pk, []).append(vid)
                         continue
-                    files.append(
-                        SenyalYouTube(
-                            canco_id=pk,
-                            data=target,
-                            video_id=vid,
-                            views=s["views"],
-                            likes=s["likes"],
-                        )
+                    acc = recollit.setdefault(
+                        pk, {"views": 0, "likes": 0, "n": 0, "primer": vid}
                     )
-                    ok += 1
+                    acc["views"] += st["views"] or 0
+                    acc["likes"] += st["likes"] or 0
+                    acc["n"] += 1
         except yt.QuotaExhausted as exc:
             self.stdout.write(self.style.WARNING(f"Quota exhaurida: {exc}"))
+
+        files: list[SenyalYouTube] = []
+        for pk, acc in recollit.items():
+            files.append(
+                SenyalYouTube(
+                    canco_id=pk,
+                    data=target,
+                    video_id=acc["primer"],
+                    views=acc["views"],
+                    likes=acc["likes"],
+                    n_videos=acc["n"],
+                )
+            )
+        # Only a song where EVERY lane failed is an error row; one dead
+        # video among several is noise, not a missing signal.
+        for pk, vids in morts.items():
+            if pk in recollit:
+                continue
+            files.append(
+                SenyalYouTube(
+                    canco_id=pk,
+                    data=target,
+                    video_id=vids[0],
+                    n_videos=0,
+                    error=True,
+                    error_msg=f"cap estadística per a {len(vids)} vídeo(s)",
+                )
+            )
+        ok = len(recollit)
+        errors = sum(1 for pk in morts if pk not in recollit)
 
         SenyalYouTube.objects.bulk_create(files, ignore_conflicts=True)
         self.stdout.write(

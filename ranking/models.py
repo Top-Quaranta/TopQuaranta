@@ -562,7 +562,15 @@ class SenyalYouTube(models.Model):
     # The id actually polled. Kept per row so a re-match (or a staff
     # correction) leaves the old series attributable instead of silently
     # re-labelling history.
-    video_id = models.CharField(max_length=16, blank=True)
+    video_id = models.CharField(
+        max_length=16, blank=True, help_text="L'Art Track; el carril primari."
+    )
+    # How many videos this row sums. A song gains videos over time (the
+    # official channel is a human decision that lands late), and when it
+    # does the series jumps for reasons that have nothing to do with the
+    # audience. Recording the count is what lets a reader tell a real
+    # spike from a lane being added.
+    n_videos = models.PositiveSmallIntegerField(default=1)
 
     error = models.BooleanField(default=False)
     error_msg = models.TextField(blank=True)

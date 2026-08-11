@@ -171,6 +171,36 @@ L'aparellament és conservador a posta: només títol normalitzat exacte
 (`_normalize_track`, compartit amb Last.fm). Un aparellament erroni no
 sembla erroni — sembla una cançó que ningú no escolta.
 
+**Dos carrils (2026-08).** L'Art Track no sempre és on és el públic:
+Maria del Mar Bonet té 97 visualitzacions a l'Art Track de «S'aigo No»
+i 55.091 al seu canal propi; Malalts, en canvi, no té canal propi i tota
+la seua audiència és a l'Art Track. Quin carril mana és propietat **de
+l'artista**. Per això el senyal d'una cançó és la **suma** de:
+
+1. l'**Art Track** — un vídeo, a `Canco.youtube_video_id`, automàtic;
+2. el **canal oficial** — zero o molts vídeos, a `CancoYouTubeVideo`,
+   i el canal el tria **una persona** a `/staff/artistes/sense-youtube`.
+
+El canal oficial no s'endevina mai. Sondejar «Malalts» automàticament
+retorna un canal de pàdel i una empresa d'esdeveniments; «Guerra» o
+«Montenegro» són pitjors. `Artista.youtube_canal_revisat` dona el tercer
+estat que fa que això funcione: «revisat, no en té» és una resposta
+final i vàlida, distinta de «ningú no ho ha mirat».
+
+**Invariant:** el senyal d'un artista s'ha de sumar sempre sobre el
+**mateix conjunt de carrils**. Barrejar un artista mesurat amb un carril
+i un altre amb dos fa que qualsevol conversió entre artistes no signifique
+res. Un artista sense canal propi no està infravalorat; un amb la decisió
+pendent, sí.
+
+Dins del canal oficial els títols són text lliure («AUXILI - TARRINETES
+AL SOL ft DJ Trapella»), així que l'aparellament és per prefix +
+decoració (`_conte_titol`): el títol de la cançó ha d'anar al principi i
+darrere només hi pot haver un separador, una etiqueta coneguda o el nom
+de l'artista. Contindre el títol **no** basta — «Llibertat» és una
+paraula sencera dins de «Buscant la llibertat», i acceptar-ho és
+exactament l'exploit que aquest projecte va decidir refusar.
+
 Com entra al rànquing **encara no està decidit**: primer calen tres o
 quatre setmanes de dades. Vegeu `docs/architecture/analytics.md` per a
 l'informe diari de progrés.

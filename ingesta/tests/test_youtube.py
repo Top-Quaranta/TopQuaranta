@@ -177,3 +177,117 @@ class TestObtenirSenyalYoutube:
             call_command("obtenir_senyal_youtube", stdout=StringIO())
         assert m.call_count == 1
         assert SenyalYouTube.objects.filter(canco=canco).count() == 1
+
+
+class TestConteTitol:
+    """The guard that decides whether a video on the artist's own channel
+    is *this* song. Titles there are free text ("AUXILI - TARRINETES AL
+    SOL ft DJ Trapella"), so this is where the "Guerra"/"Ukraine" exploit
+    would land. The project's rule is explicit: when in doubt, refuse."""
+
+    @staticmethod
+    def _f(video, canco, artista=""):
+        from ingesta.management.commands.descobrir_youtube import _conte_titol
+
+        return _conte_titol(video, canco, artista)
+
+    @pytest.mark.parametrize(
+        "video,canco,artista",
+        [
+            ("auxili tarrinetes al sol ft dj trapella", "tarrinetes al sol", "auxili"),
+            (
+                "joan miquel oliver oxitocina video oficial",
+                "oxitocina",
+                "joan miquel oliver",
+            ),
+            # The artist's name after the title is a credit line.
+            ("exorcisme katta lana", "exorcisme", "katta lana"),
+            ("baby toca m katta lana brauer", "baby toca m", "katta lana"),
+            # Stripping the artist must not eat the song's own words.
+            ("malalts d hivern", "malalts d hivern", "malalts"),
+            ("malalts som malalts directe", "som malalts", "malalts"),
+        ],
+    )
+    def test_accepts_the_real_thing(self, video, canco, artista):
+        assert self._f(video, canco, artista) is True
+
+    @pytest.mark.parametrize(
+        "video,canco,artista",
+        [
+            # Word boundaries are NOT enough: "llibertat" is a whole word
+            # inside "buscant la llibertat". Caught probing David Torné.
+            ("buscant la llibertat", "llibertat", "david torne"),
+            # A different song that merely starts with ours.
+            ("oxitocina i dopamina", "oxitocina", ""),
+            ("res de res", "res", ""),
+            # Trailing free text that isn't decoration nor the artist.
+            ("guapa i bonica", "guapa", "katta lana"),
+            ("nadala de xabia 2019", "nadala de xabia", ""),
+        ],
+    )
+    def test_refuses_the_lookalikes(self, video, canco, artista):
+        assert self._f(video, canco, artista) is False
+
+
+@pytest.mark.django_db
+class TestDuesLlanes:
+    """A song's YouTube signal is the SUM of the Art Track and whatever
+    the artist's official channel holds for it. An artist reviewed as
+    having no own channel is complete with one lane — not a gap."""
+
+    @pytest.fixture
+    def canco(self):
+        from music.models import CancoYouTubeVideo
+
+        a = Artista.objects.create(nom="A", lastfm_nom="A", aprovat=True)
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=5)
+        )
+        c = Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom="T",
+            data_llancament=date.today() - timedelta(days=5),
+            verificada=True,
+            activa=True,
+            youtube_video_id="art1",
+        )
+        CancoYouTubeVideo.objects.create(canco=c, video_id="clip1", titol="A - T")
+        CancoYouTubeVideo.objects.create(canco=c, video_id="clip2", titol="A - T live")
+        return c
+
+    def test_sums_every_lane_into_one_row(self, canco):
+        with patch.object(
+            yt,
+            "video_stats",
+            return_value={
+                "art1": {"views": 100, "likes": 1},
+                "clip1": {"views": 9000, "likes": 20},
+                "clip2": {"views": 400, "likes": 5},
+            },
+        ):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+
+        row = SenyalYouTube.objects.get(canco=canco)
+        assert row.views == 9500
+        assert row.n_videos == 3
+        assert row.error is False
+
+    def test_one_dead_video_among_several_is_not_an_error(self, canco):
+        with patch.object(
+            yt,
+            "video_stats",
+            return_value={"art1": {"views": 100, "likes": 1}},
+        ):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+
+        row = SenyalYouTube.objects.get(canco=canco)
+        assert row.error is False
+        assert row.views == 100 and row.n_videos == 1
+
+    def test_all_lanes_dead_is_an_error(self, canco):
+        with patch.object(yt, "video_stats", return_value={}):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+
+        row = SenyalYouTube.objects.get(canco=canco)
+        assert row.error is True and row.n_videos == 0

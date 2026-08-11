@@ -119,6 +119,16 @@ def artistes_list(request: Request) -> Response:
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
 
+    # YouTube official-channel workflow (2026-08). Three states, so the
+    # filter is `pendent` (nobody has looked) rather than "empty": an
+    # artist reviewed and confirmed to have no own channel is DONE, not
+    # outstanding, and must not come back in the queue forever.
+    youtube = request.GET.get("youtube", "")
+    if youtube == "pendent":
+        qs = qs.filter(youtube_canal_revisat=False)
+    elif youtube == "revisat":
+        qs = qs.filter(youtube_canal_revisat=True)
+
     # "Al top" workflow (Fase 2 D2): artistes appearing in the latest
     # weekly PPCC top, for the social tagging flow. `te_gestor_email` in
     # the payload tells staff whether the artist has a reachable
@@ -411,6 +421,8 @@ def artista_detail(request: Request, pk: int) -> Response:
             "genere_canonical",
             "percentatge_femeni",
             "musicbrainz_id",
+            "youtube_canal_oficial",
+            "youtube_canal_revisat",
         ] + [f for f, _ in Artista.SOCIAL_LINK_FIELDS]
         # Whole PATCH is one transaction: a rejected approval (no Deezer)
         # or a Deezer collision must NOT leave half-written localitats /

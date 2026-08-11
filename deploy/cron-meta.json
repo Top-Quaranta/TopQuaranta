@@ -225,5 +225,10 @@
     "frequency_label": "Cada dia 07:00 (temporal)",
     "max_age_hours": 26,
     "skip_concern": 1
+  },
+  "sembrar_canals_youtube": {
+    "frequency_label": "Cada dilluns 02:00",
+    "max_age_hours": 176,
+    "skip_concern": 1
   }
 }

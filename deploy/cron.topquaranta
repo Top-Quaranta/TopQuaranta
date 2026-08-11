@@ -105,6 +105,9 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # diàries, o siga ~90 artistes per execució. Va a les 03:00 UTC perquè
 # la quota de Google es reinicia a mitjanit del Pacífic (09:00 CEST a
 # l'estiu) — així el pressupost del dia ja està sencer.
+# Sembra el canal oficial des dels enllaços que MusicBrainz ja té
+# curats. Setmanal: la font canvia poc i és feina d'una persona.
+0 2 * * 1   topquaranta   /home/topquaranta/bin/tq-run sembrar_canals_youtube >> /var/log/topquaranta/youtube.log 2>&1
 0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run descobrir_youtube >> /var/log/topquaranta/youtube.log 2>&1
 # La recollida diària costa ~60 unitats: després del descobriment, i
 # abans que arribe l'informe.

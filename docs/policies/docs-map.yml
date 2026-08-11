@@ -58,6 +58,8 @@ mapping:
   # mateix motiu que GoAccess: analytics.md ja frega el llindar de mida.
   - prefix: analytics/management/commands/enviar_informe_youtube.py
     doc: docs/architecture/analytics-youtube.md
+  - prefix: analytics/templates/analytics/informe_youtube.html
+    doc: docs/architecture/analytics-youtube.md
   - prefix: analytics/
     doc: docs/architecture/analytics.md
 

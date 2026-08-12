@@ -130,6 +130,11 @@ def _artista_card(a, homset=None) -> dict:
         # official one is a human decision. Both surface so the staff page
         # can show what is already known before asking for a click.
         "youtube_channel_id": a.youtube_channel_id or "",
+        # Whether discovery has REACHED this artist yet. Without it an
+        # empty `youtube_channel_id` reads as "has no Art Track" when it
+        # usually means "the cron hasn't got here" — 118 of 520 done at
+        # ~90/day. Confused the operator on day one.
+        "youtube_provat": a.youtube_checked_at is not None,
         "youtube_canal_oficial": a.youtube_canal_oficial or "",
         "youtube_canal_revisat": a.youtube_canal_revisat,
         "youtube_url": a.youtube_url or "",

@@ -162,6 +162,12 @@ part a posta, perquè una visualització no és un scrobble i unir-les a
 la capa d'emmagatzematge forçaria una decisió que volem mantindre
 editorial.
 
+YouTube **localitza** el sufix: un navegador en català ensenya
+«Malifeta - Tema». Al servidor ens torna l'anglés, però això és el locale
+per defecte de l'API, no un contracte — i exigir la paraula anglesa faria
+que el descobriment no trobara res i en silenci. `topic_suffix_name()`
+accepta les variants conegudes.
+
 La comparació de noms va per `normalitza_nom_homonim` (NFKD, sense
 diacrítics, sense puntuació): «Bèrnia» ha de trobar el canal que es diu
 literalment `bernia - Topic`, i «Clàudia Xiva» fallava contra un canal

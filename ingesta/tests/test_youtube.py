@@ -307,9 +307,9 @@ class TestSembrarCanals:
         assert a.youtube_canal_oficial == "UCego8MWd7DkJXnGl9WQAbTQ"
         assert a.youtube_canal_revisat is True
 
-    def test_a_handle_needs_resolve_and_respects_the_budget(self):
-        """655 handles × 100 units is seven days of quota. The cap must
-        stop the run, not eat the budget the daily signal needs."""
+    def test_a_handle_is_resolved_for_one_unit(self):
+        """`forHandle` costs 1 unit; the old `search.list` path cost 100
+        and turned the 655-handle backlog into seven days of quota."""
         for i in range(3):
             Artista.objects.create(
                 nom=f"A{i}",
@@ -317,17 +317,29 @@ class TestSembrarCanals:
                 aprovat=True,
                 youtube_url=f"https://www.youtube.com/@handle{i}",
             )
-        with patch.object(yt, "_get") as m:
-            m.return_value = {"items": [{"snippet": {"channelId": "UC" + "x" * 20}}]}
+        with patch.object(yt, "resolve_handle", return_value="UC" + "x" * 20) as m:
+            call_command("sembrar_canals_youtube", "--resolve", stdout=StringIO())
+
+        assert m.call_count == 3
+        assert Artista.objects.exclude(youtube_canal_oficial="").count() == 3
+
+    def test_the_budget_still_stops_the_run(self):
+        for i in range(4):
+            Artista.objects.create(
+                nom=f"B{i}",
+                lastfm_nom=f"B{i}",
+                aprovat=True,
+                youtube_url=f"https://www.youtube.com/@h{i}",
+            )
+        with patch.object(yt, "resolve_handle", return_value="UC" + "y" * 20) as m:
             call_command(
                 "sembrar_canals_youtube",
                 "--resolve",
                 "--budget",
-                "100",
+                "2",
                 stdout=StringIO(),
             )
-        assert m.call_count == 1
-        assert Artista.objects.exclude(youtube_canal_oficial="").count() == 1
+        assert m.call_count == 2
 
     def test_absence_of_a_link_never_marks_the_artist_reviewed(self):
         """ "Nobody looked yet" is not "looked, has none" — only a human
@@ -371,3 +383,28 @@ class TestNomsAmbAccents:
             yt, "_get", return_value=self._search(["Essência do Céu - Topic"])
         ):
             assert yt.find_topic_channel("Essència") is None
+
+
+class TestSufixLocalitzat:
+    """YouTube localises the auto-generated suffix: a Catalan browser shows
+    "Malifeta - Tema". Our server currently gets English, but that is the
+    API's default locale, not a contract — and requiring the English word
+    would make discovery return nothing at all, silently."""
+
+    @pytest.mark.parametrize(
+        "titol,esperat",
+        [
+            ("Malifeta - Topic", "Malifeta"),
+            ("Malifeta - Tema", "Malifeta"),
+            ("Auxili - Thema", "Auxili"),
+            ("MALIFETA", None),
+            ("Malifeta de Tema", None),
+        ],
+    )
+    def test_recognises_the_auto_generated_channel(self, titol, esperat):
+        assert yt.topic_suffix_name(titol) == esperat
+
+    def test_discovery_accepts_a_localised_suffix(self):
+        data = {"items": [{"snippet": {"title": "Auxili - Tema", "channelId": "UC9"}}]}
+        with patch.object(yt, "_get", return_value=data):
+            assert yt.find_topic_channel("Auxili") == "UC9"

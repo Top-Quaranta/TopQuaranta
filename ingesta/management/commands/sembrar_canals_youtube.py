@@ -48,7 +48,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--resolve",
             action="store_true",
-            help="Resol també els /@handle amb una cerca (100 unitats cadascun).",
+            help="Resol també els /@handle (1 unitat via forHandle).",
         )
         parser.add_argument(
             "--nomes-finestra",
@@ -59,9 +59,9 @@ class Command(BaseCommand):
             "--budget",
             type=int,
             default=4_000,
-            help="Sostre de quota per a --resolve. 655 handles a 100 unitats "
-            "són 65.500: set dies de quota per una passada. El sostre fa "
-            "que la comanda pare, no que es mengi el pressupost del senyal.",
+            help="Sostre de quota per a --resolve. Amb forHandle cada un "
+            "val 1 unitat, però el fallback per nom encara en val 100, "
+            "així que el sostre continua tenint sentit.",
         )
         parser.add_argument("--dry-run", action="store_true")
 
@@ -94,12 +94,17 @@ class Command(BaseCommand):
                 if not opts["resolve"]:
                     pendents_handle += 1
                     continue
-                if gastat + yt.COST_SEARCH > opts["budget"]:
+                if gastat + yt.COST_LIST > opts["budget"]:
                     pendents_handle += 1
                     continue
-                gastat += yt.COST_SEARCH
+                gastat += yt.COST_LIST
                 nom = next(g for g in h.groups() if g)
-                channel = self._resolve(nom) or self._resolve(a.nom)
+                # `forHandle` costs 1 unit; the old `search.list` path cost
+                # 100 and made resolving the backlog a seven-day affair.
+                channel = yt.resolve_handle(nom)
+                if channel is None:
+                    gastat += yt.COST_SEARCH
+                    channel = self._resolve(a.nom)
                 if not channel:
                     continue
                 resolts += 1

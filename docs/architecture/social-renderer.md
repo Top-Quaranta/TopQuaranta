@@ -47,7 +47,7 @@ variants), `paste_logo`/`logo_mono`, the territory code resolution (`CODE_TO_KEY
 **pixel-for-pixel** (guarded by the feed + story fidelity pins). Geometry stays
 with each caller as DATA — the feed in `feed-tokens.json`, the stories in
 `social/story_design/story-tokens.json` (2026-06-12; loaded once via
-`renderer.story_tokens()`). Every hand-stitched constant of the seven `_story_*`
+`renderer.story_tokens()`). Every hand-stitched constant of the `_story_*`
 builders (and their story-only shared helpers: `_header_row`, `_section_header`,
 `_footer_url`, `_header_pill`, `_bg_ink`, `_draw_star`) — positions, sizes,
 trackings, radii, gaps, local mix ratios — lives in that file; the builders carry
@@ -56,6 +56,10 @@ the story tokens were lifted **verbatim** from the running code, so the values
 match exactly, ugly inconsistencies included (e.g. the podi line-height 62 vs its
 entry-height title component 64). Colours stay in code (palette-driven via
 `colors.*` / `story_palette`); only the slide-local mix ratios are tokenised.
+Re-tiering 2026-08-12: `_story_top_mosaic` is parametrised by tier/title/
+`pos_top` (tokens `mosaic` = 40→21 at 4×5; tokens `pairs` = 20→11 at 3+3+3+1
+via the `_story_top_pairs` wrapper, with a final orphan that opens the last
+row centred). Slide composition and slices live in `social-stories.md`.
 
 ## TOP family — `social/top_redesign.py` (2026-06)
 

@@ -33,7 +33,11 @@ La cua `sense-instagram` té una columna **Suggeriment** (provisional,
 2026-08): el candidat dels escombratges amb enllaç al perfil, botó
 «Accepta» (un clic → PATCH de la URL, consumeix el suggeriment) i «✕»
 (descarta el candidat però l'artista continua pendent — refusar el handle
-no és dir que no en té).
+no és dir que no en té). Des del 2026-08-12 les dues cues mostren només
+artistes **amb cançó viva** i, a igualtat de tops i actives, primer el de
+la **cançó més nova**: l'artista que acaba de traure single és el que la
+publicació de «nous singles» necessita etiquetat ja. Els candidats nous
+els sembra el cron `suggerir_instagram` cada nit.
 
 Les dues cues d'omplir dades (`sense-instagram` i `sense-youtube`)
 comparteixen forma a posta: mateixes columnes (artista, presència al top,

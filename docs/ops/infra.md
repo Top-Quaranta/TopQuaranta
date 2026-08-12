@@ -172,7 +172,9 @@ YouTube Data API v3 enabled. Empty default, so the three YouTube crons
 log a warning and exit 0 rather than going red. Quota is 10.000
 units/day per *project* and has no paid tier — `descobrir_youtube`
 budgets against it explicitly. See `docs/architecture/pipeline.md`
-§3.1 bis. Quatre crons: `sembrar_canals_youtube` (02:00),
+§3.1 bis. Cinc crons: `suggerir_instagram` (02:30, sembra candidats
+d'IG per als artistes que entren a la cua de staff — sense quota),
+`sembrar_canals_youtube` (02:00),
 `descobrir_youtube` (03:00), `obtenir_senyal_youtube` (06:30) i
 l'informe temporal `enviar_informe_youtube` (07:00).
 

@@ -47,6 +47,11 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 ✦ = `db_index=True`.
 
+**`instagram_rebutjat_at` (2026-08).** Es marca quan Meta refusa aquest
+compte en publicar (code 110). No podem validar handles per endavant, així
+que un rebuig en publicar és l'única evidència que un compte ha canviat.
+Editar la URL neteja la marca. Vegeu `social-etiquetatge.md`.
+
 **Canal oficial (2026-08).** `youtube_canal_oficial` és el canal PROPI
 de l'artista (videoclips), segon carril de senyal i sovint el més gran.
 El tria **una persona** a `/staff/artistes/sense-youtube`; no s'endevina

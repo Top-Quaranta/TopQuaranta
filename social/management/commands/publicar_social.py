@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import re
 from pathlib import Path
 
 from django.conf import settings
@@ -36,6 +37,33 @@ from social.captions import instagram_username
 from social.models import SocialPost
 
 logger = logging.getLogger(__name__)
+
+
+def _marca_handles_rebutjats(handles: list[str]) -> None:
+    """Stamp `instagram_rebutjat_at` on the artists Meta refused.
+
+    Best-effort: flagging is bookkeeping, and it must never turn a
+    successful publication into a failed one.
+    """
+    from django.db.models import Q
+    from django.utils import timezone as _tz
+
+    from music.models import Artista
+
+    try:
+        cond = Q()
+        for h in set(handles):
+            cond |= Q(instagram_url__iregex=rf"/{re.escape(h)}/?$")
+        if not cond:
+            return
+        n = Artista.objects.filter(cond).update(instagram_rebutjat_at=_tz.now())
+        logger.warning(
+            "Handles d'Instagram rebutjats per Meta: %s (%s artistes marcats)",
+            ", ".join(sorted(set(handles))),
+            n,
+        )
+    except Exception:  # pragma: no cover - bookkeeping must not break publish
+        logger.exception("no s'han pogut marcar els handles rebutjats")
 
 
 def _public_url_for(local_path: Path) -> str:
@@ -505,14 +533,22 @@ class Command(BaseCommand):
 
         else:
             child_ids = []
+            # Handles Meta refused mid-upload. The post still goes out
+            # without those tags; the artists get flagged afterwards so a
+            # human can fix the account, because a publish rejection is
+            # the only evidence we ever get that a handle went stale.
+            handles_dolents: list[str] = []
             for i, u in enumerate(urls):
                 cid = instagram_client.upload_carousel_item(
                     u,
                     user_tags=tags_per_slide[i] or None,
                     alt_text=alts_per_slide[i] or None,
+                    dropped=handles_dolents,
                 )
                 instagram_client.wait_until_finished(cid)
                 child_ids.append(cid)
+            if handles_dolents:
+                _marca_handles_rebutjats(handles_dolents)
 
             def _make_parent(collaborators):
                 cid = instagram_client.create_carousel(

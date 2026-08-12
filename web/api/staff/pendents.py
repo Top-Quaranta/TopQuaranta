@@ -129,6 +129,9 @@ def _artista_card(a, homset=None) -> dict:
         # YouTube lanes: the Topic channel is resolved automatically, the
         # official one is a human decision. Both surface so the staff page
         # can show what is already known before asking for a click.
+        "instagram_rebutjat_at": (
+            a.instagram_rebutjat_at.isoformat() if a.instagram_rebutjat_at else None
+        ),
         "youtube_channel_id": a.youtube_channel_id or "",
         # Whether discovery has REACHED this artist yet. Without it an
         # empty `youtube_channel_id` reads as "has no Art Track" when it

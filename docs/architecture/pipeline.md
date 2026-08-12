@@ -224,6 +224,13 @@ re-enumera els canals oficials dels artistes amb cançons en finestra
 propina captura els videoclips que les bandes pengen dies després del
 llançament.
 
+`suggerir_instagram` (02:30) tanca el cercle de l'estat estacionari: per
+als artistes que entren a la cua de staff (aprovats, amb cançó viva, sense
+URL ni suggeriment), busca un candidat al seu web propi i, si no, a
+Viasona — que NO és font curada, per això només pot escriure
+`instagram_suggerit` (mai `instagram_url`): un humà mira el perfil abans
+d'acceptar. No re-suggereix candidats descartats. Sense quota de YouTube.
+
 Dins del canal oficial els títols són text lliure («AUXILI - TARRINETES
 AL SOL ft DJ Trapella»), així que l'aparellament és per prefix +
 decoració (`_conte_titol`): el títol de la cançó ha d'anar al principi i

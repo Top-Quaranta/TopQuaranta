@@ -72,7 +72,11 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 |---|---|---|
 | GET | `/staff/artistes/` | Filters: `q`, `aprovat`, `deezer`, `territori`, `instagram`, `youtube`,
 `al_top`. **`instagram=pendent` (2026-08)** és el tercer estat, bessó de
-`youtube=pendent`: sense URL **i** sense revisar. `instagram=no` conserva
+`youtube=pendent`: sense URL **i** sense revisar, **i amb ≥1 cançó viva**
+(com a principal o col·laborador) — un artista sense res a etiquetar no és
+feina pendent. El desempat del sort `-n_top` és tops → vives → **cançó més
+nova** (l'artista que acaba de traure single va primer: la publicació de
+«nous singles» és l'única oportunitat d'etiquetar-lo) → alfabètic. `instagram=no` conserva
 el sentit antic (simplement no té URL) perquè els cridadors existents no
 es moguen sota els peus. **`instagram=rebutjat`** llista els artistes el
 compte dels quals Meta ha refusat en publicar. Aquests **també** tornen a

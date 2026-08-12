@@ -127,7 +127,7 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(
             Q(instagram_url="") | Q(instagram_url__isnull=True),
             instagram_revisat=False,
-        )
+        ).filter(_te_canco_viva())
     elif instagram == "rebutjat":
         # Handles Meta refused while publishing. They HAVE a URL, so they
         # never show up in the `instagram=no` queue — a separate hole.
@@ -139,7 +139,7 @@ def artistes_list(request: Request) -> Response:
     # outstanding, and must not come back in the queue forever.
     youtube = request.GET.get("youtube", "")
     if youtube == "pendent":
-        qs = qs.filter(youtube_canal_revisat=False)
+        qs = qs.filter(youtube_canal_revisat=False).filter(_te_canco_viva())
     elif youtube == "revisat":
         qs = qs.filter(youtube_canal_revisat=True)
 
@@ -299,11 +299,34 @@ def artistes_list(request: Request) -> Response:
             .order_by("-n_cancons_tops", Lower("nom"))
         )
     elif sort_raw == "-n_top":
-        # Tops first, then live-songs as the tiebreaker (novetats artists
-        # with 0 tops but active songs surface above the 0-top silence),
-        # then alphabetical. `n_cancons_vives` is guaranteed annotated
-        # here (this branch is inside the annotation gate above).
-        qs = qs.distinct().order_by("-n_top", "-n_cancons_vives", Lower("nom"))
+        # Tops first, then live-songs, then NEWEST song first (2026-08-12,
+        # demanat pel Miquel): an artist who released this week and has no
+        # handle yet will be published untagged in the very next "nous
+        # singles" post — that is the one case where recency beats
+        # everything else at equal tops/vives. Alphabetical only as the
+        # final stabiliser.
+        from django.db.models import DateField, Subquery, Value
+        from django.db.models.functions import Coalesce as _C
+        from django.db.models.functions import Greatest
+
+        viva = {"verificada": True, "activa": True}
+        _fons = Value(datetime.date(1900, 1, 1), output_field=DateField())
+        dp = Subquery(
+            Canco.objects.filter(artista=OuterRef("pk"), **viva)
+            .order_by("-data_llancament")
+            .values("data_llancament")[:1],
+            output_field=DateField(),
+        )
+        dc = Subquery(
+            Canco.objects.filter(artistes_col=OuterRef("pk"), **viva)
+            .order_by("-data_llancament")
+            .values("data_llancament")[:1],
+            output_field=DateField(),
+        )
+        qs = qs.annotate(darrera_canco=Greatest(_C(dp, _fons), _C(dc, _fons)))
+        qs = qs.distinct().order_by(
+            "-n_top", "-n_cancons_vives", "-darrera_canco", Lower("nom")
+        )
     else:
         qs = qs.distinct().order_by(Lower("nom"))
 
@@ -354,6 +377,23 @@ def artistes_search(request: Request) -> Response:
 _CANAL_ID = re.compile(r"^UC[\w-]{20,30}$")
 _CANAL_URL = re.compile(r"youtube\.com/channel/(UC[\w-]{20,30})", re.I)
 _CANAL_HANDLE = re.compile(r"(?:youtube\.com/)?@([\w.-]+)", re.I)
+
+
+def _te_canco_viva():
+    """Q for the fill-in queues: the artist touches ≥1 verified+active
+    song, as principal or collaborator.
+
+    Without it the queues carried every approved artist ever — 1.727 rows
+    of which ~1.500 had nothing a handle would ever be used for (no song
+    to tag, no video to match). Kept OUT of `instagram=no`/`si`, which
+    keep their old semantics.
+    """
+    from django.db.models import Exists
+
+    viva = {"verificada": True, "activa": True}
+    return Q(Exists(Canco.objects.filter(artista=OuterRef("pk"), **viva))) | Q(
+        Exists(Canco.objects.filter(artistes_col=OuterRef("pk"), **viva))
+    )
 
 
 def _resol_canal_youtube(brut: str) -> tuple[str, str]:

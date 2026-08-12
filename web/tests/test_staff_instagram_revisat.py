@@ -26,9 +26,31 @@ def staff_client(db, django_user_model):
     return c
 
 
+def _amb_canco_viva(a):
+    """The queues now require a live song; fixtures must qualify."""
+    from datetime import date, timedelta
+
+    from music.models import Album, Canco
+
+    alb = Album.objects.create(
+        artista=a, nom="Fixture", data_llancament=date.today() - timedelta(days=5)
+    )
+    Canco.objects.create(
+        artista=a,
+        album=alb,
+        nom=f"Viva {a.nom}",
+        data_llancament=date.today() - timedelta(days=5),
+        verificada=True,
+        activa=True,
+    )
+    return a
+
+
 @pytest.fixture
 def artista():
-    return Artista.objects.create(nom="Sense IG", lastfm_nom="Sense IG", aprovat=True)
+    return _amb_canco_viva(
+        Artista.objects.create(nom="Sense IG", lastfm_nom="Sense IG", aprovat=True)
+    )
 
 
 def _noms(res):
@@ -88,12 +110,14 @@ def test_a_refused_handle_comes_back_to_the_queue(staff_client):
 
     from social.management.commands.publicar_social import _marca_handles_rebutjats
 
-    a = Artista.objects.create(
-        nom="Suu",
-        lastfm_nom="Suu",
-        aprovat=True,
-        instagram_url="https://www.instagram.com/tontaca13/",
-        instagram_revisat=True,
+    a = _amb_canco_viva(
+        Artista.objects.create(
+            nom="Suu",
+            lastfm_nom="Suu",
+            aprovat=True,
+            instagram_url="https://www.instagram.com/tontaca13/",
+            instagram_revisat=True,
+        )
     )
 
     _marca_handles_rebutjats(["tontaca13"])
@@ -163,11 +187,13 @@ def test_accepting_a_url_consumes_the_suggestion(staff_client):
 def test_dismissing_a_suggestion_keeps_the_artist_pending(staff_client):
     """Rejecting the candidate answers "not this handle", not "has no
     Instagram" — the row must stay in the queue."""
-    a = Artista.objects.create(
-        nom="Sellen",
-        lastfm_nom="Sellen",
-        aprovat=True,
-        instagram_suggerit="john_sellen",
+    a = _amb_canco_viva(
+        Artista.objects.create(
+            nom="Sellen",
+            lastfm_nom="Sellen",
+            aprovat=True,
+            instagram_suggerit="john_sellen",
+        )
     )
 
     staff_client.patch(
@@ -182,3 +208,67 @@ def test_dismissing_a_suggestion_keeps_the_artist_pending(staff_client):
     assert "Sellen" in _noms(
         staff_client.get("/api/v1/staff/artistes/?instagram=pendent")
     )
+
+
+@pytest.mark.django_db
+def test_the_queue_hides_artists_with_no_live_song(staff_client):
+    """An approved artist whose songs are all gone (or who never had any)
+    has nothing a handle would be used for — no song to tag, no post to
+    appear in. 1.500 of the 1.727 historic rows were this."""
+    from datetime import date, timedelta
+
+    from music.models import Album, Canco
+
+    sense_res = Artista.objects.create(nom="Fòssil", lastfm_nom="Fòssil", aprovat=True)
+    amb_viva = Artista.objects.create(nom="Actiu", lastfm_nom="Actiu", aprovat=True)
+    alb = Album.objects.create(
+        artista=amb_viva, nom="X", data_llancament=date.today() - timedelta(days=3)
+    )
+    Canco.objects.create(
+        artista=amb_viva,
+        album=alb,
+        nom="T",
+        data_llancament=date.today() - timedelta(days=3),
+        verificada=True,
+        activa=True,
+    )
+
+    noms = _noms(staff_client.get("/api/v1/staff/artistes/?instagram=pendent"))
+    assert "Actiu" in noms
+    assert "Fòssil" not in noms
+    # …but `instagram=no` keeps its old meaning, untouched.
+    assert "Fòssil" in _noms(staff_client.get("/api/v1/staff/artistes/?instagram=no"))
+
+
+@pytest.mark.django_db
+def test_ties_break_by_newest_song(staff_client):
+    """Same tops (0), same live-song count (1): the artist who released
+    THIS WEEK goes first — they are about to appear in the "nous singles"
+    post, and that publication is the one chance to tag them."""
+    from datetime import date, timedelta
+
+    from music.models import Album, Canco
+
+    def _mk(nom, dies):
+        a = Artista.objects.create(nom=nom, lastfm_nom=nom, aprovat=True)
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=dies)
+        )
+        Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom=f"T {nom}",
+            data_llancament=date.today() - timedelta(days=dies),
+            verificada=True,
+            activa=True,
+        )
+        return a
+
+    _mk("Veterania", 300)
+    _mk("Acabat de Traure", 2)
+
+    res = staff_client.get(
+        "/api/v1/staff/artistes/?aprovat=1&instagram=pendent&include_n_top=1&sort=-n_top"
+    )
+    noms = _noms(res)
+    assert noms.index("Acabat de Traure") < noms.index("Veterania")

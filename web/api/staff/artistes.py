@@ -119,6 +119,15 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(Q(instagram_url="") | Q(instagram_url__isnull=True))
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
+    elif instagram == "pendent":
+        # Third state, mirroring `youtube=pendent`: no URL AND nobody has
+        # looked. An artist reviewed as genuinely having no Instagram is
+        # DONE, not outstanding. `instagram=no` keeps its old meaning
+        # (simply has no URL) so existing callers don't shift under them.
+        qs = qs.filter(
+            Q(instagram_url="") | Q(instagram_url__isnull=True),
+            instagram_revisat=False,
+        )
     elif instagram == "rebutjat":
         # Handles Meta refused while publishing. They HAVE a URL, so they
         # never show up in the `instagram=no` queue — a separate hole.
@@ -514,9 +523,15 @@ def artista_detail(request: Request, pk: int) -> Response:
             # corrected artist in the "broken handle" list forever.
             if "instagram_url" in data:
                 artista.instagram_rebutjat_at = None
+                # Filling the URL IS the review, so the operator doesn't
+                # have to say so twice.
+                if (data.get("instagram_url") or "").strip():
+                    artista.instagram_revisat = True
             # Boolean, so it can't ride the `.strip()` loop above.
             if "youtube_canal_revisat" in data:
                 artista.youtube_canal_revisat = bool(data["youtube_canal_revisat"])
+            if "instagram_revisat" in data:
+                artista.instagram_revisat = bool(data["instagram_revisat"])
             # Staff assigning a non-blank MBID manually overrides the
             # auto-match lockout: the decision is that this specific ID is
             # correct, so re-enable automatic sync for future cron runs.

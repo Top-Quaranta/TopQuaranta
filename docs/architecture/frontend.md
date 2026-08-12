@@ -24,6 +24,13 @@ backend; for the visual design system see
 - Node 22 is the build target. CI uses `npm ci` against
   `package-lock.json`; the server only consumes `dist/`.
 
+Les dues cues d'omplir dades (`sense-instagram` i `sense-youtube`)
+comparteixen forma a posta: mateixes columnes (artista, presència al top,
+cançons actives), mateix botó **«No en té»** i el mateix tercer estat al
+model (`instagram_revisat` / `youtube_canal_revisat`). Sense eixe botó un
+artista que genuïnament no té compte torna a la cua cada passada i es
+revisa a mà per sempre.
+
 ### `/staff/artistes/sense-youtube` *(2026-08)*
 
 Decisió humana sobre **un** canal oficial de YouTube per artista, el

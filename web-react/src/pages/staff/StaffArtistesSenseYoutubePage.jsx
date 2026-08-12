@@ -85,6 +85,7 @@ function Row({ a, onDone }) {
   }
 
   const nTop = a.n_top || 0
+  const nVives = a.n_cancons_vives || 0
 
   return (
     <Tr>
@@ -123,6 +124,13 @@ function Row({ a, onDone }) {
       <Td>
         {nTop > 0 ? (
           <Pill tone={nTop >= 3 ? 'yellow' : 'gray'}>{nTop}×</Pill>
+        ) : (
+          <span className="text-white/40">—</span>
+        )}
+      </Td>
+      <Td>
+        {nVives > 0 ? (
+          <Pill tone="gray">{nVives}</Pill>
         ) : (
           <span className="text-white/40">—</span>
         )}
@@ -238,7 +246,7 @@ export default function StaffArtistesSenseYoutubePage() {
 
   return (
     <section>
-      <PageHeader title="Canal oficial de YouTube" subtitle={subtitle} />
+      <PageHeader title="Artistes sense YouTube" subtitle={subtitle} />
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <Input
           placeholder="Cerca per nom d'artista…"
@@ -261,6 +269,7 @@ export default function StaffArtistesSenseYoutubePage() {
                   Art Track
                 </Th>
                 <Th>Al top</Th>
+                <Th>Cançons actives</Th>
                 <Th>Canal oficial</Th>
                 <Th></Th>
                 <Th></Th>

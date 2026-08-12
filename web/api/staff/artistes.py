@@ -119,6 +119,10 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(Q(instagram_url="") | Q(instagram_url__isnull=True))
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
+    elif instagram == "rebutjat":
+        # Handles Meta refused while publishing. They HAVE a URL, so they
+        # never show up in the `instagram=no` queue — a separate hole.
+        qs = qs.filter(instagram_rebutjat_at__isnull=False)
 
     # YouTube official-channel workflow (2026-08). Three states, so the
     # filter is `pendent` (nobody has looked) rather than "empty": an
@@ -505,6 +509,11 @@ def artista_detail(request: Request, pk: int) -> Response:
             for f in simple_fields:
                 if f in data:
                     setattr(artista, f, (data.get(f) or "").strip())
+            # Editing the handle is the fix for a Meta rejection, so the
+            # flag clears itself: leaving it set would keep an already-
+            # corrected artist in the "broken handle" list forever.
+            if "instagram_url" in data:
+                artista.instagram_rebutjat_at = None
             # Boolean, so it can't ride the `.strip()` loop above.
             if "youtube_canal_revisat" in data:
                 artista.youtube_canal_revisat = bool(data["youtube_canal_revisat"])

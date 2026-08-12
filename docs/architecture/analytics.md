@@ -252,8 +252,8 @@ social** — publications, followers + deltas, top post, plus a
 `✕` = failed, dashed = omitted) built from `SocialPost`, the canonical
 one-row-per-slot ledger — the headline count is derived from the same
 grid so the two can't disagree; (7) **Incidències** — failed
-`SocialPost` slots, crons in a bad state and the week's Django ERROR
-records, gathered by `analytics/incidents.py`. A "frescor de dades"
+`SocialPost` slots, Instagram handles Meta refused, crons in a bad state
+and the week's Django ERROR records, gathered by `analytics/incidents.py`. A "frescor de dades"
 line flags a stale snapshot. `--dry-run` prints text; `--html-out PATH`
 renders the HTML for local preview without sending.
 

@@ -237,6 +237,13 @@
     </tr></table>
     {% endfor %}
 
+    {% for h in incidencies.handles_rebutjats %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;"><tr>
+      <td width="18" valign="top" style="font-size:13px;color:#f87171;line-height:1.5;">&#9888;</td>
+      <td style="font-size:13px;color:#e9e9ec;line-height:1.5;">{{ h.nom }} <span class="muted" style="color:#9aa0a6;">— Instagram rebutja aquest compte</span><br><span class="muted" style="font-size:11px;color:#6b6b73;">{{ h.url }}</span></td>
+    </tr></table>
+    {% endfor %}
+
     {% for f in incidencies.social_fallades %}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;"><tr>
       <td width="18" valign="top" style="font-size:13px;color:#f87171;line-height:1.5;">&#10005;</td>

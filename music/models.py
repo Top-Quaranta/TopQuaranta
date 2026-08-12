@@ -272,6 +272,12 @@ class Artista(models.Model):
     tiktok_url = models.URLField(blank=True)
     facebook_url = models.URLField(blank=True)
     instagram_url = models.URLField(blank=True)
+    # Stamped when Meta refuses this handle while publishing (code 110,
+    # "cannot be accessed"). We cannot validate handles up front — this
+    # app flavour has no `business_discovery` — so a publish rejection is
+    # the ONLY evidence we ever get that an account was renamed, closed
+    # or made private. Cleared when the URL is edited.
+    instagram_rebutjat_at = models.DateTimeField(null=True, blank=True)
     # X (formerly Twitter). Both x.com and twitter.com URLs land here;
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)

@@ -340,8 +340,8 @@ captions). The live post + campaign strategy stay manual (Miquel).
 
 ## Collaborator invitations — feed (ADR-0015; live since 2026-07-06)
 
-Detail moved to [`social-collaboradors.md`](social-collaboradors.md)
-(2026-07-06, docs-size split — same pattern as `social-narrative.md`).
+Detail: [`social-collaboradors.md`](social-collaboradors.md); handles
+caducats: [`social-etiquetatge.md`](social-etiquetatge.md).
 In one line: artists invited as IG **collaborators** on feed posts
 (never stories), gated on `ConfiguracioGlobal.ig_collaboradors_actiu`,
 policy in `social/collaboradors.py`, non-blocking substitution guard at

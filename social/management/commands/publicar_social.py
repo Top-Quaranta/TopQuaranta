@@ -193,9 +193,18 @@ def _tags_for_entries(chunk: list[dict], pos_fn) -> list[dict]:
 
 
 def _pos_story_mosaic(i: int, n: int) -> tuple[float, float]:
-    """Slide «top 40→11»: 5×6 cover mosaic — column/row centres."""
-    r, c = divmod(i, 5)
-    return 0.13 + c * 0.185, 0.31 + r * 0.098
+    """Slide «top 40→21»: 4×5 cover mosaic — column/row centres."""
+    r, c = divmod(i, 4)
+    return 0.16 + c * 0.213, 0.22 + r * 0.135
+
+
+def _pos_story_pairs(i: int, n: int) -> tuple[float, float]:
+    """Slide «top 20→11»: 3+3+3+1 cover grid, #11 (last drawn) centred
+    on its own row."""
+    if i == n - 1 and i % 3 == 0 and i > 0:
+        return 0.5, 0.25 + (i // 3) * 0.187
+    r, c = divmod(i, 3)
+    return 0.19 + c * 0.286, 0.25 + r * 0.187
 
 
 def _pos_story_grid(i: int, n: int) -> tuple[float, float]:
@@ -767,15 +776,19 @@ class Command(BaseCommand):
         draw-order reversal — so every mention lands on the story where
         the song is visible, anchored near its drawn item. Intro and
         outro carry no entries → no tags. PPCC emits every tier
-        unconditionally; territorial degrades by omission (mosaic n>10,
-        grid n>3, podi n>1, hero if entries)."""
+        unconditionally; territorial degrades by omission (mosaic n>20,
+        pairs n>10, grid n>3, podi n>1, hero if entries)."""
         novetats_items = [it for it in (novetats_items or []) if it]
         out: list[list[dict]] = [[]]  # intro
         n = len(entries)
         ppcc = territori == "PPCC"
+        if ppcc or n > 20:
+            out.append(
+                _tags_for_entries(list(reversed(entries[20:40])), _pos_story_mosaic)
+            )
         if ppcc or n > 10:
             out.append(
-                _tags_for_entries(list(reversed(entries[10:40])), _pos_story_mosaic)
+                _tags_for_entries(list(reversed(entries[10:20])), _pos_story_pairs)
             )
         if ppcc or n > 3:
             out.append(
@@ -830,9 +843,9 @@ class Command(BaseCommand):
 
     def _publish_story(self, post, slot, territori, setmana, data, cfg, opts):
         if territori == "PPCC":
-            # Step 3b: the PPCC story set is a fixed 7-slide editorial
-            # sequence (intro → 11-40 → 4-10 → podi → #1 hero → novetats
-            # → outro).
+            # Step 3b: the PPCC story set is a fixed 8-slide editorial
+            # sequence (intro → 21-40 → 11-20 → 4-10 → podi → #1 hero →
+            # novetats → outro).
             novetats_items = self._story_novetats_items(setmana, opts)
             hero_headline = self._story_hero_headline(setmana)
             paths = renderer.render_stories_ppcc(

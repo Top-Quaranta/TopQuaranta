@@ -257,9 +257,9 @@ export default function StaffArtistesSenseInstagramPage() {
   const total = data?.total
   const subtitle = (() => {
     if (total === undefined) return 'Carregant…'
-    return `${total} artistes sense revisar. «No en té» també és una resposta: ` +
-      `molts artistes menuts no en tenen. Ordenats per cançons al top i, a ` +
-      `igualtat, per cançons actives.`
+    return `${total} artistes amb cançó viva i sense revisar. «No en té» també ` +
+      `és una resposta. Ordenats per tops, cançons actives i, a igualtat, ` +
+      `per la cançó més nova — els que acaben de traure single van primer.`
   })()
 
   return (

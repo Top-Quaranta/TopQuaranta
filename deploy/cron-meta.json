@@ -235,5 +235,10 @@
     "frequency_label": "Cada nit 02:00",
     "max_age_hours": 26,
     "skip_concern": 1
+  },
+  "suggerir_instagram": {
+    "frequency_label": "Cada nit 02:30",
+    "max_age_hours": 26,
+    "skip_concern": 1
   }
 }

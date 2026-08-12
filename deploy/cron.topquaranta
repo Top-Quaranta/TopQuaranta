@@ -110,6 +110,9 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # 100 unitats i no volia que competira amb el senyal. Amb forHandle en val
 # 1, i el setmanal només aportava fins a 7 dies de retard.
 0 2 * * *   topquaranta   /home/topquaranta/bin/tq-run sembrar_canals_youtube >> /var/log/topquaranta/youtube.log 2>&1
+# Sembra suggeriments d'Instagram per als artistes que entren a la cua
+# (fonts: web propi, Viasona com a candidat). Sense quota de YouTube.
+30 2 * * *  topquaranta   /home/topquaranta/bin/tq-run suggerir_instagram >> /var/log/topquaranta/social.log 2>&1
 0 3 * * *   topquaranta   /home/topquaranta/bin/tq-run descobrir_youtube >> /var/log/topquaranta/youtube.log 2>&1
 # La recollida diària costa ~60 unitats: després del descobriment, i
 # abans que arribe l'informe.

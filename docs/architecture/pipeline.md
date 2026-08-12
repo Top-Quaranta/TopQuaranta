@@ -214,6 +214,16 @@ i un altre amb dos fa que qualsevol conversió entre artistes no signifique
 res. Un artista sense canal propi no està infravalorat; un amb la decisió
 pendent, sí.
 
+**L'enumeració del carril oficial va desacoblada del descobriment**
+(2026-08-12): un canal confirmat des de la cua de staff (o per la sembra)
+arriba DESPRÉS de la passada Topic de l'artista, i sense una segona fase
+no s'escanejaria mai — el dia que es van aplicar les primeres 58
+confirmacions hi havia exactament 1 vídeo aparellat. Cada execució
+re-enumera els canals oficials dels artistes amb cançons en finestra
+(idempotent per `get_or_create`; els menys coberts primer), cosa que de
+propina captura els videoclips que les bandes pengen dies després del
+llançament.
+
 Dins del canal oficial els títols són text lliure («AUXILI - TARRINETES
 AL SOL ft DJ Trapella»), així que l'aparellament és per prefix +
 decoració (`_conte_titol`): el títol de la cançó ha d'anar al principi i

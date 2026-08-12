@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
+from django.utils import timezone
 
 from ingesta.clients import youtube as yt
 from music.models import Album, Artista, Canco
@@ -408,3 +409,89 @@ class TestSufixLocalitzat:
         data = {"items": [{"snippet": {"title": "Auxili - Tema", "channelId": "UC9"}}]}
         with patch.object(yt, "_get", return_value=data):
             assert yt.find_topic_channel("Auxili") == "UC9"
+
+
+@pytest.mark.django_db
+class TestCarrilOficialDesacoblat:
+    """An official channel confirmed AFTER the artist's Topic discovery
+    must still get enumerated. The day the first 58 staff confirmations
+    were applied, exactly 1 official-lane video had ever been matched:
+    the enumeration only ran inside the discovery loop, and an artist
+    already discovered never re-entered it."""
+
+    def test_enumerates_official_channels_of_discovered_artists(self):
+        from music.models import CancoYouTubeVideo
+
+        a = Artista.objects.create(
+            nom="Bèrnia",
+            lastfm_nom="Bèrnia",
+            aprovat=True,
+            youtube_channel_id="UCtopic" + "x" * 15,  # Topic ja descobert
+            youtube_checked_at=timezone.now(),
+            youtube_canal_oficial="UCoficial" + "y" * 13,
+            youtube_canal_revisat=True,
+        )
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=10)
+        )
+        c = Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom="La Nit Més Llarga",
+            data_llancament=date.today() - timedelta(days=10),
+            verificada=True,
+            activa=True,
+        )
+
+        with (
+            patch.object(yt, "uploads_playlist", return_value="UUof"),
+            patch.object(
+                yt,
+                "playlist_videos",
+                return_value=[
+                    {
+                        "video_id": "v9",
+                        "title": "Bèrnia - La Nit Més Llarga (Videoclip)",
+                    }
+                ],
+            ),
+        ):
+            call_command("descobrir_youtube", stdout=StringIO())
+
+        v = CancoYouTubeVideo.objects.get(canco=c)
+        assert v.video_id == "v9"
+
+    def test_second_run_adds_nothing_new(self):
+        from music.models import CancoYouTubeVideo
+
+        a = Artista.objects.create(
+            nom="A",
+            lastfm_nom="A",
+            aprovat=True,
+            youtube_channel_id="UCt" + "x" * 19,
+            youtube_checked_at=timezone.now(),
+            youtube_canal_oficial="UCo" + "y" * 19,
+            youtube_canal_revisat=True,
+        )
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=5)
+        )
+        Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom="Cançó Llarga",
+            data_llancament=date.today() - timedelta(days=5),
+            verificada=True,
+            activa=True,
+        )
+        videos = [{"video_id": "v1", "title": "Cançó Llarga"}]
+        with (
+            patch.object(yt, "uploads_playlist", return_value="UUo"),
+            patch.object(yt, "playlist_videos", return_value=videos),
+        ):
+            call_command("descobrir_youtube", stdout=StringIO())
+            out = StringIO()
+            call_command("descobrir_youtube", stdout=out)
+
+        assert CancoYouTubeVideo.objects.count() == 1
+        assert "vídeos del carril oficial: 0" in out.getvalue()

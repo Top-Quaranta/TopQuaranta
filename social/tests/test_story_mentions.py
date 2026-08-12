@@ -77,49 +77,60 @@ def _usernames(tags):
 
 def test_ppcc_full_set_composition():
     tags = PubCmd._story_tags("PPCC", _entries(40), _novetats(2))
-    # intro, mosaic, grid, podi, hero, novetats, outro
-    assert len(tags) == 7
-    assert tags[0] == [] and tags[6] == []  # intro/outro: no songs → no tags
-    # Mosaic = entries 11-40 in draw order (40 first), capped at 20.
-    assert len(tags[1]) == 20
-    assert tags[1][0]["username"] == "p40"
+    # intro, mosaic, pairs, grid, podi, hero, novetats, outro
+    assert len(tags) == 8
+    assert tags[0] == [] and tags[7] == []  # intro/outro: no songs → no tags
+    # Mosaic = entries 21-40 in draw order (40 first) — exactly 20, so
+    # the whole tier now fits inside Meta's 20-tag cap.
+    assert _usernames(tags[1]) == [f"p{40 - i}" for i in range(20)]
+    # Pairs = entries 11-20, drawn 20→11.
+    assert _usernames(tags[2]) == [f"p{20 - i}" for i in range(10)]
     # Grid = entries 4-10, drawn 10→4.
-    assert _usernames(tags[2]) == ["p10", "p9", "p8", "p7", "p6", "p5", "p4"]
+    assert _usernames(tags[3]) == ["p10", "p9", "p8", "p7", "p6", "p5", "p4"]
     # Podi = #3 then #2 (draw order).
-    assert _usernames(tags[3]) == ["p3", "p2"]
+    assert _usernames(tags[4]) == ["p3", "p2"]
     # Hero = #1 only.
-    assert _usernames(tags[4]) == ["p1"]
+    assert _usernames(tags[5]) == ["p1"]
     # Novetats slide mentions only the visible releases.
-    assert _usernames(tags[5]) == ["nov1", "nov2"]
+    assert _usernames(tags[6]) == ["nov1", "nov2"]
 
 
 def test_ppcc_collaborator_included_on_the_same_story():
     tags = PubCmd._story_tags("PPCC", _entries(5, collabs_on=(2,)), None)
     # Podi story carries #3, #2 AND #2's collaborator; nobody else.
-    podi = _usernames(tags[3])
+    podi = _usernames(tags[4])
     assert set(podi) == {"p3", "p2", "c2"}
-    hero = _usernames(tags[4])
+    hero = _usernames(tags[5])
     assert hero == ["p1"]
 
 
 def test_ppcc_tiers_emitted_even_when_short():
     """PPCC emits every tier unconditionally (mirrors
     `render_stories_ppcc`) — short slices give empty tag sets, and the
-    count still matches the 6-slide no-novetats set."""
+    count still matches the 7-slide no-novetats set."""
     tags = PubCmd._story_tags("PPCC", _entries(2), None)
-    assert len(tags) == 6  # intro, mosaic, grid, podi, hero, outro
-    assert tags[1] == [] and tags[2] == []  # empty slices → no tags
-    assert _usernames(tags[3]) == ["p2"]  # podi holds only #2
-    assert _usernames(tags[4]) == ["p1"]
+    assert len(tags) == 7  # intro, mosaic, pairs, grid, podi, hero, outro
+    assert tags[1] == [] and tags[2] == [] and tags[3] == []  # empty slices
+    assert _usernames(tags[4]) == ["p2"]  # podi holds only #2
+    assert _usernames(tags[5]) == ["p1"]
 
 
 def test_territorial_degraded_tiers_alignment():
-    # n=8: no mosaic (needs n>10); grid, podi, hero present.
+    # n=8: no mosaic (needs n>20), no pairs (needs n>10); grid, podi,
+    # hero present.
     tags = PubCmd._story_tags("BAL", _entries(8), None)
     assert len(tags) == 5  # intro, grid, podi, hero, outro
     assert _usernames(tags[1]) == ["p8", "p7", "p6", "p5", "p4"]
     assert _usernames(tags[2]) == ["p3", "p2"]
     assert _usernames(tags[3]) == ["p1"]
+
+
+def test_territorial_midsize_gets_pairs_but_no_mosaic():
+    # n=15: pairs tier present (n>10) but mosaic absent (needs n>20).
+    tags = PubCmd._story_tags("VAL", _entries(15), None)
+    assert len(tags) == 6  # intro, pairs, grid, podi, hero, outro
+    assert _usernames(tags[1]) == ["p15", "p14", "p13", "p12", "p11"]
+    assert _usernames(tags[2]) == ["p10", "p9", "p8", "p7", "p6", "p5", "p4"]
 
 
 def test_territorial_alignment_against_real_renderer(monkeypatch, tmp_path):
@@ -260,9 +271,9 @@ def top_ppcc(db):
     return arts
 
 
-def _run_story(upload_story_fake, n_paths=6):
+def _run_story(upload_story_fake, n_paths=7):
     """Run the Saturday PPCC STORY slot with renderer + client mocked.
-    6 fake paths = the no-novetats PPCC set, aligned with the tagger."""
+    7 fake paths = the no-novetats PPCC set, aligned with the tagger."""
     paths = [pathlib.Path(f"story_{i}.jpg") for i in range(n_paths)]
     with (
         patch(
@@ -329,16 +340,17 @@ def test_story_slot_sends_per_story_tags(top_ppcc):
     assert err is None
     post = SocialPost.objects.get(platform="instagram_story", tipus="top_ppcc")
     assert post.status == SocialPost.STATUS_PUBLICAT
-    assert len(post.metadata["story_ids"]) == 6
-    # 6 stories uploaded; intro (first) and outro (last) untagged.
-    assert len(fake.calls) == 6
+    assert len(post.metadata["story_ids"]) == 7
+    # 7 stories uploaded; intro (first) and outro (last) untagged.
+    assert len(fake.calls) == 7
     assert fake.calls[0][1] == [] and fake.calls[-1][1] == []
-    # n=4 top: mosaic + grid slides carry no handles; podi = #3,#2;
+    # n=4 top: mosaic + pairs slides carry no handles; podi = #3,#2;
     # grid = #4 only; hero = #1.
-    assert fake.calls[1][1] == []  # mosaic (entries 11-40 empty)
-    assert fake.calls[2][1] == ["p4"]  # grid (drawn 10→4 → only #4)
-    assert fake.calls[3][1] == ["p3", "p2"]  # podi
-    assert fake.calls[4][1] == ["p1"]  # hero
+    assert fake.calls[1][1] == []  # mosaic (entries 21-40 empty)
+    assert fake.calls[2][1] == []  # pairs (entries 11-20 empty)
+    assert fake.calls[3][1] == ["p4"]  # grid (drawn 10→4 → only #4)
+    assert fake.calls[4][1] == ["p3", "p2"]  # podi
+    assert fake.calls[5][1] == ["p1"]  # hero
     assert post.metadata["n_mencions"] == 4
 
 
@@ -356,32 +368,32 @@ def test_per_story_tags_logged(top_ppcc, caplog):
     lines = [
         r.getMessage() for r in caplog.records if r.getMessage().startswith("story ")
     ]
-    # 6 stories published → 6 audit lines, in order.
-    assert len(lines) == 6
-    assert lines[3] == "story 4/6 top_ppcc PPCC media=pub-cid-4 tags=[p3,p2]"  # podi
-    assert lines[4] == "story 5/6 top_ppcc PPCC media=pub-cid-5 tags=[p1]"  # hero
+    # 7 stories published → 7 audit lines, in order.
+    assert len(lines) == 7
+    assert lines[4] == "story 5/7 top_ppcc PPCC media=pub-cid-5 tags=[p3,p2]"  # podi
+    assert lines[5] == "story 6/7 top_ppcc PPCC media=pub-cid-6 tags=[p1]"  # hero
     assert lines[0].endswith("tags=[]")  # intro carries no mentions
 
 
 def test_one_failed_story_never_blocks_the_rest(top_ppcc):
-    # Page 3 (podi) dies even untagged → guard exhausts, page is skipped,
-    # the other 5 publish. The set is incomplete so the slot is ERROR
+    # Page 3 (grid) dies even untagged → guard exhausts, page is skipped,
+    # the other 6 publish. The set is incomplete so the slot is ERROR
     # (resumable: tq-run's retry backfills the gap) and the run exits
-    # non-zero — the 5 that went out are NOT rolled back.
+    # non-zero — the 6 that went out are NOT rolled back.
     fake = _CapturingUpload(fail_url="story_3.jpg")
     _out, err = _run_story(fake)
     assert err is not None  # CommandError → exit non-zero
     post = SocialPost.objects.get(platform="instagram_story", tipus="top_ppcc")
     assert post.status == SocialPost.STATUS_ERROR
-    assert len(post.metadata["story_ids"]) == 5
-    assert {d["idx"] for d in post.metadata["published_slides"]} == {0, 1, 2, 4, 5}
+    assert len(post.metadata["story_ids"]) == 6
+    assert {d["idx"] for d in post.metadata["published_slides"]} == {0, 1, 2, 4, 5, 6}
     fallides = post.metadata["stories_fallides"]
     assert len(fallides) == 1 and fallides[0]["story"] == "story_3.jpg"
     assert "pendents" in post.error_msg
 
 
 def test_tag_slide_mismatch_publishes_untagged(top_ppcc):
-    # 9 fake paths ≠ 6 tag sets → defensive fallback: everything
+    # 9 fake paths ≠ 7 tag sets → defensive fallback: everything
     # publishes with NO mentions rather than mis-anchored ones.
     fake = _CapturingUpload()
     _out, err = _run_story(fake, n_paths=9)

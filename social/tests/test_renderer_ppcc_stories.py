@@ -1,9 +1,10 @@
-"""Renderer Step 3b redesign: the 7-slide editorial PPCC story set.
+"""Renderer Step 3b redesign: the 8-slide editorial PPCC story set.
 
 Renders real slides (needs Django for settings/fonts/svg_assets) and
 pins the structure + the redesign: JPG output, reasonable weight, the
-new display fonts, the #1 hero Playfair climax, the 40→11 mosaic, and
-the yellow outro without the legacy slate card.
+new display fonts, the #1 hero Playfair climax, the 40→21 mosaic, the
+20→11 pairs tier (re-tiering of 2026-08-12), and the yellow outro
+without the legacy slate card.
 """
 
 from __future__ import annotations
@@ -65,11 +66,11 @@ def _count_yellow(img: Image.Image) -> int:
 
 
 @pytest.mark.django_db
-def test_ppcc_story_set_outputs_7_jpeg_slides():
+def test_ppcc_story_set_outputs_8_jpeg_slides():
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=_novetats(3), hero_headline="DEBUT AL CIM"
     )
-    assert len(paths) == 7, [p.name for p in paths]
+    assert len(paths) == 8, [p.name for p in paths]
     for p in paths:
         assert p.suffix == ".jpg", p.name
         assert p.is_file()
@@ -84,7 +85,7 @@ def test_ppcc_story_set_skips_novetats_when_empty():
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=[], hero_headline="NOU #1"
     )
-    assert len(paths) == 6, [p.name for p in paths]
+    assert len(paths) == 7, [p.name for p in paths]
 
 
 @pytest.mark.django_db
@@ -94,17 +95,18 @@ def test_ppcc_story_set_skips_novetats_when_items_falsy():
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=[None, {}], hero_headline="NOU #1"
     )
-    assert len(paths) == 6, [p.name for p in paths]
+    assert len(paths) == 7, [p.name for p in paths]
 
 
 @pytest.mark.django_db
 def test_ppcc_story_set_handles_short_top():
     """Only 5 ranked entries (the test fixture's size): no crash, the
-    11-40 mosaic and 4-10 grid simply render empty, slides still produce."""
+    21-40 mosaic, 11-20 pairs and 4-10 grid simply render empty, slides
+    still produce."""
     paths = renderer.render_stories_ppcc(
         WK, _entries(5), novetats_items=[], hero_headline=""
     )
-    assert len(paths) == 6
+    assert len(paths) == 7
     for p in paths:
         with Image.open(p) as im:
             assert im.format == "JPEG"
@@ -142,14 +144,14 @@ def test_hero_slide_empty_headline_falls_back():
     assert _count_yellow(img) > 1000, _count_yellow(img)
 
 
-# ── Top 11-40 mosaic ────────────────────────────────────────────────
+# ── Top 21-40 mosaic ────────────────────────────────────────────────
 
 
 @pytest.mark.django_db
-def test_mosaic_renders_30_covers_with_fallback():
-    """30 covers, some pointing at a (failing) Deezer URL so the
+def test_mosaic_renders_20_covers_with_fallback():
+    """20 covers, some pointing at a (failing) Deezer URL so the
     placeholder path is exercised. Must render without error."""
-    entries = _entries(40)[10:40]
+    entries = _entries(40)[20:40]
     for i, e in enumerate(entries):
         if i % 2 == 0:
             e["cover_url"] = (
@@ -177,6 +179,35 @@ def test_grid_long_titles_do_not_reach_footer():
     assert img.size == (renderer.STORY_W, renderer.STORY_H)
     # Placeholder covers paint COLOR_CARD; none may appear in the 30 px
     # strip just above the footer (proves no cover overflowed downward).
+    cr = colors._hex_to_rgb(colors.COLOR_CARD)
+    band = img.crop(
+        (0, renderer.STORY_H - 122, renderer.STORY_W, renderer.STORY_H - 96)
+    )
+    card = sum(
+        1
+        for r, g, b in band.getdata()
+        if abs(r - cr[0]) < 20 and abs(g - cr[1]) < 20 and abs(b - cr[2]) < 20
+    )
+    assert card == 0, f"a cover bled into the footer band ({card} px)"
+
+
+# ── Top 20-11 pairs — footer overflow guard ─────────────────────────
+
+
+@pytest.mark.django_db
+def test_pairs_long_titles_do_not_reach_footer():
+    """All 10 titles forced to 2 lines: the 3+3+3+1 grid (fixed row
+    pitch) must stay clear of the footer band (worst-case vertical
+    fit), including the centred #11 on the last row."""
+    entries = []
+    for i in range(10):
+        e = _entries(1)[0].copy()
+        e["posicio"] = i + 11
+        e["canco_nom"] = "On T'has Ficat Aquesta Nit Que No Et Trobo Enlloc"
+        e["artistes_noms"] = ["Una Banda De Nom Ben Llarg"]
+        entries.append(e)
+    img = renderer._story_top_pairs(WK, entries).convert("RGB")
+    assert img.size == (renderer.STORY_W, renderer.STORY_H)
     cr = colors._hex_to_rgb(colors.COLOR_CARD)
     band = img.crop(
         (0, renderer.STORY_H - 122, renderer.STORY_W, renderer.STORY_H - 96)
@@ -286,6 +317,7 @@ def test_ppcc_story_structure(monkeypatch, tmp_path):
     for attr, name in (
         ("_story_intro_ppcc", "intro"),
         ("_story_top_mosaic", "mosaic"),
+        ("_story_top_pairs", "pairs"),
         ("_story_top_grid", "grid"),
         ("_story_podi", "podi"),
         ("_story_hero", "hero"),
@@ -303,12 +335,21 @@ def test_ppcc_story_structure(monkeypatch, tmp_path):
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=_novetats(3), hero_headline="DEBUT AL CIM"
     )
-    assert calls == ["intro", "mosaic", "grid", "podi", "hero", "novetats", "outro"]
-    assert len(paths) == 7
+    assert calls == [
+        "intro",
+        "mosaic",
+        "pairs",
+        "grid",
+        "podi",
+        "hero",
+        "novetats",
+        "outro",
+    ]
+    assert len(paths) == 8
 
     calls.clear()
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=[], hero_headline="NOU #1"
     )
-    assert calls == ["intro", "mosaic", "grid", "podi", "hero", "outro"]
-    assert len(paths) == 6
+    assert calls == ["intro", "mosaic", "pairs", "grid", "podi", "hero", "outro"]
+    assert len(paths) == 7

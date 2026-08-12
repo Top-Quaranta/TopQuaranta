@@ -211,6 +211,11 @@
     "max_age_hours": 170,
     "skip_concern": 1
   },
+  "netejar_portades": {
+    "frequency_label": "Cada dilluns 03:00",
+    "max_age_hours": 170,
+    "skip_concern": 1
+  },
   "descobrir_youtube": {
     "frequency_label": "Cada nit 03:00",
     "max_age_hours": 26,

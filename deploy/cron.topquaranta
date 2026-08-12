@@ -250,6 +250,13 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # en temps real, açò captura la resta.
 30 2 * * 1  topquaranta   /home/topquaranta/bin/tq-run netejar_cancons_orfes >> /var/log/topquaranta/neteja.log 2>&1
 
+# 03:00 dl → Retenció de portades locals: esborra les que ja no
+# pertanyen al catàleg públic ni a cap top històric (les newsletters
+# antigues enllacen /portades/album/ — eixes es conserven sempre).
+# Reversible de facto: el cron nocturn re-baixa qualsevol portada que
+# torne a ser candidata. Vegeu docs/architecture/portades.md §Retenció.
+0 3 * * 1   topquaranta   /home/topquaranta/bin/tq-run netejar_portades >> /var/log/topquaranta/neteja.log 2>&1
+
 # 02:00 → Daily SEO inference: canonical genre + dona/home percent
 # from MB+Last.fm tags. Cheap (~5 s for 2 k artistes); idempotent.
 0 2 * * *   topquaranta   /home/topquaranta/bin/tq-run inferir_genere >> /var/log/topquaranta/seo.log 2>&1

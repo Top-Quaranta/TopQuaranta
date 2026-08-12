@@ -1,6 +1,6 @@
 """Shared PIL render primitives — the single engine behind the social slides.
 
-# Spec: docs/architecture/social.md
+# Spec: docs/architecture/social-renderer.md
 
 DRY consolidation (2026-06): the primitives below used to live twice — once in
 `feed_redesign.py` (feed novetats) and once, in a slightly different shape, in

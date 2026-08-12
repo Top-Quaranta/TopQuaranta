@@ -132,3 +132,53 @@ def test_setting_a_new_url_clears_the_refusal(staff_client):
     assert a.instagram_rebutjat_at is None
     assert a.instagram_rebutjat_url == ""
     assert a.instagram_revisat is True
+
+
+@pytest.mark.django_db
+def test_accepting_a_url_consumes_the_suggestion(staff_client):
+    """The suggestion is provisional scaffolding: once a URL lands
+    (accepted or typed), keeping it around would re-suggest a decision
+    that is already made."""
+    a = Artista.objects.create(
+        nom="Sobre Mi Gata",
+        lastfm_nom="Sobre Mi Gata",
+        aprovat=True,
+        instagram_suggerit="sobremigata",
+    )
+
+    r = staff_client.patch(
+        f"/api/v1/staff/artistes/{a.pk}/",
+        {"instagram_url": "https://www.instagram.com/sobremigata/"},
+        format="json",
+    )
+    assert r.status_code == 200
+
+    a.refresh_from_db()
+    assert a.instagram_url == "https://www.instagram.com/sobremigata/"
+    assert a.instagram_suggerit == ""
+    assert a.instagram_revisat is True
+
+
+@pytest.mark.django_db
+def test_dismissing_a_suggestion_keeps_the_artist_pending(staff_client):
+    """Rejecting the candidate answers "not this handle", not "has no
+    Instagram" — the row must stay in the queue."""
+    a = Artista.objects.create(
+        nom="Sellen",
+        lastfm_nom="Sellen",
+        aprovat=True,
+        instagram_suggerit="john_sellen",
+    )
+
+    staff_client.patch(
+        f"/api/v1/staff/artistes/{a.pk}/",
+        {"instagram_suggerit": ""},
+        format="json",
+    )
+
+    a.refresh_from_db()
+    assert a.instagram_suggerit == ""
+    assert a.instagram_revisat is False
+    assert "Sellen" in _noms(
+        staff_client.get("/api/v1/staff/artistes/?instagram=pendent")
+    )

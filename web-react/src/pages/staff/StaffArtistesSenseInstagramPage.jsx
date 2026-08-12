@@ -54,6 +54,21 @@ function Row({ a, onSaved }) {
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Local: dismissing a suggestion keeps the row (still pending), so it
+  // can't go through onSaved, which removes it.
+  const [sugg, setSugg] = useState(a.instagram_suggerit || '')
+
+  async function descartaSuggeriment() {
+    setBusy(true)
+    try {
+      await api.patch(`/staff/artistes/${a.pk}/`, { instagram_suggerit: '' })
+      setSugg('')
+    } catch (e) {
+      setErr(e.message || 'Error desant.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const valid = isPlausibleInstagramUrl(url)
   const canSave = !busy && valid
@@ -105,6 +120,38 @@ function Row({ a, onSaved }) {
       <Td>
         {nVives > 0 ? (
           <Pill tone="gray">{nVives}</Pill>
+        ) : (
+          <span className="text-white/40">—</span>
+        )}
+      </Td>
+      <Td>
+        {/* PROVISIONAL: candidate from the sweeps (Viasona, own site).
+            Not evidence — the ↗ link is there precisely so a human looks
+            at the profile before accepting. */}
+        {sugg ? (
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <a
+              href={`https://www.instagram.com/${sugg}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-tq-yellow underline hover:text-tq-yellow-deep"
+            >
+              @{sugg} ↗
+            </a>
+            <Btn
+              onClick={() =>
+                desa({
+                  instagram_url: `https://www.instagram.com/${sugg}/`,
+                })
+              }
+              disabled={busy}
+            >
+              Accepta
+            </Btn>
+            <Btn variant="ghost" onClick={descartaSuggeriment} disabled={busy}>
+              ✕
+            </Btn>
+          </div>
         ) : (
           <span className="text-white/40">—</span>
         )}
@@ -243,6 +290,7 @@ export default function StaffArtistesSenseInstagramPage() {
               <Th>Artista</Th>
               <Th title="Cançons d'aquest artista que han aparegut al top alguna vegada (distinct TopSetmanal)">Top</Th>
               <Th title="Cançons vives (verificades i actives) on l'artista és principal o col·laborador">Cançons actives</Th>
+              <Th title="Candidat trobat pels escombratges; comprova'l abans d'acceptar">Suggeriment</Th>
               <Th>Instagram URL</Th>
               <Th>Cerca</Th>
               <Th></Th>

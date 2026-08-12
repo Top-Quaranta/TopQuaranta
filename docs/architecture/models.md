@@ -52,6 +52,12 @@ bessó de `youtube_canal_revisat`: «revisat, no en té» és una resposta
 final. Sense ell, un artista que genuïnament no té Instagram tornava a la
 cua cada passada. Omplir la URL el marca sol.
 
+**`instagram_suggerit` (2026-08, PROVISIONAL).** Candidat trobat pels
+escombratges (Viasona, web propi). No és evidència — els handles d'IG no
+es poden validar per API — així que la cua el mostra amb enllaç perquè un
+humà mire el perfil abans d'acceptar. Es neteja en posar `instagram_url`.
+El camp s'esborra quan la cua estiga buidada.
+
 **`instagram_rebutjat_at` (2026-08).** Es marca quan Meta refusa aquest
 compte en publicar (code 110). No podem validar handles per endavant, així
 que un rebuig en publicar és l'única evidència que un compte ha canviat.

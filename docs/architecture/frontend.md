@@ -29,6 +29,12 @@ refusar @X — busca'n el compte nou»): és un artista que hi ha tornat
 perquè Meta va rebutjar el seu handle en publicar i el camp s'ha buidat.
 Sense eixe context, l'operador podria concloure «no en té».
 
+La cua `sense-instagram` té una columna **Suggeriment** (provisional,
+2026-08): el candidat dels escombratges amb enllaç al perfil, botó
+«Accepta» (un clic → PATCH de la URL, consumeix el suggeriment) i «✕»
+(descarta el candidat però l'artista continua pendent — refusar el handle
+no és dir que no en té).
+
 Les dues cues d'omplir dades (`sense-instagram` i `sense-youtube`)
 comparteixen forma a posta: mateixes columnes (artista, presència al top,
 cançons actives), mateix botó **«No en té»** i el mateix tercer estat al

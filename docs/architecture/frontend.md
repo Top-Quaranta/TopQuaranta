@@ -37,6 +37,17 @@ automàticament retorna un canal de pàdel i una empresa d'esdeveniments.
 Un canal equivocat no es veu equivocat aigües avall — es veu com una
 cançó amb sospitosament moltes reproduccions.
 
+El camp accepta **el que es pot copiar**: `youtube.com/@nom`, l'URL
+`/channel/UC…` o l'id pelat. Exigir l'id feia la cua inservible, perquè
+YouTube va deixar d'ensenyar-lo enlloc de la seua interfície; el resol el
+backend per 1 unitat de quota i refusa amb 400 el canal automàtic
+(«- Topic» / «- Tema»), que la cerca sol posar primer.
+
+La columna «Art Track» té **tres** estats — *Trobat*, *No en té* i
+*pendent* — perquè una cel·la buida es llegia com una absència quan
+normalment vol dir que el descobriment encara no hi ha arribat (~90
+artistes al dia sobre 520).
+
 ## Directory layout
 
 ```

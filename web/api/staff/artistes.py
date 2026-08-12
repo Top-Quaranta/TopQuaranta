@@ -8,9 +8,9 @@ module and let the shim handle the re-export.
 
 from __future__ import annotations
 
+import datetime
 import logging
-
-logger = logging.getLogger(__name__)
+import re
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -46,6 +46,7 @@ from music.models import (
 from web.api.search_utils import normalize_search_term as _normalize_search_term
 from web.api.search_utils import unaccent_field as _unaccent_field
 
+logger = logging.getLogger(__name__)
 Usuari = get_user_model()
 # Shared helpers from the staff package.
 from web.api.staff._common import IsStaff, _paginate, noms_amb_homonims
@@ -337,6 +338,58 @@ def artistes_search(request: Request) -> Response:
     )
 
 
+_CANAL_ID = re.compile(r"^UC[\w-]{20,30}$")
+_CANAL_URL = re.compile(r"youtube\.com/channel/(UC[\w-]{20,30})", re.I)
+_CANAL_HANDLE = re.compile(r"(?:youtube\.com/)?@([\w.-]+)", re.I)
+
+
+def _resol_canal_youtube(brut: str) -> tuple[str, str]:
+    """Accept an id, a /channel/ URL or a handle; return `(id, error)`.
+
+    Resolving here rather than in the browser keeps the API key server-
+    side, and it is where a bad value can still be refused: better a 400
+    the operator reads than a channel id that silently points nowhere.
+    """
+    from ingesta.clients import youtube as yt
+
+    brut = (brut or "").strip()
+    kwargs: dict[str, str] = {}
+    if _CANAL_ID.match(brut):
+        kwargs = {"channel_id": brut}
+    elif _CANAL_URL.search(brut):
+        kwargs = {"channel_id": _CANAL_URL.search(brut).group(1)}
+    elif _CANAL_HANDLE.search(brut):
+        kwargs = {"handle": _CANAL_HANDLE.search(brut).group(1)}
+    else:
+        return "", (
+            "No reconec això com un canal. Enganxa l'enllaç del canal "
+            "(youtube.com/@nom o youtube.com/channel/UC…) o l'id UC…"
+        )
+
+    try:
+        info = yt.channel_info(**kwargs)
+    except yt.QuotaExhausted:
+        return "", "Quota de YouTube exhaurida; torna-ho a provar demà."
+    except Exception:  # pragma: no cover - transport
+        logger.exception("resolent el canal de YouTube %r", brut)
+        return "", "No s'ha pogut consultar YouTube. Torna-ho a provar."
+    if not info:
+        return "", f"YouTube no coneix {brut}."
+
+    # Refuse the auto-generated channel. It is the OTHER lane and the
+    # discovery cron already finds it on its own; pasting it here would
+    # make us count the same Art Track twice and lose the videoclip lane
+    # entirely. Easy mistake: searching an artist surfaces both, and the
+    # Topic one often ranks first.
+    if yt.topic_suffix_name(info["title"]) is not None:
+        return "", (
+            f"«{info['title']}» és el canal automàtic de YouTube Music, i "
+            "eixe ja el trobem sols. Ací va el canal propi de l'artista, "
+            "el dels videoclips."
+        )
+    return info["id"], ""
+
+
 @api_view(["POST"])
 @permission_classes([IsStaff])
 def artista_crear(request: Request) -> Response:
@@ -414,6 +467,15 @@ def artista_detail(request: Request, pk: int) -> Response:
     artista = get_object_or_404(Artista, pk=pk)
     if request.method == "PATCH":
         data = request.data or {}
+        # A YouTube handle is what a human can actually copy: the site
+        # stopped showing the `UC…` id anywhere, so asking for it made the
+        # staff queue unusable (caught 2026-08-12 filling in Malifeta).
+        # `channels.list?forHandle=` resolves it for ONE quota unit.
+        if data.get("youtube_canal_oficial"):
+            resolt, err = _resol_canal_youtube(data["youtube_canal_oficial"])
+            if err:
+                return Response({"error": err}, status=400)
+            data = {**data, "youtube_canal_oficial": resolt}
         simple_fields = [
             "nom",
             "lastfm_nom",
@@ -422,7 +484,6 @@ def artista_detail(request: Request, pk: int) -> Response:
             "percentatge_femeni",
             "musicbrainz_id",
             "youtube_canal_oficial",
-            "youtube_canal_revisat",
         ] + [f for f, _ in Artista.SOCIAL_LINK_FIELDS]
         # Whole PATCH is one transaction: a rejected approval (no Deezer)
         # or a Deezer collision must NOT leave half-written localitats /
@@ -444,6 +505,9 @@ def artista_detail(request: Request, pk: int) -> Response:
             for f in simple_fields:
                 if f in data:
                     setattr(artista, f, (data.get(f) or "").strip())
+            # Boolean, so it can't ride the `.strip()` loop above.
+            if "youtube_canal_revisat" in data:
+                artista.youtube_canal_revisat = bool(data["youtube_canal_revisat"])
             # Staff assigning a non-blank MBID manually overrides the
             # auto-match lockout: the decision is that this specific ID is
             # correct, so re-enable automatic sync for future cron runs.

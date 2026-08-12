@@ -42,13 +42,19 @@ function useDebounced(value, ms = 250) {
   return v
 }
 
-/** Accepts a bare `UC…` id or any YouTube URL carrying one. */
-export function extreuCanal(value) {
-  if (!value) return ''
+/** Anything the backend knows how to resolve: an id, a /channel/ URL or
+ *  a handle. YouTube stopped showing the `UC…` id anywhere in its UI, so
+ *  demanding it made this queue unusable — the handle is what you can
+ *  actually copy out of the address bar. The backend resolves it for one
+ *  quota unit and answers 400 if it can't. */
+export function esCanalPlausible(value) {
+  if (!value) return false
   const v = value.trim()
-  if (/^UC[\w-]{20,30}$/.test(v)) return v
-  const m = v.match(/youtube\.com\/channel\/(UC[\w-]{20,30})/i)
-  return m ? m[1] : ''
+  return (
+    /^UC[\w-]{20,30}$/.test(v) ||
+    /youtube\.com\/channel\/UC[\w-]{20,30}/i.test(v) ||
+    /@[\w.-]+/.test(v)
+  )
 }
 
 function cercaYoutubeUrl(nom) {
@@ -63,8 +69,7 @@ function Row({ a, onDone }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
-  const canal = extreuCanal(val)
-  const canSave = !busy && !!canal
+  const canSave = !busy && esCanalPlausible(val)
 
   async function desa(payload) {
     setBusy(true)
@@ -102,10 +107,17 @@ function Row({ a, onDone }) {
         )}
       </Td>
       <Td>
+        {/* Three states, because an empty cell reads as "has none" when it
+            almost always means "discovery hasn't got here yet" — ~90
+            artists a day out of 520. */}
         {a.youtube_channel_id ? (
-          <Pill tone="green">Topic</Pill>
+          <Pill tone="green">Trobat</Pill>
+        ) : a.youtube_provat ? (
+          <Pill tone="gray">No en té</Pill>
         ) : (
-          <span className="text-white/40">—</span>
+          <span className="text-white/40" title="El cron encara no hi ha arribat">
+            pendent
+          </span>
         )}
       </Td>
       <Td>
@@ -118,7 +130,7 @@ function Row({ a, onDone }) {
       <Td>
         <div className="flex flex-col gap-1">
           <Input
-            placeholder="UC… o youtube.com/channel/UC…"
+            placeholder="youtube.com/@nom, o l'id UC…"
             value={val}
             onChange={e => {
               setVal(e.target.value)
@@ -126,10 +138,9 @@ function Row({ a, onDone }) {
             }}
             className="w-80"
           />
-          {val && !canal && (
+          {val && !esCanalPlausible(val) && (
             <p className="text-[11px] text-white/50">
-              Cal l'id del canal (UC…). Els /@handle no el porten: obre el
-              canal i copia la URL de «youtube.com/channel/…».
+              Enganxa l'enllaç del canal (youtube.com/@nom) o el seu id UC…
             </p>
           )}
           {err && <p className="text-[11px] text-red-400">{err}</p>}
@@ -159,7 +170,7 @@ function Row({ a, onDone }) {
           <Btn
             onClick={() =>
               desa({
-                youtube_canal_oficial: canal,
+                youtube_canal_oficial: val.trim(),
                 youtube_canal_revisat: true,
               })
             }
@@ -221,8 +232,9 @@ export default function StaffArtistesSenseYoutubePage() {
   const subtitle =
     total === undefined
       ? 'Carregant…'
-      : `${total} artistes sense revisar. «No en té» també és una resposta: ` +
-        `Malalts no té canal propi i això no és un forat, és la realitat.`
+      : `${total} artistes sense revisar. Ací va el canal PROPI de l'artista ` +
+        `(el dels videoclips), no el «- Topic» / «- Tema», que ja el trobem sols. ` +
+        `«No en té» també és una resposta vàlida i final.`
 
   return (
     <section>
@@ -245,7 +257,9 @@ export default function StaffArtistesSenseYoutubePage() {
             <THead>
               <Tr>
                 <Th>Artista</Th>
-                <Th>Art Track</Th>
+                <Th title="El canal automàtic de YouTube Music; el trobem sols">
+                  Art Track
+                </Th>
                 <Th>Al top</Th>
                 <Th>Canal oficial</Th>
                 <Th></Th>

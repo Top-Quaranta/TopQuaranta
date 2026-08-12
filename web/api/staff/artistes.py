@@ -523,6 +523,7 @@ def artista_detail(request: Request, pk: int) -> Response:
             # corrected artist in the "broken handle" list forever.
             if "instagram_url" in data:
                 artista.instagram_rebutjat_at = None
+                artista.instagram_rebutjat_url = ""
                 # Filling the URL IS the review, so the operator doesn't
                 # have to say so twice.
                 if (data.get("instagram_url") or "").strip():

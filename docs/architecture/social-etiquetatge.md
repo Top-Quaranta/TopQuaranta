@@ -24,7 +24,23 @@ etiquetar és infinitament millor que un top que no existeix.
 d'acceptacions de col·laboració). Un rebuig en publicar és **l'única**
 evidència que un compte ha canviat, així que es guarda a
 `Artista.instagram_rebutjat_at`, el Setmanari el reporta a Incidències i
-el filtre `?instagram=rebutjat` els llista. Editar la URL neteja la marca.
+el filtre `?instagram=rebutjat` els llista.
+
+**I el camp es buida.** Un handle refusat no ens val per a res, i és
+**públic**: viatja a la fitxa de l'artista i al `sameAs` del JSON-LD, així
+que un compte renombrat deixa un enllaç mort a les dades estructurades
+que llig Google. En buidar-lo, `instagram_revisat` torna a `False` i
+l'artista **reapareix a la cua de staff**, que és on algú li trobarà el
+compte nou — en lloc de quedar aparcat en una llista que ningú no visita.
+
+El valor refusat es guarda a `instagram_rebutjat_url` i la cua el mostra
+(«Instagram va refusar @tontaca13 — busca'n el compte nou»), per dos
+motius: l'operador ha de saber que la resposta és *un compte nou* i no
+«no en té», i l'error de Meta cobreix **dos casos que no distingim**
+(«private profile OR invalid username») — un compte privat continua sent
+un enllaç vàlid per a una persona i s'ha de poder restaurar a mà.
+
+Editar la URL neteja les dues marques.
 
 ## El que no podem fer
 

@@ -56,9 +56,31 @@ def _marca_handles_rebutjats(handles: list[str]) -> None:
             cond |= Q(instagram_url__iregex=rf"/{re.escape(h)}/?$")
         if not cond:
             return
-        n = Artista.objects.filter(cond).update(instagram_rebutjat_at=_tz.now())
+        ara = _tz.now()
+        n = 0
+        for a in Artista.objects.filter(cond):
+            # Empty the URL and put the artist BACK in the staff queue.
+            # A refused handle is worthless to us and, since the field is
+            # public (artist page + JSON-LD `sameAs`), a renamed account
+            # leaves a dead link on the site and in Google's structured
+            # data. The old value is kept so a merely-private account can
+            # be restored by hand.
+            a.instagram_rebutjat_url = a.instagram_url
+            a.instagram_url = ""
+            a.instagram_rebutjat_at = ara
+            a.instagram_revisat = False
+            a.save(
+                update_fields=[
+                    "instagram_url",
+                    "instagram_rebutjat_url",
+                    "instagram_rebutjat_at",
+                    "instagram_revisat",
+                ]
+            )
+            n += 1
         logger.warning(
-            "Handles d'Instagram rebutjats per Meta: %s (%s artistes marcats)",
+            "Handles d'Instagram rebutjats per Meta: %s (%s artistes buidats "
+            "i tornats a la cua)",
             ", ".join(sorted(set(handles))),
             n,
         )

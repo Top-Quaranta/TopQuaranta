@@ -83,6 +83,14 @@ function Row({ a, onSaved }) {
         >
           {a.nom}
         </Link>
+        {/* Context, not decoration: this artist is here because Meta
+            refused their old handle, so the answer is probably a NEW
+            account — not "no en té". */}
+        {a.instagram_rebutjat_url && (
+          <p className="text-[11px] text-red-400">
+            Instagram va refusar {a.instagram_rebutjat_url.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')} — busca'n el compte nou
+          </p>
+        )}
       </Td>
       <Td>
         {nTop > 0 ? (

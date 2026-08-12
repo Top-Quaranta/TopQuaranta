@@ -194,7 +194,7 @@ l'artista**. Per això el senyal d'una cançó és la **suma** de:
 2. el **canal oficial** — zero o molts vídeos, a `CancoYouTubeVideo`,
    i el canal el tria **una persona** a `/staff/artistes/sense-youtube`.
 
-`sembrar_canals_youtube` agafa gratis els enllaços curats de
+`sembrar_canals_youtube` (02:00) agafa gratis els enllaços curats de
 MusicBrainz. Els `/channel/UC…` no costen res; els `/@handle` necessiten
 una cerca (100 unitats), i per això `--resolve` va amb `--budget` i
 `--nomes-finestra`: 655 handles serien set dies de quota, i el sostre fa

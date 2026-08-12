@@ -162,6 +162,13 @@ part a posta, perquè una visualització no és un scrobble i unir-les a
 la capa d'emmagatzematge forçaria una decisió que volem mantindre
 editorial.
 
+La comparació de noms va per `normalitza_nom_homonim` (NFKD, sense
+diacrítics, sense puntuació): «Bèrnia» ha de trobar el canal que es diu
+literalment `bernia - Topic`, i «Clàudia Xiva» fallava contra un canal
+de nom idèntic perquè un costat era NFC i l'altre NFD. Afluixar això no
+eixampla la superfície d'exploit — el candidat continua havent de portar
+el sufix literal, que és el que deixa fora els canals de pàdel.
+
 **El sufix `- Topic` no és opcional.** Cercar «Auxili - Topic» retorna
 primer el canal humà de la banda («AUXILI»), ple de videoclips titulats
 «AUXILI - TARRINETES AL SOL ft DJ Trapella», que no aparellen amb res.

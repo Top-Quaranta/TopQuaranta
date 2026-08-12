@@ -336,3 +336,38 @@ class TestSembrarCanals:
         call_command("sembrar_canals_youtube", stdout=StringIO())
         a.refresh_from_db()
         assert a.youtube_canal_revisat is False
+
+
+class TestNomsAmbAccents:
+    """Two real misses from the first full discovery run, both mine."""
+
+    def _search(self, titles):
+        return {
+            "items": [
+                {"snippet": {"title": t, "channelId": f"UC{i}"}}
+                for i, t in enumerate(titles)
+            ]
+        }
+
+    def test_matches_an_unaccented_channel_title(self):
+        """Our "Bèrnia" against a channel literally called "bernia"."""
+        with patch.object(yt, "_get", return_value=self._search(["bernia - Topic"])):
+            assert yt.find_topic_channel("Bèrnia") == "UC0"
+
+    def test_matches_across_unicode_normalisation(self):
+        """NFD on one side, NFC on the other — "Clàudia Xiva" was refused
+        against a channel with the identical visible name."""
+        import unicodedata
+
+        nfd = unicodedata.normalize("NFD", "Clàudia Xiva")
+        with patch.object(
+            yt, "_get", return_value=self._search(["Clàudia Xiva - Topic"])
+        ):
+            assert yt.find_topic_channel(nfd) == "UC0"
+
+    def test_still_refuses_a_different_act(self):
+        """Folding accents must not start accepting other bands."""
+        with patch.object(
+            yt, "_get", return_value=self._search(["Essência do Céu - Topic"])
+        ):
+            assert yt.find_topic_channel("Essència") is None

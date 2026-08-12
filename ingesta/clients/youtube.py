@@ -37,6 +37,8 @@ import time
 import requests
 from django.conf import settings
 
+from music.models import normalitza_nom_homonim
+
 logger = logging.getLogger(__name__)
 
 API_URL = "https://www.googleapis.com/youtube/v3/"
@@ -73,7 +75,20 @@ def _get(endpoint: str, **params) -> dict:
 
 
 def _norm_channel_title(title: str) -> str:
-    return title.strip().lower()
+    """Fold a channel title down to a comparable key.
+
+    Lowercasing alone is not enough, and the two misses it produced are
+    both real: our "Bèrnia" never matched the channel literally called
+    `bernia - Topic`, and "Clàudia Xiva" never matched `Clàudia Xiva -
+    Topic` because one side was NFC and the other NFD. Reuses the
+    project's existing homonym key (NFKD, drop diacritics, drop
+    everything non-alphanumeric) rather than growing a second one.
+
+    Loosening this does NOT widen the exploit surface: the candidate
+    must still carry the literal "- Topic" suffix, which is what keeps
+    the padel channels and the events companies out.
+    """
+    return normalitza_nom_homonim(title)
 
 
 def find_topic_channel(artist_name: str) -> str | None:

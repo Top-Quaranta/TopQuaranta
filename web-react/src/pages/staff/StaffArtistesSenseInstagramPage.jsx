@@ -58,13 +58,11 @@ function Row({ a, onSaved }) {
   const valid = isPlausibleInstagramUrl(url)
   const canSave = !busy && valid
 
-  async function desa() {
+  async function desa(payload) {
     setBusy(true)
     setErr('')
     try {
-      await api.patch(`/staff/artistes/${a.pk}/`, {
-        instagram_url: url.trim(),
-      })
+      await api.patch(`/staff/artistes/${a.pk}/`, payload)
       onSaved(a.pk)
     } catch (e) {
       setErr(e.message || 'Error desant.')
@@ -129,9 +127,24 @@ function Row({ a, onSaved }) {
         </a>
       </Td>
       <Td className="text-right">
-        <Btn onClick={desa} disabled={!canSave}>
-          Desa
-        </Btn>
+        <div className="flex justify-end gap-2">
+          {/* Third state, same as the YouTube queue: plenty of small
+              artists simply have no Instagram, and without this they'd
+              come back every single pass. */}
+          <Btn
+            variant="ghost"
+            onClick={() => desa({ instagram_revisat: true })}
+            disabled={busy}
+          >
+            No en té
+          </Btn>
+          <Btn
+            onClick={() => desa({ instagram_url: url.trim() })}
+            disabled={!canSave}
+          >
+            Desa
+          </Btn>
+        </div>
       </Td>
     </Tr>
   )
@@ -148,7 +161,7 @@ export default function StaffArtistesSenseInstagramPage() {
     setData(null)
     const params = new URLSearchParams({
       aprovat: '1',
-      instagram: 'no',
+      instagram: 'pendent',
       include_n_top: '1',
       sort: '-n_top',
       page: String(p),
@@ -189,7 +202,9 @@ export default function StaffArtistesSenseInstagramPage() {
   const total = data?.total
   const subtitle = (() => {
     if (total === undefined) return 'Carregant…'
-    return `${total} artistes aprovats sense URL d'Instagram. Ordenats per cançons al top i, a igualtat, per cançons actives.`
+    return `${total} artistes sense revisar. «No en té» també és una resposta: ` +
+      `molts artistes menuts no en tenen. Ordenats per cançons al top i, a ` +
+      `igualtat, per cançons actives.`
   })()
 
   return (

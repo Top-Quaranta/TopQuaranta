@@ -71,8 +71,11 @@ All endpoints are under `/api/v1/staff/` and return JSON. Shared helpers:
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/staff/artistes/` | Filters: `q`, `aprovat`, `deezer`, `territori`, `instagram`, `youtube`,
-`al_top`. **`instagram=rebutjat` (2026-08)** llista els artistes el compte
-dels quals Meta ha refusat en publicar: tenen URL, així que la cua
+`al_top`. **`instagram=pendent` (2026-08)** és el tercer estat, bessó de
+`youtube=pendent`: sense URL **i** sense revisar. `instagram=no` conserva
+el sentit antic (simplement no té URL) perquè els cridadors existents no
+es moguen sota els peus. **`instagram=rebutjat`** llista els artistes el
+compte dels quals Meta ha refusat en publicar: tenen URL, així que la cua
 `instagram=no` no els veu mai. Each row carries `te_homonims` (another artista shares the name modulo accents + punctuation). **`al_top=1` (Fase 2 D2):** restrict to artistes in the latest weekly PPCC top (social-tagging workflow); with it (or `include_gestor_email=1`) each row also carries `te_gestor_email` — whether the artist has a reachable verified-manager email (the D1 alert audience). **`include_n_top=1`** annotates two counts (both via distinct scalar subqueries, principal + collaborator paths, so they never Cartesian-inflate): `n_top` (distinct `TopSetmanal` rows) and `n_cancons_vives` (distinct live cançons — `verificada=True, activa=True` — where the artist is principal or collaborator; the two paths are disjoint per cançó by the D5 signal, so no overlap correction). **`sort=-n_top`** (the "artistes sense Instagram" queue) orders `n_top` desc → `n_cancons_vives` desc → alphabetical, so novetats artists (0 tops, live songs) surface at the top of their block. |
 | POST | `/staff/avisos-top/enviar/` | Run the `enviar_avisos_top` command (Fase 2 D1/F2). Body `{send: bool, setmana?}`. **DRY-RUN by default**; `send=true` does the real send (all dedup/preference guards live in the command). Streams the command stdout back. |
 | — | *(filtre `youtube`, 2026-08)* | `pendent` / `revisat`, sobre `Artista.youtube_canal_revisat`. **Tres estats, no dos:** un artista revisat i confirmat com a «no té canal propi» està FET, no pendent, i no ha de tornar a la cua per sempre (Malalts no en té). Alimenta `/staff/artistes/sense-youtube`. El PATCH de

@@ -278,6 +278,10 @@ class Artista(models.Model):
     # the ONLY evidence we ever get that an account was renamed, closed
     # or made private. Cleared when the URL is edited.
     instagram_rebutjat_at = models.DateTimeField(null=True, blank=True)
+    # Same third state as `youtube_canal_revisat`, for the same reason:
+    # without it, an artist who genuinely has no Instagram sits in the
+    # staff queue forever and gets re-checked by hand every pass.
+    instagram_revisat = models.BooleanField(default=False, db_index=True)
     # X (formerly Twitter). Both x.com and twitter.com URLs land here;
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)

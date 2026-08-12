@@ -130,6 +130,8 @@ mapping:
     doc: docs/architecture/portades.md
   - prefix: ingesta/management/commands/descarregar_portades.py
     doc: docs/architecture/portades.md
+  - prefix: ingesta/management/commands/netejar_portades.py
+    doc: docs/architecture/portades.md
   - prefix: ingesta/
     doc: docs/architecture/pipeline.md
 

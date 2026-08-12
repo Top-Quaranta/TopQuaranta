@@ -21,7 +21,7 @@
 > **Ops**: shared `"ram_heavy"` SingletonLock between
 > `analitzar_whisper` and `obtenir_metadata_musicbrainz` (closes
 > the 4 GB CX22 OOM); `WHISPER_MODEL` env-configurable;
-> `logrotate` globs `*.log` and prunes social PNG renders >60d.
+> `logrotate` globs `*.log` and prunes social renders (PNG+JPG) >60d.
 > Cron tuning (2026-05-05): MB `--limit 200→100` (caps duration
 > ≤17 min instead of occasional 5 h); Whisper `--limit 100→200`
 > and slot moved 05:00→04:00 UTC so it's clear of the 04:30 MB

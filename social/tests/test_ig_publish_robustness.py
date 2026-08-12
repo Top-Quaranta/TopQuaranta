@@ -161,7 +161,7 @@ class _StoryUpload:
         return f"cid-{self.tag}-{self._n}"
 
 
-def _run_story(upload_fake, *, force=False, n_paths=6):
+def _run_story(upload_fake, *, force=False, n_paths=7):
     """Run the Saturday PPCC story slot with renderer + client mocked."""
     paths = [pathlib.Path(f"story_{i}.jpg") for i in range(n_paths)]
     argv = [
@@ -221,13 +221,13 @@ def test_resumable_partial_leaves_error_and_exits_nonzero(top_ppcc):
     post = _post()
     assert post.status == SocialPost.STATUS_ERROR
     done = {d["idx"] for d in post.metadata["published_slides"]}
-    assert done == {0, 1, 2, 4, 5}  # the gap (idx 3) is not recorded
-    assert len(post.metadata["story_ids"]) == 5
+    assert done == {0, 1, 2, 4, 5, 6}  # the gap (idx 3) is not recorded
+    assert len(post.metadata["story_ids"]) == 6
 
 
 def test_resumable_reentry_backfills_only_the_gap(top_ppcc):
     # Run 1: idx 3 fails. Run 2: everything works → only idx 3 retried,
-    # the other 5 skipped (no duplicate publish), set completes.
+    # the other 6 skipped (no duplicate publish), set completes.
     _out, err = _run_story(_StoryUpload(fail_names={"story_3.jpg"}))
     assert err is not None and _post().status == SocialPost.STATUS_ERROR
 
@@ -239,12 +239,12 @@ def test_resumable_reentry_backfills_only_the_gap(top_ppcc):
     # Only the missing slide was re-uploaded.
     assert fake2.calls == ["https://x/story_3.jpg"]
     story_ids = post.metadata["story_ids"]
-    assert len(story_ids) == 6
-    assert len(set(story_ids)) == 6  # no duplicate publishes
-    # The 5 originals kept their run-1 ids; only idx 3 got a fresh one.
+    assert len(story_ids) == 7
+    assert len(set(story_ids)) == 7  # no duplicate publishes
+    # The 6 originals kept their run-1 ids; only idx 3 got a fresh one.
     assert story_ids[3] == "pub-cid-b-1"
     assert story_ids[0] == "pub-cid-a-1"
-    assert {d["idx"] for d in post.metadata["published_slides"]} == set(range(6))
+    assert {d["idx"] for d in post.metadata["published_slides"]} == set(range(7))
 
 
 def test_resumable_full_success_marks_publicat(top_ppcc):
@@ -253,8 +253,8 @@ def test_resumable_full_success_marks_publicat(top_ppcc):
     assert err is None
     post = _post()
     assert post.status == SocialPost.STATUS_PUBLICAT
-    assert len(fake.calls) == 6
-    assert len(post.metadata["published_slides"]) == 6
+    assert len(fake.calls) == 7
+    assert len(post.metadata["published_slides"]) == 7
 
 
 def test_resumable_force_republishes_all_without_skipping(top_ppcc):
@@ -266,4 +266,4 @@ def test_resumable_force_republishes_all_without_skipping(top_ppcc):
     fake2 = _StoryUpload()
     _out2, err2 = _run_story(fake2, force=True)
     assert err2 is None
-    assert len(fake2.calls) == 6  # all six re-published, none skipped
+    assert len(fake2.calls) == 7  # all seven re-published, none skipped

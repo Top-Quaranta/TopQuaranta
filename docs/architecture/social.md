@@ -189,7 +189,7 @@ formats d'imatge. Partit de `social.md` el 2026-08-12 per mida
 
 ## Story sets — see `social-stories.md`
 
-The Instagram **story** renderers (PPCC 7-slide editorial set, the
+The Instagram **story** renderers (PPCC 8-slide editorial set, the
 paginated novetats story set, the territorial port) plus the standard
 publish-robustness behaviour (resumable story sets + the 9007 readiness
 retry, 2026-07-20) live in **`docs/architecture/social-stories.md`**

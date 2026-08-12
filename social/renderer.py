@@ -1153,8 +1153,11 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
 def _story_top_mosaic(
     setmana, entries: list[dict], *, territori: str = "PPCC"
 ) -> Image.Image:
-    """Slide 2 — positions 40→11 as a 5×6 cover mosaic with yellow Anton
-    number badges + Bricolage titles + Roboto artist subtitles."""
+    """Slide 2 — positions 40→21 as a 4×5 cover mosaic with yellow Anton
+    number badges + Bricolage titles + Roboto artist subtitles.
+
+    Re-tiered 2026-08-12: was the 5×6/30-item 40→11 slide; the 20→11
+    half now lives on its own pairs slide (`_story_top_pairs`)."""
     t = _ST["mosaic"]
     pal = colors.story_palette(territori)
     img = _bg_ink()
@@ -1172,7 +1175,7 @@ def _story_top_mosaic(
     f_badge = fonts.anton(bd["size"])
     f_title = fonts.bricolage_xbold(ti["size"])
     f_artist = fonts.sans_regular(ar["size"])
-    # Descending 40→11 so the mosaic ends one rank above the top-10 reveal.
+    # Descending 40→21 so the mosaic ends one rank above the pairs tier.
     items = list(reversed(entries[: t["display_cap"]]))
     for idx, e in enumerate(items):
         r, c = divmod(idx, cols)
@@ -1211,20 +1214,30 @@ def _story_top_mosaic(
 
 
 def _story_top_grid(
-    setmana, entries: list[dict], *, territori: str = "PPCC"
+    setmana,
+    entries: list[dict],
+    *,
+    territori: str = "PPCC",
+    tier: str = "grid",
+    title: str = "ENS ACOSTEM AL CIM",
+    pos_top: int = 10,
 ) -> Image.Image:
-    """Slide 3 — positions 10→4: 2-column cover grid (#10/#9, #8/#7,
-    #6/#5) then #4 centred below.
+    """Positions `pos_top`→down as centred 2-column cover pair rows.
 
-    Row heights are dynamic: each grid row reserves space for the taller
-    of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
-    never crowds the cover of the row below. The centred #4 is clamped so
-    it can't slide under the footer when several rows run tall."""
-    t = _ST["grid"]
+    Default tier ("grid") is the 10→4 slide: pairs #10/#9, #8/#7, #6/#5,
+    then #4 centred below (the centre-last item exists only when the
+    tier's `display_cap` exceeds its `max_cells`). Tier "pairs" (via
+    `_story_top_pairs`) is the 20→11 slide: 5 full pair rows, no odd
+    item. Row heights are dynamic: each grid row reserves space for the
+    taller of its two titles (1 or 2 lines, ellipsised at 2) so a
+    wrapped title never crowds the cover of the row below. The centred
+    odd item is clamped so it can't slide under the footer when several
+    rows run tall."""
+    t = _ST[tier]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana, territori=territori)
-    body_top = _section_header(img, "ENS ACOSTEM AL CIM", t["section_y"])
+    body_top = _section_header(img, title, t["section_y"])
 
     d = ImageDraw.Draw(img)
     cover = t["cover"]
@@ -1249,7 +1262,7 @@ def _story_top_grid(
         """Height of the text block under a cover for `n_lines` title."""
         return gap_above_title + n_lines * title_lh + gap_above_artist + artist_h
 
-    # Descending 10→4: grid holds #10/#9, #8/#7, #6/#5; #4 centred below.
+    # Descending countdown from `pos_top` within the slice.
     items = list(reversed(entries[: t["display_cap"]]))
     # Pre-wrap every title (≤2 lines, ellipsised) so rows can be sized.
     wrapped = [
@@ -1289,24 +1302,56 @@ def _story_top_grid(
         lines1 = wrapped[i1] if (i1 < n and i1 < max_cells) else None
         row_lines = max(len(wrapped[i0]), len(lines1) if lines1 else 1)
         _cell(
-            items[i0], wrapped[i0], col_x[0], y, items[i0].get("posicio") or (10 - i0)
+            items[i0],
+            wrapped[i0],
+            col_x[0],
+            y,
+            items[i0].get("posicio") or (pos_top - i0),
         )
         if lines1:
-            _cell(items[i1], lines1, col_x[1], y, items[i1].get("posicio") or (10 - i1))
+            _cell(
+                items[i1],
+                lines1,
+                col_x[1],
+                y,
+                items[i1].get("posicio") or (pos_top - i1),
+            )
         y += cover + _text_h(row_lines) + row_gap
-    # #4 centred below, clamped so its block never reaches the footer.
-    if n >= t["display_cap"]:
-        e = items[6]
-        needed = cover + _text_h(len(wrapped[6]))
+    # Odd centre-last item (the grid tier's #4), clamped so its block
+    # never reaches the footer. Pair-only tiers (display_cap == max_cells)
+    # skip this entirely.
+    last = t["max_cells"]
+    if t["display_cap"] > last and n >= t["display_cap"]:
+        e = items[last]
+        needed = cover + _text_h(len(wrapped[last]))
         footer_band = _ST["common"]["footer_url"]["y_from_bottom"]
         max_y = (
             STORY_H - footer_band - t["clamp_margin"] - needed
         )  # 92 band + 24 margin
         _cell(
-            e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
+            e,
+            wrapped[last],
+            (STORY_W - cover) // 2,
+            min(y, max_y),
+            e.get("posicio") or (pos_top - last),
         )
     _footer_url(img, light=pal["light"])
     return img
+
+
+def _story_top_pairs(
+    setmana, entries: list[dict], *, territori: str = "PPCC"
+) -> Image.Image:
+    """Slide 3 — positions 20→11: 5 centred pair rows (new tier,
+    2026-08-12). Same builder as the 10→4 grid, `pairs` geometry."""
+    return _story_top_grid(
+        setmana,
+        entries,
+        territori=territori,
+        tier="pairs",
+        title="CAMÍ DEL TOP 10",
+        pos_top=20,
+    )
 
 
 def _story_podi(
@@ -1704,11 +1749,11 @@ def render_stories_ppcc(
     novetats_items: list[dict] | None = None,
     hero_headline: str | None = None,
 ) -> list[Path]:
-    """Render the 7-slide editorial PPCC story set (Step 3b — structure
-    + visual redesign).
+    """Render the 8-slide editorial PPCC story set (Step 3b — structure
+    + visual redesign; re-tiered to blocks of 10 on 2026-08-12).
 
     The novetats slide is skipped when no recent releases are available,
-    so the set is 6 or 7 slides."""
+    so the set is 7 or 8 slides."""
     out: list[Path] = []
     # Drop any falsy entries so a list of empty dicts can't slip through
     # and produce a blank novetats slide.
@@ -1720,7 +1765,8 @@ def render_stories_ppcc(
         out.append(p)
 
     _emit(_story_intro_ppcc(setmana))
-    _emit(_story_top_mosaic(setmana, entries[10:40]))
+    _emit(_story_top_mosaic(setmana, entries[20:40]))
+    _emit(_story_top_pairs(setmana, entries[10:20]))
     _emit(_story_top_grid(setmana, entries[3:10]))
     _emit(_story_podi(entries[1:3], setmana))
     _emit(_story_hero(entries[0] if entries else {}, hero_headline))
@@ -1745,8 +1791,9 @@ def render_stories_territorial(
     Same grammar and inverted-toward-#1 slicing as the PPCC set, but
     recoloured per territory (`story_palette`) and degraded by omission:
     a tier slide is emitted only when its slice is non-empty, so a short
-    top (N < 40) never yields a near-blank mosaic/grid/podi. Hero (#1)
-    and outro stay brand yellow/ink. PPCC keeps `render_stories_ppcc`."""
+    top (N < 40) never yields a near-blank mosaic/pairs/grid/podi. Hero
+    (#1) and outro stay brand yellow/ink. PPCC keeps
+    `render_stories_ppcc`."""
     out: list[Path] = []
     novetats_items = [it for it in (novetats_items or []) if it]
     n = len(entries)
@@ -1755,7 +1802,7 @@ def render_stories_territorial(
         # volume collapse on a thin territory (BAL) is visible in logs.
         logger.warning(
             "territorial story has N=%d (<11) for %s setmana=%s; "
-            "mosaic/grid/podi tiers may be omitted",
+            "mosaic/pairs/grid/podi tiers may be omitted",
             n,
             territori,
             setmana,
@@ -1767,8 +1814,10 @@ def render_stories_territorial(
         out.append(p)
 
     _emit(_story_intro_ppcc(setmana, territori=territori))
+    if n > 20:
+        _emit(_story_top_mosaic(setmana, entries[20:40], territori=territori))
     if n > 10:
-        _emit(_story_top_mosaic(setmana, entries[10:40], territori=territori))
+        _emit(_story_top_pairs(setmana, entries[10:20], territori=territori))
     if n > 3:
         _emit(_story_top_grid(setmana, entries[3:10], territori=territori))
     if n > 1:

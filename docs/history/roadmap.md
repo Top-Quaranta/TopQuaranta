@@ -3,9 +3,37 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-10.
+> Last updated: 2026-08-12.
 
 ---
+
+## Sprint 2026-08-12 — Stories del top en trams de 10
+
+El mosaic 40→11 de les stories (5×6, 30 caràtules de 150 px) estava
+massa enforfoguit. Re-tiering alineat amb el feed carousel (que ja va
+per blocs de 10): el set PPCC passa de 7 a 8 slides — intro · **40→21**
+(mosaic 4×5, caràtules 175 px) · **20→11** (nova slide de 5 files de
+parelles, "CAMÍ DEL TOP 10", caràtules 176 px, reutilitza el builder
+del grid amb tier `pairs`) · 10→4 · podi · hero · [novetats] · outro.
+Territorial: degradació per omissió actualitzada (mosaic n>20, pairs
+n>10, grid n>3). `_story_tags` + `_pos_story_pairs` sincronitzats al
+mateix commit (el guard de mismatch hauria publicat el set sencer sense
+mencions). Benefici col·lateral mesurat: el mosaic antic saturava el cap
+de Meta de 20 user_tags/imatge (verificació 2026-07-15); ara cada tram
+cap dins del cap → ~+10 mencions/set. Geometria nova com a DATA a
+`story-tokens.json` (seccions `mosaic` re-tierada + `pairs` nova); test
+de desbordament worst-case (10 títols a 2 línies) per a la slide nova.
+Docs: `social-stories.md` re-escrit al set de 8. Nota de recon prèvia:
+`investigacio-stories-trams-2026-08-12.md` (untracked).
+
+Mateixa sessió, fora de repo: neteja de disc al Hetzner (90%→73%,
++6.1G: builds vells de vscode-server, revisions snap disabled, caches
+pip/npm/apt, 2 venvs morts de /root; `/root/TopQuaranta_dev` conservat
+sense venv — 1.2M de codi legacy pendent de decisió del Miquel).
+`sembrar_canals_youtube` MISSING diagnosticat com a fals positiu (cron
+nou d'ahir, primer tret 2026-08-13 02:00 UTC). Pendents amb tasca:
+retenció de `/var/topquaranta/portades` (+700 MB/mes) i glob `.jpg` del
+logrotate de renders socials.
 
 ## Sprint 2026-08-10 — Setmanari: calendari, incidències i finestra Dl–Dg
 

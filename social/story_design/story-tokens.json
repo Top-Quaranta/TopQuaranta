@@ -34,14 +34,26 @@
   },
 
   "mosaic": {
+    "_note": "Re-tiered 2026-08-12: was the 5x6/30-item 40-11 slide (cover 150); now the 4x5/20-item 40-21 slide. Same builder, bigger covers.",
     "section_y": 200,
-    "cols": 5, "gap": 18, "cover": 150,
+    "cols": 4, "gap": 22, "cover": 175,
     "grid_top_gap": 40,
-    "row_block": 78,
-    "display_cap": 30,
-    "badge":  { "size": 33, "pad_x": 15, "pad_y": 7 },
-    "title":  { "size": 20, "tracking": -0.2, "lines": 2, "lh": 21, "gap_above": 10 },
-    "artist": { "size": 17, "gap_above": 4, "mix": 0.62 }
+    "row_block": 84,
+    "display_cap": 20,
+    "badge":  { "size": 36, "pad_x": 16, "pad_y": 7 },
+    "title":  { "size": 21, "tracking": -0.2, "lines": 2, "lh": 22, "gap_above": 10 },
+    "artist": { "size": 18, "gap_above": 4, "mix": 0.62 }
+  },
+
+  "pairs": {
+    "_note": "New tier 2026-08-12: positions 20-11 as 5 centred 2-column pair rows. Rendered by the _story_top_grid builder (tier='pairs'); no centre-last odd item (display_cap == max_cells).",
+    "section_y": 200,
+    "cover": 176, "col_gap": 52, "row_gap": 12, "grid_top_gap": 20,
+    "title_lh": 28, "gap_above_title": 10, "gap_above_artist": 4, "artist_h": 26,
+    "display_cap": 10, "rows": 5, "max_cells": 10, "clamp_margin": 24,
+    "badge":  { "size": 40, "pad_x": 17, "pad_y": 8 },
+    "title":  { "size": 27, "tracking": -0.28, "lines": 2, "wrap_extra": 30 },
+    "artist": { "size": 23, "wrap_extra": 30, "mix": 0.62 }
   },
 
   "grid": {

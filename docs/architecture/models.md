@@ -55,7 +55,10 @@ cua cada passada. Omplir la URL el marca sol.
 **`instagram_rebutjat_at` (2026-08).** Es marca quan Meta refusa aquest
 compte en publicar (code 110). No podem validar handles per endavant, així
 que un rebuig en publicar és l'única evidència que un compte ha canviat.
-Editar la URL neteja la marca. Vegeu `social-etiquetatge.md`.
+En marcar-lo, `instagram_url` es **buida** (és públic: fitxa + JSON-LD
+`sameAs`) i el valor va a `instagram_rebutjat_url`, amb
+`instagram_revisat=False` perquè l'artista torne a la cua. Editar la URL
+neteja les dues marques. Vegeu `social-etiquetatge.md`.
 
 **Canal oficial (2026-08).** `youtube_canal_oficial` és el canal PROPI
 de l'artista (videoclips), segon carril de senyal i sovint el més gran.

@@ -278,6 +278,13 @@ class Artista(models.Model):
     # the ONLY evidence we ever get that an account was renamed, closed
     # or made private. Cleared when the URL is edited.
     instagram_rebutjat_at = models.DateTimeField(null=True, blank=True)
+    # The refused value, kept after `instagram_url` is emptied. Meta's own
+    # error covers two very different cases — "private profile OR invalid
+    # username" — and we can't tell them apart. A renamed account is a
+    # dead link we're right to drop (it is public: the artist page and the
+    # JSON-LD `sameAs` both carry it). A merely private one still works
+    # for humans, so the old value has to survive for staff to restore.
+    instagram_rebutjat_url = models.CharField(max_length=200, blank=True)
     # Same third state as `youtube_canal_revisat`, for the same reason:
     # without it, an artist who genuinely has no Instagram sits in the
     # staff queue forever and gets re-checked by hand every pass.

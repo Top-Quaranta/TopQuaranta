@@ -47,6 +47,11 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 ✦ = `db_index=True`.
 
+**`instagram_revisat` (2026-08).** Tercer estat de la cua de staff,
+bessó de `youtube_canal_revisat`: «revisat, no en té» és una resposta
+final. Sense ell, un artista que genuïnament no té Instagram tornava a la
+cua cada passada. Omplir la URL el marca sol.
+
 **`instagram_rebutjat_at` (2026-08).** Es marca quan Meta refusa aquest
 compte en publicar (code 110). No podem validar handles per endavant, així
 que un rebuig en publicar és l'única evidència que un compte ha canviat.

@@ -497,6 +497,7 @@ def artista_detail(request: Request, pk: int) -> Response:
             "percentatge_femeni",
             "musicbrainz_id",
             "youtube_canal_oficial",
+            "instagram_suggerit",
         ] + [f for f, _ in Artista.SOCIAL_LINK_FIELDS]
         # Whole PATCH is one transaction: a rejected approval (no Deezer)
         # or a Deezer collision must NOT leave half-written localitats /
@@ -524,6 +525,8 @@ def artista_detail(request: Request, pk: int) -> Response:
             if "instagram_url" in data:
                 artista.instagram_rebutjat_at = None
                 artista.instagram_rebutjat_url = ""
+                # Accepting (or typing) a URL consumes the suggestion.
+                artista.instagram_suggerit = ""
                 # Filling the URL IS the review, so the operator doesn't
                 # have to say so twice.
                 if (data.get("instagram_url") or "").strip():

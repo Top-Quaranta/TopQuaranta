@@ -130,6 +130,7 @@ def _artista_card(a, homset=None) -> dict:
         # official one is a human decision. Both surface so the staff page
         # can show what is already known before asking for a click.
         "instagram_revisat": a.instagram_revisat,
+        "instagram_suggerit": a.instagram_suggerit or "",
         "instagram_rebutjat_url": a.instagram_rebutjat_url or "",
         "instagram_rebutjat_at": (
             a.instagram_rebutjat_at.isoformat() if a.instagram_rebutjat_at else None

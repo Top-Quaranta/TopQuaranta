@@ -289,6 +289,13 @@ class Artista(models.Model):
     # without it, an artist who genuinely has no Instagram sits in the
     # staff queue forever and gets re-checked by hand every pass.
     instagram_revisat = models.BooleanField(default=False, db_index=True)
+    # PROVISIONAL — candidate handle found by a sweep (Viasona, the
+    # artist's own site…), surfaced in the staff queue for one-click
+    # accept. A suggestion is NOT evidence: Instagram handles can't be
+    # validated by API, so a human eyeballs the profile and decides.
+    # Cleared whenever `instagram_url` is set. Drop the field once the
+    # backlog is worked through.
+    instagram_suggerit = models.CharField(max_length=64, blank=True)
     # X (formerly Twitter). Both x.com and twitter.com URLs land here;
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)

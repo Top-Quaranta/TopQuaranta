@@ -24,6 +24,11 @@ backend; for the visual design system see
 - Node 22 is the build target. CI uses `npm ci` against
   `package-lock.json`; the server only consumes `dist/`.
 
+A `sense-instagram`, una fila pot portar un avís roig («Instagram va
+refusar @X — busca'n el compte nou»): és un artista que hi ha tornat
+perquè Meta va rebutjar el seu handle en publicar i el camp s'ha buidat.
+Sense eixe context, l'operador podria concloure «no en té».
+
 Les dues cues d'omplir dades (`sense-instagram` i `sense-youtube`)
 comparteixen forma a posta: mateixes columnes (artista, presència al top,
 cançons actives), mateix botó **«No en té»** i el mateix tercer estat al

@@ -57,6 +57,17 @@ mapping:
     doc: docs/architecture/social-collaboradors.md
   - prefix: social/
     doc: docs/architecture/social.md
+  # Newsletter split out of comptes.md (2026-08-12, docs-size Rule 3):
+  # the pipeline modules + commands resolve to the narrower doc; the
+  # subscriber model and the rest of comptes stay with the generic entry.
+  - prefix: comptes/newsletter
+    doc: docs/architecture/comptes-newsletter.md
+  - prefix: comptes/management/commands/enviar_newsletter.py
+    doc: docs/architecture/comptes-newsletter.md
+  - prefix: comptes/management/commands/generar_esborrany_newsletter.py
+    doc: docs/architecture/comptes-newsletter.md
+  - prefix: comptes/management/commands/generar_assets_newsletter.py
+    doc: docs/architecture/comptes-newsletter.md
   - prefix: comptes/
     doc: docs/architecture/comptes.md
   - prefix: music/

@@ -338,9 +338,7 @@ def test_candidates_exclude_non_public_catalogue(mock_sleep, mock_dl, portades_r
     Album.objects.create(
         artista=struct, nom="mort", deezer_id=911, imatge_url=_DZ_URL, descartat=True
     )
-    alb = Album.objects.create(
-        artista=struct, nom="viu-sense-dz", imatge_url=_DZ_URL
-    )
+    alb = Album.objects.create(artista=struct, nom="viu-sense-dz", imatge_url=_DZ_URL)
     Canco.objects.create(
         artista=struct, album=alb, nom="no-verif", deezer_id=912, verificada=False
     )
@@ -366,15 +364,21 @@ def test_netejar_prunes_stale_keeps_public_and_ranked(portades_root):
         artista=struct, nom="public", deezer_id=100, imatge_url=_DZ_URL
     )
     ranked = Album.objects.create(
-        artista=struct, nom="ranked-mort", deezer_id=200, imatge_url=_DZ_URL,
+        artista=struct,
+        nom="ranked-mort",
+        deezer_id=200,
+        imatge_url=_DZ_URL,
         descartat=True,
     )
     c = Canco.objects.create(
         artista=struct, album=ranked, nom="hit", deezer_id=300, verificada=True
     )
     TopSetmanal.objects.create(
-        canco=c, territori="PPCC", setmana=datetime.date(2026, 6, 1),
-        posicio=1, score_setmanal=9.0,
+        canco=c,
+        territori="PPCC",
+        setmana=datetime.date(2026, 6, 1),
+        posicio=1,
+        score_setmanal=9.0,
     )
     Album.objects.create(
         artista=struct, nom="mort", deezer_id=400, imatge_url=_DZ_URL, descartat=True

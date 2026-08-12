@@ -14,6 +14,8 @@ Per-user errors are logged but never abort the run; the cron has
 to keep going so a single bouncing address doesn't block the rest.
 """
 
+# Spec: docs/architecture/comptes-newsletter.md
+
 from __future__ import annotations
 
 import datetime

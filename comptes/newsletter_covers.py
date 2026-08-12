@@ -10,6 +10,8 @@ when the file is on disk, else the placeholder. Existence is a
 filesystem stat — never a network call.
 """
 
+# Spec: docs/architecture/comptes-newsletter.md
+
 from __future__ import annotations
 
 import logging

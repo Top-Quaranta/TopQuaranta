@@ -46,14 +46,15 @@
   },
 
   "pairs": {
-    "_note": "New tier 2026-08-12: positions 20-11 as 5 centred 2-column pair rows. Rendered by the _story_top_grid builder (tier='pairs'); no centre-last odd item (display_cap == max_cells).",
+    "_note": "New tier 2026-08-12: positions 20-11 as a 3+3+3+1 cover grid, #11 centred on its own last row. Rendered by the _story_top_mosaic builder (tier='pairs').",
     "section_y": 200,
-    "cover": 176, "col_gap": 52, "row_gap": 12, "grid_top_gap": 20,
-    "title_lh": 28, "gap_above_title": 10, "gap_above_artist": 4, "artist_h": 26,
-    "display_cap": 10, "rows": 5, "max_cells": 10, "clamp_margin": 24,
-    "badge":  { "size": 40, "pad_x": 17, "pad_y": 8 },
-    "title":  { "size": 27, "tracking": -0.28, "lines": 2, "wrap_extra": 30 },
-    "artist": { "size": 23, "wrap_extra": 30, "mix": 0.62 }
+    "cols": 3, "gap": 28, "cover": 240,
+    "grid_top_gap": 24,
+    "row_block": 78,
+    "display_cap": 10,
+    "badge":  { "size": 44, "pad_x": 19, "pad_y": 8 },
+    "title":  { "size": 24, "tracking": -0.24, "lines": 2, "lh": 26, "gap_above": 10 },
+    "artist": { "size": 20, "gap_above": 4, "mix": 0.62 }
   },
 
   "grid": {

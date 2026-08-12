@@ -27,10 +27,10 @@ Step 3c (section below):
    digits stay left-aligned), Bricolage titles + Roboto artist
    subtitles. (Until 2026-08-12 this was a 5×6/30-item 40→11 mosaic
    with 150 px covers — dense enough that it motivated the split.)
-3. **top 20→11** — 5 centred 2-column pair rows (180 px covers), section
-   title "CAMÍ DEL TOP 10". Rendered by the same builder as slide 4
-   (`_story_top_grid`, tier `pairs` — wrapper `_story_top_pairs`); no
-   centre-last odd item.
+3. **top 20→11** — 3+3+3+1 cover grid (240 px covers), #11 centred on
+   its own last row (mirrors slide 4's centred-#4 grammar), section
+   title "CAMÍ DEL TOP 10". Rendered by the same builder as slide 2
+   (`_story_top_mosaic`, tier `pairs` — wrapper `_story_top_pairs`).
 4. **top 10→4** — 2-column cover grid (#10/#9, #8/#7, #6/#5) with #4
    centred below (mirrors the newsletter D1a block).
 5. **podi #3-2** — two centred 300 px covers stacked, big Anton badge +

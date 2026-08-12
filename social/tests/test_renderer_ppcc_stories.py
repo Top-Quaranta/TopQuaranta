@@ -196,8 +196,9 @@ def test_grid_long_titles_do_not_reach_footer():
 
 @pytest.mark.django_db
 def test_pairs_long_titles_do_not_reach_footer():
-    """All 10 titles forced to 2 lines: the 5 dynamic pair rows must
-    still stay clear of the footer band (worst-case vertical fit)."""
+    """All 10 titles forced to 2 lines: the 3+3+3+1 grid (fixed row
+    pitch) must stay clear of the footer band (worst-case vertical
+    fit), including the centred #11 on the last row."""
     entries = []
     for i in range(10):
         e = _entries(1)[0].copy()

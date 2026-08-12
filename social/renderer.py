@@ -1151,18 +1151,29 @@ def _story_intro_ppcc(setmana, *, territori: str = "PPCC") -> Image.Image:
 
 
 def _story_top_mosaic(
-    setmana, entries: list[dict], *, territori: str = "PPCC"
+    setmana,
+    entries: list[dict],
+    *,
+    territori: str = "PPCC",
+    tier: str = "mosaic",
+    title: str = "EL TOP",
+    pos_top: int = 40,
 ) -> Image.Image:
-    """Slide 2 — positions 40→21 as a 4×5 cover mosaic with yellow Anton
-    number badges + Bricolage titles + Roboto artist subtitles.
+    """Cover-mosaic countdown slide: `pos_top`→down, `tier` geometry.
+
+    Default tier ("mosaic") is the 40→21 slide — 4×5 covers with yellow
+    Anton number badges + Bricolage titles + Roboto artist subtitles.
+    Tier "pairs" (via `_story_top_pairs`) is the 20→11 slide — 3+3+3+1.
+    A final orphan item that opens the last row is centred (the pairs
+    tier's #11; also any partial territorial slice).
 
     Re-tiered 2026-08-12: was the 5×6/30-item 40→11 slide; the 20→11
-    half now lives on its own pairs slide (`_story_top_pairs`)."""
-    t = _ST["mosaic"]
+    half now lives on its own slide."""
+    t = _ST[tier]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana, territori=territori)
-    body_top = _section_header(img, "EL TOP", t["section_y"])
+    body_top = _section_header(img, title, t["section_y"])
 
     d = ImageDraw.Draw(img)
     cols, gap = t["cols"], t["gap"]
@@ -1175,18 +1186,21 @@ def _story_top_mosaic(
     f_badge = fonts.anton(bd["size"])
     f_title = fonts.bricolage_xbold(ti["size"])
     f_artist = fonts.sans_regular(ar["size"])
-    # Descending 40→21 so the mosaic ends one rank above the pairs tier.
+    # Descending countdown from `pos_top` within the slice.
     items = list(reversed(entries[: t["display_cap"]]))
     for idx, e in enumerate(items):
         r, c = divmod(idx, cols)
         x = left + c * (cell_w + gap)
+        # Centre a final orphan that opens the last row (pairs #11).
+        if idx == len(items) - 1 and c == 0 and idx > 0:
+            x = (STORY_W - cover) // 2
         y = grid_top + r * (cell_w + row_block)  # cover + title/artist block
         _paste_cover(img, e, x, y, cover)
         _number_badge(
             img,
             x,
             y,
-            str(e.get("posicio") or (40 - idx)),
+            str(e.get("posicio") or (pos_top - idx)),
             font=f_badge,
             pad_x=bd["pad_x"],
             pad_y=bd["pad_y"],
@@ -1214,30 +1228,20 @@ def _story_top_mosaic(
 
 
 def _story_top_grid(
-    setmana,
-    entries: list[dict],
-    *,
-    territori: str = "PPCC",
-    tier: str = "grid",
-    title: str = "ENS ACOSTEM AL CIM",
-    pos_top: int = 10,
+    setmana, entries: list[dict], *, territori: str = "PPCC"
 ) -> Image.Image:
-    """Positions `pos_top`→down as centred 2-column cover pair rows.
+    """Slide 4 — positions 10→4: 2-column cover grid (#10/#9, #8/#7,
+    #6/#5) then #4 centred below.
 
-    Default tier ("grid") is the 10→4 slide: pairs #10/#9, #8/#7, #6/#5,
-    then #4 centred below (the centre-last item exists only when the
-    tier's `display_cap` exceeds its `max_cells`). Tier "pairs" (via
-    `_story_top_pairs`) is the 20→11 slide: 5 full pair rows, no odd
-    item. Row heights are dynamic: each grid row reserves space for the
-    taller of its two titles (1 or 2 lines, ellipsised at 2) so a
-    wrapped title never crowds the cover of the row below. The centred
-    odd item is clamped so it can't slide under the footer when several
-    rows run tall."""
-    t = _ST[tier]
+    Row heights are dynamic: each grid row reserves space for the taller
+    of its two titles (1 or 2 lines, ellipsised at 2) so a wrapped title
+    never crowds the cover of the row below. The centred #4 is clamped so
+    it can't slide under the footer when several rows run tall."""
+    t = _ST["grid"]
     pal = colors.story_palette(territori)
     img = _bg_ink()
     _header_row(img, setmana, territori=territori)
-    body_top = _section_header(img, title, t["section_y"])
+    body_top = _section_header(img, "ENS ACOSTEM AL CIM", t["section_y"])
 
     d = ImageDraw.Draw(img)
     cover = t["cover"]
@@ -1302,38 +1306,21 @@ def _story_top_grid(
         lines1 = wrapped[i1] if (i1 < n and i1 < max_cells) else None
         row_lines = max(len(wrapped[i0]), len(lines1) if lines1 else 1)
         _cell(
-            items[i0],
-            wrapped[i0],
-            col_x[0],
-            y,
-            items[i0].get("posicio") or (pos_top - i0),
+            items[i0], wrapped[i0], col_x[0], y, items[i0].get("posicio") or (10 - i0)
         )
         if lines1:
-            _cell(
-                items[i1],
-                lines1,
-                col_x[1],
-                y,
-                items[i1].get("posicio") or (pos_top - i1),
-            )
+            _cell(items[i1], lines1, col_x[1], y, items[i1].get("posicio") or (10 - i1))
         y += cover + _text_h(row_lines) + row_gap
-    # Odd centre-last item (the grid tier's #4), clamped so its block
-    # never reaches the footer. Pair-only tiers (display_cap == max_cells)
-    # skip this entirely.
-    last = t["max_cells"]
-    if t["display_cap"] > last and n >= t["display_cap"]:
-        e = items[last]
-        needed = cover + _text_h(len(wrapped[last]))
+    # #4 centred below, clamped so its block never reaches the footer.
+    if n >= t["display_cap"]:
+        e = items[6]
+        needed = cover + _text_h(len(wrapped[6]))
         footer_band = _ST["common"]["footer_url"]["y_from_bottom"]
         max_y = (
             STORY_H - footer_band - t["clamp_margin"] - needed
         )  # 92 band + 24 margin
         _cell(
-            e,
-            wrapped[last],
-            (STORY_W - cover) // 2,
-            min(y, max_y),
-            e.get("posicio") or (pos_top - last),
+            e, wrapped[6], (STORY_W - cover) // 2, min(y, max_y), e.get("posicio") or 4
         )
     _footer_url(img, light=pal["light"])
     return img
@@ -1342,9 +1329,11 @@ def _story_top_grid(
 def _story_top_pairs(
     setmana, entries: list[dict], *, territori: str = "PPCC"
 ) -> Image.Image:
-    """Slide 3 — positions 20→11: 5 centred pair rows (new tier,
-    2026-08-12). Same builder as the 10→4 grid, `pairs` geometry."""
-    return _story_top_grid(
+    """Slide 3 — positions 20→11 as a 3+3+3+1 cover grid, #11 centred
+    on its own last row (new tier, 2026-08-12; mirrors the 10→4 grid's
+    centred-#4 grammar). Same builder as the 40→21 mosaic, `pairs`
+    geometry."""
+    return _story_top_mosaic(
         setmana,
         entries,
         territori=territori,

@@ -12,9 +12,10 @@
 El mosaic 40→11 de les stories (5×6, 30 caràtules de 150 px) estava
 massa enforfoguit. Re-tiering alineat amb el feed carousel (que ja va
 per blocs de 10): el set PPCC passa de 7 a 8 slides — intro · **40→21**
-(mosaic 4×5, caràtules 175 px) · **20→11** (nova slide de 5 files de
-parelles, "CAMÍ DEL TOP 10", caràtules 176 px, reutilitza el builder
-del grid amb tier `pairs`) · 10→4 · podi · hero · [novetats] · outro.
+(mosaic 4×5, caràtules 175 px) · **20→11** (nova slide 3+3+3+1 amb
+l'#11 centrat, "CAMÍ DEL TOP 10", caràtules 240 px, reutilitza el
+builder del mosaic amb tier `pairs`) · 10→4 · podi · hero ·
+[novetats] · outro.
 Territorial: degradació per omissió actualitzada (mosaic n>20, pairs
 n>10, grid n>3). `_story_tags` + `_pos_story_pairs` sincronitzats al
 mateix commit (el guard de mismatch hauria publicat el set sencer sense

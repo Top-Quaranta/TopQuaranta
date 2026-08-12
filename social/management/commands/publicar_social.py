@@ -199,8 +199,12 @@ def _pos_story_mosaic(i: int, n: int) -> tuple[float, float]:
 
 
 def _pos_story_pairs(i: int, n: int) -> tuple[float, float]:
-    """Slide «top 20→11»: 5 centred 2-column pair rows."""
-    return (0.35, 0.65)[i % 2], 0.21 + (i // 2) * 0.148
+    """Slide «top 20→11»: 3+3+3+1 cover grid, #11 (last drawn) centred
+    on its own row."""
+    if i == n - 1 and i % 3 == 0 and i > 0:
+        return 0.5, 0.25 + (i // 3) * 0.187
+    r, c = divmod(i, 3)
+    return 0.19 + c * 0.286, 0.25 + r * 0.187
 
 
 def _pos_story_grid(i: int, n: int) -> tuple[float, float]:

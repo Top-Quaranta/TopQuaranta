@@ -296,6 +296,11 @@ class Artista(models.Model):
     # Cleared whenever `instagram_url` is set. Drop the field once the
     # backlog is worked through.
     instagram_suggerit = models.CharField(max_length=64, blank=True)
+    # Handles the operator dismissed with ✕. Clearing the field alone
+    # left no trace of WHAT was refused, so the next nightly run found
+    # the same handle at the same source and put it straight back —
+    # caught by the operator the morning after day one (2026-08-13).
+    instagram_suggerits_descartats = models.JSONField(default=list, blank=True)
     # X (formerly Twitter). Both x.com and twitter.com URLs land here;
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)

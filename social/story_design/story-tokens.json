@@ -92,6 +92,14 @@
     "artist":   { "size": 50, "wrap_margin": 180, "gap_above": 30 }
   },
 
+  "canco_dia": {
+    "_note": "Sonda «la cançó del dia» (2026-08-13): single-slide story, one never-topped song, one mentioned artist. Podi-derived single-entry grammar.",
+    "section_y": 200,
+    "cover": 560, "cover_y": 560,
+    "title":  { "size": 64, "tracking": -1.3, "lines": 2, "lh": 66, "gap_above": 44, "wrap_margin": 160 },
+    "artist": { "size": 40, "gap_above": 12, "wrap_margin": 160, "mix": 0.66 }
+  },
+
   "novetats": {
     "section_y": 200,
     "cover": 210,

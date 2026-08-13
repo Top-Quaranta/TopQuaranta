@@ -3,9 +3,27 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-12.
+> Last updated: 2026-08-13.
 
 ---
+
+## Sprint 2026-08-13 — Sondes «la cançó del dia» (motor)
+
+Estratègia investigada i auditada el mateix dia (nota local
+`investigacio-canco-del-dia-2026-08-13.md`): els 4 dies sense story
+(dt/dj/dv/dg), 2 sondes/dia (matí/vesprada) amb una cançó mai al top
+d'un artista amb IG mai col·laborador, per a detectar receptius i
+omplir el registre de col·laboracions (línia base actual: ~6%
+d'acceptació a cegues). Implementat el motor complet, ACTIU des del
+deploy (sense toggle dedicat, a petició del Miquel — la matriu de
+distribució ja dona l'interruptor genèric): model `SondaStoryIG` + selector
+`social/sonda.py` (escala de 3 esglaons + quota 1-de-6 no-CAT +
+round-robin de gènere + tiebreak determinista) + detector de reacció
+REACH-ONLY (mediana+3·MAD; replies està morta per a comptes UE des de
+2020-12, verificat) + slide `_story_canco_dia` + `SocialPost.slot_key`
+(discriminador intradia additiu) + runs `--franja` (crons 07:00/16:00
+UTC) + estampat de handles refusats. 15 tests nous. Taxonomia
+d'actituds de 7 estats documentada a la investigació.
 
 ## Sprint 2026-08-12 — Stories del top en trams de 10
 

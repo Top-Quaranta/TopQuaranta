@@ -204,8 +204,9 @@ def test_guard_drops_bad_mention_and_story_survives():
             return_value=None,
         ),
     ):
-        cid = cmd._create_story_with_guard("https://x/s1.jpg", tags)
+        cid, dropped = cmd._create_story_with_guard("https://x/s1.jpg", tags)
     assert cid == "story-cid"
+    assert dropped == ["dolent"]
     assert fake.calls[-1] == ["bo"]  # retried without the offender
 
 
@@ -227,8 +228,9 @@ def test_guard_last_resort_publishes_untagged():
             return_value=None,
         ),
     ):
-        cid = cmd._create_story_with_guard("https://x/s1.jpg", tags)
+        cid, dropped = cmd._create_story_with_guard("https://x/s1.jpg", tags)
     assert cid == "story-cid"
+    assert sorted(dropped) == ["a", "b"]
     assert fake.calls[-1] == []  # empty set = untagged story
 
 

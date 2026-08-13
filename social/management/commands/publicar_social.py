@@ -230,6 +230,11 @@ def _pos_story_novetats(i: int, n: int) -> tuple[float, float]:
     return 0.5, 0.40 + i * 0.17
 
 
+def _pos_canco_dia(i: int, n: int) -> tuple[float, float]:
+    """Sonda «cançó del dia»: one centred 500px cover at y≈500."""
+    return 0.5, 0.39
+
+
 def _pos_moviment(i: int, n: int) -> tuple[float, float]:
     """Feed «moviment»: single artwork cover, one protagonist entry.
     Anchor low-centre, near the credit line where the artist reads —
@@ -259,6 +264,15 @@ class Command(BaseCommand):
             type=str,
             default=None,
             help="Restrict to a single platform " "(instagram_feed | instagram_story).",
+        )
+        parser.add_argument(
+            "--franja",
+            type=str,
+            default="",
+            choices=["", "mati", "vesprada"],
+            help="Intra-day run selector: '' (default) = the main daily "
+            "run (weekly slots); mati/vesprada = only the matching "
+            "cançó-del-dia sonda slots.",
         )
         parser.add_argument(
             "--dry-run",
@@ -298,11 +312,24 @@ class Command(BaseCommand):
             )
             _time.sleep(delay_min * 60)
 
+        # Franja partition: the main run ("") never touches franja slots
+        # and vice versa, so the pre-existing 11:30 cron is byte-identical.
+        franja = opts.get("franja") or ""
         slots = calendari.slots_for(target)
+        slots = [(s, t) for (s, t) in slots if getattr(s, "franja", "") == franja]
         if opts.get("tipus"):
             slots = [(s, t) for (s, t) in slots if s.tipus == opts["tipus"]]
         if opts.get("platform"):
             slots = [(s, t) for (s, t) in slots if s.platform == opts["platform"]]
+        # Franja runs also evaluate any sonda past its metrics window
+        # (DB-only, cheap, idempotent) — piggybacked here to avoid a
+        # dedicated cron.
+        if franja and not opts.get("dry_run"):
+            from social import sonda as _sonda
+
+            n_aval = _sonda.avaluar_sondes_pendents(target)
+            if n_aval:
+                self.stdout.write(f"Sondes avaluades: {n_aval}")
         if not slots:
             self.stdout.write(f"Cap slot per a {target} (tipus/platform).")
             return
@@ -383,11 +410,18 @@ class Command(BaseCommand):
             self._record_omes(slot, territori, setmana, motiu="matriu desactivada")
             return
 
+        # Weekly types keep slot_key="" (idempotence key unchanged);
+        # sondes get one row per (data, franja).
+        target_date = opts.get("_target_date") or datetime.date.today()
+        slot_key = ""
+        if slot.tipus == SocialPost.TIPUS_CANCO_DIA:
+            slot_key = f"{target_date}-{slot.franja}"
         post, _ = SocialPost.objects.get_or_create(
             platform=slot.platform,
             tipus=slot.tipus,
             territori=territori or "",
             setmana=setmana,
+            slot_key=slot_key,
             defaults={
                 "status": SocialPost.STATUS_PENDENT,
                 "scheduled_at": timezone.now(),
@@ -398,6 +432,9 @@ class Command(BaseCommand):
             return
 
         # Build the payload.
+        if slot.tipus == SocialPost.TIPUS_CANCO_DIA:
+            self._publica_sonda(post, slot, target_date, setmana, opts)
+            return
         if slot.tipus in (SocialPost.TIPUS_TOP_PPCC, SocialPost.TIPUS_TOP_TERRITORIAL):
             data = payload.build_top(territori, setmana)
         elif slot.tipus == SocialPost.TIPUS_MOVIMENT:
@@ -803,16 +840,20 @@ class Command(BaseCommand):
         out.append([])  # outro
         return out
 
-    def _create_story_with_guard(self, image_url: str, tags: list[dict]) -> str:
+    def _create_story_with_guard(
+        self, image_url: str, tags: list[dict]
+    ) -> tuple[str, list[str]]:
         """Create (and FINISH) one STORIES container, applying the same
         non-blocking substitution guard as the feed collaborators
         (§5.3 semantics, reused via `max_slots`): a username Meta
         rejects is dropped and the story retried, last resort created
-        with no mentions. Only a non-tag failure propagates."""
+        with no mentions. Only a non-tag failure propagates. Returns
+        `(container_id, dropped_usernames)` — the sonda flow stamps
+        the dropped handles as rebutjats."""
         if not tags:
             container = instagram_client.upload_story(image_url)
             instagram_client.wait_until_finished(container)
-            return container
+            return container, []
 
         from social import collaboradors as C
 
@@ -839,7 +880,7 @@ class Command(BaseCommand):
         )
         for d in result.dropped:
             self.stdout.write(f"  · menció descartada: {d['username']} ({d['reason']})")
-        return holder["cid"]
+        return holder["cid"], [d["username"] for d in result.dropped]
 
     def _publish_story(self, post, slot, territori, setmana, data, cfg, opts):
         if territori == "PPCC":
@@ -932,7 +973,9 @@ class Command(BaseCommand):
             try:
                 # Same async-readiness gate as the feed flow above,
                 # inside the guard (a tag can also fail at FINISH).
-                container = self._create_story_with_guard(url, tags_per_story[idx])
+                container, _dropped = self._create_story_with_guard(
+                    url, tags_per_story[idx]
+                )
                 sid = instagram_client.publish_container(container)
                 story_ids.append(sid)
                 published_slides.append({"idx": idx, "name": p.name, "sid": sid})
@@ -1026,6 +1069,113 @@ class Command(BaseCommand):
 
         _register_event("social_publicat", dim1=slot.platform, dim2=slot.tipus, n=1)
         self.stdout.write(f"  · {len(story_ids)} stories publicades.")
+
+    # ── sonda «la cançó del dia» (2026-08-13) ────────────────────
+
+    def _publica_sonda(self, post, slot, target_date, setmana, opts):
+        """One single-slide probe story: never-topped song, one
+        mentioned never-collaborating artist (selector: social/sonda).
+        Mirrors the slot error discipline (ERROR row + non-zero exit)."""
+        from social import sonda as S
+        from social.models import SondaStoryIG
+
+        try:
+            cand = S.tria_artista(target_date, slot.franja)
+            if cand is None:
+                self._mark(
+                    post,
+                    SocialPost.STATUS_OMES,
+                    error_msg="cap artista elegible per a la sonda",
+                )
+                self.stdout.write("  · cap artista elegible → omès")
+                return
+            canco = S.tria_canco(cand, target_date)
+            if canco is None:
+                self._mark(
+                    post,
+                    SocialPost.STATUS_OMES,
+                    error_msg=f"cap cançó elegible per a {cand.artista.nom}",
+                )
+                self.stdout.write("  · cap cançó elegible → omès")
+                return
+            a = cand.artista
+            entry = {
+                "canco_nom": canco.nom,
+                "artista_nom": a.nom,
+                "artistes_noms": [a.nom],
+                "cover_url": canco.album.imatge_url if canco.album else None,
+                "album_deezer_id": canco.album.deezer_id if canco.album else None,
+                "artistes_instagram_urls": [a.instagram_url],
+            }
+            self.stdout.write(
+                f"  · sonda: {a.nom} — «{canco.nom}» (esglaó {cand.esglao})"
+            )
+            path = renderer.render_story_canco_dia(entry, target_date, slot.franja)
+            if opts["dry_run"]:
+                self._mark(
+                    post,
+                    SocialPost.STATUS_PENDENT,
+                    metadata={"dry_run": True, "sonda": a.pk, "canco": canco.pk},
+                )
+                self.stdout.write("  · --dry-run, no es publica.")
+                return
+            tags = _tags_for_entries([entry], _pos_canco_dia)
+            url = _public_url_for(path)
+            container, dropped = self._create_story_with_guard(url, tags)
+            sid = instagram_client.publish_container(container)
+            if dropped:
+                # A refused mention on a 1-artist probe = dead handle:
+                # empty the URL and return the artist to the staff queue
+                # (same bookkeeping as the feed flow). The probe itself
+                # published untagged — still counts as sent.
+                _marca_handles_rebutjats(dropped)
+            SondaStoryIG.objects.update_or_create(
+                data=target_date,
+                franja=slot.franja,
+                defaults={
+                    "artista": a,
+                    "canco": canco,
+                    "socialpost": post,
+                    "story_media_id": sid,
+                },
+            )
+            self._mark(
+                post,
+                SocialPost.STATUS_PUBLICAT,
+                instagram_media_id=sid,
+                metadata={
+                    "sonda_artista": a.pk,
+                    "sonda_canco": canco.pk,
+                    "esglao": cand.esglao,
+                    "mencions_descartades": dropped,
+                },
+                published_at=timezone.now(),
+            )
+            log_staff_action(
+                None,
+                "social_publicat",
+                target=post,
+                platform=slot.platform,
+                tipus=slot.tipus,
+                artista=a.nom,
+            )
+            from analytics.events import register as _register_event
+
+            _register_event("social_publicat", dim1=slot.platform, dim2=slot.tipus, n=1)
+            logger.info(
+                "sonda %s %s %s media=%s tags=[%s]",
+                target_date,
+                slot.franja,
+                a.nom,
+                sid,
+                ",".join(t["username"] for t in tags),
+            )
+            self.stdout.write("  · sonda publicada.")
+        except Exception as exc:  # noqa: BLE001 — slot discipline
+            logger.exception("sonda failed for %s %s", target_date, slot.franja)
+            self._mark(post, SocialPost.STATUS_ERROR, error_msg=str(exc)[:500])
+            self._n_errors += 1
+            self.stdout.write(f"  · ERROR: {type(exc).__name__}: {exc}")
 
     # ── PPCC story-set extras (Step 3b) ──────────────────────────
 

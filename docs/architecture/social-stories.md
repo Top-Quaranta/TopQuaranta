@@ -173,3 +173,40 @@ were retired once prod ran on them):
   semantics), so it never half-skips. No dedicated status and no data
   migration: `STATUS_ERROR` is the natural resume marker.
 
+
+## Sondes «la cançó del dia» (2026-08-13)
+
+Story d'una sola slide, els 4 dies sense story del calendari
+(dt/dj/dv/dg) × 2 franges (matí 07:00 UTC, vesprada 16:00 UTC), amb
+UNA cançó mai apareguda a cap `TopSetmanal` i UN artista mencionat
+(`user_tags`) que mai ha col·laborat amb nosaltres. Objectiu: sondejar
+receptivitat per a omplir el registre de col·laboradors — vegeu la
+investigació completa (nota local `investigacio-canco-del-dia-…`).
+
+- **Selector** (`social/sonda.py`): elegibilitat + escala de 3 esglaons
+  (mai contactat → re-sonda 12 mesos → invitació caducada 90 dies) +
+  diversitat (quota suau 1-de-6 no-CAT, round-robin de `genere`,
+  prioritat a llançament <90d, tiebreak md5 determinista per
+  data+franja). La cançó: la més escoltada del catàleg viu mai-top
+  (últim `SenyalDiari.lastfm_playcount`; als esglaons 2-3, la nova des
+  de l'últim contacte primer). Mai es repeteix artista ni cançó.
+- **Registre** `SondaStoryIG`: una fila per (data, franja) amb artista,
+  cançó, socialpost i l'avaluació.
+- **Detector de reacció REACH-ONLY** (`avaluar_sondes_pendents`,
+  piggyback als runs de franja): a T+2d llig el reach de
+  `MetricaSocialPost` i marca `reaccio_auto=True` si reach > mediana +
+  3·MAD de les últimes 30 sondes (mínim 5 prèvies; mai flag en fred).
+  Per què reach-only: `replies` retorna sempre 0 per a comptes UE
+  (regulació Meta des de 2020-12) i shares/impressions no existeixen
+  per a stories. Els receptius queden exclosos de futures sondes i
+  formen la cua prioritària d'invitació feed.
+- **Idempotència**: `SocialPost.slot_key = "<data>-<franja>"` (camp nou
+  al unique_together; els tipus setmanals mantenen `""` i la seua clau
+  intacta). Slide: `_story_canco_dia` (gramàtica podi d'una entrada,
+  kicker «FORA DEL TOP», paleta PPCC), tokens `canco_dia`.
+- **Gates**: només els genèrics — kill-switch d'Instagram + matriu de
+  distribució (fail-open; permet apagar el tipus si mai cal). Sense
+  toggle dedicat: la funció és activa des del deploy (decisió
+  2026-08-13). Una menció refusada per Meta estampa el handle com a
+  rebutjat (mateix bookkeeping que el feed) i la sonda es publica
+  sense menció.

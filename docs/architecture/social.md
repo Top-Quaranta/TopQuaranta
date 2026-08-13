@@ -189,6 +189,10 @@ formats d'imatge. Partit de `social.md` el 2026-08-12 per mida
 
 ## Story sets — see `social-stories.md`
 
+The `canco_dia` sonda tipus (2026-08-13; 2/day on story-less days,
+active from deploy, `--franja` runs) is documented in
+`social-stories.md` §Sondes; its `SocialPost.slot_key` discriminator
+extends the weekly idempotence key without touching existing rows.
 The Instagram **story** renderers (PPCC 8-slide editorial set, the
 paginated novetats story set, the territorial port) plus the standard
 publish-robustness behaviour (resumable story sets + the 9007 readiness

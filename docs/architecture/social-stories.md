@@ -204,7 +204,9 @@ investigació completa (nota local `investigacio-canco-del-dia-…`).
   al unique_together; els tipus setmanals mantenen `""` i la seua clau
   intacta). Slide: `_story_canco_dia` (gramàtica podi d'una entrada,
   kicker «FORA DEL TOP», paleta PPCC), tokens `canco_dia`.
-- **Gates**: `ConfiguracioGlobal.canco_dia_actiu` (capa dorment, patró
-  moviment) + matriu de distribució. Una menció refusada per Meta
-  estampa el handle com a rebutjat (mateix bookkeeping que el feed) i
-  la sonda es publica sense menció.
+- **Gates**: només els genèrics — kill-switch d'Instagram + matriu de
+  distribució (fail-open; permet apagar el tipus si mai cal). Sense
+  toggle dedicat: la funció és activa des del deploy (decisió
+  2026-08-13). Una menció refusada per Meta estampa el handle com a
+  rebutjat (mateix bookkeeping que el feed) i la sonda es publica
+  sense menció.

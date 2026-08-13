@@ -118,9 +118,10 @@ CALENDARI: list[CalendarSlot] = [
         "PPCC",
     ),
     # Sondes «la cançó del dia» (2026-08-13): the 4 story-less days
-    # (dt/dj/dv/dg), twice a day. GATED by `canco_dia_actiu` (same
-    # dormant-layer semantics as moviment: flag off = no row, no
-    # attempt). Only the matching `--franja` cron run processes them.
+    # (dt/dj/dv/dg), twice a day. ACTIVE from deploy — no dedicated
+    # toggle (decision 2026-08-13: the distribution matrix already
+    # provides a generic per-tipus off-switch if ever needed). Only the
+    # matching `--franja` cron run processes them.
     # See docs/architecture/social-stories.md §Sondes.
     *(
         CalendarSlot(

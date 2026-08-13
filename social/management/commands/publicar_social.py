@@ -397,13 +397,6 @@ class Command(BaseCommand):
             self.stdout.write("  · moviment desactivat (dorment) → cap fila")
             return
 
-        # Same dormant-layer gate for the cançó-del-dia sondes.
-        if slot.tipus == SocialPost.TIPUS_CANCO_DIA and not getattr(
-            cfg, "canco_dia_actiu", False
-        ):
-            self.stdout.write("  · canco_dia desactivat (dorment) → cap fila")
-            return
-
         # Distribution-matrix gate (the per-(canal × tipus) toggle, on top
         # of the master + per-channel switches checked at command entry).
         # The legacy Instagram-only "phase" rollout gate was removed

@@ -14,8 +14,9 @@ Estratègia investigada i auditada el mateix dia (nota local
 (dt/dj/dv/dg), 2 sondes/dia (matí/vesprada) amb una cançó mai al top
 d'un artista amb IG mai col·laborador, per a detectar receptius i
 omplir el registre de col·laboracions (línia base actual: ~6%
-d'acceptació a cegues). Implementat el motor complet, DORMENT per
-defecte (`canco_dia_actiu=False`): model `SondaStoryIG` + selector
+d'acceptació a cegues). Implementat el motor complet, ACTIU des del
+deploy (sense toggle dedicat, a petició del Miquel — la matriu de
+distribució ja dona l'interruptor genèric): model `SondaStoryIG` + selector
 `social/sonda.py` (escala de 3 esglaons + quota 1-de-6 no-CAT +
 round-robin de gènere + tiebreak determinista) + detector de reacció
 REACH-ONLY (mediana+3·MAD; replies està morta per a comptes UE des de

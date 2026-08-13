@@ -397,7 +397,6 @@ def _run(franja="mati", data="2026-08-18", force=False):
 def sonda_activa(db):
     cfg = ConfiguracioGlobal.load()
     cfg.instagram_actiu = True
-    cfg.canco_dia_actiu = True
     cfg.save()
     a = _artista("elegida")
     _canco(a, "la-canco")
@@ -436,16 +435,6 @@ def test_franges_del_mateix_dia_no_col·lisionen(sonda_activa):
 
 
 @pytest.mark.django_db
-def test_toggle_dorment_cap_fila(sonda_activa):
-    cfg = ConfiguracioGlobal.load()
-    cfg.canco_dia_actiu = False
-    cfg.save()
-    out = _run()
-    assert "dorment" in out
-    assert not SocialPost.objects.filter(tipus="canco_dia").exists()
-
-
-@pytest.mark.django_db
 def test_run_principal_no_toca_sondes(sonda_activa):
     """El run sense franja (dimarts = nous_albums) mai processa
     slots de sonda."""
@@ -457,7 +446,6 @@ def test_run_principal_no_toca_sondes(sonda_activa):
 def test_sense_candidats_omes(db):
     cfg = ConfiguracioGlobal.load()
     cfg.instagram_actiu = True
-    cfg.canco_dia_actiu = True
     cfg.save()
     out = _run()
     assert "cap artista elegible" in out

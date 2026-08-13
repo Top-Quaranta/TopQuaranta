@@ -272,3 +272,52 @@ def test_ties_break_by_newest_song(staff_client):
     )
     noms = _noms(res)
     assert noms.index("Acabat de Traure") < noms.index("Veterania")
+
+
+@pytest.mark.django_db
+def test_a_dismissed_suggestion_is_remembered(staff_client):
+    """Clearing the field alone was NOT enough: the nightly seeder found
+    the same handle at the same source and put it straight back — caught
+    the morning after day one."""
+    a = _amb_canco_viva(
+        Artista.objects.create(
+            nom="Repetit",
+            lastfm_nom="Repetit",
+            aprovat=True,
+            instagram_suggerit="compte_dolent",
+        )
+    )
+
+    staff_client.patch(
+        f"/api/v1/staff/artistes/{a.pk}/",
+        {"instagram_suggerit": ""},
+        format="json",
+    )
+
+    a.refresh_from_db()
+    assert a.instagram_suggerit == ""
+    assert a.instagram_suggerits_descartats == ["compte_dolent"]
+
+
+@pytest.mark.django_db
+def test_accepting_is_not_dismissing(staff_client):
+    """The accept path clears the suggestion too — but an accepted handle
+    must not land on the refused list."""
+    a = _amb_canco_viva(
+        Artista.objects.create(
+            nom="Acceptat",
+            lastfm_nom="Acceptat",
+            aprovat=True,
+            instagram_suggerit="compte_bo",
+        )
+    )
+
+    staff_client.patch(
+        f"/api/v1/staff/artistes/{a.pk}/",
+        {"instagram_url": "https://www.instagram.com/compte_bo/"},
+        format="json",
+    )
+
+    a.refresh_from_db()
+    assert a.instagram_suggerit == ""
+    assert a.instagram_suggerits_descartats == []

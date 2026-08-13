@@ -16,7 +16,10 @@ Sources, in order of trust, first hit wins:
 
 Suggestions only — this command never writes `instagram_url`. Artists
 with a suggestion already, a URL, or `instagram_revisat=True` are left
-alone, so a dismissed candidate (✕ in the queue) is not re-suggested.
+alone. Dismissed candidates live in `instagram_suggerits_descartats`
+and are never proposed again — clearing the field alone was NOT enough
+(caught 2026-08-13: the nightly run re-found the same handles at the
+same sources and put them straight back).
 
     python manage.py suggerir_instagram [--limit N] [--dry-run]
 
@@ -92,18 +95,23 @@ class Command(BaseCommand):
 
         sembrats = 0
         for a in pendents:
+            descartats = {h.lower() for h in (a.instagram_suggerits_descartats or [])}
             handle = None
             font = ""
             for url in (a.web_url, a.bandcamp_url):
                 if not url:
                     continue
-                trobats = _handles_de(url)
+                trobats = [h for h in _handles_de(url) if h not in descartats]
                 if trobats:
                     handle, font = trobats[0], "el seu web"
                     break
                 time.sleep(0.3)
             if handle is None:
-                trobats = _handles_de(f"https://www.viasona.cat/grup/{_slug(a.nom)}")
+                trobats = [
+                    h
+                    for h in _handles_de(f"https://www.viasona.cat/grup/{_slug(a.nom)}")
+                    if h not in descartats
+                ]
                 if trobats:
                     handle, font = trobats[0], "viasona (agregador)"
                 time.sleep(0.3)

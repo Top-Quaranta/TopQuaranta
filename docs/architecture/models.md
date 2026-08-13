@@ -52,6 +52,11 @@ bessó de `youtube_canal_revisat`: «revisat, no en té» és una resposta
 final. Sense ell, un artista que genuïnament no té Instagram tornava a la
 cua cada passada. Omplir la URL el marca sol.
 
+**`instagram_suggerits_descartats` (2026-08).** Handles descartats amb
+✕ a la cua. Buidar el suggeriment no bastava: el sembrador nocturn tornava
+a trobar el mateix handle a la mateixa font i el tornava a posar (caçat
+l'endemà del primer dia). El sembrador no proposa mai res d'aquesta llista.
+
 **`instagram_suggerit` (2026-08, PROVISIONAL).** Candidat trobat pels
 escombratges (Viasona, web propi). No és evidència — els handles d'IG no
 es poden validar per API — així que la cua el mostra amb enllaç perquè un

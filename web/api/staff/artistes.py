@@ -556,6 +556,20 @@ def artista_detail(request: Request, pk: int) -> Response:
             if "genere_locked" in data:
                 artista.genere_locked = bool(data["genere_locked"])
             old_mbid = artista.musicbrainz_id
+            # Clearing a non-empty suggestion IS the dismissal — record it
+            # so the seeder never proposes that handle again. MUST run
+            # BEFORE the simple_fields loop: the loop overwrites the field,
+            # and reading the old value afterwards reads "". The accept
+            # path (below, via instagram_url) clears WITHOUT recording: an
+            # accepted handle is not a refused one.
+            if "instagram_suggerit" in data:
+                _nou = (data.get("instagram_suggerit") or "").strip()
+                _vell = artista.instagram_suggerit
+                if _vell and not _nou:
+                    _desc = list(artista.instagram_suggerits_descartats or [])
+                    if _vell.lower() not in {d.lower() for d in _desc}:
+                        _desc.append(_vell)
+                    artista.instagram_suggerits_descartats = _desc
             for f in simple_fields:
                 if f in data:
                     setattr(artista, f, (data.get(f) or "").strip())

@@ -96,7 +96,10 @@ de «no en té». |
 | GET | `/staff/artistes/search/?q=` | Typeahead for pickers. Returns up to 10 results. |
 | POST | `/staff/artistes/crear/` | Body: `nom`, `lastfm_nom?`, `deezer_id?`. |
 | GET/PATCH | `/staff/artistes/<pk>/` | Detail + replace-semantics PATCH over `nom`, `lastfm_nom`, `genere`, `percentatge_femeni`, `aprovat`, social URLs, `localitats[]`, `deezer_ids[]`, `youtube_canal_oficial` + `youtube_canal_revisat`,
-`instagram_suggerit` (provisional; posar `instagram_url` el neteja). **One transaction (2026-06):** the `aprovat=True` flip is deferred until after the localitat + Deezer writes, then gated (rejects 400 without ≥1 Deezer or localitat). A `deezer_ids[]` entry already owned by another artist now returns **409** with `owner_pk` (was a silent no-op); the rollback leaves nothing half-written. **Homonym marker (2026-06-11):** GET also returns `homonims[]` — other artistes with the same `nom_normalitzat` (name modulo accents + punctuation), each with `{pk, nom, slug, aprovat, localitats, deezer_ids, n_cancons_verificades}`. The edit page shows an amber warning so reviewers are careful before approving / assigning songs (the Crim case: same name, different bands). |
+`instagram_suggerit` (provisional; posar `instagram_url` el neteja).
+Descartar el suggeriment (PATCH amb valor buit) mou el handle a
+`instagram_suggerits_descartats`, la llista de vetats que el sembrador
+nocturn no torna a proposar; acceptar NO veta. **One transaction (2026-06):** the `aprovat=True` flip is deferred until after the localitat + Deezer writes, then gated (rejects 400 without ≥1 Deezer or localitat). A `deezer_ids[]` entry already owned by another artist now returns **409** with `owner_pk` (was a silent no-op); the rollback leaves nothing half-written. **Homonym marker (2026-06-11):** GET also returns `homonims[]` — other artistes with the same `nom_normalitzat` (name modulo accents + punctuation), each with `{pk, nom, slug, aprovat, localitats, deezer_ids, n_cancons_verificades}`. The edit page shows an amber warning so reviewers are careful before approving / assigning songs (the Crim case: same name, different bands). |
 
 ### Cançons
 | Method | Path | Purpose |

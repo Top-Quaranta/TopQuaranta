@@ -229,7 +229,11 @@ als artistes que entren a la cua de staff (aprovats, amb cançó viva, sense
 URL ni suggeriment), busca un candidat al seu web propi i, si no, a
 Viasona — que NO és font curada, per això només pot escriure
 `instagram_suggerit` (mai `instagram_url`): un humà mira el perfil abans
-d'acceptar. No re-suggereix candidats descartats. Sense quota de YouTube.
+d'acceptar. Els candidats descartats amb ✕ queden vetats a
+`instagram_suggerits_descartats` i no es proposen mai més — buidar el camp
+no bastava, perquè la font torna a publicar el mateix handle l'endemà
+(caçat 2026-08-13). El vet és per handle, no per artista: una font
+diferent pot proposar-ne un altre. Sense quota de YouTube.
 
 Dins del canal oficial els títols són text lliure («AUXILI - TARRINETES
 AL SOL ft DJ Trapella»), així que l'aparellament és per prefix +

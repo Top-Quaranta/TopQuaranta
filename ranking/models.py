@@ -330,6 +330,15 @@ class ConfiguracioGlobal(models.Model):
             "intenta res per al slot de dijous."
         ),
     )
+    canco_dia_actiu = models.BooleanField(
+        default=False,
+        help_text=(
+            "Sondes «la cançó del dia» (stories dt/dj/dv/dg, matí i "
+            "vesprada, artistes mai col·laboradors). Apagat = capa "
+            "dormida: `publicar_social` no crea cap fila ni intenta res "
+            "per als slots de sonda."
+        ),
+    )
     moviment_pujada_minima = models.PositiveSmallIntegerField(
         default=5,
         help_text=(

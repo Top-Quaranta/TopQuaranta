@@ -42,6 +42,11 @@ class CalendarSlot:
     platform: str
     tipus: str
     territori_pick: str  # "PPCC" | "ROTATORI_A" | "ROTATORI_B" | ""
+    # Intra-day franja (2026-08-13). "" = the main daily run (11:30 UTC)
+    # — every pre-existing slot. "mati"/"vesprada" slots are processed
+    # ONLY by the matching `publicar_social --franja` cron run, so the
+    # main run stays byte-identical.
+    franja: str = ""
 
 
 # A "ROTATORI_A" slot uses the (week_no % 3) territori; "ROTATORI_B"
@@ -111,6 +116,22 @@ CALENDARI: list[CalendarSlot] = [
         SocialPost.PLATFORM_INSTAGRAM_FEED,
         SocialPost.TIPUS_MOVIMENT,
         "PPCC",
+    ),
+    # Sondes «la cançó del dia» (2026-08-13): the 4 story-less days
+    # (dt/dj/dv/dg), twice a day. GATED by `canco_dia_actiu` (same
+    # dormant-layer semantics as moviment: flag off = no row, no
+    # attempt). Only the matching `--franja` cron run processes them.
+    # See docs/architecture/social-stories.md §Sondes.
+    *(
+        CalendarSlot(
+            wd,
+            SocialPost.PLATFORM_INSTAGRAM_STORY,
+            SocialPost.TIPUS_CANCO_DIA,
+            "",
+            franja=fr,
+        )
+        for wd in (1, 3, 4, 6)  # dt, dj, dv, dg
+        for fr in ("mati", "vesprada")
     ),
 ]
 

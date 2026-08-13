@@ -1421,6 +1421,64 @@ def _story_podi(
     return img
 
 
+def _story_canco_dia(entry: dict, setmana) -> Image.Image:
+    """Sonda «la cançó del dia» (2026-08-13): single-slide story with
+    ONE never-topped song and one mentioned artist. Podi-derived
+    grammar: ink field, «FORA DEL TOP» kicker + Anton title, big
+    centred cover, Bricolage title + Roboto artist, footer URL. Brand
+    PPCC palette (no territory tint — the sonda is not a top)."""
+    t = _ST["canco_dia"]
+    pal = colors.story_palette("PPCC")
+    img = _bg_ink()
+    _header_row(img, setmana)
+    _section_header(
+        img,
+        "LA CANÇÓ DEL DIA",
+        t["section_y"],
+        kicker="FORA DEL TOP",
+        kicker_color=pal["light"],
+    )
+    d = ImageDraw.Draw(img)
+    cover = t["cover"]
+    ti, ar = t["title"], t["artist"]
+    x = (STORY_W - cover) // 2
+    y = t["cover_y"]
+    _paste_cover(img, entry, x, y, cover)
+    f_title = fonts.bricolage_xbold(ti["size"])
+    f_artist = fonts.sans_regular(ar["size"])
+    ty = y + cover + ti["gap_above"]
+    for line in _wrap_tracked(
+        d,
+        entry.get("canco_nom") or "—",
+        f_title,
+        STORY_W - ti["wrap_margin"],
+        ti["tracking"],
+        ti["lines"],
+    ):
+        _draw_tracked(
+            d, 0, ty, line, f_title, colors.COLOR_WHITE,
+            tracking=ti["tracking"], center_w=STORY_W,
+        )
+        ty += ti["lh"]
+    names = entry.get("artistes_noms") or [entry.get("artista_nom") or "—"]
+    subtle = colors.mix(colors.COLOR_BG, colors.COLOR_WHITE, ar["mix"])
+    artist = _truncate(d, ", ".join(names), f_artist, STORY_W - ar["wrap_margin"])
+    _draw_tracked(
+        d, 0, ty + ar["gap_above"], artist, f_artist, subtle, center_w=STORY_W
+    )
+    _footer_url(img, light=pal["light"])
+    return img
+
+
+def render_story_canco_dia(entry: dict, data, franja: str) -> Path:
+    """Render the single sonda slide; `data`+`franja` key the filename
+    so matí/vesprada of the same day never collide."""
+    img = _story_canco_dia(entry, data)
+    p = _path("canco_dia", franja, data, 0, story=True)
+    img.save(p, "JPEG", quality=90)
+    return p
+
+
 def _story_hero(
     entry: dict, headline: str | None, *, territori: str = "PPCC"
 ) -> Image.Image:

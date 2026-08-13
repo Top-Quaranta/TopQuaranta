@@ -56,7 +56,9 @@ the story tokens were lifted **verbatim** from the running code, so the values
 match exactly, ugly inconsistencies included (e.g. the podi line-height 62 vs its
 entry-height title component 64). Colours stay in code (palette-driven via
 `colors.*` / `story_palette`); only the slide-local mix ratios are tokenised.
-Re-tiering 2026-08-12: `_story_top_mosaic` is parametrised by tier/title/
+Sonda slide 2026-08-13: `_story_canco_dia` + `render_story_canco_dia`
+(single-entry podi grammar, tokens `canco_dia`; filename keyed by
+data+franja). Re-tiering 2026-08-12: `_story_top_mosaic` is parametrised by tier/title/
 `pos_top` (tokens `mosaic` = 40→21 at 4×5; tokens `pairs` = 20→11 at 3+3+3+1
 via the `_story_top_pairs` wrapper, with a final orphan that opens the last
 row centred). Slide composition and slices live in `social-stories.md`.

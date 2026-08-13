@@ -1456,8 +1456,14 @@ def _story_canco_dia(entry: dict, setmana) -> Image.Image:
         ti["lines"],
     ):
         _draw_tracked(
-            d, 0, ty, line, f_title, colors.COLOR_WHITE,
-            tracking=ti["tracking"], center_w=STORY_W,
+            d,
+            0,
+            ty,
+            line,
+            f_title,
+            colors.COLOR_WHITE,
+            tracking=ti["tracking"],
+            center_w=STORY_W,
         )
         ty += ti["lh"]
     names = entry.get("artistes_noms") or [entry.get("artista_nom") or "—"]

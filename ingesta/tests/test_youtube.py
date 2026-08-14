@@ -66,6 +66,26 @@ class TestQuota:
             with pytest.raises(yt.QuotaExhausted):
                 yt.find_topic_channel("X")
 
+    def test_per_metric_quota_is_still_quota(self):
+        """The 2026-08-12/13 incident: Google's per-metric limit ("Search
+        Queries per day") arrives with a NON-canonical reason. Treating it
+        as "no results" stamped 27 artists as channel-less."""
+        payload = {
+            "error": {
+                "message": "Quota exceeded for quota metric 'Search Queries' "
+                "and limit 'Search Queries per day' of service "
+                "'youtube.googleapis.com' for consumer 'project_number:1'.",
+                "errors": [{"reason": "rateLimitExceeded"}],
+            }
+        }
+        with (
+            patch("ingesta.clients.youtube.requests.get") as g,
+            patch("ingesta.clients.youtube.time.sleep"),
+        ):
+            g.return_value.json.return_value = payload
+            with pytest.raises(yt.QuotaExhausted):
+                yt.find_topic_channel("X")
+
     def test_other_errors_degrade_to_empty(self):
         payload = {"error": {"message": "boom", "errors": [{"reason": "backendError"}]}}
         with (

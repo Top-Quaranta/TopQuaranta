@@ -156,7 +156,14 @@ de pagament (ampliar-la exigeix una auditoria manual de Google):
 Per tant `descobrir_youtube` (03:00) només pot resoldre ~90 artistes al
 dia i **l'ordre importa més que la velocitat**: primer els artistes amb
 cançons sense senyal de Last.fm, després la resta de VAL/BAL, i al final
-CAT. `obtenir_senyal_youtube` (06:30) fotografia tot el catàleg per ~60
+CAT. El dia de quota de Google es reinicia a les 09:00 CEST, així que
+qualsevol one-off diürn resta directament del pressupost dels crons de
+la matinada següent. Quan la quota mor, el client alça `QuotaExhausted`
+i el descobriment aborta netament **sense estampar `youtube_checked_at`**
+— l'error de quota per mètrica («Search Queries per day») arriba amb un
+`reason` no canònic i el 2026-08-12/13 es va colar com a «cap resultat»,
+marcant 27 artistes com a «no té canal» en fals; ara es detecta també
+pel missatge. `obtenir_senyal_youtube` (06:30) fotografia tot el catàleg per ~60
 unitats i escriu `SenyalYouTube`, bessona de `SenyalDiari` — taula a
 part a posta, perquè una visualització no és un scrobble i unir-les a
 la capa d'emmagatzematge forçaria una decisió que volem mantindre

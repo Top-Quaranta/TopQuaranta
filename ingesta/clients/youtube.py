@@ -65,8 +65,19 @@ def _get(endpoint: str, **params) -> dict:
     data = r.json()
     if "error" in data:
         reasons = {e.get("reason", "") for e in data["error"].get("errors", []) or [{}]}
-        if "quotaExceeded" in reasons or "dailyLimitExceeded" in reasons:
-            raise QuotaExhausted(data["error"].get("message", "quota exceeded"))
+        message = data["error"].get("message", "")
+        # Google's per-metric limits ("Search Queries per day") come back
+        # with reasons OUTSIDE the two canonical ones. On 2026-08-12/13
+        # that mismatch turned quota death into "empty result", and
+        # discovery stamped 27 artists as "has no channel" — a silent
+        # lie that parked them out of the queue. Match the message too.
+        if (
+            "quotaExceeded" in reasons
+            or "dailyLimitExceeded" in reasons
+            or "rateLimitExceeded" in reasons
+            or "quota exceeded" in message.lower()
+        ):
+            raise QuotaExhausted(message or "quota exceeded")
         logger.warning(
             "YouTube %s failed: %s", endpoint, data["error"].get("message", "")[:200]
         )

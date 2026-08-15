@@ -100,6 +100,20 @@ _SOFT_CAP_WINDOW_WEEKS = 10
 _SOFT_CAP_TOP_N = 10
 
 
+def _setmana_en_curs(today: date) -> date:
+    """Monday of the week being computed — mirrors `calcular_top`.
+
+    Every TopSetmanal read in the algorithm must exclude it. `calcular_top`
+    saves each territori before PPCC aggregates, and PPCC re-runs each
+    source territori: without this filter that second run reads the rows
+    the first one just wrote, so a song is penalised for the very position
+    it is being awarded and the soft-cap knee shifts mid-run. The result
+    was a non-idempotent ranking whose published CAT order could invert
+    inside PPCC (2026-08-15: Bocc #1 CAT / Rosalía #1 PPCC, both CAT-only).
+    """
+    return today - timedelta(days=today.weekday())
+
+
 def _robust_weekly_from_series(series: list[tuple[date, int]]) -> float | None:
     """Step-robust weekly plays from a daily cumulative `series`.
 
@@ -249,25 +263,39 @@ def _top_for_territoris(
         lst.sort(key=lambda s: s.data)
 
     # Re-issue guard (2026-08-15): earliest release date per (artista,
-    # normalised title) across THIS pool. A single re-issued inside a
-    # later EP/album is a second Canco (own ISRC) that Last.fm answers
-    # with the same lifetime playcount as the original — the "fresh
-    # release" branch would then bank a year of plays as one week's.
-    # Bocc «Ànima D'Acer» did exactly that: 966 plays flat for 3 days,
-    # #1 CAT / #2 PPCC on zero real movement.
+    # normalised title). A single re-issued inside a later EP/album is a
+    # second Canco (own ISRC) that Last.fm answers with the same lifetime
+    # playcount as the original — the "fresh release" branch would then
+    # bank a year of plays as one week's. Bocc «Ànima D'Acer» did exactly
+    # that: 966 plays flat for 3 days, #1 CAT / #2 PPCC on zero movement.
+    #
+    # Queried over the artists' WHOLE catalogue, not just the candidate
+    # pool: the original is typically older than DIES_CADUCITAT and so
+    # absent from the pool — which is precisely why the re-issue looks
+    # new. (First cut of this guard read the pool and caught nothing.)
+    frescos = [
+        c
+        for c in cancons.values()
+        if c.data_llancament and c.data_llancament > today - timedelta(days=7)
+    ]
     primer_llancament: dict[tuple[int, str], date] = {}
-    for c in cancons.values():
-        if not c.data_llancament:
-            continue
-        k = (c.artista_id, _track_identity(c.nom))
-        if k not in primer_llancament or c.data_llancament < primer_llancament[k]:
-            primer_llancament[k] = c.data_llancament
+    if frescos:
+        for aid, nom, data in Canco.objects.filter(
+            artista_id__in={c.artista_id for c in frescos},
+            data_llancament__isnull=False,
+        ).values_list("artista_id", "nom", "data_llancament"):
+            k = (aid, _track_identity(nom))
+            if k not in primer_llancament or data < primer_llancament[k]:
+                primer_llancament[k] = data
 
     # Prior TopSetmanal entries per canço (for the past-top penalty).
     prior_positions_by_canco: dict[int, list[int]] = defaultdict(list)
     for rs_canco_id, rs_pos in TopSetmanal.objects.filter(
         canco_id__in=cancons.keys(),
         territori=territori,
+        # PAST tops only — a song must not be penalised for the position
+        # it is being given right now (see `_setmana_en_curs`).
+        setmana__lt=_setmana_en_curs(today),
         posicio__lte=40,
     ).values_list("canco_id", "posicio"):
         prior_positions_by_canco[rs_canco_id].append(rs_pos)
@@ -622,6 +650,10 @@ def _soft_cap_knee(
         TopSetmanal.objects.filter(
             territori=territori,
             setmana__gte=window_start,
+            # …and strictly BEFORE the week being computed: see
+            # `_setmana_en_curs`. Reading our own just-saved rows made the
+            # knee move under us mid-run.
+            setmana__lt=_setmana_en_curs(today),
             posicio__lte=top_n,
             weekly_plays__isnull=False,
         ).values_list("weekly_plays", flat=True)

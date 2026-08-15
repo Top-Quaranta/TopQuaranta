@@ -1,4 +1,11 @@
-"""Re-issue guard: a single re-released inside a later EP/album.
+"""Coherence of the weekly top: what it must never contradict.
+
+Three regressions from 2026-08-15, all found from one implausible entry
+(Bocc «Ànima D'Acer», #1 CAT and #2 PPCC on 966 flat plays):
+
+  · a re-issue must not bank the original's lifetime playcount,
+  · recalculating a week must give the same answer,
+  · PPCC must aggregate the territorial results, not recompute them.
 
 Lives in its own module because the older ranking test files are gated
 behind a PostgreSQL check that never passes (test settings are SQLite),
@@ -126,3 +133,43 @@ def test_recalculating_the_same_week_is_idempotent():
     assert [(r["canco_id"], r["score_setmanal"]) for r in segona] == [
         (r["canco_id"], r["score_setmanal"]) for r in primera
     ]
+
+
+@pytest.mark.django_db
+def test_ppcc_aggregates_the_results_it_is_given():
+    """PPCC aggregates, it does not compute (CLAUDE.md §6). `calcular_top`
+    hands it the territorial results it just produced, so the global top
+    re-scores exactly the numbers each territori published. Recomputing
+    here is what let CAT and PPCC disagree: the command saves each
+    territori first, and the second pass read those fresh rows.
+    """
+    from music.models import Album, Artista, Canco, Territori
+
+    ConfiguracioGlobal.objects.create(pk=1)
+    cat, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Catalunya"})
+    a = Artista.objects.create(nom="Passada", lastfm_nom="Passada", aprovat=True)
+    a.territoris.add(cat)
+    today = date.today()
+    alb = Album.objects.create(
+        artista=a, nom="A", data_llancament=today - timedelta(days=60)
+    )
+    c = Canco.objects.create(
+        artista=a,
+        album=alb,
+        nom="Cançó",
+        data_llancament=today - timedelta(days=60),
+        verificada=True,
+        activa=True,
+    )
+    # No SenyalDiari at all: recomputing CAT yields nothing, so if this
+    # canço reaches the global top it can only have come from the results
+    # we handed over.
+    passats = {"CAT": [{"canco_id": c.pk, "score_setmanal": 500.0, "posicio": 2}]}
+
+    ppcc = calcular_top_territori("PPCC", passats)
+
+    assert [r["canco_id"] for r in ppcc] == [c.pk]
+    # Position 2 in its territori → one step of the position penalty.
+    assert ppcc[0]["score_setmanal"] == pytest.approx(500.0 * 0.96)
+    # …and without the hand-over it recomputes, which finds nothing.
+    assert calcular_top_territori("PPCC") == []

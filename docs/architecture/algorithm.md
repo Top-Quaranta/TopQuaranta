@@ -246,8 +246,11 @@ PPCC no executa el càlcul per territori — agrega els resultats de
 tots els territoris amb top propi (CAT, VAL, BAL, ALT +
 opcionals amb prou volum):
 
-1. Per cada fila, `score_global = score_setmanal × (1 − (pos − 1) × 0.04)`
-   (penalització lineal del 4 % per posició al top d'origen).
+1. Per cada fila, `score_global = score_setmanal × (1 − (pos − 1) × p)`,
+   penalització lineal per posició al top d'origen. `p` és
+   `ConfiguracioGlobal.ppcc_penalitzacio_per_posicio`: el valor per
+   defecte del model és 0.04, però **producció fa servir 0.05** — no
+   dedueixes cap número d'aquesta doc sense llegir la config.
 2. Dedupliquem per `canco_id` conservant el `score_global` més alt.
 3. Ordenem per `score_global` desc, top 100.
 

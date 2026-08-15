@@ -79,7 +79,6 @@ def test_recalculating_the_same_week_is_idempotent():
     (2026-08-15: Bocc #1 CAT but Rosalía #1 PPCC, both CAT-only acts).
     """
     from music.models import Album, Artista, Canco, Territori
-
     from ranking.models import TopSetmanal
 
     ConfiguracioGlobal.objects.create(pk=1)

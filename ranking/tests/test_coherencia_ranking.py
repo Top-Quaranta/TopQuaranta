@@ -69,9 +69,16 @@ def test_reissue_does_not_bank_the_originals_lifetime_playcount():
             lastfm_listeners=286,
             error=False,
         )
+    control = _canco_amb_senyal(cat, "Control", plays_per_dia=50)
 
-    files = {r["canco"].pk: r for r in calcular_top_territori("CAT")}
-    assert files.get(reed.pk, {}).get("weekly_plays", 0) == 0
+    # A control that must always chart. Without it this test passes on an
+    # EMPTY top for any unrelated reason — and the first version did worse
+    # than that: it read `r["canco"]`, a key the algorithm doesn't return,
+    # so it "failed" with a KeyError instead of an assertion. It watched
+    # the right thing by accident (audit 2026-08-15).
+    ids = {r["canco_id"] for r in calcular_top_territori("CAT")}
+    assert control.pk in ids, "el càlcul no ha produït cap top: la prova no prova res"
+    assert reed.pk not in ids
 
 
 @pytest.mark.django_db
@@ -173,3 +180,121 @@ def test_ppcc_aggregates_the_results_it_is_given():
     assert ppcc[0]["score_setmanal"] == pytest.approx(500.0 * 0.96)
     # …and without the hand-over it recomputes, which finds nothing.
     assert calcular_top_territori("PPCC") == []
+
+
+def _canco_amb_senyal(territori, nom, *, plays_per_dia=50, dies=60, artista=None):
+    """A song that charts: growing cumulative signal, inside the window."""
+    from music.models import Album, Artista, Canco
+
+    today = date.today()
+    if artista is None:
+        artista = Artista.objects.create(nom=nom, lastfm_nom=nom, aprovat=True)
+        artista.territoris.add(territori)
+    alb = Album.objects.create(
+        artista=artista, nom=f"A {nom}", data_llancament=today - timedelta(days=dies)
+    )
+    c = Canco.objects.create(
+        artista=artista,
+        album=alb,
+        nom=nom,
+        data_llancament=today - timedelta(days=dies),
+        verificada=True,
+        activa=True,
+    )
+    for off in range(8):
+        SenyalDiari.objects.create(
+            canco=c,
+            data=today - timedelta(days=off),
+            lastfm_playcount=1000 + (7 - off) * plays_per_dia,
+            lastfm_listeners=100,
+            error=False,
+        )
+    return c
+
+
+def _cat():
+    from music.models import Territori
+
+    ConfiguracioGlobal.objects.get_or_create(pk=1)
+    t, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Catalunya"})
+    return t
+
+
+@pytest.mark.django_db
+def test_the_top_is_ordered_best_first():
+    """The single most consequential line in the app, and nothing watched
+    it: reversing the final sort — worst song at #1 — left all 60 ranking
+    tests green (audit 2026-08-15). Everything else in this file is about
+    the score being right; this is about the score being USED."""
+    cat = _cat()
+    fluix = _canco_amb_senyal(cat, "Fluix", plays_per_dia=20)
+    fort = _canco_amb_senyal(cat, "Fort", plays_per_dia=900)
+
+    files = calcular_top_territori("CAT")
+    ordre = [r["canco_id"] for r in files]
+
+    assert ordre.index(fort.pk) < ordre.index(fluix.pk)
+    assert [r["posicio"] for r in files] == sorted(r["posicio"] for r in files)
+    puntuacions = [float(r["score_setmanal"]) for r in files]
+    assert puntuacions == sorted(puntuacions, reverse=True)
+
+
+@pytest.mark.django_db
+def test_an_older_song_scores_below_an_identical_new_one():
+    """`_age_factor` had no test at all: making it return 1.0 always —
+    i.e. deleting the whole ageing curve — passed every ranking test."""
+    cat = _cat()
+    nova = _canco_amb_senyal(cat, "Nova", plays_per_dia=100, dies=30)
+    vella = _canco_amb_senyal(cat, "Vella", plays_per_dia=100, dies=340)
+
+    per_id = {r["canco_id"]: r for r in calcular_top_territori("CAT")}
+    assert per_id[nova.pk]["age_factor"] > per_id[vella.pk]["age_factor"]
+    assert per_id[nova.pk]["score_setmanal"] > per_id[vella.pk]["score_setmanal"]
+
+
+@pytest.mark.django_db
+def test_a_song_that_has_already_charted_is_penalised():
+    """`_past_top_factor` had no test either. It is what stops one hit
+    from owning the chart for a year, so it is load-bearing editorially."""
+    from ranking.models import TopSetmanal
+
+    cat = _cat()
+    veterana = _canco_amb_senyal(cat, "Veterana", plays_per_dia=100)
+    novella = _canco_amb_senyal(cat, "Novella", plays_per_dia=100)
+
+    today = date.today()
+    for setmanes in range(1, 6):
+        TopSetmanal.objects.create(
+            canco=veterana,
+            territori="CAT",
+            setmana=today - timedelta(days=today.weekday() + 7 * setmanes),
+            posicio=1,
+            score_setmanal=100,
+            weekly_plays=100,
+            algorithm_version="v2.0",
+        )
+
+    per_id = {r["canco_id"]: r for r in calcular_top_territori("CAT")}
+    assert per_id[veterana.pk]["past_top_factor"] < 1.0
+    assert per_id[novella.pk]["past_top_factor"] == 1.0
+    assert per_id[veterana.pk]["score_setmanal"] < per_id[novella.pk]["score_setmanal"]
+
+
+@pytest.mark.django_db
+def test_a_second_song_by_the_same_artist_is_penalised():
+    """The monopoly penalty had no test: disabling it entirely passed all
+    60. It is the only thing stopping a prolific artist from filling the
+    top with their own back catalogue."""
+    cat = _cat()
+    primera = _canco_amb_senyal(cat, "Primera", plays_per_dia=200)
+    segona = _canco_amb_senyal(
+        cat, "Segona", plays_per_dia=200, artista=primera.artista
+    )
+    aliena = _canco_amb_senyal(cat, "Aliena", plays_per_dia=200)
+
+    per_id = {r["canco_id"]: r for r in calcular_top_territori("CAT")}
+    # The artist's SECOND song takes the hit; the first does not.
+    assert per_id[segona.pk]["monopoli_factor"] < 1.0
+    assert per_id[primera.pk]["monopoli_factor"] == 1.0
+    assert per_id[aliena.pk]["monopoli_factor"] == 1.0
+    assert per_id[segona.pk]["score_setmanal"] < per_id[aliena.pk]["score_setmanal"]

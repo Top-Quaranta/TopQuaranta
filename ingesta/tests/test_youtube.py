@@ -221,6 +221,42 @@ class TestObtenirSenyalYoutube:
         row = SenyalYouTube.objects.get(canco=canco)
         assert row.error is True and row.views is None
 
+    def test_a_hidden_view_count_is_not_zero_plays(self, canco):
+        """YouTube omits `viewCount` when the uploader hides it. We used
+        to sum it as `or 0`: the song was written down as 0 plays with
+        `error=False`, which reads exactly like a song nobody played —
+        and the weekly delta then treats the real number, whenever it
+        comes back, as a spike (audit 2026-08-15)."""
+        with patch.object(
+            yt, "video_stats", return_value={"v1": {"views": None, "likes": None}}
+        ):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+        row = SenyalYouTube.objects.get(canco=canco)
+        assert row.error is True
+        assert row.views is None
+        assert row.n_videos == 0
+
+    def test_a_hidden_lane_does_not_count_towards_n_videos(self, canco):
+        """With one healthy lane and one hidden, the healthy figure stands
+        alone: `n_videos` must say 1, not 2. An inflated denominator is
+        what makes a partial reading look like a complete one."""
+        from music.models import CancoYouTubeVideo
+
+        CancoYouTubeVideo.objects.create(canco=canco, video_id="v2", titol="Oficial")
+        with patch.object(
+            yt,
+            "video_stats",
+            return_value={
+                "v1": {"views": 500, "likes": 10},
+                "v2": {"views": None, "likes": None},
+            },
+        ):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+        row = SenyalYouTube.objects.get(canco=canco)
+        assert row.views == 500
+        assert row.n_videos == 1
+        assert row.error is False
+
     def test_is_idempotent_for_the_same_day(self, canco):
         with patch.object(
             yt, "video_stats", return_value={"v1": {"views": 1, "likes": 0}}

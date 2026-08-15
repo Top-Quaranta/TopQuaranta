@@ -95,8 +95,14 @@ class Command(BaseCommand):
                 stats = yt.video_stats([vid for _, vid in tros])
                 for pk, vid in tros:
                     st = stats.get(vid)
-                    if st is None:
-                        # Gone (takedown, re-upload) or a stale id. Recorded,
+                    if st is None or st["views"] is None:
+                        # Gone (takedown, re-upload), a stale id, or an
+                        # uploader who hides the view count — all the same
+                        # thing to us: this lane reports nothing today.
+                        # Summing a hidden counter as `or 0` wrote a song
+                        # down as 0 plays with error=False AND inflated
+                        # n_videos: a false fact, indistinguishable from a
+                        # song nobody played (audit 2026-08-15). Recorded,
                         # not silently dropped, so the daily report can
                         # surface a rising count.
                         morts.setdefault(pk, []).append(vid)
@@ -104,7 +110,7 @@ class Command(BaseCommand):
                     acc = recollit.setdefault(
                         pk, {"views": 0, "likes": 0, "n": 0, "primer": vid}
                     )
-                    acc["views"] += st["views"] or 0
+                    acc["views"] += st["views"]
                     acc["likes"] += st["likes"] or 0
                     acc["n"] += 1
         except yt.QuotaExhausted as exc:

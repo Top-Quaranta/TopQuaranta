@@ -169,6 +169,17 @@ part a posta, perquè una visualització no és un scrobble i unir-les a
 la capa d'emmagatzematge forçaria una decisió que volem mantindre
 editorial.
 
+**Un carril sense dades no és un carril amb zero reproduccions.** Si un
+vídeo ha desaparegut, l'id és ranci, o l'autor amaga el comptador
+(`viewCount` absent), eixe carril no compta: no se suma i no puja
+`n_videos`. Si TOTS els carrils d'una cançó estan així, la fila ix amb
+`error=True` i `views=NULL`. Sumar un comptador amagat com a zero
+escrivia la cançó com a 0 reproduccions amb `error=False` —
+indistingible d'una cançó que ningú ha escoltat— i a més inflava
+`n_videos`, que és el denominador que fa que una lectura parcial
+semble completa (auditoria 2026-08-15; cap fila falsa arribà a
+producció).
+
 YouTube **localitza** el sufix: un navegador en català ensenya
 «Malifeta - Tema». Al servidor ens torna l'anglés, però això és el locale
 per defecte de l'API, no un contracte — i exigir la paraula anglesa faria

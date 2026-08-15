@@ -111,6 +111,24 @@ El `weekly_plays` cru es persisteix a `TopSetmanal.weekly_plays` (des de
 2026-06-09) i és el que alimenta el sostre suau de §2.1bis i la mediana
 històrica per territori.
 
+### 2.1 ter · La setmana en curs no es llig mai a si mateixa
+
+Tota lectura de `TopSetmanal` dins de l'algorisme exclou la setmana que
+s'està calculant (`_setmana_en_curs(today)` — el dilluns de la setmana
+de `today`, igual que `calcular_top`). Afecta les dues lectures: la
+penalització per tops previs (§2.3) i la mediana del genoll (§2.1bis).
+
+**Per què** (2026-08-15): `calcular_top` desa cada territori *abans* que
+PPCC agregue, i `_calcular_top_ppcc` **torna a executar** cada territori
+d'origen. Sense el filtre, eixa segona passada llegia les files que la
+primera acabava de desar: cada cançó es penalitzava per la posició que
+se li estava atorgant en eixe mateix moment — i com que la penalització
+és més gran per al #1 (4%) que per al #2 (2%), **castigava més qui anava
+davant**. Resultat: el càlcul no era idempotent i l'ordre publicat d'un
+territori podia invertir-se dins del PPCC. Cas real: Bocc #1 CAT i
+Rosalía #1 PPCC, sent les dues cançons només de CAT. Test:
+`ranking/tests/test_reedicions.py::test_recalculating_the_same_week_is_idempotent`.
+
 ### 2.1bis Sostre suau d'outliers (adaptatiu, per territori)
 
 Problema: el score és lineal en `weekly_plays` i sense normalització, així

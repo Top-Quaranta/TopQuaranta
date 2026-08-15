@@ -169,9 +169,13 @@ class Command(BaseCommand):
 
         # Run ranking per territory
         summary = []
+        # PPCC aggregates these instead of recomputing them, so the global
+        # top re-scores exactly the numbers each territori published.
+        resultats_per_territori: dict[str, list[dict]] = {}
         for territori in territoris:
             self.stdout.write(f"\nCalculating {territori}...")
-            results = calcular_top_territori(territori)
+            results = calcular_top_territori(territori, resultats_per_territori)
+            resultats_per_territori[territori] = results
 
             top40 = [r for r in results if r["posicio"] <= 40]
 

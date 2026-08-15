@@ -191,7 +191,9 @@ def territoris_amb_top_propi() -> list[str]:
 # ── Per-territori computation ─────────────────────────────────────────
 
 
-def calcular_top_territori(territori: str) -> list[dict]:
+def calcular_top_territori(
+    territori: str, resultats_previs: dict[str, list[dict]] | None = None
+) -> list[dict]:
     """Run the v2.0 ranking for a single territori.
 
     Returns a list of dicts sorted by posicio ascending:
@@ -200,7 +202,7 @@ def calcular_top_territori(territori: str) -> list[dict]:
     Limit: top 100.
     """
     if territori == "PPCC":
-        return _calcular_top_ppcc()
+        return _calcular_top_ppcc(resultats_previs)
 
     # ALT collects literal-ALT artists + any optional territori below
     # its own-top threshold.
@@ -304,6 +306,12 @@ def _top_for_territoris(
     prev_week_positions: dict[int, int] = {}
     prev_setmana = (
         TopSetmanal.objects.filter(territori=territori)
+        # Not the week being computed: once `calcular_top` has saved it,
+        # "the most recent setmana" IS this one, and the movement column
+        # compares the week against itself (every row "="). Console-only
+        # today — the API derives movement from its own query — but wrong
+        # is wrong.
+        .filter(setmana__lt=_setmana_en_curs(today))
         .order_by("-setmana")
         .values_list("setmana", flat=True)
         .first()
@@ -679,19 +687,31 @@ def _apply_soft_cap(plays: float, knee: float | None) -> float:
 # ── PPCC aggregation ──────────────────────────────────────────────────
 
 
-def _calcular_top_ppcc() -> list[dict]:
+def _calcular_top_ppcc(
+    resultats_previs: dict[str, list[dict]] | None = None,
+) -> list[dict]:
     """Aggregate all non-PPCC rankings, penalise by source position, dedupe.
 
     The per-position penalty (`ppcc_penalitzacio_per_posicio`, default
     0.04) lives on `ConfiguracioGlobal` since 2026-04-25 (Sprint A);
     editing it from staff config now reaches the ranking without code.
+
+    PPCC **aggregates, it does not compute** (CLAUDE.md §6). `calcular_top`
+    passes the territorial results it has just produced via
+    `resultats_previs`, so the global top is a re-scoring of exactly the
+    numbers we published per territori. Recomputing them here instead is
+    what let the two disagree on 2026-08-15: the command saves each
+    territori before this runs, and the second pass read those fresh rows
+    (see `_setmana_en_curs`). The recompute stays as the fallback for a
+    standalone `--territori PPCC`, where nothing has been computed yet.
     """
     cfg = ConfiguracioGlobal.load()
     pos_penalty = float(cfg.ppcc_penalitzacio_per_posicio)
     source_territoris = [t for t in territoris_amb_top_propi() if t != "PPCC"]
     all_results: list[dict] = []
     for t in source_territoris:
-        for r in calcular_top_territori(t):
+        previs = (resultats_previs or {}).get(t)
+        for r in previs if previs is not None else calcular_top_territori(t):
             r = dict(r)
             r["territori_original"] = t
             all_results.append(r)

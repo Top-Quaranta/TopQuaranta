@@ -119,15 +119,15 @@ de `today`, igual que `calcular_top`). Afecta les dues lectures: la
 penalització per tops previs (§2.3) i la mediana del genoll (§2.1bis).
 
 **Per què** (2026-08-15): `calcular_top` desa cada territori *abans* que
-PPCC agregue, i `_calcular_top_ppcc` **torna a executar** cada territori
-d'origen. Sense el filtre, eixa segona passada llegia les files que la
+PPCC agregue, i `_calcular_top_ppcc` tornava a executar cada territori
+d'origen (ja no: §3). Sense el filtre, eixa segona passada llegia les files que la
 primera acabava de desar: cada cançó es penalitzava per la posició que
 se li estava atorgant en eixe mateix moment — i com que la penalització
 és més gran per al #1 (4%) que per al #2 (2%), **castigava més qui anava
 davant**. Resultat: el càlcul no era idempotent i l'ordre publicat d'un
 territori podia invertir-se dins del PPCC. Cas real: Bocc #1 CAT i
 Rosalía #1 PPCC, sent les dues cançons només de CAT. Test:
-`ranking/tests/test_reedicions.py::test_recalculating_the_same_week_is_idempotent`.
+`ranking/tests/test_coherencia_ranking.py`.
 
 ### 2.1bis Sostre suau d'outliers (adaptatiu, per territori)
 
@@ -250,6 +250,22 @@ opcionals amb prou volum):
    (penalització lineal del 4 % per posició al top d'origen).
 2. Dedupliquem per `canco_id` conservant el `score_global` més alt.
 3. Ordenem per `score_global` desc, top 100.
+
+**Les files són les que ja s'han calculat, no unes de noves.**
+`calcular_top` acumula el resultat de cada territori i li'l passa a
+`calcular_top_territori("PPCC", resultats_per_territori)`, de manera que
+el top global re-puntua exactament els números que hem publicat per
+territori. Fins al 2026-08-15 l'agregació recalculava cada territori
+des de zero, i com que el comando desa abans d'arribar al PPCC, eixa
+segona passada llegia les files acabades d'escriure (§2.1 ter) i podia
+contradir el top publicat. El recàlcul es conserva només com a reserva
+per a `--territori PPCC` a soles, on encara no hi ha res calculat.
+
+**PPCC no té penalització de permanència pròpia.** Com que mai passa pel
+càlcul per territori, les files amb `territori='PPCC'` no es llegeixen
+mai com a historial; el PPCC hereta la penalització que ja portava el
+territori d'origen. La permanència és per territori a posta: una cançó
+pot ser #1 al VAL i no haver aparegut mai al CAT.
 
 ---
 

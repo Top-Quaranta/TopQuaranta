@@ -221,7 +221,7 @@ www.topquaranta.cat {
 		# /api/v1/staff/analytics/goaccess/, which needs `data:` fonts
 		# and `'unsafe-eval'` for D3 to render. Every other response
 		# inherits the strict baseline below.
-		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-Wu+kU5EkXi0rgxBYNZgraQVbF2AN72hbhCSUJEGoGu8=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-0dI/35d/q1kSRrsl7FM1dCM2OAnMbtxWIzs+ucZbUxw=' 'sha256-4Hn6sH+ypoj5nK93WMu6mUFQpfobPWpZ7lhDC+66jX8=' 'sha256-roWz13kQTOWWGhpVzbqgbscn0jzVYDnLtBFjN9TlD5Q=' 'sha256-cI/S3TUZCuIHtTmLlnwGR4k/NbGwEg2EVdeKKX6TwDo=' 'sha256-ZS6tnpohjy2235uLNOQs8/B1pJbrxq6BEHLFX266P1E=' 'sha256-0DAOj4yIIGTkmqj8368zp/RrGHhjbwL8eb3rvrPuexY=' 'sha256-sAf3d2w1WbdjN6OhzrAjRW1FpsEzrRxTF2QjXmClp/Q=' 'sha256-cq9KN8BfABBMKv4RfBHUMY77nIRgWQfbLcCyn6sOB08=' 'sha256-aUbj/Fc3SMOAnlQIrovaPz0fox9uC2ttH7W2XXvJae4=' 'sha256-Wu+kU5EkXi0rgxBYNZgraQVbF2AN72hbhCSUJEGoGu8=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
 	}
 	# Access log retention. Rotation is by size; a rotated segment is
 	# gzipped ~15x, so 10 MiB of log costs ~640 KiB on disk. With

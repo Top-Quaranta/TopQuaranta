@@ -82,6 +82,34 @@ project its own write surface. TopQuaranta keeps the global block
 and its own sites; other projects ship snippets that survive any
 TQ deploy because TQ never reads or writes the conf.d directory.
 
+## CSP: cada `<style>` en línia va amb la seua empremta
+
+`deploy/Caddyfile` envia `style-src 'self' '<sha256…>' …`, una empremta
+per cada bloc `<style>` en línia que servim. La política **no** porta
+`'unsafe-inline'`, i això té una conseqüència que cal tindre molt clara:
+
+> Si edites el CSS de dins d'una plantilla i no actualitzes l'empremta,
+> el navegador rebutja el bloc **sencer** i la pàgina ix **sense cap
+> estil**.
+
+La fallada és silenciosa i total. L'HTML és correcte, el CSS hi és, les
+proves passen i `curl` ho ensenya tot al seu lloc: només un navegador de
+veres aplica la CSP. Va passar exactament així — el redisseny del
+2026-06-13 va reescriure `comptes/_base_auth.html`, el Caddyfile va
+quedar amb l'empremta vella, i durant dos mesos totes les pàgines que
+renderitza Django (accés, registre, les tres de 2FA, nova contrasenya,
+esborrar compte) i les de 403/404/500 van eixir en HTML pelat. Ho vam
+descobrir perquè el Miquel va entrar des del mòbil i ho va vore.
+
+El guardià és `topquaranta/tests/test_csp_style_hashes.py`: recalcula
+l'empremta de cada bloc i falla si no és a la CSP, dient-te quina cadena
+has d'enganxar. També exigeix que els blocs siguen **estàtics**: una
+etiqueta de plantilla dins d'un `<style>` faria que el que se serveix no
+coincidira amb el codi font, i l'empremta seria correcta ací i falsa en
+producció.
+
+Els correus (`email_*.html`) queden fora: no viatgen mai per HTTP.
+
 ## Access log retention
 
 The TopQuaranta vhost writes JSON access logs to

@@ -53,11 +53,17 @@ def test_reissue_of_an_older_homonym_is_not_fresh():
     primer = {(7, "anima d acer"): date(2025, 4, 29)}
     assert _compute_weekly_plays(reissue, signals, today, primer) == 0.0
     # Same title, DIFFERENT artist → still fresh (covers are legitimate).
-    assert _compute_weekly_plays(reissue, signals, today, {(8, "anima d acer"): date(2025, 4, 29)}) == 966.0
+    assert (
+        _compute_weekly_plays(
+            reissue, signals, today, {(8, "anima d acer"): date(2025, 4, 29)}
+        )
+        == 966.0
+    )
     # The original itself is not affected by the map (its own date IS the earliest).
     original = _Canco(date(2025, 4, 29), artista_id=7, nom="Ànima d'Acer")
-    assert _compute_weekly_plays(original, signals, today, primer) == 0.0  # branch 4, no baseline
-
+    assert (
+        _compute_weekly_plays(original, signals, today, primer) == 0.0
+    )  # branch 4, no baseline
 
 
 def test_fresh_release_returns_today_playcount():

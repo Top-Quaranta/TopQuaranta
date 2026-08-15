@@ -31,9 +31,39 @@ class _Senyal:
 @dataclass
 class _Canco:
     data_llancament: date | None
+    artista_id: int = 1
+    nom: str = "X"
 
 
 # ── Branch 1: fresh release (< 7 days old) ─────────────────────────
+
+
+def test_reissue_of_an_older_homonym_is_not_fresh():
+    """Bocc «Ànima D'Acer», 2026-08-15: a single re-issued 15 months
+    later as a new Canco (own ISRC). Last.fm answered the ORIGINAL's
+    lifetime playcount (966, flat for 3 days) and the fresh branch
+    banked it as one week's plays → #1 CAT / #2 PPCC on zero movement.
+    An older homonym by the same artist means the row inherits its age;
+    with no matching baseline that is 0 until one accumulates."""
+    today = date(2026, 8, 15)
+    reissue = _Canco(date(2026, 8, 11), artista_id=7, nom="Ànima D'Acer")
+    # No entry → old behaviour, kept for every caller not passing the map.
+    signals = [_Senyal(date(2026, 8, 13), 966), _Senyal(date(2026, 8, 15), 966)]
+    assert _compute_weekly_plays(reissue, signals, today) == 966.0
+    primer = {(7, "anima d acer"): date(2025, 4, 29)}
+    assert _compute_weekly_plays(reissue, signals, today, primer) == 0.0
+    # Same title, DIFFERENT artist → still fresh (covers are legitimate).
+    assert (
+        _compute_weekly_plays(
+            reissue, signals, today, {(8, "anima d acer"): date(2025, 4, 29)}
+        )
+        == 966.0
+    )
+    # The original itself is not affected by the map (its own date IS the earliest).
+    original = _Canco(date(2025, 4, 29), artista_id=7, nom="Ànima d'Acer")
+    assert (
+        _compute_weekly_plays(original, signals, today, primer) == 0.0
+    )  # branch 4, no baseline
 
 
 def test_fresh_release_returns_today_playcount():

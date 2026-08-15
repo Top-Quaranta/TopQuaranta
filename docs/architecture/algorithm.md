@@ -68,6 +68,15 @@ Casuístiques:
   `weekly_plays = playcount_today` (tot el comptador és d'aquesta
   setmana). Sense extrapolation: projectar un ritme de 2 dies a 7
   fabricava xifres fantasma (decisió 2026-05-07).
+  **Guarda de reedició (2026-08-15):** si el mateix artista té una
+  altra cançó al pool amb el mateix títol normalitzat (`_track_identity`)
+  i data anterior, la fila NO és fresca — és un single reeditat dins
+  d'un EP/àlbum posterior (ISRC propi, però Last.fm només coneix un
+  títol i torna el comptador de tota la vida de l'original). Hereta la
+  data de la més antiga i cau a les branques amb baseline (→ 0 fins que
+  s'acumule). Cas: Bocc «Ànima D'Acer», 966 plays clavats 3 dies, #1
+  CAT / #2 PPCC sense cap moviment real. Mateix títol amb artista
+  diferent (versions) continua sent fresc.
 - **Esglaó de fusió de Last.fm** (`_robust_weekly_from_series`,
   2026-06-06): Last.fm fusiona periòdicament els scrobbles d'una
   cançó cap a la gravació canònica i **duplica el comptador acumulat

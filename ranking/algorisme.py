@@ -248,6 +248,21 @@ def _top_for_territoris(
     for lst in senyals_by_canco.values():
         lst.sort(key=lambda s: s.data)
 
+    # Re-issue guard (2026-08-15): earliest release date per (artista,
+    # normalised title) across THIS pool. A single re-issued inside a
+    # later EP/album is a second Canco (own ISRC) that Last.fm answers
+    # with the same lifetime playcount as the original — the "fresh
+    # release" branch would then bank a year of plays as one week's.
+    # Bocc «Ànima D'Acer» did exactly that: 966 plays flat for 3 days,
+    # #1 CAT / #2 PPCC on zero real movement.
+    primer_llancament: dict[tuple[int, str], date] = {}
+    for c in cancons.values():
+        if not c.data_llancament:
+            continue
+        k = (c.artista_id, _track_identity(c.nom))
+        if k not in primer_llancament or c.data_llancament < primer_llancament[k]:
+            primer_llancament[k] = c.data_llancament
+
     # Prior TopSetmanal entries per canço (for the past-top penalty).
     prior_positions_by_canco: dict[int, list[int]] = defaultdict(list)
     for rs_canco_id, rs_pos in TopSetmanal.objects.filter(
@@ -288,7 +303,10 @@ def _top_for_territoris(
     rows: list[dict] = []
     for canco in cancons.values():
         plays = _compute_weekly_plays(
-            canco=canco, signals=senyals_by_canco.get(canco.pk, []), today=today
+            canco=canco,
+            signals=senyals_by_canco.get(canco.pk, []),
+            today=today,
+            primer_llancament=primer_llancament,
         )
         # Eligibility (min_escoltes_top) is judged on RAW plays; the soft
         # cap only reshapes how a song's plays translate into score.
@@ -372,8 +390,27 @@ def _top_for_territoris(
 # ── Weekly-plays estimator (with gap + fresh-release handling) ────────
 
 
+def _track_identity(s: str) -> str:
+    """Case + accents + punctuation collapsed — a *recording* identity.
+
+    Deliberately NOT `_normalize_track` from the Last.fm client, which
+    strips `(Live)` / `(Remaster)` / `(feat. X)`: here we WANT to tell
+    live from studio apart.
+    """
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.lower()
+    s = "".join(c if c.isalnum() or c.isspace() else " " for c in s)
+    return " ".join(s.split())
+
+
 def _compute_weekly_plays(
-    canco: Canco, signals: list[SenyalDiari], today: date
+    canco: Canco,
+    signals: list[SenyalDiari],
+    today: date,
+    primer_llancament: dict[tuple[int, str], date] | None = None,
 ) -> float:
     """Estimate plays gained in the last 7 days for `canco`.
 
@@ -425,7 +462,16 @@ def _compute_weekly_plays(
     # 1) Fresh release branch — we know the baseline (zero) without
     # needing any historical SenyalDiari row, because the canço
     # literally didn't exist 7 days ago.
-    if canco.data_llancament and canco.data_llancament > today - timedelta(days=7):
+    # …unless an older homonym by the same artist exists: then this row
+    # is a re-issue, Last.fm's playcount is the ORIGINAL's lifetime, and
+    # the zero baseline is a lie. Inherit the age; fall through to the
+    # baseline branches (→ 0 until SenyalDiari accumulates one).
+    data_ref = canco.data_llancament
+    if data_ref and primer_llancament:
+        primera = primer_llancament.get((canco.artista_id, _track_identity(canco.nom)))
+        if primera and primera < data_ref:
+            data_ref = primera
+    if data_ref and data_ref > today - timedelta(days=7):
         return max(0.0, float(playcount_today))
 
     # Track-switch guard (2026-05-08): a baseline is only valid if it
@@ -451,15 +497,6 @@ def _compute_weekly_plays(
     # `(Live)` / `(Remaster)` / `(feat. X)` parentheticals. That
     # stripping is the wrong semantics here — we WANT to distinguish
     # live from studio recordings, the whole point of the guard.
-
-    def _track_identity(s: str) -> str:
-        if not s:
-            return ""
-        s = unicodedata.normalize("NFD", s)
-        s = "".join(c for c in s if not unicodedata.combining(c))
-        s = s.lower()
-        s = "".join(c if c.isalnum() or c.isspace() else " " for c in s)
-        return " ".join(s.split())
 
     ref_track_n = _track_identity(latest.lastfm_returned_track or "")
 

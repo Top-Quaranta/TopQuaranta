@@ -69,13 +69,20 @@ class TestQuota:
     def test_per_metric_quota_is_still_quota(self):
         """The 2026-08-12/13 incident: Google's per-metric limit ("Search
         Queries per day") arrives with a NON-canonical reason. Treating it
-        as "no results" stamped 27 artists as channel-less."""
+        as "no results" stamped 27 artists as channel-less.
+
+        The reason here must be one NO branch recognises, so only the
+        message match can save it. The first version of this test used
+        `rateLimitExceeded`, which the reason-check already caught — it
+        passed with the message branch deleted, i.e. it never guarded the
+        fix it was written for (audit 2026-08-15).
+        """
         payload = {
             "error": {
                 "message": "Quota exceeded for quota metric 'Search Queries' "
                 "and limit 'Search Queries per day' of service "
                 "'youtube.googleapis.com' for consumer 'project_number:1'.",
-                "errors": [{"reason": "rateLimitExceeded"}],
+                "errors": [{"reason": "userRateLimitExceeded"}],
             }
         }
         with (
@@ -155,6 +162,30 @@ class TestDescobrirYoutube:
         with patch.object(yt, "find_topic_channel") as f:
             call_command("descobrir_youtube", "--budget", "10", stdout=StringIO())
         f.assert_not_called()
+
+    def test_quota_death_must_not_be_recorded_as_no_channel(self, artista):
+        """The 27-artist incident, at the level where it actually happened.
+
+        `QuotaExhausted` has to abort the run leaving `youtube_checked_at`
+        untouched: a stamped artist is one the queue never revisits, so a
+        dead quota would silently retire artists that do have a channel.
+        The client-level test does not cover this — swallowing the
+        exception here (`except QuotaExhausted: channel = None`) kept the
+        whole suite green (audit 2026-08-15).
+        """
+        with patch.object(
+            yt, "find_topic_channel", side_effect=yt.QuotaExhausted("quota")
+        ):
+            call_command("descobrir_youtube", stdout=StringIO())
+
+        artista.refresh_from_db()
+        assert artista.youtube_checked_at is None
+        assert artista.youtube_channel_id == ""
+
+        from ingesta.management.commands.descobrir_youtube import _cua
+
+        # Still queued: tomorrow's run must try again.
+        assert artista in _cua(None)
 
 
 @pytest.mark.django_db

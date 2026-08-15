@@ -248,9 +248,8 @@ opcionals amb prou volum):
 
 1. Per cada fila, `score_global = score_setmanal × (1 − (pos − 1) × p)`,
    penalització lineal per posició al top d'origen. `p` és
-   `ConfiguracioGlobal.ppcc_penalitzacio_per_posicio`: el valor per
-   defecte del model és 0.04, però **producció fa servir 0.05** — no
-   dedueixes cap número d'aquesta doc sense llegir la config.
+   `ConfiguracioGlobal.ppcc_penalitzacio_per_posicio`, editable des del
+   panell staff: per a saber-ne el valor, llig la config, no aquesta doc.
 2. Dedupliquem per `canco_id` conservant el `score_global` més alt.
 3. Ordenem per `score_global` desc, top 100.
 

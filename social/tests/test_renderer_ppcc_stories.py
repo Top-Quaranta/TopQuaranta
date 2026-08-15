@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageStat
 
 from social import colors, fonts, renderer
 from social.narrative.story_synth import synthesize_hero
@@ -353,3 +353,63 @@ def test_ppcc_story_structure(monkeypatch, tmp_path):
     )
     assert calls == ["intro", "mosaic", "pairs", "grid", "podi", "hero", "outro"]
     assert len(paths) == 7
+
+
+# ── Content oracle ──────────────────────────────────────────────────
+#
+# Every structural test in this file passes on a BLANK slide: they check
+# size, format, weight, slide count and pixel-region emptiness. A 2026-08-15
+# audit proved it — making `_story_top_grid` return an untouched background
+# left all 434 social tests green, on a slide that goes to Instagram
+# Stories twice a week. Nothing looked at whether anything had been PAINTED.
+#
+# The oracle is the luminance standard deviation of the whole slide: a
+# painted slide has covers, text and pills spread over the ink; a blank one
+# is a near-flat field. Measured 2026-08-15 on the real 8-slide set:
+# 22.0–40.6 for real slides, 1.62 for a bare `_bg_ink()`. The threshold sits
+# an order of magnitude clear of both, so ordinary design changes can't
+# trip it — only a slide that stopped painting.
+
+_MIN_VARIACIO = 10.0
+
+
+def _variacio(img: Image.Image) -> float:
+    """Luminance spread. Near zero on a slide that never got painted."""
+    return ImageStat.Stat(img.convert("L")).stddev[0]
+
+
+def _assert_pintada(img: Image.Image, nom: str) -> None:
+    v = _variacio(img)
+    assert v >= _MIN_VARIACIO, f"{nom}: sembla en blanc (variació {v:.2f})"
+
+
+@pytest.mark.django_db
+def test_every_ppcc_slide_is_actually_painted():
+    paths = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=_novetats(3), hero_headline="DEBUT AL CIM"
+    )
+    for p in paths:
+        with Image.open(p) as im:
+            _assert_pintada(im, p.name)
+
+
+@pytest.mark.django_db
+def test_every_territorial_slide_is_actually_painted():
+    """The territorial set degrades by omission, so it can legitimately be
+    shorter — but no slide it DOES emit may be blank."""
+    paths = renderer.render_stories_territorial(
+        "VAL", WK, _entries(12), novetats_items=_novetats(2)
+    )
+    assert paths, "el joc territorial no ha generat cap diapositiva"
+    for p in paths:
+        with Image.open(p) as im:
+            _assert_pintada(im, p.name)
+
+
+@pytest.mark.django_db
+def test_every_novetats_slide_is_actually_painted():
+    paths = renderer.render_stories_novetats(WK, _novetats(7), per_page=3)
+    assert paths, "el joc de novetats no ha generat cap diapositiva"
+    for p in paths:
+        with Image.open(p) as im:
+            _assert_pintada(im, p.name)

@@ -204,3 +204,35 @@ busquen grup". Tokens are stored comma-joined and matched with
   `comptes/notifications.py`, `comptes/management/`,
   `comptes/newsletter.py`, `comptes/newsletter_{utm,covers,meta}.py`,
   `web/api/compte_views/`, `web/api/staff/sollicituds_revisio.py`
+
+## Limitadors de ritme: el scope va a la classe, no a la vista
+
+Els sis limitadors (`auth_login`, `data_export`, `newsletter_unsubscribe`,
+`feedback_crear`, `account_delete`, `dm_send`) i el de registre hereten
+`web.api.utils.ScopedThrottle`, **no** el `ScopedRateThrottle` de DRF.
+
+El motiu és que aquell llig el scope de la *vista*
+(`view.throttle_scope`) i, si no hi és, **deixa passar la petició sense
+comptar-la**:
+
+```python
+self.scope = getattr(view, self.scope_attr, None)
+if not self.scope:
+    return True
+```
+
+Declarar `scope = "..."` a la subclasse no serveix de res: eixe mètode
+el sobreescriu a cada crida. Com que cap vista definia `throttle_scope`,
+els sis limitadors van estar inerts des que es van afegir (auditoria de
+maig del 2026) fins al 2026-08-15: connectats, invocats a cada petició, i
+sense limitar res. El scope `registre` ni tan sols tenia classe.
+
+`ScopedThrottle` llig el scope de la classe i fa la clau de cache igual
+que DRF (per usuari si està autenticat, per IP si no). El guardià és
+`web/tests/test_throttles.py`, que a més falla si algun limitador torna a
+heretar de `ScopedRateThrottle`.
+
+**Pendent**: el scope `auth_2fa` continua sense aplicar-se. La pantalla
+de verificació és una vista de Django plana, no de DRF, així que un
+limitador de DRF no hi arriba; el repte del TOTP (que accepta codis de
+recuperació) continua sense límit de ritme.

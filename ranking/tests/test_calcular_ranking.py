@@ -2,14 +2,15 @@ from datetime import date, timedelta
 from io import StringIO
 
 import pytest
-from django.conf import settings
 from django.core.management import call_command
 
 from ranking.models import ConfiguracioGlobal, SenyalDiari, TopProvisional
 
-# Raw SQL uses PostgreSQL-specific syntax (DISTINCT ON, ::text casts).
-_is_postgres = "postgresql" in settings.DATABASES["default"].get("ENGINE", "")
-pytestmark = pytest.mark.skipif(not _is_postgres, reason="Requires PostgreSQL")
+# These used to be gated on PostgreSQL, from the days the algorithm was
+# raw SQL (DISTINCT ON, ::text casts). v2.0 is pure ORM, the test settings
+# are SQLite, so the gate never opened and the file never ran — long
+# enough for its fixtures to stop describing the algorithm. Removed
+# 2026-08-15; see the module docstring of test_coherencia_ranking.py.
 
 
 @pytest.mark.django_db
@@ -25,10 +26,13 @@ class TestCalcularRankingCommand:
         )
         artista = Artista.objects.create(nom="Feliu", lastfm_nom="Feliu", aprovat=True)
         artista.territoris.add(cat)
+        # Relative to today: a hardcoded date silently ages out of the
+        # 365-day window and takes the whole file down with it.
+        llancament = date.today() - timedelta(days=60)
         album = Album.objects.create(
             artista=artista,
             nom="Album",
-            data_llancament=date(2026, 3, 1),
+            data_llancament=llancament,
         )
 
         cancons = []
@@ -37,13 +41,17 @@ class TestCalcularRankingCommand:
                 artista=artista,
                 album=album,
                 nom=f"Track {i}",
-                data_llancament=date(2026, 3, 1),
+                data_llancament=llancament,
                 verificada=True,
                 activa=True,
             )
             cancons.append(c)
 
-        # Create 7 days of signal data
+        # 7 days of signal that GROWS. `lastfm_playcount` is cumulative,
+        # so a flat series means zero plays this week and the song is
+        # filtered out by `min_escoltes_top` — which is exactly what the
+        # old fixture did, and why these tests failed the moment they
+        # were allowed to run.
         today = date.today()
         for day_offset in range(7):
             d = today - timedelta(days=day_offset)
@@ -51,7 +59,7 @@ class TestCalcularRankingCommand:
                 SenyalDiari.objects.create(
                     canco=c,
                     data=d,
-                    lastfm_playcount=(j + 1) * 1000,
+                    lastfm_playcount=(j + 1) * 1000 + (6 - day_offset) * 100,
                     lastfm_listeners=(j + 1) * 100,
                     error=False,
                 )

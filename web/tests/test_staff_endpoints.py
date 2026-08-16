@@ -525,8 +525,30 @@ def test_social_delay_caps_in_command(db, monkeypatch):
     monkeypatch.setattr(time, "sleep", lambda s: sleep_calls.append(s))
 
     out = StringIO()
-    # --dry-run path: the delay branch is gated on `not dry_run`, so
-    # nothing should sleep. This proves the kill switch path works
-    # without holding a worker idle in tests.
+    # --dry-run: the delay branch is gated on `not dry_run`.
     call_command("publicar_canal", "--channel", "mastodon", "--dry-run", stdout=out)
-    assert sleep_calls == []  # gated by --dry-run
+    assert sleep_calls == []
+
+    # …and the half the docstring is actually about, which nothing
+    # checked: a real run DOES sleep. Deleting the whole delay block
+    # left this test green, because it only ever exercised the path
+    # where the block is switched off (audit 2026-08-15). There are no
+    # slots to publish here, and that is fine — the sleep happens before
+    # the slots are read.
+    call_command("publicar_canal", "--channel", "mastodon", stdout=StringIO())
+    assert sleep_calls == [30 * 60], sleep_calls
+
+    # The 180-minute cap: a fat-fingered config must not park a worker
+    # for the rest of the day.
+    sleep_calls.clear()
+    cfg.delay_mastodon_min = 999
+    cfg.save()
+    call_command("publicar_canal", "--channel", "mastodon", stdout=StringIO())
+    assert sleep_calls == [180 * 60], sleep_calls
+
+    # `--force` is the operator saying "now": it must override the delay.
+    sleep_calls.clear()
+    call_command(
+        "publicar_canal", "--channel", "mastodon", "--force", stdout=StringIO()
+    )
+    assert sleep_calls == []

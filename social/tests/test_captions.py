@@ -51,7 +51,16 @@ NOVETATS_ENTRIES = [
 ]
 
 
+@pytest.mark.django_db
+@pytest.mark.django_db
 def test_caption_top_uses_handle():
+    """`django_db` is load-bearing, not decoration. `compose_for_channel`
+    catches everything the engine raises and returns the legacy caption
+    instead, so a test without DB access trips Django's "Database access
+    not allowed", silently lands on the fallback, and measures the one
+    path production never takes. These two had not executed the engine
+    since it landed (audit 2026-08-15) — which is exactly why the
+    2026-05-20 mention regression went undetected."""
     text = caption_top("top_ppcc", "PPCC", SETMANA, TOP_ENTRIES)
     # Artist with handle renders the @username.
     assert "@rosalia.vt" in text
@@ -60,6 +69,8 @@ def test_caption_top_uses_handle():
     assert "@Sense Insta" not in text
 
 
+@pytest.mark.django_db
+@pytest.mark.django_db
 def test_caption_novetats_uses_handle():
     text = caption_novetats("nous_albums", SETMANA, NOVETATS_ENTRIES)
     assert "@manel.cat" in text

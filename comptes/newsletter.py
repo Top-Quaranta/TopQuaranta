@@ -402,6 +402,28 @@ def render_newsletter_html(
     )
 
 
+def destinataris():
+    """The users the weekly newsletter goes to.
+
+    `is_active=True` means the address confirmed itself. Registration
+    sets `vol_newsletter` immediately while the account is still inactive
+    pending email verification, so without it anyone could sign a third
+    party up for mail to an address whose owner never agreed — and the
+    Brevo budget would be spent on unconfirmed addresses. The staff
+    dashboard already counted it this way
+    (`web/api/staff/analytics.py::newsletter_audience`), so the number
+    shown and the list actually mailed disagreed until 2026-08-15.
+
+    A function, not an inline queryset, so the count and the send can be
+    tested against the same definition instead of a copy of it.
+    """
+    return (
+        Usuari.objects.filter(perfil__vol_newsletter=True, is_active=True)
+        .exclude(email="")
+        .select_related("perfil")
+    )
+
+
 def send_top_newsletter(
     tipus: str,
     territori: str,
@@ -429,7 +451,7 @@ def send_top_newsletter(
         narrative_html_override=narrative_html_override,
     )
 
-    qs = Usuari.objects.filter(perfil__vol_newsletter=True).select_related("perfil")
+    qs = destinataris()
     sent = 0
     failed = 0
     for user in qs.iterator():

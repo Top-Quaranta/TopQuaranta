@@ -217,3 +217,21 @@ off by default**, gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`
   javascript:/data:) + lazy-loads images, so this widened render is safe for
   EVERY `Publicacio` (non-staff public posts still pass the moderation queue).
 
+## Qui rep la newsletter
+
+`comptes.newsletter.destinataris()` és la definició única: `PerfilUsuari.
+vol_newsletter=True` **i** `Usuari.is_active=True`, sense correu buit.
+
+L'`is_active` no és cosmètic: el registre marca `vol_newsletter` de
+seguida, mentre el compte encara està inactiu esperant la confirmació del
+correu. Sense el filtre, qualsevol podia donar d'alta l'adreça d'un
+tercer i eixa adreça rebia correu sense que el seu amo hi haguera
+consentit mai — a més de gastar el pressupost de Brevo (300/dia) en
+adreces no confirmades. El comptador del panell
+(`web/api/staff/analytics.py::newsletter_audience`) ja filtrava així, o
+siga que **el número que veies i la llista que s'enviava no coincidien**
+(trobat el 2026-08-15; aleshores, 1 destinatari i cap sense confirmar).
+
+És una funció i no una consulta escrita dins de l'enviament perquè el
+comptador i l'enviament es puguen provar contra la mateixa definició en
+lloc de contra una còpia.

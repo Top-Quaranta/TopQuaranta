@@ -241,7 +241,24 @@ que DRF (per usuari si està autenticat, per IP si no). El guardià és
 `web/tests/test_throttles.py`, que a més falla si algun limitador torna a
 heretar de `ScopedRateThrottle`.
 
-**Pendent**: el scope `auth_2fa` continua sense aplicar-se. La pantalla
-de verificació és una vista de Django plana, no de DRF, així que un
-limitador de DRF no hi arriba; el repte del TOTP (que accepta codis de
-recuperació) continua sense límit de ritme.
+### El repte de 2FA no és de DRF
+
+`dos_fa_verificar` és una vista de Django plana, així que cap limitador
+de DRF hi arriba: el scope `auth_2fa` estava configurat des del maig del
+2026 i **no s'aplicava enlloc**. Era, precisament, l'única pantalla del
+projecte que accepta codis de recuperació d'un sol ús en bucle.
+
+Des del 2026-08-16 el limitador és `comptes/ratelimit.py::excedeix_limit`,
+una finestra fixa comptada al cache compartit que llig el ritme del mateix
+`DEFAULT_THROTTLE_RATES`, de manera que els números viuen en un sol lloc.
+Superar-lo torna **429** amb la mateixa pantalla i un missatge clar.
+
+Dues decisions que val la pena conéixer:
+
+- **La identitat és l'usuari, no la IP.** Qui arriba a esta pantalla ja ha
+  passat la contrasenya, així que algú amb una galeta robada és *un*
+  usuari per moltes IPs que rote.
+- **Falla obert.** Si el cache peta, es deixa passar. La contrasenya
+  continua sent necessària per a arribar ací, i una caiguda del cache no
+  pot convertir-se en un bloqueig del compte — però implica que el
+  limitador és tan disponible com el cache.

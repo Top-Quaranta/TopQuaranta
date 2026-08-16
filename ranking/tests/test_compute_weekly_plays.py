@@ -149,9 +149,17 @@ def test_no_signals_returns_zero():
 
 
 def test_today_playcount_none_returns_zero():
+    """A baseline IS present, so the delta branch is the one that runs —
+    otherwise this passes for the wrong reason. Without the None guard
+    the code reaches `None - 1000` and raises; with only a lone signal
+    it fell through to branch 4 and returned 0 anyway, so the test could
+    not tell the guard from its absence (audit 2026-08-15)."""
     today = date(2026, 5, 7)
     canco = _Canco(data_llancament=date(2025, 1, 1))
-    signals = [_Senyal(date(2026, 5, 7), None)]
+    signals = [
+        _Senyal(date(2026, 4, 30), 1000),
+        _Senyal(date(2026, 5, 7), None),
+    ]
     assert _compute_weekly_plays(canco, signals, today) == 0.0
 
 

@@ -63,9 +63,10 @@ from `music/constants.py`. Never raise — return `None` on any failure.
   etc., and converts Unicode quotes to ASCII. Recovers ~10–15% of errors.
 
 ### `spotify.py` — playlist output (active since 2026-04)
-- Two classes. `SpotifyClient` is the legacy Client-Credentials wrapper
-  (ingest endpoints no longer available to us since Spotify gated Web API
-  behind Premium in 2024).
+- Una sola classe viva. La `SpotifyClient` de Client-Credentials es va
+  llevar el 2026-08-16: no la cridava ningú des que Spotify va tancar els
+  endpoints d'ingesta darrere de Premium (2024), i les seues 10 proves
+  eren l'única cosa que la tocava — vigilaven codi que no s'executava.
 - **`UserSpotifyClient`** is the live path: OAuth refresh-token flow for the
   admin account. Rotates access tokens on 401 mid-flight, honours 429
   `Retry-After`, persists a rotated refresh_token when Spotify issues one.

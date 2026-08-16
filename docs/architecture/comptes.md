@@ -121,7 +121,16 @@ business write isn't blocked.
 - `/compte/exportar-dades/` — JSON export of everything tied to
   the user (Feedback, UserArtista, Publicacio, Comentari,
   Missatge, StaffAuditLog rows where they're the target, axes
-  login history). Throttled 3/h.
+  login history). Throttled 3/h. **El contingut és el contracte**, no
+  només que arribe un adjunt: fins al 2026-08-15 l'única prova
+  comprovava que el correu portava un fitxer acabat en `.json` i prou,
+  així que un export podia eixir amb `audit_log_sobre_meu` buit —
+  `rgpd.py` s'empassa l'`ImportError` d'axes i emet `[]`— i tot verd.
+  Això és una mala resposta a una petició legal: sembla «no tenim res»
+  quan de fet és «no ho hem mirat». Fixat a
+  `web/tests/test_export_rgpd_contingut.py`, que a més comprova el
+  revés: el filtre per `target_id` no pot donar-li a algú l'historial de
+  moderació d'una altra persona.
 - `/compte/baixa-newsletter/` — token-signed unsubscribe (token
   expires after 1 year, May-2026 audit fix). Throttled 10/min.
 - `/compte/esborrar-sollicitud/` — self-delete confirmation

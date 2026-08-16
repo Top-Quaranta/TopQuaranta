@@ -203,7 +203,8 @@ every message in the media-group (Telegram has no group-level delete).
 | GET | `/staff/usuaris/` | User list with filters. |
 | GET | `/staff/usuaris/<pk>/` | Detail with propostes + sol·licituds + audit. |
 | POST | `/staff/usuaris/<pk>/toggle-actiu/` | Deactivate / reactivate (never self, never staff). |
-| POST | `/staff/usuaris/<pk>/reset-2fa/` | Wipe TOTP + static devices. |
+| POST | `/staff/usuaris/<pk>/reset-2fa/` | Wipe TOTP **+ static** devices. Leaving the static ones would keep the backup codes working — the opposite of locking the account down. |
+| POST | `/staff/usuaris/<pk>/esborrar/` | Hard delete. Refuses **self first**, then other staff. Eixe ordre importa: al revés, la branca d'auto-esborrat era inabastable (qui arriba a la vista és staff, així que un target que és un mateix també ho és) i responia «No pots esborrar un altre staff» a algú que s'esborrava a si mateix. Escriu `StaffAuditLog` amb l'email i el pk del compte que ja no existeix: la fila d'usuari desapareix, i el log és l'única evidència. |
 
 ## 4. React surface (`web-react/src/pages/staff/`)
 

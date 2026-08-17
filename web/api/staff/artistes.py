@@ -611,7 +611,18 @@ def artista_detail(request: Request, pk: int) -> Response:
                     f"com a Art Track i he aparellat {n} cançons. El camp del "
                     f"canal propi (el dels videoclips) continua buit."
                 )
-                data = {k: v for k, v in data.items() if k != "youtube_canal_oficial"}
+                # Drop the "reviewed" flag too, not just the field. The
+                # queue sends both in one PATCH, and the videoclip
+                # channel — the whole point of that queue — is still
+                # missing, so the artist has to stay in it. Xafogor
+                # vanished from the list minutes after this shipped
+                # (2026-08-17): the Topic channel landed correctly and
+                # the row left anyway.
+                data = {
+                    k: v
+                    for k, v in data.items()
+                    if k not in ("youtube_canal_oficial", "youtube_canal_revisat")
+                }
             else:
                 data = {**data, "youtube_canal_oficial": resolt}
         simple_fields = [

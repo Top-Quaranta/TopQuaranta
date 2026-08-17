@@ -167,12 +167,24 @@ def test_a_topic_channel_is_adopted_when_discovery_missed_it(staff_client, artis
     ):
         r = staff_client.patch(
             f"/api/v1/staff/artistes/{artista.pk}/",
-            {"youtube_canal_oficial": "https://www.youtube.com/@malifeta"},
+            {
+                "youtube_canal_oficial": "https://www.youtube.com/@malifeta",
+                # Exactly what the staff page sends.
+                "youtube_canal_revisat": True,
+            },
             format="json",
         )
 
     assert r.status_code == 200
     assert "automàtic" in r.json()["avis"]
+
+    # …and the artist STAYS in the queue: the videoclip channel, which is
+    # what that queue exists for, is still missing. The panel sends
+    # `youtube_canal_revisat: true` in the same PATCH, so dropping only
+    # the channel field marked it done and the row vanished (caught by
+    # Miquel on Xafogor, minutes after this shipped).
+    artista.refresh_from_db()
+    assert artista.youtube_canal_revisat is False
 
     artista.refresh_from_db()
     assert artista.youtube_channel_id == "UCYPU3FvPV5Hm6mmi2CVaR6A"

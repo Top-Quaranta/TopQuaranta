@@ -40,3 +40,35 @@ Esborra la línia `enviar_informe_youtube` de `deploy/cron.topquaranta`,
 executa `bin/tq-sync-infra` i esborra aquest document. Els camps
 `youtube_checked_at` i `youtube_matched_at` es queden: són historial de
 la ingesta, no de l'informe.
+
+## Des del 2026-08-17: la pregunta és si es poden juntar
+
+El descobriment va acabar el catàleg («queden per provar: 0»), així que
+les barres de progrés informaven d'un fet tancat. El correu passa a
+respondre el que continua obert: **quantes visualitzacions val una
+escolta**, i quantes cançons rescataria juntar les dues fonts — que és
+per al que es va construir la segona font (el top valencià tenia 22
+files de 40).
+
+Dos blocs nous, i tots dos porten la seua pròpia advertència:
+
+- **Es poden juntar?** Mediana de visualitzacions per escolta sobre les
+  cançons que es mouen a les dues bandes, amb la meitat central i la
+  mida de la mostra. Per davall de 30 parelles diu «encara no és
+  fiable», entre 30 i 100 «primer indici», i a partir de 100 convida a
+  mirar si convergeix. Un factor tret de quatre parelles sembla un
+  número i és soroll; el correu ho ha de dir, no imprimir-lo pla.
+- **Què guanyaríem.** Cançons que YouTube veu moure's i Last.fm no, en
+  conjunt i per territori. Són exactament les que ara no poden entrar al
+  top.
+
+**La referència es busca amb marge**, no a la data exacta de fa set dies:
+`_MARGE_DIES = 3`, igual que fa `ranking.algorisme` amb `SenyalDiari`, i
+l'increment es reescala als dies transcorreguts de veres. Exigir el dia
+exacte és fràgil — amb una sola foto perduda el correu diria «cap cançó
+comparable», que sembla una troballa i és un forat de dades. Comprovat el
+17/08: amb data exacta eixien 0 comparables i amb marge, 77.
+
+El moviment mínim per a entrar a la comparativa és de 5 en una setmana a
+les dues fonts (`_MOVIMENT_MIN`): amb 1 escolta i 300 visualitzacions, la
+divisió dona 300 i no significa res.

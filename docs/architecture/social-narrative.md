@@ -58,6 +58,23 @@ hero) when the detectors don't supply enough distinct subjects.
 | `a5_artista_multiple` | Artist with ≥3 songs in the top | n_cancons |
 | `a6_canco_recent` | Song <30 days old currently in top 10 | 11 − posicio |
 | `a7_long_runner` | Song ≥180 days old in top 10 | 5 (fixed) |
+
+> **`a7` emet `mesos_estrena`: l'EDAT de la cançó, mai el temps al top.**
+> Fins al 2026-08-17 el camp es deia `mesos` i 35 de les 41 frases del
+> banc el gastaven com a permanència («suma {mesos} mesos a la llista»).
+> És una afirmació distinta, i falsa: `TopSetmanal` comença el
+> 2026-04-13, així que cap cançó pot portar-hi més de ~4 mesos —
+> qualsevol xifra superior és impossible per construcció, no només
+> no verificada. El va detectar el Miquel llegint un post balear que
+> deia 9 mesos d'una cançó amb 14 setmanes de presència, i amb forats.
+> Guardià: `social/tests/test_afirmacions_verificables.py`.
+>
+> El mateix post portava un segon defecte: `posicio_anterior_str` ja
+> inclou l'article («al 15è»), i 24 frases hi afegien «de» al davant →
+> «puja **de al** 15è». El camp `posicio_anterior_de` dona la forma
+> contreta («del 15è») i, per al cas de fora del top, «de fora del top»,
+> que no es pot contraure. Una sola cadena no pot servir les dues
+> posicions sintàctiques.
 | `a8_pujada_forta` | Song climbed ≥10 positions and now in top 10 | climb // 2 |
 | `a9_debut_anywhere` | New entry at position 4-40 (ADR-0008) | 1-5 |
 | `a10_artista_first_ever` | Artist's first-ever top appearance (ADR-0008) | 8 (fixed) |

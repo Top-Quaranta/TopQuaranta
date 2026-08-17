@@ -89,8 +89,16 @@ que busca un compte NOU i no que l'artista no en tinga. Each row carries `te_hom
 (`youtube.com/@nom`): YouTube va deixar d'ensenyar l'id `UC…` enlloc, i
 exigir-lo feia la cua inservible. Es resol al servidor amb
 `channels.list?forHandle=` (1 unitat) i es **refusa amb 400 si el canal
-és l'automàtic** («- Topic» / «- Tema»), que és un error fàcil perquè la
-cerca el sol posar primer i acceptar-lo perdria el carril del videoclip.
+és l'automàtic** («- Topic» / «- Tema») **quan l'artista ja en té un**:
+és un error fàcil, perquè la cerca el sol posar primer, i acceptar-lo
+comptaria l'Art Track dues vegades i perdria el carril del videoclip.
+Si l'artista **no** en té cap, en canvi, s'adopta al carril de l'Art
+Track i s'aparellen les cançons a l'acte (2026-08-17): `search.list`
+enterra els canals nous i menuts, i abans no hi havia cap manera de
+donar-los des del panell — el cas DUPLICATS es va haver d'arreglar per
+consola. L'aparellament ha de ser immediat perquè `_cua()` només visita
+artistes amb `youtube_channel_id` buit. La resposta porta `avis` amb
+l'explicació; el camp del videoclip es queda buit.
 Cada fila porta `youtube_provat` per a distingir «encara no s'ha mirat»
 de «no en té». |
 | GET | `/staff/artistes/search/?q=` | Typeahead for pickers. Returns up to 10 results. |

@@ -124,3 +124,21 @@ def test_the_endpoints_take_no_notice_of_who_is_asking():
         "COOKIES",
     ):
         assert prohibit not in codi, prohibit
+
+
+@pytest.mark.django_db
+def test_a_beacon_pageview_counts_as_human():
+    """The weekly digest filters on `dimensio_2="human"`. Rows written
+    without a class are invisible to it, which is how the week of 10/08
+    reported 98 human visits — mostly sitemap fetches — while 373 real
+    SPA visits sat unclassified (2026-08-17).
+
+    Classified by construction, not by inspection: reaching this endpoint
+    means the SPA's JavaScript ran. Nothing about the caller is read, so
+    the aggregate-only promise above still holds.
+    """
+    from analytics.bots import CLASS_HUMAN
+
+    assert _c().post(PAGEVIEW, {"path": "/top"}, format="json").status_code == 204
+    fila = _files("pageview").get()
+    assert fila.dimensio_2 == CLASS_HUMAN

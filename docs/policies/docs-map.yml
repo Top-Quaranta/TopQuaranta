@@ -86,6 +86,16 @@ mapping:
     doc: docs/architecture/analytics-youtube.md
   - prefix: analytics/templates/analytics/informe_youtube.html
     doc: docs/architecture/analytics-youtube.md
+  # Els dos escriptors de MetricaEsdeveniment (middleware + beacon) es
+  # van separar el 2026-08-17, quan analytics.md va passar de 400 línies
+  # (docs-maintenance.md regla 3). Qui toque la classificació bot/humà
+  # actualitza el doc d'ingesta, no l'índex.
+  - prefix: analytics/middleware.py
+    doc: docs/architecture/analytics-ingest.md
+  - prefix: analytics/bots.py
+    doc: docs/architecture/analytics-ingest.md
+  - prefix: web/api/analytics_ingest.py
+    doc: docs/architecture/analytics-ingest.md
   - prefix: analytics/
     doc: docs/architecture/analytics.md
 

@@ -295,12 +295,7 @@ export default function StaffArtistesSenseYoutubePage() {
         </TableCard>
       )}
       {data && (
-        <Pagination
-          page={page}
-          total={data.total}
-          pageSize={data.page_size}
-          onChange={setPage}
-        />
+        <Pagination meta={data} onPage={setPage} />
       )}
     </section>
   )

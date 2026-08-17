@@ -48,6 +48,12 @@ revisa a mà per sempre.
 
 ### `/staff/artistes/sense-youtube` *(2026-08)*
 
+> **`<Pagination>` va amb `meta`, sempre.** El component fa
+> `if (!meta) return null`, així que una crida amb els noms equivocats no
+> dibuixa res: ni error ni avís. Aquesta vista deia 400 artistes i només
+> se'n podien tocar 50 (2026-08-17). Guardià estàtic a
+> `web/tests/test_paginacio_spa.py`, perquè el projecte no té Vitest.
+
 Decisió humana sobre **un** canal oficial de YouTube per artista, el
 segon carril de senyal. Clon de `sense-instagram` amb una diferència que
 importa: la resposta té **tres** sortides, no dues — un id de canal, «no

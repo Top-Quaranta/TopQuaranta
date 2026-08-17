@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import datetime
 import logging
+import statistics
+from collections import defaultdict
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -40,6 +42,141 @@ from ranking.models import SenyalDiari, SenyalYouTube
 logger = logging.getLogger(__name__)
 
 DASHBOARD_URL = "https://www.topquaranta.cat/staff/estat"
+
+
+# Quantes parelles calen abans de fiar-se de la mediana. Per davall de 30
+# el rang interquartílic es mou massa d'un dia a l'altre per a dir res;
+# per damunt de 100 ja es pot mirar si convergeix. Són llindars de sentit
+# comú, no d'estadística formal: la decisió que han d'alimentar és
+# editorial, no un contrast d'hipòtesis.
+_MOSTRA_INDICI = 30
+_MOSTRA_PROU = 100
+
+# Moviment mínim setmanal perquè una cançó entre a la comparativa. Amb
+# menys, la divisió amplifica el soroll: 1 escolta i 300 visualitzacions
+# dona un factor de 300 que no significa res.
+_MOVIMENT_MIN = 5
+
+
+# Marge al voltant de «fa set dies» per a buscar la foto de referència,
+# el mateix que fa `ranking.algorisme` amb SenyalDiari. Exigir la data
+# exacta és fràgil: un sol dia de cron perdut buidaria la comparativa
+# sencera, i el correu diria «cap cançó comparable» quan el que passa és
+# que falta una foto.
+_MARGE_DIES = 3
+
+
+def _increments(model, camp, fi, *, dies=7):
+    """`{canco_id: delta setmanal}` reescalat a set dies.
+
+    Agafa la foto més pròxima a `fi - dies` dins de `±_MARGE_DIES` i
+    divideix pel nombre real de dies transcorreguts, així una referència
+    de fa 5 o de fa 9 dies continua donant una xifra setmanal comparable.
+    """
+    objectiu = fi - datetime.timedelta(days=dies)
+    des_de = objectiu - datetime.timedelta(days=_MARGE_DIES)
+    fins_a = objectiu + datetime.timedelta(days=_MARGE_DIES)
+
+    per = defaultdict(dict)
+    for s in model.objects.filter(error=False, data__gte=des_de, data__lte=fi).only(
+        "canco_id", "data", camp
+    ):
+        v = getattr(s, camp)
+        if v is not None:
+            per[s.canco_id][s.data] = v
+
+    out = {}
+    for canco_id, fotos in per.items():
+        if fi not in fotos:
+            continue
+        candidates = [d for d in fotos if des_de <= d <= fins_a]
+        if not candidates:
+            continue
+        base = min(candidates, key=lambda d: abs((d - objectiu).days))
+        span = (fi - base).days
+        if span <= 0 or fotos[fi] < fotos[base]:
+            continue
+        out[canco_id] = (fotos[fi] - fotos[base]) * dies / span
+    return out
+
+
+def _comparativa(en_finestra, today):
+    """Es poden juntar les dues fonts, i què guanyaríem.
+
+    La pregunta que aquest informe existeix per a respondre des del
+    2026-08-17: el descobriment ja ha acabat el catàleg, així que el que
+    queda per saber és si el senyal de YouTube es pot convertir a
+    escoltes i quantes cançons rescataria.
+    """
+    lfm = _increments(SenyalDiari, "lastfm_playcount", today)
+    yt_inc = _increments(SenyalYouTube, "views", today)
+    vius = set(en_finestra.values_list("id", flat=True))
+
+    mou_lfm = {c for c, v in lfm.items() if c in vius and v >= _MOVIMENT_MIN}
+    mou_yt = {c for c, v in yt_inc.items() if c in vius and v >= _MOVIMENT_MIN}
+    parelles = sorted(yt_inc[c] / lfm[c] for c in (mou_lfm & mou_yt) if lfm[c])
+
+    factor = None
+    if parelles:
+        n = len(parelles)
+        factor = {
+            "n": n,
+            "mediana": round(statistics.median(parelles)),
+            "p25": round(parelles[n // 4]),
+            "p75": round(parelles[3 * n // 4]),
+            "prou": n >= _MOSTRA_PROU,
+            "indici": _MOSTRA_INDICI <= n < _MOSTRA_PROU,
+        }
+
+    # Quantes cançons tenen ja set dies de fotos: sense això no hi ha
+    # increment setmanal possible, i és el que encara està creixent.
+    amb_setmana = (
+        SenyalYouTube.objects.filter(
+            error=False,
+            data__gte=today - datetime.timedelta(days=7 + _MARGE_DIES),
+            data__lte=today - datetime.timedelta(days=7 - _MARGE_DIES),
+        )
+        .values("canco_id")
+        .distinct()
+        .count()
+    )
+    amb_avui = (
+        SenyalYouTube.objects.filter(data=today, error=False)
+        .values("canco_id")
+        .distinct()
+        .count()
+    )
+
+    guany = []
+    for codi in ("CAT", "VAL", "BAL"):
+        ids = set(
+            en_finestra.filter(
+                Q(artista__territoris__codi=codi)
+                | Q(artistes_col__territoris__codi=codi)
+            )
+            .distinct()
+            .values_list("id", flat=True)
+        )
+        guany.append(
+            {
+                "codi": codi,
+                "lastfm": len(ids & mou_lfm),
+                "noves": len(ids & mou_yt - mou_lfm),
+            }
+        )
+
+    return {
+        "comparables": len(mou_lfm & mou_yt),
+        "mou_lfm": len(mou_lfm),
+        "mou_yt": len(mou_yt),
+        "noves": len(mou_yt - mou_lfm),
+        "factor": factor,
+        "amb_setmana": amb_setmana,
+        "amb_avui": amb_avui,
+        "pct_setmana": round(amb_setmana / amb_avui * 100) if amb_avui else 0,
+        "guany": guany,
+        "moviment_min": _MOVIMENT_MIN,
+    }
 
 
 def _cobertura(qs_cancons) -> dict:
@@ -154,6 +291,7 @@ def build_context(today: datetime.date) -> dict:
             "territoris": per_territori,
         },
         "punt_cec": punt_cec,
+        "comparativa": _comparativa(en_finestra, today),
         "senyal": {
             "avui": snap_avui.filter(error=False).count(),
             "errors": snap_avui.filter(error=True).count(),

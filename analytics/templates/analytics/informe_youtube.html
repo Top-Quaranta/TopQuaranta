@@ -45,6 +45,67 @@
   </tr></table>
 </td></tr>
 
+{% comment %} A. ES PODEN JUNTAR? — el bloc principal des del 17/08:
+   el descobriment ja ha acabat el catàleg, i el que queda per saber és
+   si el senyal de YouTube es pot convertir a escoltes. {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Es poden juntar les dues fonts?</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Cal saber quantes visualitzacions val una escolta. Per a esbrinar-ho fan falta cançons que es moguen a les dues bandes alhora.</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      {% include "analytics/_kpi.html" with label="Cançons comparables" value=comparativa.comparables delta=None suffix=None %}
+      {% include "analytics/_kpi.html" with label="Amb setmana sencera" value=comparativa.pct_setmana suffix="%" delta=None %}
+    </tr>
+  </table>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid {% if comparativa.factor.prou %}#7bbf7b{% else %}#facc15{% endif %};border-radius:12px;margin-top:6px;"><tr><td style="padding:16px;">
+    {% if comparativa.factor %}
+      <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:30px;color:#facc15;line-height:1;">{{ comparativa.factor.mediana|milers }}<span style="font-size:15px;color:#9aa0a6;">&nbsp;visualitzacions per escolta</span></div>
+      <div class="muted" style="font-size:13px;color:#b7b7be;margin-top:6px;">
+        Meitat central entre <strong style="color:#ffffff;">{{ comparativa.factor.p25|milers }}</strong> i <strong style="color:#ffffff;">{{ comparativa.factor.p75|milers }}</strong> · mostra de {{ comparativa.factor.n }} cançons
+      </div>
+      <div style="font-size:13px;margin-top:10px;line-height:1.6;">
+        {% if comparativa.factor.prou %}
+          <span style="color:#7bbf7b;">✓ Mostra prou gran per a mirar si el factor convergeix.</span> Si la meitat central s'estreny durant uns dies, ja es pot decidir.
+        {% elif comparativa.factor.indici %}
+          <span style="color:#facc15;">Primer indici.</span> Amb aquesta mostra el número es mou encara d'un dia a l'altre; mira'l com a tendència, no com a xifra.
+        {% else %}
+          <span style="color:#fca5a5;">Encara no és fiable.</span> Amb tan poques parelles, un sol cas estrany mou la mediana. Fa falta que més cançons acumulen la setmana sencera.
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="muted" style="font-size:13px;color:#b7b7be;line-height:1.7;">
+        Encara no hi ha cap cançó que es moga a les dues fonts alhora aquesta setmana. Fa falta que les fotos de YouTube acumulen set dies i que Last.fm veja moviment.
+      </div>
+    {% endif %}
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
+      Es mouen a Last.fm: <strong style="color:#ffffff;">{{ comparativa.mou_lfm }}</strong> · a YouTube: <strong style="color:#ffffff;">{{ comparativa.mou_yt }}</strong> · a les dues: <strong style="color:#ffffff;">{{ comparativa.comparables }}</strong><br>
+      Amb foto de fa set dies: {{ comparativa.amb_setmana|milers }} de {{ comparativa.amb_avui|milers }} — la comparativa només pot mirar aquestes.
+    </div>
+  </td></tr></table>
+</td></tr>
+
+{% comment %} B. QUÈ GUANYARÍEM {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Què guanyaríem</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Cançons que YouTube veu moure's i Last.fm no. Són les que ara mateix no poden entrar al top.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
+    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:32px;color:#7bbf7b;line-height:1;">+{{ comparativa.noves }}<span style="font-size:15px;color:#9aa0a6;">&nbsp;cançons al conjunt</span></div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">
+      {% for g in comparativa.guany %}
+      <tr>
+        <td width="46" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#facc15;padding:3px 0;">{{ g.codi }}</td>
+        <td class="muted" style="font-size:13px;color:#b7b7be;padding:3px 0;">
+          {{ g.lastfm }} amb Last.fm{% if g.noves %} <strong style="color:#7bbf7b;">+{{ g.noves }} noves</strong>{% else %} · cap de nova{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:10px;line-height:1.6;">Compta com a moviment a partir de {{ comparativa.moviment_min }} en una setmana, a les dues fonts.</div>
+  </td></tr></table>
+</td></tr>
+
 {% comment %} A. DESCOBRIMENT {% endcomment %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Descobriment de canals</div>

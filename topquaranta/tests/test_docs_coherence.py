@@ -105,8 +105,12 @@ def test_unmapped_path_returns_none(script, cfg):
 
 
 def test_web_api_staff_beats_web_api(script, cfg):
+    """The endpoint table moved to `staff-api.md` on 2026-08-17 when
+    `staff.md` crossed the 400-line threshold. What this pins is the
+    precedence — `web/api/staff/` must beat the generic `web/api/`
+    entry — not which of the two staff docs it lands on."""
     doc = script.resolve("web/api/staff/estat.py", cfg["mapping"], cfg["exclude"])
-    assert doc == "docs/architecture/staff.md"
+    assert doc == "docs/architecture/staff-api.md"
 
 
 def test_web_seo_matches_both_dir_and_hypothetical_file(script, cfg):

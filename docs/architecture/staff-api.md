@@ -56,7 +56,11 @@ enterra els canals nous i menuts, i abans no hi havia cap manera de
 donar-los des del panell — el cas DUPLICATS es va haver d'arreglar per
 consola. L'aparellament ha de ser immediat perquè `_cua()` només visita
 artistes amb `youtube_channel_id` buit. La resposta porta `avis` amb
-l'explicació; el camp del videoclip es queda buit.
+l'explicació; el camp del videoclip es queda buit **i l'artista es queda a
+la cua**: el PATCH de la cua envia `youtube_canal_revisat: true` al costat
+del canal, i eixa marca també s'ignora en aquest camí. Llevar només el
+camp del canal el marcava com a fet i la fila desapareixia tot i faltar el
+videoclip (Xafogor, 2026-08-17, minuts després de desplegar-ho).
 Cada fila porta `youtube_provat` per a distingir «encara no s'ha mirat»
 de «no en té». |
 | GET | `/staff/artistes/search/?q=` | Typeahead for pickers. Returns up to 10 results. |

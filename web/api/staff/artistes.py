@@ -396,8 +396,61 @@ def _te_canco_viva():
     )
 
 
+def _adopta_canal_tema(artista, channel_id: str) -> int:
+    """Store a Topic channel supplied by hand and match its songs now.
+
+    The matching cannot wait for the nightly cron: `_cua()` only queues
+    artists whose `youtube_channel_id` is empty, so the moment we store
+    it the artist stops being revisited. Khimera (DUPLICATS) sat with a
+    perfectly good channel and no matched song for exactly that reason
+    until it was repaired by hand on 2026-08-14.
+
+    Returns how many songs got a video.
+    """
+    from django.utils import timezone
+
+    from ingesta.clients import youtube as yt
+    from ingesta.management.commands.descobrir_youtube import _norm
+
+    playlist = yt.uploads_playlist(channel_id)
+    artista.youtube_channel_id = channel_id
+    artista.youtube_uploads_playlist = playlist or ""
+    artista.youtube_checked_at = timezone.now()
+    artista.save(
+        update_fields=[
+            "youtube_channel_id",
+            "youtube_uploads_playlist",
+            "youtube_checked_at",
+        ]
+    )
+    if not playlist:
+        return 0
+    videos = {_norm(v["title"]): v["video_id"] for v in yt.playlist_videos(playlist)}
+    fets = 0
+    for canco in Canco.objects.filter(artista=artista, youtube_video_id=""):
+        vid = videos.get(_norm(canco.nom))
+        if vid:
+            canco.youtube_video_id = vid
+            canco.youtube_match = Canco.MATCH_EXACTE
+            canco.youtube_matched_at = timezone.now()
+            canco.save(
+                update_fields=[
+                    "youtube_video_id",
+                    "youtube_match",
+                    "youtube_matched_at",
+                ]
+            )
+            fets += 1
+    return fets
+
+
 def _resol_canal_youtube(brut: str) -> tuple[str, str]:
-    """Accept an id, a /channel/ URL or a handle; return `(id, error)`.
+    """Accept an id, a /channel/ URL or a handle.
+
+    Returns `(id, error, info_tema)`. `info_tema` is set — with an empty
+    id and no error — when the channel is the auto-generated Topic one:
+    it belongs to the other lane, so the caller decides what to do with
+    it rather than losing it.
 
     Resolving here rather than in the browser keeps the API key server-
     side, and it is where a bad value can still be refused: better a 400
@@ -414,20 +467,24 @@ def _resol_canal_youtube(brut: str) -> tuple[str, str]:
     elif _CANAL_HANDLE.search(brut):
         kwargs = {"handle": _CANAL_HANDLE.search(brut).group(1)}
     else:
-        return "", (
-            "No reconec això com un canal. Enganxa l'enllaç del canal "
-            "(youtube.com/@nom o youtube.com/channel/UC…) o l'id UC…"
+        return (
+            "",
+            (
+                "No reconec això com un canal. Enganxa l'enllaç del canal "
+                "(youtube.com/@nom o youtube.com/channel/UC…) o l'id UC…"
+            ),
+            None,
         )
 
     try:
         info = yt.channel_info(**kwargs)
     except yt.QuotaExhausted:
-        return "", "Quota de YouTube exhaurida; torna-ho a provar demà."
+        return "", "Quota de YouTube exhaurida; torna-ho a provar demà.", None
     except Exception:  # pragma: no cover - transport
         logger.exception("resolent el canal de YouTube %r", brut)
-        return "", "No s'ha pogut consultar YouTube. Torna-ho a provar."
+        return "", "No s'ha pogut consultar YouTube. Torna-ho a provar.", None
     if not info:
-        return "", f"YouTube no coneix {brut}."
+        return "", f"YouTube no coneix {brut}.", None
 
     # Refuse the auto-generated channel. It is the OTHER lane and the
     # discovery cron already finds it on its own; pasting it here would
@@ -435,12 +492,13 @@ def _resol_canal_youtube(brut: str) -> tuple[str, str]:
     # entirely. Easy mistake: searching an artist surfaces both, and the
     # Topic one often ranks first.
     if yt.topic_suffix_name(info["title"]) is not None:
-        return "", (
-            f"«{info['title']}» és el canal automàtic de YouTube Music, i "
-            "eixe ja el trobem sols. Ací va el canal propi de l'artista, "
-            "el dels videoclips."
-        )
-    return info["id"], ""
+        # Signalled, not just refused: when discovery missed the Topic
+        # channel the operator has nowhere else to put it, and search
+        # DOES miss them — it buries brand-new or tiny ones (DUPLICATS,
+        # 2026-08-14: 4 videos, invisible to `search.list`). The caller
+        # routes it to the Topic lane when that lane is empty.
+        return "", "", info
+    return info["id"], "", None
 
 
 @api_view(["POST"])
@@ -518,6 +576,7 @@ def _homonims_payload(artista: Artista) -> list[dict]:
 @permission_classes([IsStaff])
 def artista_detail(request: Request, pk: int) -> Response:
     artista = get_object_or_404(Artista, pk=pk)
+    avis_tema = ""
     if request.method == "PATCH":
         data = request.data or {}
         # A YouTube handle is what a human can actually copy: the site
@@ -525,10 +584,36 @@ def artista_detail(request: Request, pk: int) -> Response:
         # staff queue unusable (caught 2026-08-12 filling in Malifeta).
         # `channels.list?forHandle=` resolves it for ONE quota unit.
         if data.get("youtube_canal_oficial"):
-            resolt, err = _resol_canal_youtube(data["youtube_canal_oficial"])
+            resolt, err, tema = _resol_canal_youtube(data["youtube_canal_oficial"])
             if err:
                 return Response({"error": err}, status=400)
-            data = {**data, "youtube_canal_oficial": resolt}
+            if tema is not None:
+                # A Topic channel was pasted. If discovery already found
+                # one, this is the classic mix-up and we refuse it. If it
+                # did NOT — and search does miss small channels — this is
+                # the only way the operator can supply it, so take it,
+                # into the lane it belongs to.
+                if artista.youtube_channel_id:
+                    return Response(
+                        {
+                            "error": (
+                                f"«{tema['title']}» és el canal automàtic de "
+                                "YouTube Music, i d'aquest artista ja el tenim. "
+                                "Ací va el canal propi, el dels videoclips."
+                            )
+                        },
+                        status=400,
+                    )
+                n = _adopta_canal_tema(artista, tema["id"])
+                avis_tema = (
+                    f"«{tema['title']}» és el canal automàtic de YouTube Music. "
+                    f"No en teníem cap per a aquest artista, així que l'he desat "
+                    f"com a Art Track i he aparellat {n} cançons. El camp del "
+                    f"canal propi (el dels videoclips) continua buit."
+                )
+                data = {k: v for k, v in data.items() if k != "youtube_canal_oficial"}
+            else:
+                data = {**data, "youtube_canal_oficial": resolt}
         simple_fields = [
             "nom",
             "lastfm_nom",
@@ -815,6 +900,8 @@ def artista_detail(request: Request, pk: int) -> Response:
             },
         }
     )
+    if avis_tema:
+        row["avis"] = avis_tema
     return Response(row)
 
 

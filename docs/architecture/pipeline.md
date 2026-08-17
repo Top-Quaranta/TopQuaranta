@@ -170,6 +170,23 @@ part a posta, perquè una visualització no és un scrobble i unir-les a
 la capa d'emmagatzematge forçaria una decisió que volem mantindre
 editorial.
 
+**Si la cerca perd un canal Tema, es pot posar a mà.** `search.list`
+enterra els canals nous i menuts —DUPLICATS en tenia un de perfecte amb 4
+vídeos i el descobriment no el va vore mai (2026-08-14)— i fins al
+2026-08-17 no hi havia cap lloc al panell per a donar-lo: el camp del
+canal oficial el refusava, correctament, perquè és l'altre carril.
+
+Ara, si enganxes un canal «- Topic» a eixe camp i l'artista **no en té**
+cap, s'adopta al carril de l'Art Track, s'aparellen les cançons a l'acte
+i el camp del videoclip es queda buit, amb un avís que ho explica. Si
+l'artista ja en té un, es continua refusant: eixa és la confusió clàssica
+i acceptar-la comptaria l'Art Track dues vegades.
+
+L'aparellament immediat no és una comoditat: `_cua()` només visita
+artistes amb `youtube_channel_id` buit, així que desar el canal sense
+aparellar deixaria l'artista congelat amb canal i sense cap cançó — que
+és exactament l'estat en què estava Khimera.
+
 **Un carril sense dades no és un carril amb zero reproduccions.** Si un
 vídeo ha desaparegut, l'id és ranci, o l'autor amaga el comptador
 (`viewCount` absent), eixe carril no compta: no se suma i no puja

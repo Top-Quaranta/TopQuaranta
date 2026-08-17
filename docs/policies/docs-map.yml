@@ -105,8 +105,12 @@ mapping:
   # (error handlers, RSS feeds, sitemaps, legal versions).
   # `web/seo` (no trailing slash) matches both `web/seo/<file>` and
   # a hypothetical future `web/seo.py`.
+  # La taula d'endpoints es va separar el 2026-08-17, quan staff.md va
+  # passar de 400 línies (docs-maintenance.md regla 3). Qui toque un
+  # endpoint del panell actualitza staff-api.md; qui toque el control
+  # d'accés o els invariants, staff.md.
   - prefix: web/api/staff/
-    doc: docs/architecture/staff.md
+    doc: docs/architecture/staff-api.md
   - prefix: web/seo
     doc: docs/architecture/seo.md
   - prefix: web/api/

@@ -68,6 +68,7 @@ function Row({ a, onDone }) {
   const [val, setVal] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [avis, setAvis] = useState('')
 
   const canSave = !busy && esCanalPlausible(val)
 
@@ -75,7 +76,16 @@ function Row({ a, onDone }) {
     setBusy(true)
     setErr('')
     try {
-      await api.patch(`/staff/artistes/${a.pk}/`, payload)
+      const r = await api.patch(`/staff/artistes/${a.pk}/`, payload)
+      // The backend accepts a "- Topic" channel when discovery never
+      // found one — it goes to the Art Track lane instead of this
+      // field. Say so rather than removing the row silently, or the
+      // operator thinks the videoclip channel is filled in when it
+      // is not.
+      if (r?.avis) {
+        setAvis(r.avis)
+        return
+      }
       onDone(a.pk)
     } catch (e) {
       setErr(e.message || 'Error desant.')
@@ -152,6 +162,7 @@ function Row({ a, onDone }) {
             </p>
           )}
           {err && <p className="text-[11px] text-red-400">{err}</p>}
+          {avis && <p className="text-[11px] text-tq-yellow">{avis}</p>}
         </div>
       </Td>
       <Td>

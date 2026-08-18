@@ -250,12 +250,16 @@ mail.topquaranta.cat {
 	# autoconfig/... → MX-derived guess. We publish here AND on
 	# the dedicated `autoconfig.<domain>` site below to cover both.
 	handle /.well-known/autoconfig/mail/config-v1.1.xml {
-		root * /var/www/autoconfig/.well-known/autoconfig/mail
+		root * /var/www/autoconfig
 		rewrite * /config-v1.1.xml
 		file_server
 		header Content-Type "application/xml; charset=utf-8"
 	}
-	reverse_proxy localhost:8080
+	# Stalwart was retired on 2026-08-18: mail for topquaranta.cat and
+	# cercol.team is on Purelymail (MX mailserver.purelymail.com). Only the
+	# Thunderbird autoconfig above stays here, now pointing at Purelymail;
+	# there is no longer anything on :8080 to proxy to.
+	respond "mail.topquaranta.cat no longer hosts mail. IMAP: imap.purelymail.com:993, SMTP: smtp.purelymail.com:465" 410
 }
 
 # Subdomain that Thunderbird probes first (`autoconfig.<domain>/mail/
@@ -263,7 +267,10 @@ mail.topquaranta.cat {
 # soon as the A record at CDMON points here. Pair with:
 #     A autoconfig → 188.245.60.20
 autoconfig.topquaranta.cat {
+	# Mateix fitxer que el camí `.well-known` de dalt: n'hi havia dues
+	# còpies a disc i es van desincronitzar quan es va retirar Stalwart.
 	root * /var/www/autoconfig
+	rewrite * /config-v1.1.xml
 	file_server
 	header Content-Type "application/xml; charset=utf-8"
 }

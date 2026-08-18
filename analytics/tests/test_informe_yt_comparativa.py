@@ -156,3 +156,63 @@ def test_a_reference_far_outside_the_window_is_refused():
     )
     assert _ctx()["mou_yt"] == 0
     del _senyal_lfm
+
+
+@pytest.mark.django_db
+def test_a_big_sample_is_not_called_stable_while_the_number_still_moves():
+    """The verdict this replaces was based on sample size alone, and it
+    was wrong in production on 2026-08-18: 179 pairs — comfortably over
+    the threshold — with the median having gone 1 → 23 → 9 in three days.
+    Size is necessary, not sufficient; what decides is that it settles.
+    """
+    # Over `_MOSTRA_PROU` (100), so the old size-only verdict would have
+    # printed a green tick.
+    for i in range(105):
+        c = _canco(f"Cançó {i}")
+        # Ratios spread wide enough that the daily median cannot hold.
+        _senyal(c, lfm=10, yt=100 * (i + 1))
+    f = _ctx()["factor"]
+    assert f["prou"] is True
+    assert f["estable"] is False
+
+
+@pytest.mark.django_db
+def test_the_report_carries_the_recent_history_of_the_factor():
+    """Printing today's median alone hides the only thing that answers
+    "can we decide yet": whether it stopped jumping."""
+    _senyal(_canco("Amb història"), lfm=10, yt=900)
+    h = _ctx()["historial"]
+    assert len(h) >= 3
+    assert h[-1]["data"] == AVUI
+    assert {"data", "n", "mediana"} <= set(h[0])
+
+
+@pytest.mark.django_db
+def test_a_ratio_that_belongs_to_the_artist_is_reported_as_such():
+    """The hypothesis that decides the design: if the ratio is tight
+    within an artist and wide across the catalogue, the conversion has to
+    be per artist and a global factor would be wrong for nearly all.
+    Measured 2026-08-18: 2.57 across the catalogue, 0.64 within.
+    """
+    from music.models import Album, Canco
+
+    # Two artists, each internally consistent, far apart from each other.
+    for artista_ratio in (5, 500):
+        base = _canco(f"Cap {artista_ratio}")
+        _senyal(base, lfm=10, yt=10 * artista_ratio)
+        for i in range(5):
+            germana = Canco.objects.create(
+                artista=base.artista,
+                album=Album.objects.filter(artista=base.artista).first(),
+                nom=f"Germana {artista_ratio}-{i}",
+                data_llancament=base.data_llancament,
+                verificada=True,
+                activa=True,
+            )
+            _senyal(germana, lfm=10, yt=10 * artista_ratio + i)
+
+    pa = _ctx()["per_artista"]
+    assert pa is not None
+    assert pa["n_artistes"] == 2
+    assert pa["cv_artista"] < pa["cv_global"]
+    assert pa["millor_per_artista"] is True

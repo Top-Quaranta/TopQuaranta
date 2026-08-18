@@ -47,6 +47,43 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 ✦ = `db_index=True`.
 
+**`instagram_revisat` (2026-08).** Tercer estat de la cua de staff,
+bessó de `youtube_canal_revisat`: «revisat, no en té» és una resposta
+final. Sense ell, un artista que genuïnament no té Instagram tornava a la
+cua cada passada. Omplir la URL el marca sol.
+
+**`instagram_suggerits_descartats` (2026-08).** Handles descartats amb
+✕ a la cua. Buidar el suggeriment no bastava: el sembrador nocturn tornava
+a trobar el mateix handle a la mateixa font i el tornava a posar (caçat
+l'endemà del primer dia). El sembrador no proposa mai res d'aquesta llista.
+
+**`instagram_suggerit` (2026-08, PROVISIONAL).** Candidat trobat pels
+escombratges (Viasona, web propi). No és evidència — els handles d'IG no
+es poden validar per API — així que la cua el mostra amb enllaç perquè un
+humà mire el perfil abans d'acceptar. Es neteja en posar `instagram_url`.
+El camp s'esborra quan la cua estiga buidada.
+
+**`instagram_rebutjat_at` (2026-08).** Es marca quan Meta refusa aquest
+compte en publicar (code 110). No podem validar handles per endavant, així
+que un rebuig en publicar és l'única evidència que un compte ha canviat.
+En marcar-lo, `instagram_url` es **buida** (és públic: fitxa + JSON-LD
+`sameAs`) i el valor va a `instagram_rebutjat_url`, amb
+`instagram_revisat=False` perquè l'artista torne a la cua. Editar la URL
+neteja les dues marques. Vegeu `social-etiquetatge.md`.
+
+**Canal oficial (2026-08).** `youtube_canal_oficial` és el canal PROPI
+de l'artista (videoclips), segon carril de senyal i sovint el més gran.
+El tria **una persona** a `/staff/artistes/sense-youtube`; no s'endevina
+mai, perquè sondejar «Malalts» retorna un canal de pàdel.
+`youtube_canal_revisat` aporta el tercer estat: «revisat, no en té» és
+final i vàlid, distint de «ningú no ho ha mirat».
+
+**YouTube (2026-08).** `youtube_channel_id` + `youtube_uploads_playlist`
+apunten al canal auto-generat «`<nom>` - Topic», no al canal humà de la
+banda que ja guarda `youtube_url` — són coses distintes i confondre-les
+trenca l'aparellament. `youtube_checked_at` es marca també quan NO se'n
+troba cap, perquè reintentar-ho costa 100 unitats de quota.
+
 ### Approval state machine (since migration 0042)
 
 `aprovat` and `pendent_review` are orthogonal and ENFORCED by
@@ -185,6 +222,10 @@ into the RF classifier as 4 features (`whisper_p_ca`, `whisper_p_es`,
 set (ADR-0014, `docs/decisions/0014-whisper-lid-eval.md`): precision(ca) = 100 %,
 recall(ca) = 81 %, specificity = 100 %.
 
+**YouTube (2026-08).** `youtube_video_id` és l'Art Track del canal Topic;
+`youtube_match` diu COM s'hi ha arribat (`exacte` / `durada` / `manual`) i
+`youtube_matched_at` quan. Vegeu `pipeline.md` §3.1 bis.
+
 ### External-anchor invariant (2026-04-22, relaxed)
 Signal `unapprove_on_last_deezer_removed` (post_delete on ArtistaDeezer)
 enforces: `aprovat=True ⇒ ≥ 1 external anchor` (Deezer ID OR non-empty
@@ -310,6 +351,20 @@ Daily Last.fm signal per track. One row per `(canco, data)`.
 - Indexes: `(canco, data)` unique, `(data, error)`, `(data, corregit)`
 - **No normalisation** since 2026-04-23. Algorithm v2.0 reads
   `lastfm_playcount` directly and computes weekly deltas at ranking time.
+
+### `CancoYouTubeVideo` — `music_cancoyoutubevideo` (2026-08)
+
+Vídeos del **canal oficial** aparellats a una cançó. Taula filla perquè
+una banda pot penjar videoclip, directe i lyric del mateix tema i sota
+una lectura de «ressò» compten els tres. L'Art Track, que és un per
+cançó, es queda a `Canco.youtube_video_id`.
+
+### `SenyalYouTube` — `ranking_senyalyoutube` (2026-08)
+
+Bessona de `SenyalDiari` per a la segona font: `views` (acumulatiu) +
+`likes` + `video_id`, únic per `(canco, data)`. Taula separada a posta —
+una visualització no és un scrobble, i unir-les ací forçaria una decisió
+que ha de ser editorial. Vegeu `pipeline.md` §3.1 bis.
 
 ### `TopSetmanal` — `ranking_topsetmanal`
 Weekly official ranking. `setmana` = Monday of the ranking ISO week.

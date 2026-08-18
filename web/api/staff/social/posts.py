@@ -595,11 +595,28 @@ def _delete_remote_and_reset(post: SocialPost) -> tuple[bool, str]:
         from social import telegram_client
 
         mids = (post.metadata or {}).get("message_ids") or []
+        parcial = False
         if not mids:
+            # Posts published before `message_ids` was captured
+            # (2026-05-03) only leave the URL, whose tail is the FIRST
+            # message of the media-group. Telegram has no group-level
+            # delete, so this removes one of up to ten and the rest stay
+            # in the channel — reported as a plain success until
+            # 2026-08-15, after which the row was reset and the other
+            # ids were gone for good. Still worth attempting, but the
+            # operator has to be told it was partial.
             tail = ext_id.rstrip("/").rsplit("/", 1)[-1]
             if tail.isdigit():
                 mids = [int(tail)]
+                parcial = True
         ok, msg = telegram_client.delete_messages(mids)
+        if ok and parcial:
+            msg = (
+                f"{msg} — ATENCIÓ: no teníem els ids del grup, així que "
+                f"només s'ha esborrat el missatge {mids[0]}. Si la "
+                f"publicació era un carrusel, la resta continuen al canal "
+                f"i s'han d'esborrar a mà."
+            )
     else:
         return False, f"plataforma no suportada per esborrat remot: {plat}"
 

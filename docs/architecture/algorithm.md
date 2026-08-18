@@ -18,6 +18,14 @@
 
 For each territori the algorithm looks at:
 
+> **`SenyalYouTube` (2026-08) no entra en aquest càlcul.** Des de
+> l'agost suma dos carrils (Art Track + canal oficial) i `n_videos` diu
+> sobre quants, perquè afegir un carril fa saltar la sèrie per motius
+> que no són l'audiència. La segona font
+> recull dades des de l'agost del 2026, però com es combina amb Last.fm
+> és una decisió editorial pendent que necessita setmanes d'històric
+> abans de prendre's. L'algorisme d'ací baix llig NOMÉS Last.fm.
+
 1. **`SenyalDiari.lastfm_playcount`** — the raw cumulative Last.fm play
    count per (cançó, data). Ingested daily by `obtenir_senyal`
    (06:00 UTC). No normalisation; we consume it as-is.
@@ -60,6 +68,15 @@ Casuístiques:
   `weekly_plays = playcount_today` (tot el comptador és d'aquesta
   setmana). Sense extrapolation: projectar un ritme de 2 dies a 7
   fabricava xifres fantasma (decisió 2026-05-07).
+  **Guarda de reedició (2026-08-15):** si el mateix artista té una
+  altra cançó al pool amb el mateix títol normalitzat (`_track_identity`)
+  i data anterior, la fila NO és fresca — és un single reeditat dins
+  d'un EP/àlbum posterior (ISRC propi, però Last.fm només coneix un
+  títol i torna el comptador de tota la vida de l'original). Hereta la
+  data de la més antiga i cau a les branques amb baseline (→ 0 fins que
+  s'acumule). Cas: Bocc «Ànima D'Acer», 966 plays clavats 3 dies, #1
+  CAT / #2 PPCC sense cap moviment real. Mateix títol amb artista
+  diferent (versions) continua sent fresc.
 - **Esglaó de fusió de Last.fm** (`_robust_weekly_from_series`,
   2026-06-06): Last.fm fusiona periòdicament els scrobbles d'una
   cançó cap a la gravació canònica i **duplica el comptador acumulat
@@ -93,6 +110,24 @@ Casuístiques:
 El `weekly_plays` cru es persisteix a `TopSetmanal.weekly_plays` (des de
 2026-06-09) i és el que alimenta el sostre suau de §2.1bis i la mediana
 històrica per territori.
+
+### 2.1 ter · La setmana en curs no es llig mai a si mateixa
+
+Tota lectura de `TopSetmanal` dins de l'algorisme exclou la setmana que
+s'està calculant (`_setmana_en_curs(today)` — el dilluns de la setmana
+de `today`, igual que `calcular_top`). Afecta les dues lectures: la
+penalització per tops previs (§2.3) i la mediana del genoll (§2.1bis).
+
+**Per què** (2026-08-15): `calcular_top` desa cada territori *abans* que
+PPCC agregue, i `_calcular_top_ppcc` tornava a executar cada territori
+d'origen (ja no: §3). Sense el filtre, eixa segona passada llegia les files que la
+primera acabava de desar: cada cançó es penalitzava per la posició que
+se li estava atorgant en eixe mateix moment — i com que la penalització
+és més gran per al #1 (4%) que per al #2 (2%), **castigava més qui anava
+davant**. Resultat: el càlcul no era idempotent i l'ordre publicat d'un
+territori podia invertir-se dins del PPCC. Cas real: Bocc #1 CAT i
+Rosalía #1 PPCC, sent les dues cançons només de CAT. Test:
+`ranking/tests/test_coherencia_ranking.py`.
 
 ### 2.1bis Sostre suau d'outliers (adaptatiu, per territori)
 
@@ -205,16 +240,97 @@ la setmana immediatament anterior (TopSetmanal ordenat per
 
 ---
 
+## 2.4 `SenyalYouTube` — la segona font, i quan s'encén sola
+
+Des del 2026-08-19 el càlcul pot sumar les visualitzacions de YouTube.
+**No hi ha interruptor.** Que compte o no depén d'un fet comprovable:
+quants dies de detall per vídeo hi ha acumulats
+(`ranking.senyal_youtube.actiu`, una agregació indexada per càlcul de
+top). Per defecte en calen **7**
+(`ConfiguracioGlobal.youtube_dies_minims`).
+
+Un interruptor només afegiria una segona cosa que pot estar malament: el
+dia que les dades estan llestes i la casella apagada, o al revés. La
+pregunta «ja es pot fer servir?» té resposta factual, i llegir-la és més
+barat que recordar-se'n.
+
+**Per què 7 i no 4.** El delta setmanal és `delta × 7 / span`. Amb una
+base de 4 dies —el mínim que la finestra accepta— això infla un 75 %. A
+7 dies d'història, el dia que s'activa tota cançó fotografiada cada dia
+té una base d'exactament una setmana enrere i el número mesura una
+setmana en lloc d'extrapolar-la. Baixar el llindar avança el dia i
+eixampla eixa extrapolació.
+
+**Només compten les fotos amb detall per vídeo.** Les files anteriors al
+2026-08-19 només porten el total, i un total no distingeix una setmana
+de públic d'un carril que arriba — que és exactament per què el detall
+existeix. Datar la història des d'elles convertiria el llindar en un
+tràmit.
+
+Amb la font activa, el senyal d'una cançó passa a ser:
+
+Amb l'interruptor encés, el senyal d'una cançó passa a ser:
+
+```
+senyal = escoltes × youtube_pes_escolta + visualitzacions_setmanals
+```
+
+i el terra passa de `min_escoltes_top` a `min_senyal_combinat`, perquè
+els dos números deixen d'estar en unitats d'escoltes.
+
+**Per què es multipliquen les escoltes i no es divideixen les
+visualitzacions.** Són equivalents per a l'ordre, però no per a qui
+entra: `min_escoltes_top` és un número absolut, així que dividint, una
+cançó amb 400 visualitzacions i cap escolta cau a 2 i queda fora —
+precisament la gent que la segona font existeix per a no perdre. Mesurat
+el 2026-08-18: dividint quedaven **857** cançons només-YouTube per davall
+del terra; multiplicant, **393**, i eixes tenen menys de cinc
+visualitzacions en una setmana.
+
+**El pes és editorial, no una conversió mesurada.** La proporció real
+entre visualitzacions i escoltes va de 3 a 67 segons l'artista (vegeu
+[`analytics-youtube.md`](analytics-youtube.md)), així que no hi ha cap
+número «correcte». A 1000 —el valor per defecte— el top valencià passa
+de 30 files a 40 i YouTube **no supera Last.fm en cap fila**: només
+decideix on Last.fm calla.
+
+**L'increment se suma per vídeo**, mai restant sumes. `views` és la suma
+de tots els carrils i un carril nou entra amb el seu comptador de tota la
+vida; `SenyalYouTube.views_per_video` guarda el detall per a restar
+només els vídeos presents a les dues fotos. Sense això, aparellar un
+videoclip es llig com una setmana de públic (Andreu Valor, 2026-08-18:
+103.048 falses contra 17 de reals). La lectura viu a
+`ranking/senyal_youtube.py`, compartida amb l'informe diari perquè dues
+implementacions del mateix delta és com es desincronitzen.
+
 ## 3. Agregació PPCC
 
 PPCC no executa el càlcul per territori — agrega els resultats de
 tots els territoris amb top propi (CAT, VAL, BAL, ALT +
 opcionals amb prou volum):
 
-1. Per cada fila, `score_global = score_setmanal × (1 − (pos − 1) × 0.04)`
-   (penalització lineal del 4 % per posició al top d'origen).
+1. Per cada fila, `score_global = score_setmanal × (1 − (pos − 1) × p)`,
+   penalització lineal per posició al top d'origen. `p` és
+   `ConfiguracioGlobal.ppcc_penalitzacio_per_posicio`, editable des del
+   panell staff: per a saber-ne el valor, llig la config, no aquesta doc.
 2. Dedupliquem per `canco_id` conservant el `score_global` més alt.
 3. Ordenem per `score_global` desc, top 100.
+
+**Les files són les que ja s'han calculat, no unes de noves.**
+`calcular_top` acumula el resultat de cada territori i li'l passa a
+`calcular_top_territori("PPCC", resultats_per_territori)`, de manera que
+el top global re-puntua exactament els números que hem publicat per
+territori. Fins al 2026-08-15 l'agregació recalculava cada territori
+des de zero, i com que el comando desa abans d'arribar al PPCC, eixa
+segona passada llegia les files acabades d'escriure (§2.1 ter) i podia
+contradir el top publicat. El recàlcul es conserva només com a reserva
+per a `--territori PPCC` a soles, on encara no hi ha res calculat.
+
+**PPCC no té penalització de permanència pròpia.** Com que mai passa pel
+càlcul per territori, les files amb `territori='PPCC'` no es llegeixen
+mai com a historial; el PPCC hereta la penalització que ja portava el
+territori d'origen. La permanència és per territori a posta: una cançó
+pot ser #1 al VAL i no haver aparegut mai al CAT.
 
 ---
 

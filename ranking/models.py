@@ -90,6 +90,55 @@ class ConfiguracioGlobal(models.Model):
         "queden fora del top. Si això fa que un territori no arribi "
         "a 40 cançons, el top és més curt — no s'omple amb soroll.",
     )
+    # ── YouTube com a segona font (2026-08) ─────────────────────────
+    # No hi ha interruptor. Que YouTube compte o no depén d'un fet
+    # comprovable —quants dies de detall per vídeo tenim— i no d'un clic
+    # que algú va donar o no va donar. Un interruptor només afegiria una
+    # segona cosa que pot estar malament: el dia que les dades estan
+    # llestes i la casella apagada, o al revés.
+    #
+    # A 7 dies, el dia que s'encén tota cançó fotografiada cada dia té
+    # una base d'exactament una setmana enrere, i el delta mesura una
+    # setmana en lloc d'extrapolar-la (amb una base de 4 dies, la
+    # reescalada infla un 75 %). Baixar-ho avança el dia i eixampla eixa
+    # extrapolació; pujar-ho el retarda.
+    youtube_dies_minims = models.IntegerField(
+        default=7,
+        validators=_COUNT_RANGE,
+        help_text="Dies de detall per vídeo que demanem abans de deixar "
+        "que YouTube compte al top. Quan se n'acumulen tants, s'activa "
+        "sol. Més alt = més tard i amb un delta menys extrapolat.",
+    )
+    # Quantes visualitzacions val una escolta. NO és una conversió
+    # mesurada —la proporció real varia per artista de 3 a 67— sinó el
+    # pes editorial que decidim donar-li a cada font.
+    #
+    # Es multipliquen les ESCOLTES en lloc de dividir les
+    # visualitzacions perquè `min_escoltes_top` és un número absolut: si
+    # dividires, una cançó amb 400 visualitzacions i cap escolta cauria a
+    # 2 i quedaria fora, que és exactament la gent que volem deixar de
+    # perdre. Multiplicant, el llindar deixa de fer eixe mal.
+    #
+    # Mesurat el 2026-08-18 amb dades netes: a 1000, el top valencià
+    # passa de 30 files a 40 i YouTube no supera Last.fm en cap fila —
+    # només decideix on Last.fm calla.
+    youtube_pes_escolta = models.IntegerField(
+        default=1000,
+        validators=_COUNT_RANGE,
+        help_text="Quantes visualitzacions de YouTube val una escolta de "
+        "Last.fm. Més alt = YouTube pesa menys. A 1000, YouTube només "
+        "omple els buits i no reordena res del que Last.fm ja veu.",
+    )
+    # El terra quan la font combinada està activa. En unitats del senyal
+    # combinat, no d'escoltes: a pes 1000, 200 vol dir «200
+    # visualitzacions o una cinquena part d'una escolta».
+    min_senyal_combinat = models.IntegerField(
+        default=200,
+        validators=_COUNT_RANGE,
+        help_text="Terra per a entrar al top quan YouTube està actiu. "
+        "Substitueix min_escoltes_top, que és en unitats d'escoltes.",
+    )
+
     # PPCC aggregator weight per source position. Was a module-level
     # constant in `ranking/algorisme.py`; promoted to the configurable
     # surface 2026-04-25 (Sprint A) so editorial tuning doesn't require
@@ -390,6 +439,46 @@ class ConfiguracioGlobal(models.Model):
         help_text="Segons d'espera entre reintents 9007 (backoff curt fix).",
     )
 
+    # ── TLS certificate expiry watch (2026-07-27) ──
+    # Added after the Stalwart certificate expired unnoticed on
+    # 2026-07-26. `tq-health` opens a TLS connection to each endpoint
+    # and reads the certificate ACTUALLY SERVED; a PEM on disk proves
+    # nothing, which is exactly how that incident stayed invisible for
+    # a month. See docs/post-mortems/2026-07-26-stalwart-cert-expirat.md.
+    #
+    # Default EMPTY so deploying this changes nothing — the operator
+    # opts in per endpoint. Recommended entries, one per line:
+    #     mail.topquaranta.cat:993
+    #     mail.topquaranta.cat:465
+    #     mail.topquaranta.cat:25
+    #     topquaranta.cat:443
+    #     api.cercol.team:443
+    #     autoconfig.topquaranta.cat:443
+    tls_endpoints_vigilats = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Endpoints TLS a vigilar, un per línia en format «host:port» "
+            "(p. ex. mail.topquaranta.cat:993). Les línies buides i les "
+            "que comencen amb # s'ignoren, així pots deixar-hi candidats "
+            "apuntats sense activar-los. Buit = cap vigilància. Els ports "
+            "25 i 587 es negocien amb STARTTLS; la resta és TLS directe. "
+            "Es mesura el certificat servit per la xarxa, mai un fitxer "
+            "del disc."
+        ),
+    )
+    tls_avis_dies = models.PositiveSmallIntegerField(
+        default=21,
+        validators=[MinValueValidator(1), MaxValueValidator(365)],
+        help_text=(
+            "Dies de marge abans de la caducitat a partir dels quals "
+            "tq-health avisa. Per defecte 21: deixa tres setmanes de "
+            "reacció i queda per damunt de la finestra de renovació de "
+            "Let's Encrypt (~30 dies), de manera que una renovació que "
+            "no arriba es nota abans no siga urgent."
+        ),
+    )
+
     # Channel arg → its per-channel `*_actiu` field. Single source of
     # truth for the set of distribution channels the master gates.
     CHANNEL_SWITCH_FIELDS = {
@@ -492,6 +581,80 @@ class SenyalDiari(models.Model):
 
     def __str__(self) -> str:
         return f"{self.canco} — {self.data}"
+
+
+class SenyalYouTube(models.Model):
+    """Daily YouTube snapshot per track — the second signal source.
+
+    Deliberately a separate table rather than columns on `SenyalDiari`:
+    the two sources have different coverage, different failure modes and
+    different semantics (a view is not a scrobble), so joining them at
+    the storage layer would force a decision we want to keep editorial.
+    Same shape otherwise, so the weekly-delta machinery transfers.
+
+    Cheap to fill: `videos.list?part=statistics` returns 50 ids for one
+    quota unit, so the whole catalogue costs ~60 of the 10.000 daily.
+    """
+
+    canco = models.ForeignKey(
+        Canco,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="senyals_youtube",
+    )
+    data = models.DateField()
+
+    # Cumulative, exactly like `lastfm_playcount` — the ranking reads the
+    # 7-day delta, never the absolute value.
+    views = models.BigIntegerField(null=True)
+    likes = models.IntegerField(null=True)
+    # The id actually polled. Kept per row so a re-match (or a staff
+    # correction) leaves the old series attributable instead of silently
+    # re-labelling history.
+    video_id = models.CharField(
+        max_length=16, blank=True, help_text="L'Art Track; el carril primari."
+    )
+    # How many videos this row sums. A song gains videos over time (the
+    # official channel is a human decision that lands late), and when it
+    # does the series jumps for reasons that have nothing to do with the
+    # audience. Recording the count is what lets a reader tell a real
+    # spike from a lane being added.
+    n_videos = models.PositiveSmallIntegerField(default=1)
+    # `{video_id: views}` d'aquell dia. Comptar els carrils no basta:
+    # si avui en marxa un de menut i n'entra un de gran, `n_videos` no
+    # es mou i el bot es cola igual (ho va vore el Miquel el 18/08).
+    #
+    # Amb el detall per vídeo l'increment setmanal es calcula sumant
+    # restes per vídeo en lloc de restar sumes, i llavors:
+    #
+    #   · un vídeo nou no aporta res el dia que apareix — no en tenim
+    #     base— i sí a partir de l'endemà;
+    #   · un vídeo que desapareix deixa d'aportar sense restar el que
+    #     havia acumulat;
+    #   · substituir-ne un per un altre ja no es pot confondre amb
+    #     públic.
+    #
+    # Un mapa a la mateixa fila i no una taula nova: sempre es llig una
+    # foto sencera d'una cançó, mai vídeos solts, i estalvia ~3.800
+    # files al dia.
+    views_per_video = models.JSONField(default=dict, blank=True)
+
+    error = models.BooleanField(default=False)
+    error_msg = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Senyal de YouTube"
+        verbose_name_plural = "Senyals de YouTube"
+        unique_together = [("canco", "data")]
+        ordering = ["-data"]
+        indexes = [
+            models.Index(fields=["canco", "data"]),
+            models.Index(fields=["data", "error"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.canco} — {self.data} (YouTube)"
 
 
 class TopSetmanal(models.Model):

@@ -91,7 +91,7 @@
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;"><tr>
       <td width="130" class="muted" style="font-size:13px;color:#b7b7be;">{{ b.label }}</td>
       <td valign="middle" style="padding:0 8px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:rgba(255,255,255,0.08);border-radius:999px;"><tr><td style="background:#facc15;height:8px;width:{{ b.pct }}%;border-radius:999px;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;background:rgba(255,255,255,0.08);border-radius:999px;"><tr><td width="{{ b.pct }}%" style="background:#facc15;height:8px;border-radius:999px;font-size:0;line-height:0;">&nbsp;</td><td width="{{ b.rest }}%" style="font-size:0;line-height:0;">&nbsp;</td></tr></table>
       </td>
       <td width="42" align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#ffffff;">{{ b.pct }}%</td>
     </tr></table>
@@ -160,7 +160,8 @@
     {% for q in seo.top_queries %}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:3px 0;"><tr>
       <td class="ink" style="font-size:14px;color:#e9e9ec;">{{ q.query }}</td>
-      <td align="right" class="muted" style="font-size:13px;color:#9aa0a6;white-space:nowrap;"><strong style="color:#facc15;">{{ q.clicks }}</strong> clics</td>
+      {% comment %} A query with 0 clicks is normal on a young site; showing "0 clics" five times in a row reads as breakage. Fall back to the impressions, which is the signal that query actually carries. {% endcomment %}
+      <td align="right" class="muted" style="font-size:13px;color:#9aa0a6;white-space:nowrap;">{% if q.clicks %}<strong style="color:#facc15;">{{ q.clicks }}</strong> clics{% else %}<strong style="color:#e9e9ec;">{{ q.impressions|milers }}</strong> impressions{% endif %}</td>
     </tr></table>
     {% endfor %}
   </td></tr></table>
@@ -185,6 +186,99 @@
     {% if social.top_post %}
     <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">Top post: <span style="color:#e9e9ec;">{{ social.top_post.label }}</span> &middot; {{ social.top_post.likes }}&#9829; {{ social.top_post.replies }}&#8617; {{ social.top_post.shares }}&#8599;</div>
     {% endif %}
+  </td></tr></table>
+
+  {% comment %} Calendari: canal × dia de la setmana {% endcomment %}
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin:14px 0 8px;">Qui ha publicat, i quin dia</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:12px 14px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
+      <tr>
+        <td width="74" style="font-size:10px;">&nbsp;</td>
+        {% for d in social.calendari.dies %}
+        <td align="center" class="muted" style="font-size:10px;color:#9aa0a6;text-transform:uppercase;letter-spacing:0.5px;padding-bottom:6px;line-height:1.3;">{{ d.curt }}<br><span style="color:#6b6b73;">{{ d.num }}</span></td>
+        {% endfor %}
+      </tr>
+      {% for fila in social.calendari.files %}
+      <tr>
+        <td width="74" class="muted" style="font-size:11px;color:{% if fila.total %}#e9e9ec{% else %}#6b6b73{% endif %};padding:3px 6px 3px 4px;white-space:nowrap;">{{ fila.label }}</td>
+        {% for c in fila.cel_les %}
+        <td align="center" style="padding:2px 1px;">
+          {% if c.estat == 'publicat' %}<div style="background:#facc15;color:#0a0a0a;font-size:10px;font-weight:700;border-radius:6px;padding:5px 2px;line-height:1.1;">{{ c.text }}</div>{% if c.fallats %}<div style="color:#f87171;font-size:10px;font-weight:700;padding-top:2px;line-height:1.1;">&#10005; {{ c.fallats }}</div>{% endif %}
+          {% elif c.estat == 'error' %}<div style="background:rgba(248,113,113,0.16);border:1px solid #f87171;color:#f87171;font-size:10px;font-weight:700;border-radius:6px;padding:4px 2px;line-height:1.1;">&#10005; {{ c.text }}</div>
+          {% elif c.estat == 'omes' %}<div style="border:1px dashed rgba(255,255,255,0.16);color:#6b6b73;font-size:10px;border-radius:6px;padding:4px 2px;line-height:1.1;">omès</div>
+          {% else %}<div style="color:#3a3a42;font-size:13px;line-height:1.9;">&middot;</div>{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="muted" style="font-size:10px;color:#6b6b73;margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;line-height:1.6;">
+      Top = top global &middot; Terr = top territorial &middot; Àlb = nous àlbums &middot; Sing = nous singles &middot; Mov = moviment<br>&times;N = N publicacions el mateix dia &middot; <span style="color:#f87171;">&#10005;N</span> = N han fallat &middot; <span style="color:#3a3a42;">&middot;</span> = res programat
+    </div>
+    {% if social.calendari.cap %}
+    <div style="color:#facc15;font-size:12px;margin-top:8px;">&#9888; Cap publicació ha sortit aquesta setmana.</div>
+    {% endif %}
+  </td></tr></table>
+</td></tr>
+
+{% comment %} G. INCIDÈNCIES {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:{% if incidencies.total %}#f87171{% else %}#7bbf7b{% endif %};text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Incidències{% if incidencies.total %} &middot; {{ incidencies.total }}{% endif %}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
+
+    {% if not incidencies.total %}
+    <div style="font-size:14px;color:#7bbf7b;">&#10003; Cap incidència registrada aquesta setmana.</div>
+    {% endif %}
+
+    {% for c in incidencies.crons %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;"><tr>
+      <td width="18" valign="top" style="font-size:13px;color:#f87171;line-height:1.5;">&#9679;</td>
+      <td style="font-size:13px;color:#e9e9ec;line-height:1.5;">{{ c.name }} <span class="muted" style="color:#9aa0a6;">— {{ c.display }}{% if c.silenced %} (silenciat){% endif %}</span><br><span class="muted" style="font-size:11px;color:#6b6b73;">últim OK: {{ c.last_run }}</span></td>
+    </tr></table>
+    {% endfor %}
+
+    {% for h in incidencies.handles_rebutjats %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;"><tr>
+      <td width="18" valign="top" style="font-size:13px;color:#f87171;line-height:1.5;">&#9888;</td>
+      <td style="font-size:13px;color:#e9e9ec;line-height:1.5;">{{ h.nom }} <span class="muted" style="color:#9aa0a6;">— Instagram rebutja aquest compte</span><br><span class="muted" style="font-size:11px;color:#6b6b73;">{{ h.url }}</span></td>
+    </tr></table>
+    {% endfor %}
+
+    {% for f in incidencies.social_fallades %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0;"><tr>
+      <td width="18" valign="top" style="font-size:13px;color:#f87171;line-height:1.5;">&#10005;</td>
+      <td style="font-size:13px;color:#e9e9ec;line-height:1.5;">{{ f.label }} <span class="muted" style="font-size:11px;color:#6b6b73;">{{ f.quan|date:"d/m" }}</span><br><span class="muted" style="font-size:11px;color:#9aa0a6;">{{ f.error }}</span></td>
+    </tr></table>
+    {% endfor %}
+
+    {% if incidencies.errors_log.total %}
+    <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;">
+      <div class="muted" style="font-size:11px;color:#9aa0a6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Errors Django &middot; {{ incidencies.errors_log.total }} registres</div>
+      {% comment %} Same day-of-week reading direction as the publication calendar. {% endcomment %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;margin-bottom:12px;"><tr>
+        {% for d in incidencies.errors_log.per_dia %}
+        <td align="center" style="padding:0 2px;">
+          <div class="muted" style="font-size:10px;color:#6b6b73;text-transform:uppercase;letter-spacing:0.5px;">{{ d.data|date:"D" }}</div>
+          <div style="margin-top:3px;border-radius:6px;padding:5px 2px;line-height:1.1;font-size:12px;font-weight:700;{% if d.count %}background:rgba(248,113,113,0.16);border:1px solid #f87171;color:#f87171;{% else %}border:1px solid rgba(255,255,255,0.07);color:#3a3a42;{% endif %}">{{ d.count }}</div>
+        </td>
+        {% endfor %}
+      </tr></table>
+      {% for t in incidencies.errors_log.top %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:3px 0;"><tr>
+        <td width="34" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:14px;color:#f87171;">{{ t.count }}&times;</td>
+        <td style="font-size:12px;color:#b7b7be;line-height:1.5;word-break:break-word;"><span style="color:#9aa0a6;">{{ t.logger }}</span> {{ t.msg }}</td>
+      </tr></table>
+      {% endfor %}
+      {% if incidencies.errors_log.altres %}<div class="muted" style="font-size:11px;color:#6b6b73;margin-top:6px;">+{{ incidencies.errors_log.altres }} tipus d'error més</div>{% endif %}
+    </div>
+    {% elif not incidencies.errors_log.disponible %}
+    <div class="muted" style="font-size:12px;color:#6b6b73;margin-top:8px;">Sense accés a <code>errors.log</code>: el registre d'errors Django no s'ha pogut llegir.</div>
+    {% endif %}
+
+    {% if incidencies.social_omesos %}
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">Slots omesos: {{ incidencies.social_omesos }} — la fase no els incloïa o no hi havia contingut. No compta com a error.</div>
+    {% endif %}
+
   </td></tr></table>
 </td></tr>
 

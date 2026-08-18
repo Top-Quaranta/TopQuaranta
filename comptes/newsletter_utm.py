@@ -12,6 +12,8 @@ analytics dashboard can attribute landings to a specific block
                              novetat_1, compartir_telegram, …)
 """
 
+# Spec: docs/architecture/comptes-newsletter.md
+
 from __future__ import annotations
 
 from urllib.parse import urlencode, urlparse

@@ -24,6 +24,63 @@ backend; for the visual design system see
 - Node 22 is the build target. CI uses `npm ci` against
   `package-lock.json`; the server only consumes `dist/`.
 
+A `sense-instagram`, una fila pot portar un avís roig («Instagram va
+refusar @X — busca'n el compte nou»): és un artista que hi ha tornat
+perquè Meta va rebutjar el seu handle en publicar i el camp s'ha buidat.
+Sense eixe context, l'operador podria concloure «no en té».
+
+La cua `sense-instagram` té una columna **Suggeriment** (provisional,
+2026-08): el candidat dels escombratges amb enllaç al perfil, botó
+«Accepta» (un clic → PATCH de la URL, consumeix el suggeriment) i «✕»
+(descarta el candidat però l'artista continua pendent — refusar el handle
+no és dir que no en té). Des del 2026-08-12 les dues cues mostren només
+artistes **amb cançó viva** i, a igualtat de tops i actives, primer el de
+la **cançó més nova**: l'artista que acaba de traure single és el que la
+publicació de «nous singles» necessita etiquetat ja. Els candidats nous
+els sembra el cron `suggerir_instagram` cada nit.
+
+Les dues cues d'omplir dades (`sense-instagram` i `sense-youtube`)
+comparteixen forma a posta: mateixes columnes (artista, presència al top,
+cançons actives), mateix botó **«No en té»** i el mateix tercer estat al
+model (`instagram_revisat` / `youtube_canal_revisat`). Sense eixe botó un
+artista que genuïnament no té compte torna a la cua cada passada i es
+revisa a mà per sempre.
+
+### `/staff/artistes/sense-youtube` *(2026-08)*
+
+> **`<Pagination>` va amb `meta`, sempre.** El component fa
+> `if (!meta) return null`, així que una crida amb els noms equivocats no
+> dibuixa res: ni error ni avís. Aquesta vista deia 400 artistes i només
+> se'n podien tocar 50 (2026-08-17). Guardià estàtic a
+> `web/tests/test_paginacio_spa.py`, perquè el projecte no té Vitest.
+
+Decisió humana sobre **un** canal oficial de YouTube per artista, el
+segon carril de senyal. Clon de `sense-instagram` amb una diferència que
+importa: la resposta té **tres** sortides, no dues — un id de canal, «no
+en té» (final i vàlid: Malalts no en té), o pendent. Sense el botó de
+«no en té», els artistes sense canal es quedarien a la cua per sempre.
+
+Si el que enganxes és un canal «- Topic» i l'artista no en tenia cap,
+el backend l'adopta a l'altre carril i la fila **no desapareix**: es
+queda amb un avís groc explicant que el camp del videoclip continua
+buit. Sense això semblaria que la faena està feta quan no ho està.
+
+Per què una persona i no una heurística: sondejar «Malalts»
+automàticament retorna un canal de pàdel i una empresa d'esdeveniments.
+Un canal equivocat no es veu equivocat aigües avall — es veu com una
+cançó amb sospitosament moltes reproduccions.
+
+El camp accepta **el que es pot copiar**: `youtube.com/@nom`, l'URL
+`/channel/UC…` o l'id pelat. Exigir l'id feia la cua inservible, perquè
+YouTube va deixar d'ensenyar-lo enlloc de la seua interfície; el resol el
+backend per 1 unitat de quota i refusa amb 400 el canal automàtic
+(«- Topic» / «- Tema»), que la cerca sol posar primer.
+
+La columna «Art Track» té **tres** estats — *Trobat*, *No en té* i
+*pendent* — perquè una cel·la buida es llegia com una absència quan
+normalment vol dir que el descobriment encara no hi ha arribat (~90
+artistes al dia sobre 520).
+
 ## Directory layout
 
 ```
@@ -158,6 +215,13 @@ control). It lives in each `ChannelView`'s "Què publica" section
 the cockpit. An off cell renders inactive (never hidden); non-seeded
 combos paint a blank dash.
 Not to be confused with `/staff/publicacions` (community posts).
+
+`StaffAnalyticsPage` carries a GoAccess card whose blurb describes what
+the reader actually consumes — the live Caddy access log **plus** its
+rotated `.log.gz` segments — and warns that the report states the
+interval it really covered, which can be shorter than the 30 days
+requested when rotation has eaten the tail. Keep that copy in step with
+`docs/architecture/analytics-goaccess.md`.
 
 ## Backend seam
 

@@ -48,6 +48,7 @@ number, kebab-case slug). Fill in:
 | 0009 | Spotify identity migrated to admin@ + Premium | Accepted | 2026-05-22 |
 | 0010 | No second-output to YouTube Music (yet) | Accepted | 2026-05-22 |
 | 0011 | Spotify sync cron schedule (daily 6h + weekly) | Proposed | 2026-05-22 |
+| 0017 | Pytest runs with `-n 4` fixed (xdist), not `-n auto` | Accepted | 2026-08-18 |
 
 ## Lifecycle
 

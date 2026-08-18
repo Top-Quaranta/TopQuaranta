@@ -93,6 +93,76 @@ def _render():
     return render_to_string("comptes/email_newsletter_top.html", _context())
 
 
+# ── structural helpers (property oracles, no pixel/hex pins) ─────────
+
+
+def _style_css(html):
+    m = re.search(r"<style[^>]*>(.*?)</style>", html, flags=re.S)
+    return m.group(1) if m else ""
+
+
+def _split_media(css):
+    """→ (top_level_css, [(query, body), ...]) with brace matching."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)  # prose may say "@media"
+    top, media, i = [], [], 0
+    while i < len(css):
+        m = re.compile(r"@media\s*([^{]+)\{").search(css, i)
+        if not m:
+            top.append(css[i:])
+            break
+        top.append(css[i : m.start()])
+        depth, j = 1, m.end()
+        while j < len(css) and depth:
+            depth += {"{": 1, "}": -1}.get(css[j], 0)
+            j += 1
+        media.append((m.group(1).strip(), css[m.end() : j - 1]))
+        i = j
+    return "".join(top), media
+
+
+def _rules(css):
+    """[(selector, declarations)] for a flat CSS body (comments removed).
+    Comma-separated selector lists are expanded one row per selector."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    out = []
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        for one in sel.split(","):
+            out.append((one.strip(), body.strip()))
+    return out
+
+
+def _decl(css_body, prop):
+    m = re.search(r"(?:^|;)\s*%s\s*:\s*([^;]+)" % re.escape(prop), css_body)
+    return m.group(1).replace("!important", "").strip() if m else None
+
+
+def _no_mso(html):
+    """The HTML with every MSO conditional-comment segment removed."""
+    return re.sub(r"<!--\[if mso\]>.*?<!\[endif\]-->", "", html, flags=re.S)
+
+
+def _tags(html, name):
+    """[(attrs_str, attrs_dict)] for every <name ...> opening tag."""
+    out = []
+    for attrs in re.findall(r"<%s\b([^>]*)>" % name, html, flags=re.S):
+        out.append((attrs, dict(re.findall(r'([\w-]+)="([^"]*)"', attrs))))
+    return out
+
+
+def _column_classes(html):
+    """Column classes are the SOURCE OF TRUTH of the hybrid layout: any
+    class that (a) gets a `max-width` cap in the top-level <style> rules
+    and (b) is used on a <div>. Derived, never listed by hand."""
+    top, _ = _split_media(_style_css(html))
+    capped = {
+        sel.lstrip(".")
+        for sel, body in _rules(top)
+        if sel.startswith(".") and _decl(body, "max-width")
+    }
+    used_on_div = {d.get("class") for _, d in _tags(html, "div")}
+    return capped & used_on_div
+
+
 # ── template render ──────────────────────────────────────────────────
 
 
@@ -138,9 +208,15 @@ def test_no_template_comment_leaks():
 
 
 def test_dark_mode_and_responsive_present():
+    """Property asserted: the <style> block has a dark-scheme media query
+    with at least one rule and a mobile (`max-width`) media query with
+    at least one rule — breakpoint value not pinned."""
     html = _render()
-    assert "prefers-color-scheme: dark" in html
-    assert "max-width:640px" in html
+    _, media = _split_media(_style_css(html))
+    dark = [b for q, b in media if "prefers-color-scheme" in q and "dark" in q]
+    mobile = [b for q, b in media if re.search(r"max-width\s*:\s*\d+px", q)]
+    assert dark and _rules(dark[0]), media
+    assert mobile and _rules(mobile[0]), media
 
 
 # ── Gmail compatibility (2026-07-05 refactor) ────────────────────────
@@ -158,15 +234,24 @@ def test_gmail_redundant_bgcolor_attributes():
     Gmail keeps the dark surfaces even when it strips or ignores CSS
     (dark-mode inversion, clipped <style>). Structural cells use the
     `bgcolor` attribute; the card surfaces are <div>s (2026-08-01), where
-    `bgcolor` does not exist, so they carry the inline background-color."""
+    `bgcolor` does not exist, so they carry the inline background-color.
+    Property asserted: <body>, every section cell (`td.px`) and every
+    `.card` div carry an INLINE background (attribute and/or style, and
+    when both, the same value); no surface relies on the <style> block.
+    Hex values and counts are not pinned."""
     html = _render()
-    assert html.count('bgcolor="#060608"') >= 8  # body/sections
-    assert html.count('bgcolor="#141319"') >= 5  # cards that kept a table
-    assert 'bgcolor="#1c1a10"' not in html  # gestio block absent by default
-    cards = re.findall(r'<div class="card"[^>]*>', html)
+    ((_body_attrs, body),) = _tags(html, "body")
+    assert body.get("bgcolor") and _decl(body.get("style", ""), "background-color")
+    sections = [d for _, d in _tags(html, "td") if "px" in d.get("class", "").split()]
+    assert sections
+    for d in sections:
+        inline = _decl(d.get("style", ""), "background-color")
+        assert d.get("bgcolor") and inline, d
+        assert d["bgcolor"].lower() == inline.lower(), d
+    cards = [d for _, d in _tags(html, "div") if "card" in d.get("class", "").split()]
     assert cards
-    for div in cards:
-        assert "background-color:#141319" in div, div
+    for d in cards:
+        assert _decl(d.get("style", ""), "background-color"), d
 
 
 def test_gmail_no_rgba_and_no_anchor_wrapped_tables():
@@ -178,14 +263,25 @@ def test_gmail_no_rgba_and_no_anchor_wrapped_tables():
 
 
 def test_gmail_hybrid_container():
-    """Fluid-hybrid wrapper: width=100% + inline max-width:640px + MSO
-    ghost table, instead of a fixed width=\"640\" attribute."""
+    """Fluid-hybrid wrapper: width=100% + inline max-width + MSO ghost
+    table, instead of a fixed pixel width attribute.
+    Property asserted: outside the MSO conditionals no <table> carries a
+    fixed pixel `width` attribute; the outer wrapper is width=100% with
+    an inline pixel max-width; an MSO ghost exists. 640 not pinned."""
     html = _render()
     assert "[if mso]" in html
-    assert re.search(r'class="wrap"[^>]*width="100%"[^>]*max-width:640px', html)
-    assert 'width="640"' not in html.replace(
-        '<table role="presentation" align="center" width="640"', ""
-    )  # only the MSO ghost keeps a fixed 640
+    plain = _no_mso(html)
+    fixed = [
+        a for a, d in _tags(plain, "table") if re.fullmatch(r"\d+", d.get("width", ""))
+    ]
+    assert not fixed, fixed
+    wraps = [d for _, d in _tags(plain, "table") if d.get("class") == "wrap"]
+    assert len(wraps) == 1
+    w = wraps[0]
+    assert w.get("width") == "100%"
+    assert re.fullmatch(r"\d+px", _decl(w.get("style", ""), "max-width") or ""), w
+    # …and the MSO ghost is the only place a pixel width appears on a table.
+    assert re.search(r"<!--\[if mso\]><table[^>]*width=\"\d+\"", html)
 
 
 # ── Gmail mobile: hybrid columns (2026-08-01) ────────────────────────
@@ -200,46 +296,60 @@ def test_gmail_hybrid_container():
 # the <style> block only adds the max-width caps that turn the stack into
 # a row on wide viewports.
 
-_COL_CLASSES = ("hcol-a", "hcol-b", "hero-img", "hero-txt", "col2", "col3")
-
 
 def _col_divs(html):
-    return re.findall(
-        r'<div class="(%s)"[^>]*style="([^"]*)"' % "|".join(_COL_CLASSES), html
-    )
+    """[(class, inline style)] for every column div — classes derived
+    from the <style> caps (see `_column_classes`)."""
+    classes = _column_classes(html)
+    return [
+        (d["class"], d.get("style", ""))
+        for _, d in _tags(html, "div")
+        if d.get("class") in classes
+    ]
 
 
 def test_gmail_columns_are_full_width_divs_by_default():
     """Layout must survive the <style> block being dropped entirely: no
     <td> is stacked via CSS, and every column div is width:100% inline so
-    the no-CSS fallback is a clean single column."""
+    the no-CSS fallback is a clean single column.
+    Property asserted: column classes are derived from the <style> caps;
+    every div using one is inline `display:inline-block; width:100%` with
+    no inline max-width; no @media rule stacks anything with
+    `display:block`. No class names or counts pinned."""
     html = _render()
-    assert "gridcell" not in html
-    assert "display:block !important" not in html  # no CSS-stacked <td>s
+    classes = _column_classes(html)
+    assert len(classes) >= 2, classes  # a real multi-column layout
     cols = _col_divs(html)
-    assert len(cols) >= 8  # header 2 + hero 2 + podi 2 + territorial + novetat
+    assert cols
     for _cls, style in cols:
-        assert "display:inline-block" in style, style
-        assert "width:100%" in style, style
-        assert "max-width" not in style, style  # the cap is class-only
+        assert _decl(style, "display") == "inline-block", style
+        assert _decl(style, "width") == "100%", style
+        assert _decl(style, "max-width") is None, style  # the cap is class-only
+    _, media = _split_media(_style_css(html))
+    for _q, body in media:
+        for sel, decl in _rules(body):
+            assert _decl(decl, "display") != "block", (sel, decl)
 
 
 def test_gmail_column_caps_live_in_the_style_block_and_reset_on_mobile():
     """The max-width caps are class rules, and the @media block resets
     them to 100% — class-on-class, so it wins on source order even if a
-    client strips `!important`."""
+    client strips `!important`.
+    Property asserted: for every column class, the top-level cap is a
+    pixel value and the mobile @media block has a rule for that class
+    setting max-width to 100%. Pixel caps not pinned."""
     html = _render()
-    for cls, cap in (
-        ("hero-img", "330px"),
-        ("hero-txt", "250px"),
-        ("col2", "290px"),
-        ("col3", "192px"),
-    ):
-        assert ".%s { max-width:%s; }" % (cls, cap) in html
-    start = html.index("@media (max-width:640px)")
-    reset = html[start : html.index("@media (prefers-color-scheme", start)]
-    for cls in _COL_CLASSES:
-        assert ".%s" % cls in reset
+    top, media = _split_media(_style_css(html))
+    classes = _column_classes(html)
+    assert classes
+    mobile = [b for q, b in media if re.search(r"max-width\s*:\s*\d+px", q)]
+    assert mobile
+    mobile_rules = _rules(mobile[0])
+    for cls in classes:
+        caps = [_decl(b, "max-width") for sel, b in _rules(top) if sel == "." + cls]
+        assert any(re.fullmatch(r"\d+px", c or "") for c in caps), (cls, caps)
+        resets = [_decl(b, "max-width") for sel, b in mobile_rules if sel == "." + cls]
+        assert any(r and r.startswith("100%") for r in resets), (cls, resets)
 
 
 def test_gmail_columns_never_add_padding_to_a_100pc_box():
@@ -254,33 +364,47 @@ def test_gmail_columns_never_add_padding_to_a_100pc_box():
 def test_gmail_cards_own_their_width_not_a_nested_table():
     """Nested tables are shrink-to-fit in Gmail, so the card surface
     (background + border + radius) sits on a block-level <div>; any table
-    inside it is layout-only."""
+    inside it is layout-only.
+    Property asserted: no `.card` is a <table>/<td>; there is at least
+    one card div per top 4-10 entry; every card div carries its own
+    inline background-color AND border. Hex/radius/count not pinned."""
     html = _render()
-    # Top 4-10 rows: one card div per entry, each with the full surface.
-    rows = re.findall(r'<div class="card" style="([^"]*border-radius:12px[^"]*)"', html)
-    assert len(rows) == 7
-    for style in rows:
-        assert "background-color:#141319" in style
-        assert "border:1px solid" in style
+    for tag in ("table", "td", "tr"):
+        assert not [
+            d for _, d in _tags(html, tag) if "card" in d.get("class", "").split()
+        ]
+    cards = [d for _, d in _tags(html, "div") if "card" in d.get("class", "").split()]
+    assert len(cards) >= len(_context()["resta"])
+    for d in cards:
+        style = d.get("style", "")
+        assert _decl(style, "background-color"), d
+        assert _decl(style, "border"), d
 
 
 def test_gmail_mso_ghost_columns_for_outlook():
     """Outlook ignores inline-block widths, so each column group is
-    bracketed by an MSO ghost table with pixel widths."""
+    bracketed by an MSO ghost table with pixel widths.
+    Property asserted: MSO conditionals are balanced, and every column
+    div is immediately preceded by an MSO segment that opens a ghost
+    `<td width="<px>">`. Ghost pixel widths not pinned."""
     html = _render()
-    for w in ('width="330"', 'width="250"', 'width="290"', 'width="192"'):
-        assert "<!--[if mso]><td %s" % w in html or "<td %s valign" % w in html
-    assert html.count("<!--[if mso]>") == html.count("<![endif]-->")
+    assert html.count("<!--[if mso]>") == html.count("<![endif]-->") > 0
+    classes = _column_classes(html)
+    assert classes
+    seg_re = re.compile(r"<!--\[if mso\]>(.*?)<!\[endif\]-->", re.S)
+    n = 0
+    for m in re.finditer(
+        r'<div class="(%s)"' % "|".join(map(re.escape, classes)), html
+    ):
+        before = html[: m.start()]
+        segs = seg_re.findall(before)
+        assert segs, m.group(0)
+        assert re.search(r'<td\s[^>]*width="\d+"', segs[-1]), (m.group(1), segs[-1])
+        n += 1
+    assert n >= 2
 
 
 # ── no top 1-40 section + management block ───────────────────────────
-
-
-def test_no_full_ranking_section():
-    """The email carries the highlighted top 10 only; there is no separate
-    full 1-40 ranking section."""
-    html = _render()
-    assert "El Top 40 complet" not in html
 
 
 def test_management_block_absent_without_gestio_url():

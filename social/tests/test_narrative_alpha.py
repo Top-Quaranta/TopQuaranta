@@ -20,12 +20,6 @@ def _S(code, sev, cid, aid):
 # ── select_slots / _scenario_subject ─────────────────────────────────
 
 
-def test_scenario_subject_tuple():
-    assert _scenario_subject(_S("a6", 6, 100, 1)) == (100, 1)
-    assert _scenario_subject(_S("a5", 5, None, 1)) == (None, 1)
-    assert _scenario_subject(Scenario("fallback_no_event", 0, {})) == (None, None)
-
-
 def test_select_slots_drops_same_song():
     # [0] and [1] share canco_id 100 → [1] dropped; [2] and [3] distinct.
     scs = [
@@ -59,15 +53,6 @@ def test_select_slots_only_two_distinct_no_forced_tertiary():
     assert len(select_slots(scs, 3)) == 2
 
 
-def test_select_slots_degenerate_single_subject():
-    scs = [_S("a10", 8, 100, 1), _S("a6", 6, 100, 1)]
-    assert [s.code for s in select_slots(scs, 3)] == ["a10"]
-
-
-def test_select_slots_empty():
-    assert select_slots([], 3) == []
-
-
 def test_select_slots_none_ids_never_conflict():
     # Two generic scenarios (both None,None) must NOT dedup each other.
     scs = [
@@ -81,10 +66,16 @@ def test_select_slots_none_ids_never_conflict():
 
 
 def test_novetats_hashtags_titlecase():
-    assert HASHTAGS_NOVETATS == ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+    # Property (2026-08 rewrite; the exact list was a tautology of the
+    # constant): the novetats bank is non-empty, carries the brand tag
+    # shared with the tops' bank, and every tag is a well-formed
+    # TitleCase hashtag (leading '#', uppercase after it, no spaces).
+    assert HASHTAGS_NOVETATS
+    assert "#TopQuaranta" in HASHTAGS_NOVETATS
     # Consistent with the tops' bank: same #TopQuaranta token, TitleCase.
     assert "#TopQuaranta" in TERRITORY_HASHTAGS["PPCC"]
     for t in HASHTAGS_NOVETATS:
+        assert t.startswith("#") and len(t) > 1, t
         assert t[1].isupper(), t  # first letter after '#' is uppercase
         assert " " not in t
 

@@ -64,13 +64,23 @@ def top_ppcc(db):
 
 
 def test_seed_creates_todays_combos(db):
-    """The migration seeds the 17 combos published today, all on."""
+    """The migration seeds the 17 combos published today, all on.
+
+    Property asserted: every push canal × every tipus the CALENDARI carries
+    is seeded ON, newsletter × top_ppcc is seeded ON, and no combo the
+    channel never publishes (per `publish_weekdays_for`) is seeded — the
+    row count itself is not pinned so a new combo does not break this."""
+    from social.calendari import publish_weekdays_for
+
     rows = {(m.canal, m.tipus): m.actiu for m in MatriuPublicacio.objects.all()}
-    assert len(rows) == 17
+    assert rows  # seed ran
     for canal in ("instagram", "mastodon", "bluesky", "telegram"):
         for tipus in ("top_ppcc", "top_territorial", "nous_singles", "nous_albums"):
-            assert rows[(canal, tipus)] is True
-    assert rows[("newsletter", "top_ppcc")] is True
+            assert rows.get((canal, tipus)) is True, (canal, tipus)
+    assert rows.get(("newsletter", "top_ppcc")) is True
+    # Nothing seeded for a (canal, tipus) the channel never publishes.
+    for canal, tipus in rows:
+        assert publish_weekdays_for(canal, tipus), (canal, tipus)
     assert ("newsletter", "nous_albums") not in rows  # never published today
 
 
@@ -259,10 +269,17 @@ def test_toggle_writes_staff_audit(db, django_user_model):
 
 
 def test_matrix_excludes_web_and_rss(cfg_all_on):
+    # Property: rss/web are never matrix canals (adding a push channel does
+    # not break this); every matrix canal has its own per-channel switch;
+    # RSS stays governed by its own switch, never the matrix.
     canals = {c for c, _ in MatriuPublicacio.CANALS}
-    assert canals == {"instagram", "mastodon", "bluesky", "telegram", "newsletter"}
+    assert canals  # non-empty
     assert "rss" not in canals and "web" not in canals
+    assert canals <= set(ConfiguracioGlobal.CHANNEL_SWITCH_FIELDS)
     # RSS stays governed by its own per-channel switch, never the matrix.
     cfg_all_on.rss_actiu = True
     cfg_all_on.save()
     assert cfg_all_on.pot_publicar("rss") is True
+    cfg_all_on.rss_actiu = False
+    cfg_all_on.save()
+    assert cfg_all_on.pot_publicar("rss") is False

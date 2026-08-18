@@ -137,7 +137,15 @@ def test_no_subtier_is_currently_auto():
 
 
 @pytest.mark.django_db
-def test_already_verified_skipped(canco):
+def test_already_verified_skipped(canco, monkeypatch):
+    """An already-verified canço is never re-decided, even when its
+    sub-tier IS graduated. Graduate A++ for the test so the `verificada`
+    guard is the only thing standing between the canço and an auto-approval
+    (with today's empty ML_AUTO_APPROVE_SUBTIERS the guard would be
+    unobservable — mutation audit 2026-08-18)."""
+    import music.ml as ml
+
+    monkeypatch.setattr(ml, "ML_AUTO_APPROVE_SUBTIERS", ("A++",))
     canco.ml_classe = "A"
     canco.ml_confianca = 0.999
     canco.verificada = True
@@ -145,6 +153,13 @@ def test_already_verified_skipped(canco):
 
     assert maybe_auto_decide(canco) is None
     assert HistorialRevisio.objects.count() == 0
+
+    # Contrast: the same canço, still pending, IS auto-approved — proves
+    # the graduation took and the guard is what stopped the first call.
+    canco.verificada = False
+    canco.save()
+    assert maybe_auto_decide(canco) == "aprovada"
+    assert HistorialRevisio.objects.filter(motiu="auto_ml").exists()
 
 
 # ── Training filter ──────────────────────────────────────────────────

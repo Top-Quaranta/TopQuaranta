@@ -72,3 +72,36 @@ comparable», que sembla una troballa i és un forat de dades. Comprovat el
 El moviment mínim per a entrar a la comparativa és de 5 en una setmana a
 les dues fonts (`_MOVIMENT_MIN`): amb 1 escolta i 300 visualitzacions, la
 divisió dona 300 i no significa res.
+
+### El veredicte mira l'estabilitat, no la mida (2026-08-18)
+
+La primera versió donava el vistiplau quan hi havia 100 parelles o més.
+El 18/08 n'hi havia 179 —«prou» de sobra— i la mediana havia anat
+**1 → 23 → 9** en tres dies. La mida de la mostra és condició necessària
+i no suficient: el que decideix és que el número pare de moure's.
+
+Ara el correu porta la mediana dels últims `_DIES_HISTORIAL` (5) dies i
+només diu «s'ha assentat» quan les tres últimes queden dins d'un ±25 %
+(`_ESTABLE_MARGE`). El marge és ample a posta: busquem que deixe de
+saltar per múltiples, no precisió decimal. L'històric es recalcula a cada
+execució en lloc de desar-se — són poques consultes i no val la pena una
+taula per a un informe temporal.
+
+### Un factor global o un per artista
+
+Mesurat el 18/08 sobre 179 parelles i 22 artistes amb 3 o més cançons
+comparables:
+
+| | Dispersió (coef. de variació) |
+|---|---|
+| Entre tot el catàleg | **2,57** |
+| Dins d'un mateix artista | **0,64** |
+
+Quatre vegades més estreta dins de l'artista. La proporció sembla una
+propietat del **públic de cada artista**, no una constant del catàleg:
+Maria Jaume va de 3 a 12 i Power Burkas de 0 a 2, però ROMÀNTIC DIMONI
+va de 12 a 67. Si es manté, la conversió ha de ser per artista, i el
+factor global de 9 seria fals per a quasi tots.
+
+El correu ho compara cada dia i ho diu explícitament. El llindar per a
+afirmar-ho és que la dispersió interna siga menys del 70 % de la global.

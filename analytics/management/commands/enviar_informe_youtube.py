@@ -100,6 +100,97 @@ def _increments(model, camp, fi, *, dies=7):
     return out
 
 
+# Dies enrere que es recalculen per a vore si el factor s'assenta. La
+# mida de la mostra sola no ho diu: el 18/08 hi havia 179 parelles —
+# «prou» pel llindar— i la mediana havia anat 1 → 23 → 9 en tres dies.
+# El que decideix és que pare de moure's.
+_DIES_HISTORIAL = 5
+
+# Marge dins del qual dues medianes consecutives compten com a «la
+# mateixa». Un ±25 % és ample a posta: buscem que deixe de saltar per
+# múltiples, no precisió decimal.
+_ESTABLE_MARGE = 0.25
+
+
+def _ratios(en_finestra_ids, today):
+    """`{canco_id: visualitzacions per escolta}` d'una setmana."""
+    lfm = _increments(SenyalDiari, "lastfm_playcount", today)
+    yt_inc = _increments(SenyalYouTube, "views", today)
+    return {
+        c: yt_inc[c] / lfm[c]
+        for c in set(lfm) & set(yt_inc)
+        if c in en_finestra_ids
+        and lfm[c] >= _MOVIMENT_MIN
+        and yt_inc[c] >= _MOVIMENT_MIN
+    }
+
+
+def _historial(en_finestra_ids, today):
+    """La mediana de cada un dels últims dies, i si s'ha assentat.
+
+    Es recalcula en lloc de desar-se: són poques consultes i evita una
+    taula nova per a un informe que és temporal.
+    """
+    files = []
+    for enrere in range(_DIES_HISTORIAL - 1, -1, -1):
+        dia = today - datetime.timedelta(days=enrere)
+        r = sorted(_ratios(en_finestra_ids, dia).values())
+        files.append(
+            {
+                "data": dia,
+                "n": len(r),
+                "mediana": round(statistics.median(r)) if r else None,
+            }
+        )
+    darreres = [f["mediana"] for f in files[-3:] if f["mediana"]]
+    estable = False
+    if len(darreres) == 3:
+        centre = statistics.median(darreres)
+        estable = centre > 0 and all(
+            abs(m - centre) / centre <= _ESTABLE_MARGE for m in darreres
+        )
+    return files, estable
+
+
+def _per_artista(ratios, en_finestra):
+    """Compara la dispersió global amb la de dins de cada artista.
+
+    La hipòtesi que això contrasta: la proporció entre visualitzacions i
+    escoltes no és una constant del catàleg sinó una propietat del públic
+    de cada artista — qui té públic de YouTube en té a totes les seues
+    cançons. Si es confirma, la conversió ha de ser per artista i un
+    factor global seria fals per a quasi tothom.
+    """
+    if len(ratios) < 10:
+        return None
+    artista_de = dict(en_finestra.filter(id__in=ratios).values_list("id", "artista_id"))
+    per_art = defaultdict(list)
+    for canco_id, r in ratios.items():
+        aid = artista_de.get(canco_id)
+        if aid:
+            per_art[aid].append(r)
+    grups = [v for v in per_art.values() if len(v) >= 3]
+    if not grups:
+        return None
+
+    def _cv(vals):
+        mitjana = statistics.mean(vals)
+        return statistics.pstdev(vals) / mitjana if mitjana else 0
+
+    tots = list(ratios.values())
+    cv_global = _cv(tots)
+    cvs = [_cv(v) for v in grups if statistics.mean(v)]
+    cv_artista = statistics.median(cvs) if cvs else 0
+    return {
+        "cv_global": round(cv_global, 2),
+        "cv_artista": round(cv_artista, 2),
+        "n_artistes": len(grups),
+        # Un terç més estret ja no és soroll: vol dir que el número
+        # pertany a l'artista, no al catàleg.
+        "millor_per_artista": cv_artista and cv_artista < cv_global * 0.7,
+    }
+
+
 def _comparativa(en_finestra, today):
     """Es poden juntar les dues fonts, i què guanyaríem.
 
@@ -111,6 +202,8 @@ def _comparativa(en_finestra, today):
     lfm = _increments(SenyalDiari, "lastfm_playcount", today)
     yt_inc = _increments(SenyalYouTube, "views", today)
     vius = set(en_finestra.values_list("id", flat=True))
+    ratios_avui = _ratios(vius, today)
+    historial, estable = _historial(vius, today)
 
     mou_lfm = {c for c, v in lfm.items() if c in vius and v >= _MOVIMENT_MIN}
     mou_yt = {c for c, v in yt_inc.items() if c in vius and v >= _MOVIMENT_MIN}
@@ -126,6 +219,8 @@ def _comparativa(en_finestra, today):
             "p75": round(parelles[3 * n // 4]),
             "prou": n >= _MOSTRA_PROU,
             "indici": _MOSTRA_INDICI <= n < _MOSTRA_PROU,
+            # La mida de la mostra és condició necessària, no suficient.
+            "estable": estable,
         }
 
     # Quantes cançons tenen ja set dies de fotos: sense això no hi ha
@@ -176,6 +271,8 @@ def _comparativa(en_finestra, today):
         "pct_setmana": round(amb_setmana / amb_avui * 100) if amb_avui else 0,
         "guany": guany,
         "moviment_min": _MOVIMENT_MIN,
+        "historial": historial,
+        "per_artista": _per_artista(ratios_avui, en_finestra),
     }
 
 

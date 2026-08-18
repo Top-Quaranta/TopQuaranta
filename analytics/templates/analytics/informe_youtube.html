@@ -66,14 +66,27 @@
         Meitat central entre <strong style="color:#ffffff;">{{ comparativa.factor.p25|milers }}</strong> i <strong style="color:#ffffff;">{{ comparativa.factor.p75|milers }}</strong> · mostra de {{ comparativa.factor.n }} cançons
       </div>
       <div style="font-size:13px;margin-top:10px;line-height:1.6;">
-        {% if comparativa.factor.prou %}
-          <span style="color:#7bbf7b;">✓ Mostra prou gran per a mirar si el factor convergeix.</span> Si la meitat central s'estreny durant uns dies, ja es pot decidir.
+        {% if comparativa.factor.estable %}
+          <span style="color:#7bbf7b;">✓ S'ha assentat.</span> Tres dies seguits amb la mateixa mediana i mostra suficient: ja es pot decidir sobre aquest número.
+        {% elif comparativa.factor.prou %}
+          <span style="color:#facc15;">Mostra suficient, però el número encara balla.</span> La mida sola no basta — mira la columna de baix: mentre la mediana salte per múltiples d'un dia a l'altre, no hi ha res a decidir.
         {% elif comparativa.factor.indici %}
-          <span style="color:#facc15;">Primer indici.</span> Amb aquesta mostra el número es mou encara d'un dia a l'altre; mira'l com a tendència, no com a xifra.
+          <span style="color:#facc15;">Primer indici.</span> Mira'l com a tendència, no com a xifra.
         {% else %}
-          <span style="color:#fca5a5;">Encara no és fiable.</span> Amb tan poques parelles, un sol cas estrany mou la mediana. Fa falta que més cançons acumulen la setmana sencera.
+          <span style="color:#fca5a5;">Encara no és fiable.</span> Amb tan poques parelles, un sol cas estrany mou la mediana.
         {% endif %}
       </div>
+
+      {% comment %} L'històric: el que de veres diu si es pot decidir. {% endcomment %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
+        {% for h in comparativa.historial %}
+        <tr>
+          <td width="58" class="muted" style="font-size:12px;color:#9aa0a6;padding:2px 0;">{{ h.data|date:"d/m" }}</td>
+          <td class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if forloop.last %}#facc15{% else %}#b7b7be{% endif %};padding:2px 0;">{% if h.mediana %}{{ h.mediana|milers }}{% else %}—{% endif %}</td>
+          <td align="right" class="muted" style="font-size:12px;color:#9aa0a6;padding:2px 0;">{{ h.n }} parelles</td>
+        </tr>
+        {% endfor %}
+      </table>
     {% else %}
       <div class="muted" style="font-size:13px;color:#b7b7be;line-height:1.7;">
         Encara no hi ha cap cançó que es moga a les dues fonts alhora aquesta setmana. Fa falta que les fotos de YouTube acumulen set dies i que Last.fm veja moviment.
@@ -85,6 +98,27 @@
     </div>
   </td></tr></table>
 </td></tr>
+
+{% if comparativa.per_artista %}
+{% comment %} A bis. UN FACTOR O UN PER ARTISTA {% endcomment %}
+<tr><td class="px" style="padding:18px 28px 0;background:#060608;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
+    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:13px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;">Un factor per a tots, o un per artista?</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#b7b7be;">
+      <tr><td style="padding:2px 0;">Dispersió entre tot el catàleg</td><td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:#ffffff;">{{ comparativa.per_artista.cv_global }}</td></tr>
+      <tr><td style="padding:2px 0;">Dispersió dins d'un mateix artista</td><td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:{% if comparativa.per_artista.millor_per_artista %}#7bbf7b{% else %}#ffffff{% endif %};">{{ comparativa.per_artista.cv_artista }}</td></tr>
+    </table>
+    <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;line-height:1.7;">
+      {% if comparativa.per_artista.millor_per_artista %}
+        Molt més estreta dins de l'artista: la proporció sembla una propietat del seu públic, no del catàleg. Si es manté, la conversió ha de ser <strong style="color:#ffffff;">per artista</strong> — un factor global seria fals per a quasi tots.
+      {% else %}
+        De moment no hi ha diferència clara entre les dues: no hi ha motiu per a complicar-ho amb un factor per artista.
+      {% endif %}
+      <br>Mesurat sobre {{ comparativa.per_artista.n_artistes }} artistes amb 3 o més cançons comparables.
+    </div>
+  </td></tr></table>
+</td></tr>
+{% endif %}
 
 {% comment %} B. QUÈ GUANYARÍEM {% endcomment %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">

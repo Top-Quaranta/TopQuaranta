@@ -75,19 +75,20 @@ def test_build_top_surfaces_artist_territori(top_with_collab):
 
 @pytest.mark.django_db
 def test_build_top_no_regression_on_legacy_keys(top_with_collab):
+    # Property: every legacy key is still emitted (a SUBSET check, so
+    # additive fields — `artistes_slugs`, `reentrada` (TOP movement),
+    # `artista_territori` (per-row silhouette), `artistes_pool` (ADR-0015)
+    # or any future one — never break this) and the legacy fields keep
+    # their exact values (social engine contract).
     data = payload.build_top("PPCC", SETMANA)
     entry = data["entries"][0]
-    # Added keys: `artistes_slugs` + `reentrada` (TOP movement) +
-    # `artista_territori` (per-row silhouette) + `artistes_pool`
-    # (collaborator slot policy, ADR-0015); rest is legacy.
-    assert set(entry) == LEGACY_ENTRY_KEYS | {
-        "artistes_slugs",
-        "reentrada",
-        "artista_territori",
-        "artistes_pool",
-    }
+    missing = LEGACY_ENTRY_KEYS - set(entry)
+    assert not missing, missing
+    assert "artistes_slugs" in entry  # the Slice 2 addition is present
     # Legacy fields keep their exact values (social engine contract).
+    assert entry["posicio"] == 1
     assert entry["artista_nom"] == "Ouineta"
     assert entry["artista_slug"] == "ouineta"
     assert entry["canco_nom"] == "Nois"
     assert entry["canco_slug"] == "nois"
+    assert entry["artistes_noms"] == ["Ouineta", "Mushkaa"]

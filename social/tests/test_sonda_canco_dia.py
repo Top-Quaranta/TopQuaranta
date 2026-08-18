@@ -121,11 +121,18 @@ def test_elegibles_excludes_every_blocked_state():
 
 @pytest.mark.django_db
 def test_ladder_tiers_and_order():
+    # Property: the three ladder situations are all eligible and strictly
+    # ordered by priority — never probed (verge) before re-probe after the
+    # cooldown (resonda) before caducada re-entry (caducat) — and
+    # `tria_artista` follows that ladder as candidates disappear. The
+    # numeric encoding of the tiers is not pinned. The lower tiers get a
+    # recent release so the later sort keys would favour THEM — the tier
+    # must be what decides.
     verge = _artista("verge")
     _canco(verge, "c1")
 
     resonda = _artista("resonda")
-    _canco(resonda, "c2")
+    _canco(resonda, "c2", llancament=AVUI - datetime.timedelta(days=20))
     SondaStoryIG.objects.create(
         artista=resonda,
         data=AVUI - datetime.timedelta(days=400),
@@ -134,7 +141,7 @@ def test_ladder_tiers_and_order():
     )
 
     caducat = _artista("caducat")
-    _canco(caducat, "c3")
+    _canco(caducat, "c3", llancament=AVUI - datetime.timedelta(days=10))
     InvitacioColaboracioIG.objects.create(
         artista=caducat,
         ig_media_id="m3",
@@ -146,8 +153,14 @@ def test_ladder_tiers_and_order():
     )
 
     per_nom = {c.artista.nom: c.esglao for c in sonda.elegibles(AVUI)}
-    assert per_nom == {"verge": 1, "resonda": 2, "caducat": 3}
+    assert set(per_nom) == {"verge", "resonda", "caducat"}
+    assert per_nom["verge"] < per_nom["resonda"] < per_nom["caducat"]
+    # The pick walks down the ladder.
     assert sonda.tria_artista(AVUI, "mati").artista.nom == "verge"
+    verge.delete()
+    assert sonda.tria_artista(AVUI, "mati").artista.nom == "resonda"
+    resonda.delete()
+    assert sonda.tria_artista(AVUI, "mati").artista.nom == "caducat"
 
 
 @pytest.mark.django_db
@@ -168,6 +181,9 @@ def test_caducada_cooldown_90_dies():
 
 @pytest.mark.django_db
 def test_topat_amb_caducada_entra_esglao_3():
+    # Property: an artist with a topped song re-enters the funnel ONLY via
+    # an old caducada, and then at the lowest-priority tier (below a
+    # never-probed artist); without the caducada it is not eligible.
     a = _artista("topat-caducat")
     c_top = _canco(a, "hit")
     TopSetmanal.objects.create(
@@ -178,7 +194,7 @@ def test_topat_amb_caducada_entra_esglao_3():
         score_setmanal=9.0,
     )
     _canco(a, "deep-cut")  # material mai-top
-    InvitacioColaboracioIG.objects.create(
+    inv = InvitacioColaboracioIG.objects.create(
         artista=a,
         ig_media_id="m",
         username_snapshot="tc",
@@ -187,12 +203,24 @@ def test_topat_amb_caducada_entra_esglao_3():
         data_invitacio=_DT(2026, 2, 15),
         data_resolucio=_DT(2026, 3, 1),
     )
-    cands = sonda.elegibles(AVUI)
-    assert len(cands) == 1 and cands[0].esglao == 3
+    verge = _artista("verge")
+    _canco(verge, "c-verge")
+    per_nom = {c.artista.nom: c for c in sonda.elegibles(AVUI)}
+    assert set(per_nom) == {"topat-caducat", "verge"}
+    assert per_nom["topat-caducat"].esglao > per_nom["verge"].esglao
+    assert per_nom["topat-caducat"].ultima_caducada == inv.data_resolucio.date()
+    assert sonda.tria_artista(AVUI, "mati").artista.nom == "verge"
+    # Take the caducada away → the topped artist is out of the funnel.
+    inv.delete()
+    assert {c.artista.nom for c in sonda.elegibles(AVUI)} == {"verge"}
 
 
 @pytest.mark.django_db
 def test_quota_no_cat_al_torn():
+    # Property: on the reserved turn (one probe out of every
+    # `sonda.QUOTA_NO_CAT`) a non-CAT artist beats a CAT artist that would
+    # otherwise win; off the turn the CAT artist wins on the later keys
+    # (here: a recent release). The turn recurs with that period.
     from music.models import Territori
 
     cat = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Catalunya"})[0]
@@ -201,23 +229,30 @@ def test_quota_no_cat_al_torn():
     )[0]
     a_cat = _artista("de-cat")
     a_cat.territoris.add(cat)
-    _canco(a_cat, "c-cat")
+    _canco(a_cat, "c-cat", llancament=AVUI - datetime.timedelta(days=10))  # recent
     a_val = _artista("de-val")
     a_val.territoris.add(val)
-    _canco(a_val, "c-val")
+    _canco(a_val, "c-val", llancament=AVUI - datetime.timedelta(days=700))
+    # Probes are logged against a third, never-eligible artist (no IG) so
+    # they only move the global counter.
+    altre = _artista("altre", ig=False)
 
-    # 0 sondes → count%6==0 → torn no-CAT: guanya el valencià.
-    assert sonda.tria_artista(AVUI, "mati").artista.nom == "de-val"
-    # Amb 1 sonda registrada, ja no és el torn: el no-CAT no té avantatge
-    # (l'ordre cau al tiebreak/gènere).
-    SondaStoryIG.objects.create(
-        artista=a_val,
-        data=AVUI - datetime.timedelta(days=800),
-        franja="mati",
-        reaccio_auto=False,
-    )
-    tri = sonda.tria_artista(AVUI, "mati")
-    assert tri is not None  # no assert de qui: només que la quota no força
+    def _log_sonda(i):
+        SondaStoryIG.objects.create(
+            artista=altre,
+            data=AVUI - datetime.timedelta(days=800 + i),  # unique (data, franja)
+            franja="mati",
+            reaccio_auto=False,
+        )
+
+    for n in range(2 * sonda.QUOTA_NO_CAT + 1):
+        assert SondaStoryIG.objects.count() == n
+        winner = sonda.tria_artista(AVUI, "mati").artista.nom
+        if n % sonda.QUOTA_NO_CAT == 0:
+            assert winner == "de-val", n  # reserved turn: non-CAT wins
+        else:
+            assert winner == "de-cat", n  # off-turn: quota does not force
+        _log_sonda(n)
 
 
 # ── cançó ────────────────────────────────────────────────────────────

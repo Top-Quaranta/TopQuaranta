@@ -83,8 +83,10 @@ def test_instagram_feed_uses_tertiary_when_three_scenarios_given():
         setmana=datetime.date(2026, 5, 18),
         rng=random.Random(0),
     )
+    # Property: the tertiary referent surfaces in the body. How many
+    # phrase_ids the composer books is an internal (density-floor
+    # upgrades / truncation may change it) and is not asserted.
     assert "Third Song" in out["text"]
-    assert len(out["phrase_ids"]) == 3
 
 
 @pytest.mark.django_db

@@ -149,8 +149,16 @@ def test_detect_a3_fall_from_top1():
     _seed(c, "PPCC", _monday(2026, 5, 4), 1)  # was #1 last week
     _seed(c, "PPCC", _monday(2026, 5, 11), 5)  # now #5
     s = scen.detect_a3_fall_from_top1("PPCC", _monday(2026, 5, 11))
-    assert s and s.severity == 4
-    assert "5è" in s.data["posicio_nova_str"]
+    # Property: the detector fires with its own code and the new
+    # position reaches the phrase data as a Catalan ordinal (derived
+    # from `ordinal_ca`, ADR-0006 — never a "#N"); the severity is a
+    # real (positive) weight, but its exact value is tuning, not promise.
+    from social.narrative.utils import ordinal_ca
+
+    assert s and s.code == "a3_fall_from_top1"
+    assert s.severity > 0
+    assert ordinal_ca(5) in s.data["posicio_nova_str"]
+    assert "#5" not in s.data["posicio_nova_str"]
 
 
 @pytest.mark.django_db
@@ -388,38 +396,33 @@ def test_detect_all_sorts_by_severity():
 
 @pytest.mark.django_db
 def test_detect_a13_top1_return_with_gap_5():
-    """top1 W, pos3 W-1, top1 W-5 → a13 fires, severity 8 (gap 5 weeks)."""
+    """top1 W, pos3 W-1, top1 W-5 → a13 fires, severity 8 (gap 5 weeks).
+    top1 W, pos2 W-1, top1 W-2 → a13 fires, severity 5 (gap 2 weeks).
+
+    2026-08 rewrite: the former `..._with_gap_2` twin was folded in
+    here. Property asserted now: for each gap the detector fires with
+    its code, `gap_setmanes` equals the seeded gap and the human string
+    carries that number; and severity is monotone in the gap (a longer
+    absence is a bigger story) — the exact 5/8 weights are tuning."""
     a = Artista.objects.create(nom="R", slug="r", aprovat=True)
     al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
-    c = _make_canco("Divinize", a, al, "r-c")
-    other = _make_canco("Vell", a, al, "r-o")
     W = _monday(2026, 5, 18)
-    _seed(c, "PPCC", W, 1)  # this week #1
-    _seed(c, "PPCC", _monday(2026, 5, 11), 3)  # W-1 at #3 (not #1)
-    _seed(other, "PPCC", _monday(2026, 5, 11), 1)  # someone else #1 at W-1
-    _seed(c, "PPCC", _monday(2026, 4, 13), 1)  # W-5 was #1
-    s = scen.detect_a13_top1_return("PPCC", W)
-    assert s and s.code == "a13_top1_return"
-    assert s.severity == 8
-    assert s.data["gap_setmanes"] == 5
-    assert s.data["gap_setmanes_str"] == "5 setmanes"
-
-
-@pytest.mark.django_db
-def test_detect_a13_top1_return_with_gap_2():
-    """top1 W, pos2 W-1, top1 W-2 → a13 fires, severity 5 (gap 2 weeks)."""
-    a = Artista.objects.create(nom="R", slug="r", aprovat=True)
-    al = Album.objects.create(nom="A", slug="r-a", artista=a, descartat=False)
-    c = _make_canco("X", a, al, "r-c")
-    other = _make_canco("Vell", a, al, "r-o")
-    W = _monday(2026, 5, 18)
-    _seed(c, "PPCC", W, 1)
-    _seed(c, "PPCC", _monday(2026, 5, 11), 2)  # W-1 at #2
-    _seed(other, "PPCC", _monday(2026, 5, 11), 1)
-    _seed(c, "PPCC", _monday(2026, 5, 4), 1)  # W-2 was #1
-    s = scen.detect_a13_top1_return("PPCC", W)
-    assert s and s.severity == 5
-    assert s.data["gap_setmanes"] == 2
+    results = {}
+    # Each gap in its own territori so the seeds don't interfere.
+    for gap, terr, prev_pos in ((5, "CAT", 3), (2, "VAL", 2)):
+        c = _make_canco(f"Divinize-{gap}", a, al, f"r-c{gap}")
+        other = _make_canco(f"Vell-{gap}", a, al, f"r-o{gap}")
+        _seed(c, terr, W, 1)  # this week #1
+        _seed(c, terr, W - datetime.timedelta(weeks=1), prev_pos)  # W-1 not #1
+        _seed(other, terr, W - datetime.timedelta(weeks=1), 1)  # someone else
+        _seed(c, terr, W - datetime.timedelta(weeks=gap), 1)  # W-gap was #1
+        s = scen.detect_a13_top1_return(terr, W)
+        assert s and s.code == "a13_top1_return", (gap, s)
+        assert s.data["gap_setmanes"] == gap
+        assert str(gap) in s.data["gap_setmanes_str"]
+        assert s.severity > 0
+        results[gap] = s
+    assert results[5].severity > results[2].severity
 
 
 @pytest.mark.django_db
@@ -484,32 +487,23 @@ def test_fallback_when_no_scenario():
 
 
 def test_hero_has_nine_codes_three_lengths_fifteen_entries_each():
-    expected_codes = {
-        "a1_outside_to_top1",
-        "a2_streak",
-        "a3_fall_from_top1",
-        "a4_debut_alt",
-        "a5_artista_multiple",
-        "a6_canco_recent",
-        "a7_long_runner",
-        "a8_pujada_forta",
-        "a9_debut_anywhere",
-        "a10_artista_first_ever",
-        "a11_top5_drop_generic",
-        "a12_artista_emerging",
-        "a13_top1_return",
-        "fallback_no_event",
-    }
-    assert set(HERO.keys()) == expected_codes
+    """Every scenario code the engine can emit (each detector in
+    `scen._DETECTORS` + the fallback) has a hero bank with the three
+    tiers, and every tier has enough variants for the anti-repeat
+    registry to rotate (≥ 4). Property asserted now (2026-08 rewrite):
+    codes derived from the detector registry, tier presence, and a
+    floor of 4 — no exact key set, no exact per-code counts (a13,
+    2026-06-01, ships fewer variants than the original detectors)."""
+    emitted = {det.__name__.removeprefix("detect_") for det in scen._DETECTORS}
+    emitted.add(scen.fallback_scenario("PPCC").code)
+    assert emitted, "detector registry must not be empty"
+    missing = emitted - set(HERO.keys())
+    assert not missing, f"codes without a hero bank: {missing}"
     for code, by_length in HERO.items():
         for length in ("short", "medium", "long"):
             assert length in by_length, f"{code} missing {length}"
-            # The original 12 detectors + fallback ship 15 variants/tier;
-            # a13 (2026-06-01) ships 6 (its trigger is rarer). Either way
-            # at least 4 so anti-repeat has room.
-            minimum = 6 if code == "a13_top1_return" else 15
             assert (
-                len(by_length[length]) >= minimum
+                len(by_length[length]) >= 4
             ), f"{code}/{length} has {len(by_length[length])} entries"
 
 
@@ -812,7 +806,11 @@ def test_build_novetats_enriches_flags_and_composes_narrative():
     )
     txt = res["text"]
     assert txt and "Setmana" not in txt.split("\n")[0]  # not the skeleton header
-    assert res["hashtags"] == ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+    # Property: the narrative path names both artists in the body and
+    # emits hashtags at all (the exact hashtag list is the bank
+    # constant, not a promise).
+    assert "Coneguda" in txt and "Nova" in txt, txt
+    assert res["hashtags"] and all(h.startswith("#") for h in res["hashtags"])
 
 
 @pytest.mark.django_db

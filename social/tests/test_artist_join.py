@@ -114,8 +114,14 @@ def test_join_artists_text_only_first_fits():
     out = _join_artists_text(["Maria", "Joan"], max_chars=5)
     # Only "Maria" itself is exactly 5 chars — can't add an ellipsis
     # without exceeding, so it falls through to char-truncating the
-    # first name down by one to make room.
-    assert out == "Mari…"
+    # first name to make room.
+    # Property: the output respects the budget, signals omission with
+    # `…`, is a prefix of the main name (no collab leaks through) and
+    # keeps as much of that name as the budget allows.
+    assert len(out) <= 5
+    assert out.endswith("…")
+    assert "Joan" not in out and "," not in out
+    assert "Maria".startswith(out[:-1]) and len(out[:-1]) >= 1
 
 
 def test_join_artists_text_main_too_long_char_truncates():
@@ -221,10 +227,41 @@ def test_word_wrap_split_with_realistic_data():
         "El Diluvi",
     ]
     out = _join_artists(d, names, f, 840, max_lines=2)
+    # Property (not the exact split point, which depends on font
+    # metrics): the output uses two lines, both lines fit the slot,
+    # every name is preserved whole or broken exactly at a word
+    # boundary (line 1 ends with a leading-word prefix of the broken
+    # name and line 2 starts with its remaining words), and the
+    # word-wrap did fire — line 1 does not end with a whole name.
     assert "\n" in out, out
     parts = out.split("\n")
-    assert parts[0].endswith("Arde"), parts[0]
-    assert parts[1].startswith("Bogotá"), parts[1]
+    assert len(parts) == 2
+    for line in parts:
+        assert d.textlength(line, font=f) <= 840, line
+    l1 = parts[0].split(", ")
+    l2 = parts[1].rstrip("…").split(", ")
+    # Line 1: whole names in insertion order, except possibly the last
+    # token, which may be a leading-word prefix of the next name.
+    assert l1[:-1] == names[: len(l1) - 1], l1
+    nxt = names[len(l1) - 1]
+    if l1[-1] == nxt:
+        broken = False
+        rest = names[len(l1) :]
+    else:
+        words = nxt.split(" ")
+        prefixes = [" ".join(words[:k]) for k in range(1, len(words))]
+        assert l1[-1] in prefixes, (l1[-1], nxt)
+        broken = True
+        # Line 2 opens with the remaining words of the broken name.
+        assert l2[0] == nxt[len(l1[-1]) + 1 :], (l2[0], nxt)
+        l2 = l2[1:]
+        rest = names[len(l1) :]
+    # Line 2: whole names, in order, a prefix of what's left.
+    assert l2 == rest[: len(l2)], (l2, rest)
+    # With this real-world list the word-wrap must actually fire
+    # (line 1 has room for a leading word of the next multi-word
+    # name) — otherwise the test would not exercise Tasca B5.
+    assert broken, out
 
 
 def test_word_wrap_does_not_split_single_word_names():
@@ -251,10 +288,19 @@ def test_word_wrap_is_opportunistic_not_forced():
     d = _draw()
     f = fonts.sans_regular(44)
     names = ["Aaaa", "Bbbb", "Long Name", "Other"]
-    # Wide enough for line 1 ["Aaaa", "Bbbb"] and line 2
-    # ["Long Name", "Other"] whole.
-    out = _join_artists(d, names, f, 400, max_lines=2)
-    parts = out.split("\n") if "\n" in out else [out]
-    if len(parts) == 2:
-        # Neither line should have a broken name.
-        assert "Long Name" in (parts[0] + ", " + parts[1]).replace("\n", ", ")
+    # Slot sized empirically: fits "Aaaa, Bbbb, Long" (so a forced
+    # word-wrap COULD extend line 1) but not the whole list on one
+    # line, while "Long Name, Other" fits whole on line 2.
+    w_forced = d.textlength("Aaaa, Bbbb, Long", font=f)
+    w_full = d.textlength(", ".join(names), font=f)
+    max_w = int((w_forced + w_full) / 2)
+    assert d.textlength("Long Name, Other", font=f) <= max_w
+    out = _join_artists(d, names, f, max_w, max_lines=2)
+    # Property, asserted unconditionally: two lines, nothing dropped,
+    # and no name broken across lines — every painted token is one
+    # of the input names.
+    assert "\n" in out, out
+    parts = out.split("\n")
+    assert len(parts) == 2, out
+    tokens = [t for line in parts for t in line.split(", ")]
+    assert tokens == names, tokens

@@ -106,24 +106,23 @@ def test_caption_top_uses_narrative_engine():
             "artista_instagram_url": "",
         }
     ]
-    text = caption_top("top_ppcc", "PPCC", datetime.date(2026, 5, 11), entries)
-    # Legacy header is "Top — Global\nSetmana N\n\n…". Engine prepends
-    # a hero block referencing the artist and streak count. We can't
-    # pin one phrase (random pick), but every A2_STREAK template
-    # mentions either "{streak}" expanded (→ "4") AND "La Fúmiga".
-    # Tasca C (2026-05-18): article-stripping lowercases the
-    # article in "de + La Fúmiga" → "de la Fúmiga". Accept either
-    # form so the test is robust against future engine reorderings
-    # of preposition choice per template.
+    setmana = datetime.date(2026, 5, 11)
+    text = caption_top("top_ppcc", "PPCC", setmana, entries)
+    # Property asserted now (2026-08 rewrite): the caption is produced
+    # by the ENGINE path — it differs from the legacy plain-list shape,
+    # a hero phrase was actually emitted (compose_for_channel exposes
+    # its phrase_ids), and the artist is named. We do not pin any copy
+    # token: the phrase pick is random and the bank wording is free to
+    # change. Tasca C (2026-05-18): article-stripping lowercases the
+    # article in "de + La Fúmiga" → "de la Fúmiga", so accept either.
+    from social.captions import _caption_top_legacy
+
+    assert text.strip(), "caption must not be empty"
+    assert text != _caption_top_legacy("top_ppcc", "PPCC", setmana, entries)
     assert "La Fúmiga" in text or "la Fúmiga" in text
-    # The legacy plain caption never carries the word "setmana" (it
-    # uses "Setmana N" in the header). The engine bank uses lower-case
-    # "setmana"/"setmanes" inside the hero. Quick signal that we're
-    # on the engine path. ADR-0006: positions are emitted as Catalan
-    # ordinals / words ("al 1r", "al cim"), never as "#1" (which would
-    # autolink as a hashtag), so "#1" is no longer an accepted token —
-    # all 15 A2-streak long templates carry "setmana"/"setmanes".
-    assert any(tok in text for tok in (" setmana", "setmanes", "cim"))
+    result = compose_for_channel("instagram_feed", "top_ppcc", "PPCC", setmana, entries)
+    assert result["phrase_ids"], result
+    assert result["text"].strip()
 
 
 @pytest.mark.django_db
@@ -187,11 +186,17 @@ def test_caption_top_fallback_on_engine_error(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR, logger="social.captions"):
         text = caption_top("top_ppcc", "PPCC", SETMANA, entries)
 
-    # Legacy shape: "Top — Global\nSetmana N\n\n1. X · Y\n\n#…"
-    assert text.startswith("Top — Global"), text[:60]
-    assert "1. X · Y" in text
-    # The exception was logged via logger.exception.
-    assert any("narrative engine failed" in r.getMessage() for r in caplog.records), [
+    # Property asserted now (2026-08 rewrite): the post never goes out
+    # empty — the fallback is exactly the legacy caption for the same
+    # inputs (derived, not a literal), it lists the entries, and the
+    # failure was logged at ERROR with the traceback. No exact log
+    # copy, no exact header copy.
+    from social.captions import _caption_top_legacy
+
+    assert text.strip(), "fallback caption must not be empty"
+    assert text == _caption_top_legacy("top_ppcc", "PPCC", SETMANA, entries)
+    assert "X" in text and "Y" in text
+    assert any(r.levelno >= logging.ERROR and r.exc_info for r in caplog.records), [
         r.getMessage() for r in caplog.records
     ]
 

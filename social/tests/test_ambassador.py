@@ -27,6 +27,12 @@ def test_caption_no_positional_hashtag():
 
 
 def test_caption_without_position_omits_ordinal():
+    # Property: with an unknown position the caption carries no ordinal /
+    # "lloc" phrase and no digit at all, but still names the artist and
+    # links to the canonical page (exact wording is free to change).
     cap = ambassador_top_caption("Manel", "manel")
     assert "lloc" not in cap
-    assert "Manel entra al Top" in cap
+    prose = re.sub(r"https?://\S+", "", cap)  # the URL may legitimately carry digits
+    assert not re.search(r"\d", prose)
+    assert "Manel" in cap
+    assert "/artista/manel" in cap

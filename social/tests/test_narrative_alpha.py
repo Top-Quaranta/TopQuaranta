@@ -66,10 +66,16 @@ def test_select_slots_none_ids_never_conflict():
 
 
 def test_novetats_hashtags_titlecase():
-    assert HASHTAGS_NOVETATS == ["#TopQuaranta", "#MúsicaEnCatalà", "#Novetats"]
+    # Property (2026-08 rewrite; the exact list was a tautology of the
+    # constant): the novetats bank is non-empty, carries the brand tag
+    # shared with the tops' bank, and every tag is a well-formed
+    # TitleCase hashtag (leading '#', uppercase after it, no spaces).
+    assert HASHTAGS_NOVETATS
+    assert "#TopQuaranta" in HASHTAGS_NOVETATS
     # Consistent with the tops' bank: same #TopQuaranta token, TitleCase.
     assert "#TopQuaranta" in TERRITORY_HASHTAGS["PPCC"]
     for t in HASHTAGS_NOVETATS:
+        assert t.startswith("#") and len(t) > 1, t
         assert t[1].isupper(), t  # first letter after '#' is uppercase
         assert " " not in t
 

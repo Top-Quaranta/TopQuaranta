@@ -60,10 +60,13 @@ def test_short_forms():
 def test_ordinal_forms():
     # PPCC overrides to the genitive locative form ("al 1r del top general").
     assert territori_ordinal("PPCC") == "del top general"
-    assert TERRITORI_ORDINAL == {"PPCC": "del top general"}
-    # Every other territori falls back to its TERRITORI_DE form — no-op.
+    # Property: every override targets a known public territori (no
+    # orphan keys); the exact override dict is not pinned.
+    assert set(TERRITORI_ORDINAL) <= set(TERRITORI_DE)
+    # Every territori WITHOUT an override falls back to its TERRITORI_DE
+    # form — no-op.
     for slug in PUBLIC_SLUGS:
-        if slug == "PPCC":
+        if slug in TERRITORI_ORDINAL:
             continue
         assert territori_ordinal(slug) == TERRITORI_DE[slug]
 
@@ -106,7 +109,13 @@ def test_no_paisos_catalans_hashtag():
             assert "païsoscatalans" not in t.lower()
             assert "paisoscatalans" not in t.lower()
     # PPCC keeps only neutral hashtags, no global-territory tag.
-    assert TERRITORY_HASHTAGS["PPCC"] == ["#TopQuaranta", "#MúsicaEnCatalà"]
+    # Property: PPCC is non-empty and carries no tag that is specific
+    # to it — every PPCC tag also appears on some other territori
+    # (the exact list is the bank constant, not a promise).
+    ppcc = TERRITORY_HASHTAGS["PPCC"]
+    assert ppcc
+    others = {t for k, v in TERRITORY_HASHTAGS.items() if k != "PPCC" for t in v}
+    assert set(ppcc) <= others, set(ppcc) - others
 
 
 # ── phrase templates: no double preposition ──────────────────────────

@@ -789,6 +789,16 @@ Font de veritat del unit: `deploy/topquaranta-web.service` al repo.
 `bin/tq-sync-infra` el sincronitza a `/etc/systemd/system/` quan
 detecta drift, i fa `systemctl daemon-reload`.
 
+`tq-sync-infra` és, en general, **l'única via** per a qualsevol fitxer
+que viu fora de l'arbre de treball: Caddyfile, cron, logrotate, el unit
+de systemd i —des del 2026-08-18— l'autoconfig de correu
+(`deploy/autoconfig-topquaranta.xml` → `/var/www/autoconfig/`). Eixe
+últim va entrar precisament perquè no hi era: vivia només al servidor i
+es va desincronitzar quan es va retirar Stalwart, deixant els clients de
+correu apuntant a un relay que ja no els servia. **Si edites un fitxer
+d'infraestructura directament a la màquina, el següent desplegament no
+el toca i ningú se n'assabenta fins que falla.**
+
 Vegeu `docs/decisions/0001-gunicorn-no-reload.md` i
 `docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
 

@@ -36,9 +36,15 @@ def _entry(pos, canco, canco_slug, names, artista_slug, artistes_slugs=None):
     return e
 
 
+@pytest.mark.django_db
 def test_enrich_entry_collab_without_slug_stays_bold():
     """A collaborator whose slug is None stays bold even in a Slice-2
-    payload (the principal still links)."""
+    payload (the principal still links).
+    Property asserted on the rendered email: the collaborator's name is
+    present but is NOT the text of any link (no `/artista/None`, no link
+    to a guessed slug), while the principal is linked."""
+    import re
+
     e = _entry(
         3,
         "Nois",
@@ -47,10 +53,23 @@ def test_enrich_entry_collab_without_slug_stays_bold():
         "ouineta",
         artistes_slugs=["ouineta", None],
     )
-    row = _enrich_entry(e, "top_3", 40, hero=False, torna=False)
-    ar = row["artistes_render"]
-    assert "/artista/ouineta" in ar[0]["url"]
-    assert ar[1]["nom"] == "Mushkaa" and ar[1]["url"] is None
+    setmana = datetime.date(2026, 6, 1)
+    html = render_newsletter_preview(
+        "top_ppcc",
+        "PPCC",
+        setmana,
+        setmana + datetime.timedelta(days=5),
+        [e],
+        subject_override="Subj",
+        narrative_html_override="<p>Sense noms.</p>",
+    )
+    assert "Mushkaa" in html
+    assert "/artista/ouineta" in html
+    # Every link text: Mushkaa never appears as the text of an <a>.
+    link_texts = re.findall(r"<a\b[^>]*>(.*?)</a>", html, flags=re.S)
+    assert not any("Mushkaa" in t for t in link_texts), link_texts
+    # No broken href built from a missing slug.
+    assert "/artista/None" not in html and "/artista/mushkaa" not in html
 
 
 def test_truncation_budget_is_over_names_and_keeps_whole_artists():
@@ -58,15 +77,21 @@ def test_truncation_budget_is_over_names_and_keeps_whole_artists():
     artist names measured against the 80-char NAME budget (never cut into
     a name), so the rendered HTML can never contain a sliced <a>/<strong>."""
     names = ["La Fúmiga"] + [f"Col {i}" for i in range(38)]
+    import inspect
+
+    # Property asserted: whole names, prefix order, and the budget is the
+    # function's own `max_chars` default (read, not hardcoded): the kept
+    # names + ellipsis fit, one more name would not.
+    budget = inspect.signature(_artistes_render).parameters["max_chars"].default
     rows, truncated = _artistes_render(names, ["la-fumiga"] + [None] * 38, "top_17", 40)
     assert truncated is True
     kept = [r["nom"] for r in rows]
+    assert 1 <= len(kept) < len(names)
     # Kept names are an exact prefix of the input (whole names, in order).
     assert kept == names[: len(kept)]
-    # Budget is measured on the NAMES (joined + ellipsis), not on HTML:
-    # the kept set fits in 80 chars and adding one more would overflow.
-    assert len(", ".join(kept) + "…") <= 80
-    assert len(", ".join(names[: len(kept) + 1]) + "…") > 80
+    # Budget is measured on the NAMES (joined + ellipsis), not on HTML.
+    assert len(", ".join(kept) + "…") <= budget
+    assert len(", ".join(names[: len(kept) + 1]) + "…") > budget
 
 
 def test_truncated_partial_renders_valid_balanced_html():

@@ -35,16 +35,46 @@ def _write_jpgs(root, deezer_id):
 
 
 def test_downloads_when_missing(portades_root, monkeypatch):
-    calls = []
+    """Property asserted: when the JPGs are absent, the call fetches the
+    given source URL over the (mocked) network and afterwards the cover
+    is really on disk — `album_cover_url` serves the local file instead
+    of the placeholder. No call-tuple pinned on the internal helper."""
+    import io
 
-    def fake_dl(entitat, deezer_id, source_url):
-        calls.append((entitat, deezer_id, source_url))
-        return True
+    from PIL import Image
 
-    monkeypatch.setattr(manager, "download_and_convert", fake_dl)
-    ok = nc.ensure_cover_downloaded(851013072, "https://cdn/deezer/cover.jpg")
+    fetched = []
+
+    class _Resp:
+        def __init__(self):
+            buf = io.BytesIO()
+            Image.new("RGB", (64, 64), (200, 30, 30)).save(buf, "PNG")
+            self.content = buf.getvalue()
+
+        def raise_for_status(self):
+            pass
+
+    def fake_get(url, *a, **k):
+        fetched.append(url)
+        return _Resp()
+
+    monkeypatch.setattr(manager.requests, "get", fake_get)
+    src = "https://cdn/deezer/cover.jpg"
+    assert nc.album_cover_url(851013072) == nc.placeholder_url()
+    ok = nc.ensure_cover_downloaded(851013072, src)
     assert ok is True
-    assert calls == [("album", 851013072, "https://cdn/deezer/cover.jpg")]
+    assert fetched, "a network fetch was expected"
+    assert any("cover.jpg" in u for u in fetched)
+    for mida in settings_variants():
+        assert manager.path_for("album", 851013072, mida, "jpg").is_file()
+    assert nc.album_cover_url(851013072) != nc.placeholder_url()
+    assert nc.album_cover_url(851013072).endswith("/851013072-500.jpg")
+
+
+def settings_variants():
+    from django.conf import settings
+
+    return settings.PORTADES_VARIANTS
 
 
 def test_no_download_when_present(portades_root, monkeypatch):

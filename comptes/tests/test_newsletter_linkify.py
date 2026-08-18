@@ -14,11 +14,55 @@ CANCO = "/canco/x"
 ART = "/artista/a"
 
 
+def _links(html):
+    """[(href, text, {open tags around the link})] — structural view so the
+    tests assert the property (linked + emphasised) not the exact markup
+    or nesting order of <strong>/<em> vs <a>."""
+    from html.parser import HTMLParser
+
+    class _P(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack = []
+            self.out = []
+            self.cur = None
+
+        def handle_starttag(self, tag, attrs):
+            self.stack.append(tag)
+            if tag == "a":
+                self.cur = [dict(attrs).get("href"), "", set(self.stack)]
+
+        def handle_endtag(self, tag):
+            if tag == "a" and self.cur is not None:
+                href, text, ctx = self.cur
+                # tags opened *inside* the link count too (a > strong > text)
+                self.out.append((href, text, ctx | self.cur[2]))
+                self.cur = None
+            if tag in self.stack:
+                del self.stack[len(self.stack) - 1 - self.stack[::-1].index(tag) :]
+
+        def handle_data(self, data):
+            if self.cur is not None:
+                self.cur[1] += data
+                self.cur[2] |= set(self.stack)
+
+    p = _P()
+    p.feed(html)
+    return p.out
+
+
 def test_wraps_song_em_and_artist_strong():
+    """Property asserted: the artist name is the text of a link to ART
+    and is bold; the song title is the text of a link to CANCO and is
+    italic — however <strong>/<em> and <a> are nested."""
     nm = [("Divinize", CANCO, "canco"), ("Rosalía", ART, "artista")]
     out = linkify_narrative("<p>Rosalía firma Divinize.</p>", nm)
-    assert f'<strong><a href="{ART}">Rosalía</a></strong>' in out
-    assert f'<em><a href="{CANCO}">Divinize</a></em>' in out
+    links = {href: (text, ctx) for href, text, ctx in _links(out)}
+    assert set(links) == {ART, CANCO}
+    assert links[ART][0] == "Rosalía" and "strong" in links[ART][1]
+    assert links[CANCO][0] == "Divinize" and "em" in links[CANCO][1]
+    # Prose outside the names is untouched.
+    assert "firma" in out
 
 
 def test_longest_match_first_title_contains_artist():

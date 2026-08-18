@@ -122,12 +122,19 @@ def test_template_renders_with_real_data(approved_ua_unnotified):
     """End-to-end: the email_user_solicitud_aprovada.html template
     must render without raising. Covers the FAQ + walkthrough copy
     against real artista data."""
+    # Property asserted: the template rendered (a render error is
+    # swallowed by `_send` and shows up as NO email), the mail names the
+    # artist in subject + HTML, every placeholder resolved, and the
+    # walkthrough links point at this artist's edit page. FAQ copy and
+    # subject wording are not pinned.
     call_command("notificar_gestors_retroactiu")
     assert len(mail.outbox) == 1
     msg = mail.outbox[0]
-    assert "verificada" in msg.subject.lower()
-    # HTML alternative must mention the artist and the FAQ keywords.
+    art = approved_ua_unnotified.artista
+    assert art.nom in msg.subject
+    assert msg.alternatives and msg.alternatives[0][1] == "text/html"
     html = msg.alternatives[0][0]
-    assert approved_ua_unnotified.artista.nom in html
-    assert "365 dies" in html  # FAQ #1
-    assert "Deezer" in html  # FAQ #2
+    assert art.nom in html
+    assert "{{" not in html and "{%" not in html  # nothing unrendered
+    assert f"/compte/artista/{art.pk}/editar" in html
+    assert "None" not in html

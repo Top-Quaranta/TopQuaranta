@@ -45,6 +45,43 @@
   </tr></table>
 </td></tr>
 
+{% comment %} EL TOP — el que de veres canvia {% endcomment %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:{% if comparativa.efecte_top.actiu %}#7bbf7b{% else %}#facc15{% endif %};text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">
+    {% if comparativa.efecte_top.actiu %}El top amb YouTube{% else %}Què li passaria al top{% endif %}
+  </div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">
+    {% if comparativa.efecte_top.actiu %}Actiu · pes {{ comparativa.efecte_top.pes|milers }} · terra {{ comparativa.efecte_top.terra|milers }}{% else %}Simulació amb la configuració actual: pes {{ comparativa.efecte_top.pes|milers }}, terra {{ comparativa.efecte_top.terra|milers }}. Encara apagat.{% endif %}
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
+      <tr class="muted" style="color:#9aa0a6;font-size:11.5px;text-transform:uppercase;letter-spacing:1px;">
+        <td style="padding-bottom:6px;">&nbsp;</td>
+        <td align="right" style="padding-bottom:6px;">files ara</td>
+        <td align="right" style="padding-bottom:6px;">amb YouTube</td>
+        <td align="right" style="padding-bottom:6px;">noves</td>
+        <td align="right" style="padding-bottom:6px;">mana YT</td>
+      </tr>
+      {% for t in comparativa.efecte_top.territoris %}
+      <tr>
+        <td class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#facc15;padding:3px 0;">{{ t.codi }}</td>
+        <td align="right" class="muted" style="color:#b7b7be;padding:3px 0;">{{ t.ara }}/40</td>
+        <td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if t.amb_yt > t.ara %}#7bbf7b{% else %}#ffffff{% endif %};padding:3px 0;">{{ t.amb_yt }}/40</td>
+        <td align="right" class="muted" style="color:#b7b7be;padding:3px 0;">{% if t.noves %}+{{ t.noves }}{% else %}—{% endif %}</td>
+        <td align="right" class="muted" style="color:{% if t.mana_yt %}#facc15{% else %}#9aa0a6{% endif %};padding:3px 0;">{{ t.mana_yt }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
+      <strong style="color:#ffffff;">Noves</strong> = files que entren al top 40 i abans no hi eren.
+      <strong style="color:#ffffff;">Mana YT</strong> = files on les visualitzacions pesen més que les escoltes; si es queda a zero, YouTube només omple buits i no reordena res.
+      {% if comparativa.efecte_top.actiu %}<br><strong style="color:#7bbf7b;">Actiu</strong> des que hi ha {{ comparativa.efecte_top.dies_minims }} dies d'història per vídeo; ara en tenim {{ comparativa.efecte_top.dies }}. Això que veus a dalt és el top real, no una simulació.
+      {% elif comparativa.efecte_top.dies == None %}<br>Encara no hi ha cap fotografia amb detall per vídeo, així que això és una simulació. S'activarà sol quan n'hi haja {{ comparativa.efecte_top.dies_minims }} dies.
+      {% else %}<br>Això és una simulació: <strong style="color:#ffffff;">falten {{ comparativa.efecte_top.falten }} {{ comparativa.efecte_top.falten|pluralize:"dia,dies" }}</strong> ({{ comparativa.efecte_top.dies }} de {{ comparativa.efecte_top.dies_minims }} d'història per vídeo). No cal encendre res: quan hi siguen, s'activa sol.{% endif %}
+    </div>
+  </td></tr></table>
+</td></tr>
+
 {% comment %} A. ES PODEN JUNTAR? — el bloc principal des del 17/08:
    el descobriment ja ha acabat el catàleg, i el que queda per saber és
    si el senyal de YouTube es pot convertir a escoltes. {% endcomment %}

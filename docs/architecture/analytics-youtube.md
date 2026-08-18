@@ -209,3 +209,27 @@ dia.
 Les files escrites abans d'eixa data no porten detall i cauen al criteri
 antic (mateix `n_videos` als dos extrems), que per a una cançó d'un sol
 carril és equivalent. La sèrie de Last.fm hi cau sempre: no té carrils.
+
+### El correu conta l'efecte sobre el top (2026-08-19)
+
+Amb la decisió a prop, la pregunta útil deixa de ser «quin és el factor»
+i passa a ser **quantes files canvien i qui les decideix**. El bloc de
+dalt del correu ho simula cada dia amb la configuració real:
+
+| | files ara | amb YouTube | noves | mana YT |
+|---|---|---|---|---|
+| CAT | 40/40 | 40/40 | 0 | 0 |
+| VAL | **30/40** | **40/40** | **+10** | 0 |
+| BAL | 40/40 | 40/40 | 0 | 0 |
+| ALT | 5/40 | **13/40** | +8 | 0 |
+
+«Noves» són files que entren al top 40 i abans no hi eren. «Mana YT» són
+files on les visualitzacions pesen més que les escoltes: **si es queda a
+zero, YouTube només omple buits i no reordena res del que Last.fm ja
+veu**, que és el comportament que es va buscar en triar el pes.
+
+Es calcula amb `ConfiguracioGlobal`, així que moure el pes al panell
+canvia el correu de l'endemà sense desplegar res. Mentre no hi haja prou
+història és una simulació, i el correu diu **quants dies falten**; quan
+la font s'activa sola (vegeu [`algorithm.md`](algorithm.md) §2.4),
+descriu el top que s'està publicant. No hi ha res a encendre.

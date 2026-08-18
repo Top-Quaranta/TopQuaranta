@@ -75,7 +75,9 @@
     <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
       <strong style="color:#ffffff;">Noves</strong> = files que entren al top 40 i abans no hi eren.
       <strong style="color:#ffffff;">Mana YT</strong> = files on les visualitzacions pesen més que les escoltes; si es queda a zero, YouTube només omple buits i no reordena res.
-      {% if not comparativa.efecte_top.actiu %}<br>Per a encendre-ho: <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">youtube_al_top</code> a la configuració del panell.{% endif %}
+      {% if comparativa.efecte_top.actiu %}<br><strong style="color:#7bbf7b;">Actiu</strong> des que hi ha {{ comparativa.efecte_top.dies_minims }} dies d'història per vídeo; ara en tenim {{ comparativa.efecte_top.dies }}. Això que veus a dalt és el top real, no una simulació.
+      {% elif comparativa.efecte_top.dies == None %}<br>Encara no hi ha cap fotografia amb detall per vídeo, així que això és una simulació. S'activarà sol quan n'hi haja {{ comparativa.efecte_top.dies_minims }} dies.
+      {% else %}<br>Això és una simulació: <strong style="color:#ffffff;">falten {{ comparativa.efecte_top.falten }} {{ comparativa.efecte_top.falten|pluralize:"dia,dies" }}</strong> ({{ comparativa.efecte_top.dies }} de {{ comparativa.efecte_top.dies_minims }} d'història per vídeo). No cal encendre res: quan hi siguen, s'activa sol.{% endif %}
     </div>
   </td></tr></table>
 </td></tr>

@@ -280,6 +280,7 @@ def _efecte_al_top(today):
 
     from music.constants import DIES_CADUCITAT
     from music.models import Canco
+    from ranking import senyal_youtube
     from ranking.models import ConfiguracioGlobal
     from ranking.senyal_youtube import visualitzacions_setmanals
 
@@ -327,8 +328,15 @@ def _efecte_al_top(today):
                 ),
             }
         )
+    # Quan s'encén no ho decideix ningú: ho decideix quanta història
+    # per vídeo hi ha. Així el correu pot dir el dia, no un condicional.
+    dies_minims = int(getattr(cfg, "youtube_dies_minims", 7) or 0)
+    dies = senyal_youtube.dies_de_dades(today)
     return {
-        "actiu": bool(getattr(cfg, "youtube_al_top", False)),
+        "actiu": senyal_youtube.actiu(today, dies_minims),
+        "dies": dies,
+        "dies_minims": dies_minims,
+        "falten": None if dies is None else max(0, dies_minims - dies),
         "pes": pes,
         "terra": terra_comb,
         "territoris": files,

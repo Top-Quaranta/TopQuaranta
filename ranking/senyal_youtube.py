@@ -31,11 +31,48 @@ from __future__ import annotations
 import datetime
 from collections import defaultdict
 
+from django.db.models import Min
+
 from ranking.models import SenyalYouTube
 
 # Same slack the Last.fm delta uses: a missing day must not blank the
 # week. `ranking.algorisme._WEEK_WINDOW_DAYS` is the sibling constant.
 MARGE_DIES = 3
+
+
+def dies_de_dades(today: datetime.date) -> int | None:
+    """Days of per-video history, or None if there is none at all yet.
+
+    Only snapshots carrying `views_per_video` count. Rows written before
+    2026-08-19 have the total alone, and a total cannot tell a week of
+    views from a lane arriving — which is the whole reason the detail
+    exists. Counting them would date the history from a moment when it
+    could not answer the question.
+    """
+    primera = (
+        SenyalYouTube.objects.filter(error=False)
+        .exclude(views_per_video={})
+        .aggregate(Min("data"))["data__min"]
+    )
+    return None if primera is None else (today - primera).days
+
+
+def actiu(today: datetime.date, dies_minims: int) -> bool:
+    """Whether YouTube has enough history to be a second source.
+
+    This is deliberately **not** a switch someone flips. The question
+    "can we use it yet" has a factual answer — how many days of usable
+    history exist — and reading it costs one indexed aggregate. A switch
+    would only add a second thing to be wrong: a day when the data is
+    ready and the flag is off, or the reverse.
+
+    What the threshold buys is the rescale. The weekly delta is
+    `delta × 7 / span`; with a base 4 days old that inflates by 75 %. At
+    7 days every song photographed daily has a base exactly a week back,
+    so the number measures a week instead of extrapolating one.
+    """
+    dies = dies_de_dades(today)
+    return dies is not None and dies >= dies_minims
 
 
 def visualitzacions_setmanals(

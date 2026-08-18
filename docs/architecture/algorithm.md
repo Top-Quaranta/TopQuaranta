@@ -240,12 +240,34 @@ la setmana immediatament anterior (TopSetmanal ordenat per
 
 ---
 
-## 2.4 `SenyalYouTube` — la segona font, darrere d'un interruptor
+## 2.4 `SenyalYouTube` — la segona font, i quan s'encén sola
 
-Des del 2026-08-19 el càlcul pot sumar les visualitzacions de YouTube,
-però **apagat per defecte** (`ConfiguracioGlobal.youtube_al_top`):
-encendre-ho canvia el top publicat, i eixa és una decisió editorial que
-ha de ser un clic conscient i reversible.
+Des del 2026-08-19 el càlcul pot sumar les visualitzacions de YouTube.
+**No hi ha interruptor.** Que compte o no depén d'un fet comprovable:
+quants dies de detall per vídeo hi ha acumulats
+(`ranking.senyal_youtube.actiu`, una agregació indexada per càlcul de
+top). Per defecte en calen **7**
+(`ConfiguracioGlobal.youtube_dies_minims`).
+
+Un interruptor només afegiria una segona cosa que pot estar malament: el
+dia que les dades estan llestes i la casella apagada, o al revés. La
+pregunta «ja es pot fer servir?» té resposta factual, i llegir-la és més
+barat que recordar-se'n.
+
+**Per què 7 i no 4.** El delta setmanal és `delta × 7 / span`. Amb una
+base de 4 dies —el mínim que la finestra accepta— això infla un 75 %. A
+7 dies d'història, el dia que s'activa tota cançó fotografiada cada dia
+té una base d'exactament una setmana enrere i el número mesura una
+setmana en lloc d'extrapolar-la. Baixar el llindar avança el dia i
+eixampla eixa extrapolació.
+
+**Només compten les fotos amb detall per vídeo.** Les files anteriors al
+2026-08-19 només porten el total, i un total no distingeix una setmana
+de públic d'un carril que arriba — que és exactament per què el detall
+existeix. Datar la història des d'elles convertiria el llindar en un
+tràmit.
+
+Amb la font activa, el senyal d'una cançó passa a ser:
 
 Amb l'interruptor encés, el senyal d'una cançó passa a ser:
 

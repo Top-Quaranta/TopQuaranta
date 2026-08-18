@@ -49,6 +49,7 @@ from music.constants import TERRITORIS_AGREGATS as _TERRITORIS_AGREGATS_TUPLE
 from music.constants import TERRITORIS_FIXOS as _TERRITORIS_FIXOS_TUPLE
 from music.constants import TERRITORIS_OPCIONALS as _TERRITORIS_OPCIONALS_TUPLE
 from music.models import Canco
+from ranking import senyal_youtube
 from ranking.models import ConfiguracioGlobal, SenyalDiari, TopSetmanal
 
 logger = logging.getLogger(__name__)
@@ -334,7 +335,8 @@ def _top_for_territoris(
     min_plays = int(cfg.min_escoltes_top or 0)
 
     # ── YouTube com a segona font ───────────────────────────────────
-    # Apagat per defecte. Encés, el senyal passa a ser
+    # S'activa sola quan hi ha prou història (vegeu `senyal_youtube.actiu`).
+    # Activa, el senyal passa a ser
     #     escoltes × pes + visualitzacions
     # i el terra passa a `min_senyal_combinat`, perquè els dos números
     # deixen d'estar en unitats d'escoltes.
@@ -344,13 +346,13 @@ def _top_for_territoris(
     # cançó amb 400 visualitzacions i cap escolta cauria a 2 i quedaria
     # fora — precisament la gent que la segona font existeix per a no
     # perdre.
-    yt_actiu = bool(getattr(cfg, "youtube_al_top", False))
+    yt_actiu = senyal_youtube.actiu(
+        today, int(getattr(cfg, "youtube_dies_minims", 7) or 0)
+    )
     yt_pes = int(getattr(cfg, "youtube_pes_escolta", 1000) or 1000)
     yt_views: dict[int, float] = {}
     if yt_actiu:
-        from ranking.senyal_youtube import visualitzacions_setmanals
-
-        yt_views = visualitzacions_setmanals(list(cancons.keys()), today)
+        yt_views = senyal_youtube.visualitzacions_setmanals(list(cancons.keys()), today)
         min_plays = int(getattr(cfg, "min_senyal_combinat", 200) or 0)
     # Adaptive outlier knee for this territori (None when the cap is off).
     # Computed once: it depends on the territori's history, not the song.

@@ -229,6 +229,7 @@ zero, YouTube només omple buits i no reordena res del que Last.fm ja
 veu**, que és el comportament que es va buscar en triar el pes.
 
 Es calcula amb `ConfiguracioGlobal`, així que moure el pes al panell
-canvia el correu de l'endemà sense desplegar res. Mentre
-`youtube_al_top` estiga apagat és una simulació; encés, descriu el top
-que s'està publicant.
+canvia el correu de l'endemà sense desplegar res. Mentre no hi haja prou
+història és una simulació, i el correu diu **quants dies falten**; quan
+la font s'activa sola (vegeu [`algorithm.md`](algorithm.md) §2.4),
+descriu el top que s'està publicant. No hi ha res a encendre.

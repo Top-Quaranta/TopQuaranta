@@ -1,7 +1,9 @@
 """YouTube as a second signal source in the ranking.
 
-Off by default: turning it on changes the published chart, and that is
-an editorial decision that must be a deliberate, reversible click.
+There is no switch. Whether YouTube counts depends on a checkable fact —
+how many days of per-video history exist — read once per chart. A switch
+would add a second thing that can be wrong: a day when the data is ready
+and the box is unticked, or the reverse.
 
 The shape of the formula matters and was arrived at by measurement:
 
@@ -60,9 +62,11 @@ def _lastfm(canco, delta):
         )
 
 
-def _youtube(canco, delta, *, detall=True):
-    base, avui = 5_000, 5_000 + delta
-    for data, v in ((FA_UNA_SETMANA, base), (AVUI, avui)):
+def _youtube(canco, delta, *, dies=7, detall=True):
+    """Two snapshots `dies` apart. `dies` also sets how old the history
+    looks, which is what decides whether the source counts at all."""
+    base_data = AVUI - datetime.timedelta(days=dies)
+    for data, v in ((base_data, 5_000), (AVUI, 5_000 + delta)):
         SenyalYouTube.objects.create(
             canco=canco,
             data=data,
@@ -77,26 +81,64 @@ def _ids(territori="VAL"):
     return {r["canco_id"] for r in calcular_top_territori(territori)}
 
 
+# ── When it turns itself on ────────────────────────────────────────
+
+
 @pytest.mark.django_db
-def test_off_by_default_the_chart_is_last_fm_only(cfg):
-    """A song nobody scrobbles stays out while the switch is off — the
-    behaviour every chart published before 2026-08 had."""
+def test_history_younger_than_the_threshold_does_not_count(cfg):
+    """Five days of history, threshold seven: the chart is Last.fm only,
+    which is what every chart published before 2026-08 was.
+
+    Five and not one on purpose — the weekly delta has its own window
+    and refuses a base under four days old. At five it would answer, so
+    what this measures is the activation gate and nothing else."""
     muda = _canco("Muda")
-    _youtube(muda, 50_000)
-    assert cfg.youtube_al_top is False
+    _youtube(muda, 50_000, dies=5)
+    assert cfg.youtube_dies_minims == 7
     assert muda.pk not in _ids()
 
 
 @pytest.mark.django_db
-def test_switched_on_a_song_last_fm_cannot_see_can_chart(cfg):
+def test_it_turns_itself_on_when_the_history_is_old_enough(cfg):
     """The whole point: the Valencian chart had 30 rows for 40 places
-    because Last.fm barely sees Valencian music."""
+    because Last.fm barely sees Valencian music. Nobody ticks anything —
+    the seventh day of history is what changes the answer."""
     muda = _canco("Muda")
-    _youtube(muda, 50_000)
-
-    cfg.youtube_al_top = True
-    cfg.save(update_fields=["youtube_al_top"])
+    _youtube(muda, 50_000, dies=7)
     assert muda.pk in _ids()
+
+
+@pytest.mark.django_db
+def test_the_threshold_is_the_knob(cfg):
+    """The same five-day history counts once we say five days is enough.
+    Pinned so the number is known to be live: it is the only dial over
+    when this starts, and lowering it widens the extrapolation the
+    weekly delta has to do."""
+    muda = _canco("Muda")
+    _youtube(muda, 50_000, dies=5)
+    cfg.youtube_dies_minims = 5
+    cfg.save(update_fields=["youtube_dies_minims"])
+    assert muda.pk in _ids()
+
+
+@pytest.mark.django_db
+def test_snapshots_without_per_video_detail_do_not_age_the_history(cfg):
+    """A week of totals is not a week of usable history.
+
+    A total cannot tell a week of views from a lane arriving — that is
+    why the detail exists. Dating the history from rows that could not
+    answer the question would turn the gate into a formality.
+
+    The pair is seven days apart, inside the delta's own window, so if
+    the gate counted these rows the song would chart. An older pair
+    would fall outside that window and the test would pass without the
+    gate doing anything."""
+    muda = _canco("Muda")
+    _youtube(muda, 50_000, dies=7, detall=False)
+    assert muda.pk not in _ids()
+
+
+# ── What the weight decides ────────────────────────────────────────
 
 
 @pytest.mark.django_db
@@ -108,9 +150,6 @@ def test_at_the_default_weight_youtube_does_not_outrank_last_fm(cfg):
     _lastfm(escoltada, 100)  # 100 escoltes × 1000 = 100.000
     mirada = _canco("Mirada")
     _youtube(mirada, 50_000)  # 50.000 visualitzacions
-
-    cfg.youtube_al_top = True
-    cfg.save(update_fields=["youtube_al_top"])
 
     ordre = [r["canco_id"] for r in calcular_top_territori("VAL")]
     assert ordre.index(escoltada.pk) < ordre.index(mirada.pk)
@@ -125,12 +164,14 @@ def test_the_weight_is_what_decides_the_balance(cfg):
     mirada = _canco("Mirada")
     _youtube(mirada, 50_000)
 
-    cfg.youtube_al_top = True
     cfg.youtube_pes_escolta = 100  # 100 × 100 = 10.000 < 50.000
-    cfg.save(update_fields=["youtube_al_top", "youtube_pes_escolta"])
+    cfg.save(update_fields=["youtube_pes_escolta"])
 
     ordre = [r["canco_id"] for r in calcular_top_territori("VAL")]
     assert ordre.index(mirada.pk) < ordre.index(escoltada.pk)
+
+
+# ── What is not a week of views ────────────────────────────────────
 
 
 @pytest.mark.django_db
@@ -156,9 +197,6 @@ def test_a_lane_that_appeared_this_week_does_not_count_as_views(cfg):
         views_per_video={"art": 157, "clip1": 80_000, "clip2": 8_000, "clip3": 293},
         error=False,
     )
-
-    cfg.youtube_al_top = True
-    cfg.save(update_fields=["youtube_al_top"])
 
     # Només els 17 de l'Art Track compten, i no arriben al terra.
     assert canco.pk not in _ids()
@@ -186,6 +224,4 @@ def test_swapping_a_video_does_not_count_either(cfg):
         error=False,
     )
 
-    cfg.youtube_al_top = True
-    cfg.save(update_fields=["youtube_al_top"])
     assert canco.pk not in _ids()

@@ -412,3 +412,43 @@ def test_the_report_says_what_would_happen_to_the_chart():
     # Al pes per defecte, les escoltes manen: cap fila decidida per YouTube
     # per damunt d'una que Last.fm ja veu.
     assert val["mana_yt"] == 1  # la muda, que no té escoltes
+
+
+# ── El compte enrere de l'activació ────────────────────────────────
+#
+# El bloc «efecte al top» del correu té tres estats i els tres es
+# renderitzen: una errada de sintaxi a la plantilla no peta, es menja la
+# frase, i el correu arriba dient res. Rendered, not asserted on the
+# dict: el dict el sap escriure qualsevol, el que ha d'arribar és el text.
+
+
+def _render(efecte):
+    from django.template.loader import render_to_string
+
+    return render_to_string(
+        "analytics/informe_youtube.html",
+        {"comparativa": {"efecte_top": efecte}, "avui": datetime.date(2026, 8, 18)},
+    )
+
+
+def test_the_email_says_how_many_days_are_missing():
+    base = {"pes": 1000, "terra": 200, "territoris": []}
+    html = _render({**base, "actiu": False, "dies": 5, "dies_minims": 7, "falten": 2})
+    assert "falten 2 dies" in html
+    assert "s'activa sol" in html
+
+    # Singular, perquè «falten 1 dies» és el detall que delata que ningú
+    # ha llegit el correu que envia.
+    html = _render({**base, "actiu": False, "dies": 6, "dies_minims": 7, "falten": 1})
+    assert "falten 1 dia<" in html, "plural castellanitzat o comptador mut"
+
+    # Sense cap fotografia amb detall encara.
+    html = _render(
+        {**base, "actiu": False, "dies": None, "dies_minims": 7, "falten": None}
+    )
+    assert "Encara no hi ha cap fotografia" in html
+
+    # I quan ja compta, que quede clar que allò no és una simulació.
+    html = _render({**base, "actiu": True, "dies": 9, "dies_minims": 7, "falten": 0})
+    assert "Actiu" in html and "no una simulació" in html
+    assert "simulació:" not in html

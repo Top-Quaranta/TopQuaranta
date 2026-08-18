@@ -91,13 +91,23 @@ class ConfiguracioGlobal(models.Model):
         "a 40 cançons, el top és més curt — no s'omple amb soroll.",
     )
     # ── YouTube com a segona font (2026-08) ─────────────────────────
-    # Apagat per defecte: encendre'l canvia el top publicat, i eixa és
-    # una decisió editorial que ha de ser un clic conscient i reversible.
-    youtube_al_top = models.BooleanField(
-        default=False,
-        help_text="Si està actiu, el senyal del top suma les "
-        "visualitzacions de YouTube a les escoltes de Last.fm. "
-        "Apagat, el top només mira Last.fm (comportament fins al 2026-08).",
+    # No hi ha interruptor. Que YouTube compte o no depén d'un fet
+    # comprovable —quants dies de detall per vídeo tenim— i no d'un clic
+    # que algú va donar o no va donar. Un interruptor només afegiria una
+    # segona cosa que pot estar malament: el dia que les dades estan
+    # llestes i la casella apagada, o al revés.
+    #
+    # A 7 dies, el dia que s'encén tota cançó fotografiada cada dia té
+    # una base d'exactament una setmana enrere, i el delta mesura una
+    # setmana en lloc d'extrapolar-la (amb una base de 4 dies, la
+    # reescalada infla un 75 %). Baixar-ho avança el dia i eixampla eixa
+    # extrapolació; pujar-ho el retarda.
+    youtube_dies_minims = models.IntegerField(
+        default=7,
+        validators=_COUNT_RANGE,
+        help_text="Dies de detall per vídeo que demanem abans de deixar "
+        "que YouTube compte al top. Quan se n'acumulen tants, s'activa "
+        "sol. Més alt = més tard i amb un delta menys extrapolat.",
     )
     # Quantes visualitzacions val una escolta. NO és una conversió
     # mesurada —la proporció real varia per artista de 3 a 67— sinó el

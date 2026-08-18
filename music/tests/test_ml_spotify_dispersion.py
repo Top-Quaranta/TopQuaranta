@@ -50,9 +50,13 @@ def test_dispersion_feature_artista_none_is_zero():
 @pytest.mark.django_db
 def test_build_features_includes_dispersion_at_expected_index():
     """End-to-end: a Cançó whose artista has dispersio=2 produces a
-    feature vector where the slot before the TF-IDF tail is 2.0."""
-    from music.ml import TFIDF_MAX_FEATURES
+    feature vector where the slot before the TF-IDF tail is 2.0.
 
+    Property asserted: the vector is aligned with FEATURE_NAMES (same
+    length) and the value at the column NAMED `spotify_artist_dispersio`
+    is the artista's dispersio. The index is looked up by name, so
+    appending features at the end of FEATURE_NAMES (the post-2026-05-23
+    convention, see docs/ops/runbook.md) does not break this test."""
     a = Artista.objects.create(
         nom="EXEMPLE D2", lastfm_nom="EXEMPLE D2", spotify_artist_dispersio=2
     )
@@ -61,12 +65,15 @@ def test_build_features_includes_dispersion_at_expected_index():
         artista=a, album=al, nom="EXEMPLE D2 song", isrc="ZZ00DL0000002"
     )
     feats = _build_features(c)
-    # Structured count = total - tfidf width. Dispersion is the LAST
-    # structured slot, so its index is `n_struct - 1`.
-    n_struct = len(FEATURE_NAMES) - TFIDF_MAX_FEATURES
-    assert feats[n_struct - 1] == 2.0
-    # And the column name at that index matches the feature.
-    assert FEATURE_NAMES[n_struct - 1] == "spotify_artist_dispersio"
+    assert len(feats) == len(FEATURE_NAMES)
+    idx = FEATURE_NAMES.index("spotify_artist_dispersio")
+    assert feats[idx] == 2.0
+    # The column tracks the field, not a constant: change the artista's
+    # dispersio and the same slot moves with it.
+    a.spotify_artist_dispersio = 5
+    a.save(update_fields=["spotify_artist_dispersio"])
+    c.refresh_from_db()
+    assert _build_features(c)[idx] == 5.0
 
 
 @pytest.mark.django_db

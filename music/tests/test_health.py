@@ -33,10 +33,12 @@ def test_premium_crit_when_no_auth_row():
     """No SpotifyAuth singleton row means OAuth has never been
     completed. CRIT so the operator gets nudged toward
     /staff/social/spotify/."""
+    # Property: severity is CRIT and the payload keeps the documented
+    # dict shape (bash callers pretty-print it unconditionally).
     sev, msg, payload = check_spotify_premium()
     assert sev == "CRIT"
-    assert "OAuth dance not completed" in msg
-    assert payload == {}
+    assert msg
+    assert isinstance(payload, dict)
 
 
 @pytest.mark.django_db
@@ -60,8 +62,11 @@ def test_premium_warn_on_transient_api_error():
         )
         mock_cls.return_value = mock_client
         sev, msg, payload = check_spotify_premium()
+    # Property: a transport failure is WARN (never CRIT, never OK) and
+    # the payload keeps its dict shape.
     assert sev == "WARN"
-    assert "Spotify /me call failed" in msg
+    assert msg
+    assert isinstance(payload, dict)
 
 
 @pytest.mark.django_db
@@ -110,9 +115,11 @@ def test_premium_ok_on_premium():
         }
         mock_cls.return_value = mock_client
         sev, msg, payload = check_spotify_premium()
+    # Property: OK, and the payload identifies the account + product
+    # (that is the contract the dashboard reads, not the message copy).
     assert sev == "OK"
-    assert "admin_user" in msg
     assert payload["product"] == "premium"
+    assert payload["spotify_user_id"] == "admin_user"
 
 
 # ── check_spotify_coverage ────────────────────────────────────────
@@ -149,8 +156,11 @@ def test_coverage_warn_when_no_rows(unsilence_cron):
 
     SpotifyPlaylist.objects.all().delete()
     sev, msg, payload = check_spotify_coverage()
+    # Property: nothing configured is a WARN nudge (not OK, not CRIT)
+    # with an empty row list.
     assert sev == "WARN"
-    assert "configurar_spotify_playlists" in msg
+    assert msg
+    assert payload["rows"] == []
 
 
 @pytest.mark.django_db
@@ -168,9 +178,12 @@ def test_coverage_warn_when_all_rows_never_synced(unsilence_cron):
     )
     sev, msg, payload = check_spotify_coverage()
     # All rows have last_n_tracks=0 → WARN to nudge the operator.
+    # Property: WARN, and every configured row is reported with no
+    # coverage figure (never synced) — no row is silently dropped.
     assert sev == "WARN"
-    assert "never synced" in msg
-    assert len(payload["rows"]) == 2
+    codis = {r["codi"] for r in payload["rows"]}
+    assert codis == {"top-cat", "top-val"}
+    assert all(r["coverage"] is None for r in payload["rows"])
 
 
 @pytest.mark.django_db
@@ -186,8 +199,11 @@ def test_coverage_ok_when_healthy(unsilence_cron):
         last_sync_ok=True,
     )
     sev, msg, payload = check_spotify_coverage()
+    # Property: a verified row above the WARN threshold yields OK and
+    # its coverage is reported as matched/tracks.
     assert sev == "OK"
-    assert "Coverage OK" in msg
+    row = next(r for r in payload["rows"] if r["codi"] == "top-cat")
+    assert row["coverage"] == round(38 / 40, 3)
 
 
 @pytest.mark.django_db
@@ -505,11 +521,23 @@ def test_tls_certs_malformed_line_is_an_error_not_a_silent_skip():
 
 @pytest.mark.django_db
 def test_tls_certs_probes_the_configured_host_and_port():
+    """Property: the configured `host:port` line is what actually gets
+    probed, with a positive timeout — asserted through a fake probe
+    that only answers for that exact endpoint (no pin on how the
+    probe is invoked)."""
     _set_tls_config("mail.example:465")
-    with patch(
-        "music.health._fetch_peer_cert_der", return_value=_der_cert(90)
-    ) as fetch:
-        check_tls_certs()
-    (host, port, timeout), _kwargs = fetch.call_args
-    assert (host, port) == ("mail.example", 465)
-    assert timeout > 0
+    seen: list[tuple[str, int, float]] = []
+
+    def fake(host, port, timeout):
+        seen.append((host, port, timeout))
+        if (host, port) != ("mail.example", 465):
+            raise OSError(f"unexpected probe {host}:{port}")
+        return _der_cert(90)
+
+    with patch("music.health._fetch_peer_cert_der", side_effect=fake):
+        severity, _msg, payload = check_tls_certs()
+    assert severity == "OK"
+    assert payload["endpoints"][0]["endpoint"] == "mail.example:465"
+    assert payload["endpoints"][0]["state"] == "ok"
+    assert len(seen) == 1
+    assert seen[0][2] > 0

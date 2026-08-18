@@ -130,13 +130,27 @@ class TestTryAutoUnlink:
         assert a.deezer_ids.count() == 2
 
 
+def _indexnow_pushed_url(mock_post, path_suffix: str) -> bool:
+    """True iff some IndexNow submission carried a URL ending in
+    `path_suffix` (any batch, any order)."""
+    for call in mock_post.call_args_list:
+        payload = call.kwargs.get("json") or {}
+        if any(u.endswith(path_suffix) for u in payload.get("urlList", [])):
+            return True
+    return False
+
+
 # ── aprovar_canco / aprovar_canco_auto_ml ───────────────────────────
 
 
 @pytest.mark.django_db
 class TestAprovarCanco:
-    @patch("web.seo.indexnow.notify_canco")
-    def test_approves_and_logs_ok(self, mock_indexnow):
+    @patch("web.seo.indexnow.requests.post")
+    def test_approves_and_logs_ok(self, mock_post):
+        """Property: approval flips verificada, records the historial
+        row and pings IndexNow with the canço's public URL (asserted
+        at the outbound HTTP boundary, not on an intermediate call)."""
+        mock_post.return_value.status_code = 202
         a = _mk_artista()
         c = _mk_canco(a, verificada=False)
         aprovar_canco(c)
@@ -145,7 +159,7 @@ class TestAprovarCanco:
         assert HistorialRevisio.objects.filter(
             artista_nom=a.nom, decisio="aprovada", motiu="ok"
         ).exists()
-        mock_indexnow.assert_called_once_with(c)
+        assert _indexnow_pushed_url(mock_post, f"/canco/{c.slug}")
 
     @patch("web.seo.indexnow.notify_canco")
     def test_multi_territori_artista_does_not_overflow_historial(self, _ix):
@@ -195,9 +209,11 @@ class TestAprovarCanco:
 
 @pytest.mark.django_db
 class TestAutoAprovarPerWhisper:
-    @patch("web.seo.indexnow.notify_canco")
-    def test_approves_over_threshold(self, mock_indexnow):
+    @patch("web.seo.indexnow.requests.post")
+    def test_approves_over_threshold(self, mock_post):
         from music.constants import MOTIU_AUTO_WHISPER
+
+        mock_post.return_value.status_code = 202
 
         a = _mk_artista()
         c = _mk_canco(
@@ -213,7 +229,8 @@ class TestAutoAprovarPerWhisper:
         assert HistorialRevisio.objects.filter(
             artista_nom=a.nom, decisio="aprovada", motiu=MOTIU_AUTO_WHISPER
         ).exists()
-        mock_indexnow.assert_called_once_with(c)
+        # Auto-approval publishes the page too: IndexNow was notified.
+        assert _indexnow_pushed_url(mock_post, f"/canco/{c.slug}")
 
     @patch("web.seo.indexnow.notify_canco")
     def test_falls_back_to_top1_when_no_all_probs(self, _ix):

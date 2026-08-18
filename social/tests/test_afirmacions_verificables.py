@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime
 import re
+import unicodedata
 
 import pytest
 
@@ -61,20 +62,24 @@ def test_a_phrase_with_the_number_anchors_it_to_the_release(registre, frase):
     Bare "{mesos_estrena} mesos" next to the chart reads as tenure."""
     if "{mesos_estrena}" not in frase:
         return  # phrases that skip the number entirely are fine
+    # Mutation audit 2026-08-18: the placeholder name itself contains
+    # "estrena", so anchors must be looked for AFTER the placeholder is
+    # replaced — otherwise every phrase passes vacuously.
+    text = unicodedata.normalize("NFC", frase.replace("{mesos_estrena}", "N")).lower()
     ancores = (
         "eixir",
         "estrena",
         "publica",
         "després",
         "de fa",
-        "té {mesos_estrena}",
+        "té N",
         "ja té",
         "a l'esquena",
         "de cançó",
         "treure",
     )
     assert any(
-        a in frase for a in ancores
+        unicodedata.normalize("NFC", a).lower() in text for a in ancores
     ), f"[{registre}] dona el número sense dir que és l'edat de la cançó: {frase}"
 
 

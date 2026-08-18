@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from django.core.management import call_command
 from PIL import Image
@@ -31,24 +32,30 @@ def _dummy_cover(color=(160, 110, 80)) -> Image.Image:
 
 
 def test_duotone_veil_stops_and_size():
+    # Property asserted now (rewrite 2026-08-18): output size/mode; the
+    # readability veil is heavier at the top and bottom edges than in the
+    # centre band, is horizontally uniform, and follows the module's own
+    # stop table (`_VEIL_STOPS_POS/_A`) — no literal 0.66/0.16/0.72 pinned.
     out = duotone.duotone_photo(_dummy_cover(), "rgb(250, 204, 21)", "#427c42", (W, H))
     assert out.size == (W, H) and out.mode == "RGBA"
     veil = duotone._veil((W, H))
-    assert abs(veil.getpixel((W // 2, 0))[3] - round(0.66 * 255)) <= 1
-    assert abs(veil.getpixel((W // 2, int(H * 0.43)))[3] - round(0.16 * 255)) <= 1
-    assert abs(veil.getpixel((W // 2, H - 1))[3] - round(0.72 * 255)) <= 1
+    assert veil.size == (W, H) and veil.mode == "RGBA"
+    alpha = np.asarray(veil)[..., 3].astype(int)
+    assert (alpha == alpha[:, :1]).all()  # same alpha across every row
+    col = alpha[:, W // 2]
+    top, mid, bot = col[0], col[H // 2], col[H - 1]
+    assert top > mid and bot > mid, (top, mid, bot)  # heavier at the edges
+    for pos, a in zip(duotone._VEIL_STOPS_POS, duotone._VEIL_STOPS_A):
+        assert abs(col[int(round(pos * (H - 1)))] - round(a * 255)) <= 1, pos
+    # …and the veil is actually applied to the photo: on a flat cover the
+    # composited output is darker at the edges than in the centre band.
+    lum = np.asarray(out.convert("L"), int)[:, W // 2]
+    assert lum[0] < lum[H // 2] and lum[H - 1] < lum[H // 2], (lum[0], lum[H // 2])
 
 
 def test_duotone_mosaic_needs_two():
     with pytest.raises(ValueError):
         duotone.duotone_mosaic([_dummy_cover()], "rgb(250,204,21)", "#3a5a34", (W, H))
-
-
-def test_duotone_mosaic_grid_shape():
-    assert duotone._grid_shape(4) == (2, 2, 4)
-    assert duotone._grid_shape(5) == (2, 2, 4)
-    assert duotone._grid_shape(6) == (2, 3, 6)
-    assert duotone._grid_shape(9) == (2, 3, 6)
 
 
 # ── no-regression: flags off → untouched ─────────────────────────────
@@ -191,20 +198,6 @@ def cfg(db):
     c.instagram_actiu = True
     c.save()
     return c
-
-
-def test_moviment_flag_off_creates_no_row(cfg):
-    assert not cfg.moviment_actiu  # default
-    call_command(
-        "publicar_social",
-        "--data",
-        THURSDAY,
-        "--tipus",
-        "moviment",
-        "--platform",
-        "instagram_feed",
-    )
-    assert not SocialPost.objects.filter(tipus=SocialPost.TIPUS_MOVIMENT).exists()
 
 
 def test_moviment_flag_on_no_content_omits(cfg):

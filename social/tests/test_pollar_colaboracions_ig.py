@@ -10,6 +10,7 @@ manually from the staff panel (tested in
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
@@ -18,7 +19,10 @@ from django.utils import timezone
 from analytics.models import MetricaPipeline
 from music.models import Artista
 from ranking.models import ConfiguracioGlobal
-from social.management.commands.pollar_colaboracions_ig import METRICA_CLAU
+from social.management.commands.pollar_colaboracions_ig import (
+    METRICA_CLAU,
+    WINDOW_DIES,
+)
 from social.models import InvitacioColaboracioIG as Inv
 
 
@@ -40,18 +44,33 @@ def _invite(artista, media, username, *, dies=1, estat=Inv.ESTAT_PENDENT):
 @pytest.mark.django_db
 def test_poller_expires_old_pending_to_caducada():
     """Pending invites older than the 14-day window become `caducada`
-    (with data_resolucio); fresh pending is untouched."""
+    (with data_resolucio); fresh pending is untouched.
+
+    Property (merged from the former
+    `test_fresh_pending_untouched_and_no_graph_dependency`, ADR-0015 §5.5
+    definitive cycle 2026-07-13): a pendent inside the window — even one
+    day short of it — stays pendent with no resolution date; only the
+    stale one flips; and the run performs NO outbound HTTP (no Graph
+    calls: acceptances are manual)."""
     cfg = ConfiguracioGlobal.load()
     cfg.ig_collaboradors_actiu = True
     cfg.save()
     a = _artista("EXEMPLE A")
-    old = _invite(a, "m1", "u_old", dies=20)  # > 14d
-    fresh = _invite(a, "m2", "u_fresh", dies=2)  # < 14d
-    call_command("pollar_colaboracions_ig")
+    old = _invite(a, "m1", "u_old", dies=WINDOW_DIES + 6)  # > window
+    fresh = _invite(a, "m2", "u_fresh", dies=2)  # < window
+    edge = _invite(a, "m3", "u_edge", dies=WINDOW_DIES - 1)  # inside
+    with (
+        patch("requests.get", side_effect=AssertionError("HTTP")),
+        patch("requests.post", side_effect=AssertionError("HTTP")),
+        patch("requests.Session.request", side_effect=AssertionError("HTTP")),
+    ):
+        call_command("pollar_colaboracions_ig")
     old.refresh_from_db()
     fresh.refresh_from_db()
+    edge.refresh_from_db()
     assert old.estat == Inv.ESTAT_CADUCADA and old.data_resolucio is not None
-    assert fresh.estat == Inv.ESTAT_PENDENT and fresh.data_resolucio is None
+    for inv in (fresh, edge):
+        assert inv.estat == Inv.ESTAT_PENDENT and inv.data_resolucio is None
     # caducada counts as a non-acceptance in the rate (0 acc / 1 no = 0.0).
     m = MetricaPipeline.objects.get(clau=METRICA_CLAU)
     assert m.valor_float == 0.0
@@ -105,22 +124,3 @@ def test_metric_derived_from_registry_state():
     call_command("pollar_colaboracions_ig")
     m = MetricaPipeline.objects.get(clau=METRICA_CLAU)
     assert abs(m.valor_float - 0.5) < 1e-6  # 1 acc / (1 acc + 1 caducada)
-
-
-@pytest.mark.django_db
-def test_fresh_pending_untouched_and_no_graph_dependency():
-    """A fresh pendent stays pendent forever under this command alone —
-    resolution is manual (staff) or expiry. The command must not import
-    the Instagram client at all (no Graph calls in the definitive
-    cycle)."""
-    import social.management.commands.pollar_colaboracions_ig as mod
-
-    assert not hasattr(mod, "instagram_client")
-    cfg = ConfiguracioGlobal.load()
-    cfg.ig_collaboradors_actiu = True
-    cfg.save()
-    a = _artista("EXEMPLE A")
-    inv = _invite(a, "m1", "u1", dies=13)  # still inside the window
-    call_command("pollar_colaboracions_ig")
-    inv.refresh_from_db()
-    assert inv.estat == Inv.ESTAT_PENDENT and inv.data_resolucio is None

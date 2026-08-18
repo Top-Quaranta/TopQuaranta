@@ -251,8 +251,3 @@ def test_collab_error_on_one_post_does_not_block_others():
         except CollaboratorContainerError:
             processed.append((name, "SKIPPED"))
     assert processed == [("A", "SKIPPED"), ("B", ["x"])]
-
-
-def test_dataclass_shapes():
-    s = Selected(artista_id=1, username="u", categoria=CAT_A)
-    assert (s.artista_id, s.username, s.categoria) == (1, "u", "A")

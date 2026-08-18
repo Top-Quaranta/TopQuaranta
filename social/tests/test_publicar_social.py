@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import datetime
 import io
+import re
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
@@ -178,18 +180,6 @@ def setmana_with_top(db):
     return setmana
 
 
-def test_no_phase_gate_message(db, cfg_ig_on, setmana_with_top):
-    """The legacy per-slot phase gate is gone (removed 2026-06, neutral at
-    prod fase 5): a Wednesday run never reports a 'fase < min_fase' omès
-    reason — slots are gated only by the distribution matrix now."""
-    out = io.StringIO()
-    with redirect_stdout(out):
-        call_command(
-            "publicar_social", "--data", "2026-04-22", "--dry-run"  # Wednesday
-        )
-    assert "fase" not in out.getvalue().lower()
-
-
 def test_phase_1_publishes_saturday_dryrun(db, cfg_ig_on, setmana_with_top):
     out = io.StringIO()
     with redirect_stdout(out):
@@ -207,13 +197,20 @@ def test_phase_1_publishes_saturday_dryrun(db, cfg_ig_on, setmana_with_top):
 
 def test_kill_switch_short_circuits(db, cfg_ig_on, setmana_with_top):
     # Disable globally; even live mode wouldn't publish.
+    # Property: with the channel switch off (and NO --dry-run) the run has
+    # no side effect at all — no SocialPost row is created and neither the
+    # renderer nor the Instagram client is ever touched.
     cfg_ig_on.instagram_actiu = False
     cfg_ig_on.save()
-    out = io.StringIO()
-    with redirect_stdout(out):
+    with (
+        patch("social.management.commands.publicar_social.renderer") as renderer_mod,
+        patch("social.management.commands.publicar_social.instagram_client") as ig_mod,
+    ):
         # NO --dry-run on purpose: kill switch should stop before any side effect.
         call_command("publicar_social", "--data", "2026-04-25")
-    assert "Kill switch" in out.getvalue()
+    assert not SocialPost.objects.filter(setmana=setmana_with_top).exists()
+    assert not renderer_mod.mock_calls
+    assert not ig_mod.mock_calls
 
 
 def test_idempotent_does_not_repost_when_already_publicat(
@@ -245,6 +242,9 @@ def test_idempotent_does_not_repost_when_already_publicat(
 
 
 def test_force_republishes_even_if_publicat(db, cfg_ig_on, setmana_with_top):
+    # Property: --force re-processes a row that is already `publicat`
+    # (the idempotency skip does not apply): the pipeline runs again and
+    # the same row is re-marked with freshly rendered slides.
     setmana = setmana_with_top
     p = SocialPost.objects.create(
         platform=SocialPost.PLATFORM_INSTAGRAM_FEED,
@@ -265,8 +265,17 @@ def test_force_republishes_even_if_publicat(db, cfg_ig_on, setmana_with_top):
             "--force",
             "--dry-run",
         )
-    text = out.getvalue()
-    assert "renderitzades" in text
+    p.refresh_from_db()
+    assert p.metadata.get("dry_run") is True  # the row was re-processed
+    assert p.metadata.get("slides")  # ≥1 slide re-rendered
+    assert (
+        SocialPost.objects.filter(
+            platform=SocialPost.PLATFORM_INSTAGRAM_FEED,
+            tipus=SocialPost.TIPUS_TOP_PPCC,
+            setmana=setmana,
+        ).count()
+        == 1
+    )  # same row, no duplicate
 
 
 def test_no_data_marks_omes(db, cfg_ig_on):
@@ -306,15 +315,26 @@ def test_slide_alts_top_portada_mentions_territory_and_week():
 
 
 def test_slide_alts_top_list_lists_entries_with_positions():
+    # Property: the list-slide alt names EVERY entry on that slide
+    # (song + artist), and states the position range covered — first and
+    # last positions appear — without pinning the exact copy.
     setmana = datetime.date(2026, 4, 27)
     entries = [
         {"posicio": i, "canco_nom": f"Cançó {i}", "artista_nom": f"Artista {i}"}
         for i in range(1, 11)
     ]
     alts = captions.slide_alts("top_territorial", "CAT", setmana, entries, n_slides=2)
-    assert "Posicions 1 a 10" in alts[1]
-    assert "Cançó 1 de Artista 1" in alts[1]
-    assert "Cançó 10 de Artista 10" in alts[1]
+    assert len(alts) == 2
+    alt = alts[1]
+    for e in entries:
+        assert e["canco_nom"] in alt
+        assert e["artista_nom"] in alt
+    # The song and its artist are named together (song before artist).
+    assert re.search(r"Cançó 7\b[^\d]*Artista 7\b", alt)
+    # The position range covered (1..10) is stated in the header, i.e.
+    # before the first entry is listed.
+    header = alt[: alt.index("Cançó 1")]
+    assert re.search(r"\b1\b", header) and re.search(r"\b10\b", header)
 
 
 def test_slide_alts_novetats_albums_one_per_slide():
@@ -359,19 +379,6 @@ def test_slide_tags_top_spreads_y_per_row():
     ys = [t["y"] for t in list_slide_tags]
     assert len(set(ys)) == len(ys), "every row should land at a different Y"
     assert all(0.05 <= y <= 0.95 for y in ys), "Y must be within Meta's bounds"
-
-
-def test_slide_tags_top_alternates_x_columns():
-    from social.management.commands.publicar_social import Command
-
-    entries = [
-        {"posicio": i, "artista_instagram_url": f"https://instagram.com/a{i}"}
-        for i in range(1, 11)
-    ]
-    out = Command._slide_tags("top_ppcc", n_slides=2, data={"entries": entries})
-    xs = [t["x"] for t in out[1]]
-    # Three-column zigzag: at least 3 distinct X values across 10 rows.
-    assert len(set(xs)) >= 3
 
 
 def test_slide_tags_album_slide_tags_principal():

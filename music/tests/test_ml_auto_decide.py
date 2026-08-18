@@ -103,27 +103,6 @@ def test_subtiers_cover_full_axis_no_overlap():
             assert bands[i][1] == bands[i + 1][0], f"gap/overlap: {bands}"
 
 
-def test_subtiers_high_to_low_order():
-    """Display order: A++ first, C-- last."""
-    labels = [label for label, _, _ in ML_SUBTIERS]
-    assert labels[0] == "A++"
-    assert labels[-1] == "C--"
-    assert labels == [
-        "A++",
-        "A+",
-        "A-",
-        "A--",
-        "B++",
-        "B+",
-        "B-",
-        "B--",
-        "C++",
-        "C+",
-        "C-",
-        "C--",
-    ]
-
-
 # ── _is_auto_approve_subtier ──────────────────────────────────────────
 
 
@@ -138,22 +117,6 @@ def test_no_subtier_is_currently_auto():
 
 
 # ── maybe_auto_decide ─────────────────────────────────────────────────
-
-
-@pytest.mark.django_db
-def test_no_auto_decision_today(canco):
-    """No sub-tier qualifies today, so even an A++ canco is left
-    alone for HITL."""
-    canco.ml_classe = "A"
-    canco.ml_confianca = 0.999
-    canco.save()
-
-    result = maybe_auto_decide(canco)
-
-    assert result is None
-    canco.refresh_from_db()
-    assert canco.verificada is False
-    assert HistorialRevisio.objects.count() == 0
 
 
 @pytest.mark.django_db

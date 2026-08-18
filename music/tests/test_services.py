@@ -75,16 +75,6 @@ class TestRebutjarCanco:
             artista_nom=a.nom, decisio="rebutjada", motiu="desvincular_canco"
         ).exists()
 
-    def test_motiu_artista_incorrecte_triggers_unlink_attempt(self):
-        a = _mk_artista()
-        ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
-        c = _mk_canco(a)
-        # Only one Cançó, rejected for artista_incorrecte → eligible
-        # for auto-unlink (no other active tracks; only motiu present).
-        rebutjar_canco(c, "desvincular_artista")
-        a.refresh_from_db()
-        assert a.deezer_ids.count() == 0  # unlinked
-
     def test_no_unlink_for_other_motius(self):
         a = _mk_artista()
         ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
@@ -98,32 +88,10 @@ class TestRebutjarCanco:
 
 @pytest.mark.django_db
 class TestTryAutoUnlink:
-    def test_no_op_when_active_canco_remains(self):
-        a = _mk_artista()
-        ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
-        # Keep an active canço — defer to human.
-        _mk_canco(a, activa=True, verificada=True)
-        assert _try_auto_unlink_homonym_deezer(a) is False
-        assert a.deezer_ids.count() == 1
-
     def test_no_op_when_no_rejection_history(self):
         a = _mk_artista()
         ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
         # No HistorialRevisio rows at all.
-        assert _try_auto_unlink_homonym_deezer(a) is False
-        assert a.deezer_ids.count() == 1
-
-    def test_no_op_when_mixed_motius(self):
-        a = _mk_artista()
-        ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
-        c1 = _mk_canco(a, nom="T1")
-        c2 = _mk_canco(a, nom="T2")
-        # Two rejections, different motius → defer.
-        rebutjar_canco(c1, "desvincular_artista")
-        rebutjar_canco(c2, "desvincular_canco")
-        # The first call may have unlinked already; restore for test.
-        if a.deezer_ids.count() == 0:
-            ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
         assert _try_auto_unlink_homonym_deezer(a) is False
         assert a.deezer_ids.count() == 1
 

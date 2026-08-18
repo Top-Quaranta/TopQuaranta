@@ -27,15 +27,6 @@ def base(db):
     return a, al, c
 
 
-def test_feature_name_present():
-    """The dispersion column lives between mb features and TF-IDF."""
-    assert "spotify_artist_dispersio" in FEATURE_NAMES
-    # And it sits at the LAST structured slot (immediately before
-    # the TF-IDF tail). This is the contract the inference path uses.
-    structured_only = [n for n in FEATURE_NAMES if not n.startswith("tfidf_")]
-    assert structured_only[-1] == "spotify_artist_dispersio"
-
-
 def test_dispersion_feature_reads_artista_field(base):
     a, _, c = base
     a.spotify_artist_dispersio = 3

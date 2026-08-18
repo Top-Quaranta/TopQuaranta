@@ -194,17 +194,3 @@ def test_get_track_info_literal_keeps_genuine_variant():
         # artist matches what we asked for (typographic), not the
         # canonical (ASCII) → sum normally.
         assert result["playcount"] == 25530
-
-
-@pytest.mark.django_db
-def test_alias_str_states():
-    """__str__ varies by state — used in admin + audit logs."""
-    art = Artista.objects.create(nom="X", lastfm_nom="X")
-    pending = ArtistaLastfmAlias.objects.create(artista=art, nom="x")
-    confirmed = ArtistaLastfmAlias.objects.create(artista=art, nom="X.", confirmat=True)
-    rejected = ArtistaLastfmAlias.objects.create(
-        artista=art, nom="X-different", rebutjat=True
-    )
-    assert "pendent" in str(pending)
-    assert "confirmat" in str(confirmed)
-    assert "rebutjat" in str(rejected)

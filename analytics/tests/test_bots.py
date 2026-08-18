@@ -55,3 +55,34 @@ def test_classify_human_and_empty():
     assert classify_ua(chrome) == "human"
     assert classify_ua("") == "human"
     assert classify_ua(None) == "human"
+
+
+def test_sitemaps_are_not_pageviews():
+    """A sitemap is a machine endpoint, never a visit. The skip list said
+    `/sitemap.xml` — the index — but the real ones are `/sitemap-*.xml`,
+    and a dot is not a dash. Combined with "unknown UA → human", they
+    became the entire "top human pages" list of the weekly digest
+    (2026-08-17)."""
+    from analytics.middleware import _is_public_pageview
+
+    class _Req:
+        method = "GET"
+
+        def __init__(self, path):
+            self.path = path
+
+    for path in (
+        "/sitemap.xml",
+        "/sitemap-artistes.xml",
+        "/sitemap-cancons.xml",
+        "/sitemap-albums.xml",
+        "/sitemap-top_historic.xml",
+        "/sitemap-territoris.xml",
+        "/sitemap-generes.xml",
+        "/sitemap-static.xml",
+    ):
+        assert not _is_public_pageview(_Req(path)), path
+
+    # …and real pages still count.
+    for path in ("/", "/top", "/artistes", "/canco/alguna-cosa"):
+        assert _is_public_pageview(_Req(path)), path

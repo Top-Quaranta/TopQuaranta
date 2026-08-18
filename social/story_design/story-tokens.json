@@ -34,14 +34,27 @@
   },
 
   "mosaic": {
+    "_note": "Re-tiered 2026-08-12: was the 5x6/30-item 40-11 slide (cover 150); now the 4x5/20-item 40-21 slide. Same builder, bigger covers.",
     "section_y": 200,
-    "cols": 5, "gap": 18, "cover": 150,
+    "cols": 4, "gap": 22, "cover": 175,
     "grid_top_gap": 40,
+    "row_block": 84,
+    "display_cap": 20,
+    "badge":  { "size": 36, "pad_x": 16, "pad_y": 7 },
+    "title":  { "size": 21, "tracking": -0.2, "lines": 2, "lh": 22, "gap_above": 10 },
+    "artist": { "size": 18, "gap_above": 4, "mix": 0.62 }
+  },
+
+  "pairs": {
+    "_note": "New tier 2026-08-12: positions 20-11 as a 3+3+3+1 cover grid, #11 centred on its own last row. Rendered by the _story_top_mosaic builder (tier='pairs').",
+    "section_y": 200,
+    "cols": 3, "gap": 28, "cover": 240,
+    "grid_top_gap": 24,
     "row_block": 78,
-    "display_cap": 30,
-    "badge":  { "size": 33, "pad_x": 15, "pad_y": 7 },
-    "title":  { "size": 20, "tracking": -0.2, "lines": 2, "lh": 21, "gap_above": 10 },
-    "artist": { "size": 17, "gap_above": 4, "mix": 0.62 }
+    "display_cap": 10,
+    "badge":  { "size": 44, "pad_x": 19, "pad_y": 8 },
+    "title":  { "size": 24, "tracking": -0.24, "lines": 2, "lh": 26, "gap_above": 10 },
+    "artist": { "size": 20, "gap_above": 4, "mix": 0.62 }
   },
 
   "grid": {
@@ -77,6 +90,14 @@
     "scenario": { "size": 26, "gap_above": 36, "tracking": 5, "wrap_margin": 180, "lines": 2, "lh": 34 },
     "title":    { "size": 108, "wrap_w": 880, "lines": 2, "gap_above": 16, "lh": 114 },
     "artist":   { "size": 50, "wrap_margin": 180, "gap_above": 30 }
+  },
+
+  "canco_dia": {
+    "_note": "Sonda «la cançó del dia» (2026-08-13): single-slide story, one never-topped song, one mentioned artist. Podi-derived single-entry grammar.",
+    "section_y": 200,
+    "cover": 560, "cover_y": 560,
+    "title":  { "size": 64, "tracking": -1.3, "lines": 2, "lh": 66, "gap_above": 44, "wrap_margin": 160 },
+    "artist": { "size": 40, "gap_above": 12, "wrap_margin": 160, "mix": 0.66 }
   },
 
   "novetats": {

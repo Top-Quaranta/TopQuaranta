@@ -96,6 +96,12 @@ export const STAFF_GROUPS = [
         desc: "Artistes aprovats sense instagram_url, per presència al top.",
       },
       {
+        to: "/staff/artistes/sense-youtube",
+        label: "Artistes sense YouTube",
+        title: "Artistes sense YouTube",
+        desc: "Decidir el canal propi de cada artista: el segon carril de senyal.",
+      },
+      {
         to: "/staff/artistes/al-top",
         label: "Artistes al top",
         title: "Artistes al top",

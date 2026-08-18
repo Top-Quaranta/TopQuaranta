@@ -126,6 +126,24 @@ def _artista_card(a, homset=None) -> dict:
             if homset is not None
             else a.homonims().exists()
         ),
+        # YouTube lanes: the Topic channel is resolved automatically, the
+        # official one is a human decision. Both surface so the staff page
+        # can show what is already known before asking for a click.
+        "instagram_revisat": a.instagram_revisat,
+        "instagram_suggerit": a.instagram_suggerit or "",
+        "instagram_rebutjat_url": a.instagram_rebutjat_url or "",
+        "instagram_rebutjat_at": (
+            a.instagram_rebutjat_at.isoformat() if a.instagram_rebutjat_at else None
+        ),
+        "youtube_channel_id": a.youtube_channel_id or "",
+        # Whether discovery has REACHED this artist yet. Without it an
+        # empty `youtube_channel_id` reads as "has no Art Track" when it
+        # usually means "the cron hasn't got here" — 118 of 520 done at
+        # ~90/day. Confused the operator on day one.
+        "youtube_provat": a.youtube_checked_at is not None,
+        "youtube_canal_oficial": a.youtube_canal_oficial or "",
+        "youtube_canal_revisat": a.youtube_canal_revisat,
+        "youtube_url": a.youtube_url or "",
         "auto_descobert": a.auto_descobert,
         "font_descoberta": a.font_descoberta or "",
         # Read from the prefetch cache (`.values_list()` would bypass it

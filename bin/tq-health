@@ -59,23 +59,19 @@ DISK_AVAIL=$(df -h / --output=avail | tail -1 | tr -d ' ')
 PUBLIC_BASE="${TQ_HEALTH_WEB_PUBLIC:-https://www.topquaranta.cat}"
 BACKEND_BASE="${TQ_HEALTH_WEB_BACKEND:-http://127.0.0.1:8083}"
 
-spa_body=$(curl -fsSk --max-time 10 "$PUBLIC_BASE/" 2>/dev/null || true)
-if [[ -z "$spa_body" ]]; then
-    WEB_SPA_OK=0; WEB_SPA_DETAIL="cap resposta de $PUBLIC_BASE/"
-elif ! grep -q 'id="root"' <<<"$spa_body"; then
-    WEB_SPA_OK=0; WEB_SPA_DETAIL="servit sense <div id=root> (build trencat?)"
-else
-    css_path=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.css' <<<"$spa_body" | head -1)
-    if [[ -z "$css_path" ]]; then
-        WEB_SPA_OK=0; WEB_SPA_DETAIL="sense link CSS hashed (build Vite trencat?)"
-    else
-        css_status=$(curl -fsSk --max-time 5 -o /dev/null -w "%{http_code}" "$PUBLIC_BASE$css_path" 2>/dev/null || echo 000)
-        if [[ "$css_status" == 200 ]]; then
-            WEB_SPA_OK=1; WEB_SPA_DETAIL="OK ($css_path → 200)"
-        else
-            WEB_SPA_OK=0; WEB_SPA_DETAIL="CSS $css_path → $css_status (dist stale?)"
-        fi
-    fi
+# The shell + hashed-asset probing lives in scripts/health/spa_assets.sh
+# so it is testable without a Django env (this script needs the venv and
+# cron-meta.json before it gets anywhere). That file documents why the
+# check asserts content-type and not just the status code: `try_files`
+# makes a MISSING asset return 200 with the SPA shell, so a status-only
+# assert could never fail on a stale dist.
+#
+# Unlike the Spotify/TLS sub-checks this one is not opt-in, so a missing
+# script is itself an anomaly rather than a silent OK.
+WEB_SPA_OK=0; WEB_SPA_DETAIL="scripts/health/spa_assets.sh no trobat"
+if [[ -n "$SP_DIR" && -x "$SP_DIR/spa_assets.sh" ]]; then
+    WEB_SPA_DETAIL=$(TQ_HEALTH_WEB_PUBLIC="$PUBLIC_BASE" "$SP_DIR/spa_assets.sh" 2>&1)
+    if [[ $? == 0 ]]; then WEB_SPA_OK=1; else WEB_SPA_OK=0; fi
 fi
 
 top_body=$(curl -fsS --max-time 10 "$BACKEND_BASE/api/v1/top/?territori=PPCC" 2>/dev/null || true)

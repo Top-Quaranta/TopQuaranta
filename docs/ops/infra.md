@@ -223,10 +223,8 @@ routine's own environment. See `docs/architecture/comptes.md`.
 
 Del 27 d'abril al 18 d'agost del 2026 aquesta màquina va allotjar
 **Stalwart Mail Server** per a les bústies de `topquaranta.cat` i
-`cercol.team`. Ja no: les dues han passat a **Purelymail**, i de tot
-aquell muntatge només queda el fitxer d'autoconfig que serveix Caddy des
-de `mail.topquaranta.cat`; qualsevol altra petició d'eixe domini respon
-un 410 amb els paràmetres nous.
+`cercol.team`. Ja no: les dues han passat a **Purelymail**, i d'aquell
+muntatge no queda res ací.
 
 El que hi havia i s'ha llevat: el servei, els listeners de 25/465/587/993,
 `/etc/stalwart`, `/var/lib/stalwart`, i la parella
@@ -246,13 +244,12 @@ Es conserven dues coses, a posta:
   en va eixir és genèrica i continua activa per a qualsevol endpoint que
   es configure a `tls_endpoints_vigilats`.
 
-L'autoconfig es publica **només** al camí `.well-known` de
-`mail.topquaranta.cat`. Hi havia també un site block per a
-`autoconfig.topquaranta.cat` —el subdomini que Thunderbird prova
-primer— però el registre A que necessitava no es va crear mai: resol a
-CDMON i respon un Apache. Durant quatre mesos els clients ja trobaven la
-configuració pel camí `.well-known`, així que el bloc es va llevar el
-2026-08-18 en lloc de completar el DNS.
+**No publiquem cap autoconfig.** Purelymail ja en serveix un amb
+`%EMAILDOMAIN%` de comodí, i un client que no troba res al nostre domini
+el dedueix des de l'MX. La còpia pròpia que vam tindre uns dies era el
+mateix contingut en dos llocs i es va desincronitzar; els dos site blocks
+que la servien (`mail.` i `autoconfig.`) ja no hi són, i els seus
+registres DNS tampoc.
 
 Arquitectura de correu actual a [`../EMAIL.md`](../EMAIL.md).
 

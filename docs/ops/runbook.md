@@ -792,14 +792,18 @@ Font de veritat del unit: `deploy/topquaranta-web.service` al repo.
 detecta drift, i fa `systemctl daemon-reload`.
 
 `tq-sync-infra` és, en general, **l'única via** per a qualsevol fitxer
-que viu fora de l'arbre de treball: Caddyfile, cron, logrotate, el unit
-de systemd i —des del 2026-08-18— l'autoconfig de correu
-(`deploy/autoconfig-topquaranta.xml` → `/var/www/autoconfig/`). Eixe
-últim va entrar precisament perquè no hi era: vivia només al servidor i
-es va desincronitzar quan es va retirar Stalwart, deixant els clients de
-correu apuntant a un relay que ja no els servia. **Si edites un fitxer
-d'infraestructura directament a la màquina, el següent desplegament no
-el toca i ningú se n'assabenta fins que falla.**
+que viu fora de l'arbre de treball: Caddyfile, cron, logrotate i el unit
+de systemd. **Si edites un fitxer d'infraestructura directament a la
+màquina, el següent desplegament no el toca i ningú se n'assabenta fins
+que falla.**
+
+Això ho vam aprendre amb l'autoconfig de correu, que va viure només al
+servidor i es va desincronitzar en retirar Stalwart. La conclusió, però,
+no va ser posar-lo ací sinó **deixar de publicar-lo**: Purelymail ja en
+serveix un de comodí i la nostra còpia era el mateix contingut en dos
+llocs. La regla que en queda és més general que el fitxer — si una cosa
+ha d'existir fora de l'arbre, va a `deploy/` i entra per ací; si no ha
+d'existir, millor encara.
 
 Afegir-hi un fitxer és **només** posar una línia al mapa `FILES` de
 l'script. Les branques del `case` que hi ha a sota existeixen únicament

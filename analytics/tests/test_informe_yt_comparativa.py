@@ -304,3 +304,82 @@ def test_a_stable_lane_set_is_still_measured():
     c = _ctx()
     assert c["comparables"] == 1
     assert c["factor"]["mediana"] == 800  # 8000 visual. / 10 escoltes
+
+
+@pytest.mark.django_db
+def test_swapping_one_video_for_another_is_not_a_week_of_views():
+    """Miquel's case, 2026-08-18, and the reason `n_videos` was only a
+    proxy: today three videos, tomorrow three again — but the small one
+    is gone and a big one has arrived. The count never moves, so a guard
+    that compares counts lets the jump through.
+
+    With the per-video detail the increment is the SUM OF THE
+    DIFFERENCES of the videos present in both photographs, so a
+    substitution contributes nothing at all.
+    """
+    canco = _canco("Substitució")
+    SenyalDiari.objects.create(
+        canco=canco, data=FA_UNA_SETMANA, lastfm_playcount=100, error=False
+    )
+    SenyalDiari.objects.create(
+        canco=canco, data=AVUI, lastfm_playcount=110, error=False
+    )
+    SenyalYouTube.objects.create(
+        canco=canco,
+        data=FA_UNA_SETMANA,
+        views=1_010,
+        n_videos=3,
+        views_per_video={"gran1": 500, "gran2": 500, "menut": 10},
+        error=False,
+    )
+    SenyalYouTube.objects.create(
+        canco=canco,
+        data=AVUI,
+        views=51_000,
+        n_videos=3,  # el mateix compte: la guarda antiga no ho veuria
+        views_per_video={"gran1": 500, "gran2": 500, "nou_gran": 50_000},
+        error=False,
+    )
+
+    c = _ctx()
+    # Els dos vídeos comuns no s'han mogut, així que l'increment és 0 i
+    # la cançó no arriba al mínim per a ser comparable.
+    assert c["comparables"] == 0
+    assert c["mou_yt"] == 0
+
+
+@pytest.mark.django_db
+def test_a_new_video_counts_from_the_day_after_it_appears():
+    """The other half of the rule: a video contributes nothing the day it
+    shows up — there is no baseline for it — and everything it earns from
+    then on."""
+    canco = _canco("Vídeo nou")
+    SenyalDiari.objects.create(
+        canco=canco, data=FA_UNA_SETMANA, lastfm_playcount=100, error=False
+    )
+    SenyalDiari.objects.create(
+        canco=canco, data=AVUI, lastfm_playcount=110, error=False
+    )
+    # A week ago the new video already existed with 9.000; today 9.700.
+    # Only those 700 are this week's, not the 9.000 it arrived with.
+    SenyalYouTube.objects.create(
+        canco=canco,
+        data=FA_UNA_SETMANA,
+        views=9_100,
+        n_videos=2,
+        views_per_video={"vell": 100, "nou": 9_000},
+        error=False,
+    )
+    SenyalYouTube.objects.create(
+        canco=canco,
+        data=AVUI,
+        views=9_850,
+        n_videos=2,
+        views_per_video={"vell": 150, "nou": 9_700},
+        error=False,
+    )
+
+    c = _ctx()
+    assert c["comparables"] == 1
+    # (50 + 700) / 10 escoltes = 75
+    assert c["factor"]["mediana"] == 75

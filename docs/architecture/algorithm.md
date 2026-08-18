@@ -240,6 +240,26 @@ la setmana immediatament anterior (TopSetmanal ordenat per
 
 ---
 
+## 2.4 `SenyalYouTube` — encara fora del càlcul
+
+La segona font de senyal (§`pipeline.md` 3.1 bis) **no entra al top**:
+`_top_for_territoris` només llig `SenyalDiari`. La taula existeix a part
+a posta, perquè una visualització no és un scrobble i unir-les a la capa
+d'emmagatzematge forçaria una decisió que volem mantindre editorial.
+
+Si algun dia hi entra, dues coses hi han d'anar amb ella:
+
+1. **L'increment se suma per vídeo**, no restant sumes. `views` és la
+   suma de tots els carrils d'una cançó i un carril nou entra amb el seu
+   comptador de tota la vida; `views_per_video` guarda el detall
+   justament per a poder restar només els vídeos presents a les dues
+   fotos. Sense això, aparellar un videoclip es llig com una setmana de
+   públic (Andreu Valor, 2026-08-18: 103.048 falses contra 17 de reals).
+2. **La unitat.** Dividir les visualitzacions per un factor les fa
+   xocar contra `min_escoltes_top`, que és un número absolut en unitats
+   de Last.fm, i expulsa cançons que sí que tenen públic. Multiplicar
+   les escoltes és equivalent per a l'ordre i deixa el llindar en pau.
+
 ## 3. Agregació PPCC
 
 PPCC no executa el càlcul per territori — agrega els resultats de

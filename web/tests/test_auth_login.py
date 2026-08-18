@@ -19,6 +19,8 @@ in-memory cache of its own.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from django.core.cache.backends.locmem import LocMemCache
 from rest_framework.test import APIClient
@@ -31,11 +33,16 @@ ME = "/api/v1/auth/me/"
 PASS = "una-contrasenya-prou-llarga-9"
 
 
+# `uuid4` i no `id(monkeypatch)`: CPython reutilitza els id dels objectes
+# alliberats, i dues instàncies de LocMemCache amb el MATEIX nom
+# comparteixen magatzem. Amb id() dues proves podien acabar compartint
+# comptador — en local no passava i a CI sí, perquè l'ordre de les proves
+# és aleatori (2026-08-19).
 @pytest.fixture(autouse=True)
 def _throttle_cache(monkeypatch):
     """A private in-memory cache per test: real throttling, no bleed."""
     monkeypatch.setattr(
-        SimpleRateThrottle, "cache", LocMemCache(f"throttle-{id(monkeypatch)}", {})
+        SimpleRateThrottle, "cache", LocMemCache(f"throttle-{uuid.uuid4()}", {})
     )
 
 

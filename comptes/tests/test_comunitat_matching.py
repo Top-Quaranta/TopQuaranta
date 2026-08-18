@@ -34,11 +34,28 @@ def test_patch_sets_matching_fields_from_list_and_string(django_user_model):
         format="json",
     )
     assert r.status_code == 200, r.content
-    p = PerfilUsuari.objects.get(usuari=u)
-    # Invalid busca token dropped; valid ones kept.
-    assert p.busca == "grup,colaboradors"
-    assert p.generes == "rock,pop"
-    assert p.nivell == "amateur"
+    # Property asserted (through the API, not the storage format): the
+    # unknown `busca` token is dropped, every valid one is kept, and the
+    # comma-string `generes` is tokenised — order and separator are not
+    # pinned.
+    body = r.json()
+
+    def _toks(s):
+        return {t.strip() for t in str(s or "").split(",") if t.strip()}
+
+    assert _toks(body["busca"]) == {"grup", "colaboradors"}
+    assert _toks(body["generes"]) == {"rock", "pop"}
+    assert body["nivell"] == "amateur"
+    # And it round-trips: a fresh GET says the same.
+    again = _client(u).get("/api/v1/compte/perfil-usuari/").json()
+    assert _toks(again["busca"]) == {"grup", "colaboradors"}
+    # The directori filter sees the valid tokens and not the dropped one.
+    PerfilUsuari.objects.filter(usuari=u).update(visible_directori=True)
+    viewer = _client(_user(django_user_model, "viewer1"))
+    hit = viewer.get("/api/v1/comunitat/directori/?busca=colaboradors").json()
+    assert u.pk in [row["usuari_id"] for row in hit["results"]]
+    miss = viewer.get("/api/v1/comunitat/directori/?busca=INVALID").json()
+    assert u.pk not in [row["usuari_id"] for row in miss["results"]]
 
 
 @pytest.mark.django_db

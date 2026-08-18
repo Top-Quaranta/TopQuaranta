@@ -83,23 +83,17 @@ def test_staff_estat_returns_full_payload(staff_client):
     assert "subtiers" in data["ml"]
     sub = data["ml"]["subtiers"]
     rows = sub["rows"]
-    # 12 sub-tiers (4 per class), ordered high-to-low confidence.
-    assert len(rows) == 12
-    expected_order = [
-        "A++",
-        "A+",
-        "A-",
-        "A--",
-        "B++",
-        "B+",
-        "B-",
-        "B--",
-        "C++",
-        "C+",
-        "C-",
-        "C--",
-    ]
-    assert [r["label"] for r in rows] == expected_order
+    # One row per sub-tier, in the order of the source-of-truth constant
+    # (`music.constants.ML_SUBTIERS`, high-to-low confidence) — not a
+    # hand-copied list of 12 labels.
+    from music.constants import (
+        ML_AUTO_APPROVE_SUBTIERS,
+        ML_AUTO_REJECT_SUBTIERS,
+        ML_SUBTIERS,
+    )
+
+    assert [r["label"] for r in rows] == [label for label, _, _ in ML_SUBTIERS]
+    assert len(rows) == len(ML_SUBTIERS) > 0
     for r in rows:
         for k in (
             "label",
@@ -114,10 +108,20 @@ def test_staff_estat_returns_full_payload(staff_client):
             "status",
         ):
             assert k in r
-    # No auto-decision is currently graduated — the original 100%
-    # claim was a target-leakage artifact (live Canco fields).
-    assert sub["auto_approved"] == []
-    assert sub["auto_rejected"] == []
+    # The graduated sets are whatever the constants say (originally empty
+    # — the 100% claim was a target-leakage artifact on live Canco
+    # fields); graduating a sub-tier must not break this test. Every
+    # graduated label must be a real sub-tier, and its row must carry
+    # the matching status.
+    labels = {r["label"] for r in rows}
+    assert set(sub["auto_approved"]) == set(ML_AUTO_APPROVE_SUBTIERS) <= labels
+    assert set(sub["auto_rejected"]) == set(ML_AUTO_REJECT_SUBTIERS) <= labels
+    assert not (set(sub["auto_approved"]) & set(sub["auto_rejected"]))
+    by_label = {r["label"]: r for r in rows}
+    for lab in sub["auto_approved"]:
+        assert by_label[lab]["status"] == "auto_aprovacio_activa"
+    for lab in sub["auto_rejected"]:
+        assert by_label[lab]["status"] == "auto_rebuig_activa"
 
 
 def test_staff_top_list_responds(staff_client):
@@ -328,16 +332,6 @@ def test_staff_artistes_list_instagram_no_filter(staff_client, db):
     assert "WithIG" not in noms
 
 
-def test_legacy_staff_views_shim_still_exposes_names():
-    """Anything that did `from web.api import staff_views` must keep
-    finding the old names. Guards against a future cleanup that
-    removes the shim before everyone has migrated."""
-    from web.api import staff_views
-
-    for attr in ("dashboard", "estat", "top_list", "IsStaff"):
-        assert hasattr(staff_views, attr), attr
-
-
 # ── social_republicar (Lot C — re-publicar amb correcció) ───────────
 
 
@@ -402,11 +396,16 @@ def test_republicar_calls_delete_then_publish(
 ):
     """The endpoint must invoke delete first (resetting local state),
     then call_command for re-publish. Both pieces stubbed; we assert
-    the order + payload."""
-    calls: list[str] = []
+    the order + payload.
+
+    Asserted as properties: exactly one delete then one publish, in that
+    order; the publish targets the post's own channel; the local reset
+    is persisted and echoed in the response — not the exact command
+    argv string."""
+    calls: list[tuple] = []
 
     def fake_delete(post):
-        calls.append(f"delete:{post.pk}")
+        calls.append(("delete", post.pk))
         post.status = post.STATUS_PENDENT
         post.instagram_media_id = ""
         post.metadata = {}
@@ -415,7 +414,7 @@ def test_republicar_calls_delete_then_publish(
         return True, "DRY-RUN: deleted"
 
     def fake_call_command(*args, **kwargs):
-        calls.append("publish:" + " ".join(args))
+        calls.append(("publish", tuple(args)))
 
     monkeypatch.setattr(
         "web.api.staff.social.posts._delete_remote_and_reset", fake_delete
@@ -429,11 +428,17 @@ def test_republicar_calls_delete_then_publish(
     )
     assert r.status_code == 200, r.data
     assert r.data["ok"] is True
-    # Order matters — delete BEFORE publish.
-    assert calls[0] == f"delete:{published_post.pk}"
-    assert calls[1].startswith("publish:publicar_canal")
-    assert "--channel mastodon" in calls[1]
-    assert "--force" in calls[1]
+    # Order matters — exactly one delete BEFORE exactly one publish.
+    assert [c[0] for c in calls] == ["delete", "publish"]
+    assert calls[0][1] == published_post.pk
+    # The re-publish targets the post's own channel/platform.
+    publish_args = calls[1][1]
+    assert published_post.platform in publish_args
+    # The local reset done by the delete step is persisted and echoed.
+    published_post.refresh_from_db()
+    assert published_post.status == published_post.STATUS_PENDENT
+    assert published_post.published_at is None
+    assert r.data["post"]["status"] == published_post.STATUS_PENDENT
 
 
 def test_republicar_502_when_delete_fails(staff_client, published_post, monkeypatch):

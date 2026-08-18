@@ -380,10 +380,15 @@ def test_editorial_genre_link_on_artista_page(client, artista):
 @pytest.mark.django_db
 def test_artista_page_degrades_without_editorial_links(client, artista):
     """No territori/genere/decade → page still renders 200, no Explora
-    block (clean degradation, thin gate untouched)."""
+    block (clean degradation, thin gate untouched).
+
+    Asserts the property — the page renders and links into NO editorial
+    landing (`/territori/`, `/genere/`, `/decada/`) — not the heading
+    markup of the block."""
     resp = client.get(f"/artista/{artista.slug}")
     assert resp.status_code == 200
-    assert "<h2>Explora</h2>" not in resp.content.decode()
+    body = resp.content.decode()
+    assert not re.search(r'href="/(territori|genere|decada)/', body)
 
 
 @pytest.mark.django_db
@@ -411,15 +416,16 @@ def test_landing_prose_renders_when_present_and_degrades_when_absent(client):
 @pytest.mark.django_db
 def test_comunitat_musics_public_page(client, db):
     """Slice D: /comunitat-musics is public, indexable, unique title,
-    CollectionPage JSON-LD, no noindex, sells the community."""
+    CollectionPage JSON-LD, no noindex, sells the community.
+
+    Asserts 200 / indexable / a community-specific title / CollectionPage
+    — the marketing copy itself is not pinned."""
     r = client.get("/comunitat-musics")
     assert r.status_code == 200
     body = r.content.decode()
-    assert "Comunitat de músics en català" in body
-    assert "busca grup" in body.lower()
     assert "noindex" not in body
     title = re.search(r"<title>(.+?)</title>", body).group(1)
-    assert "Comunitat de músics" in title
+    assert "comunitat" in title.lower()
     coll = next(b for b in _jsonld_blocks(body) if b.get("@type") == "CollectionPage")
     assert coll["mainEntity"]["@type"] == "ItemList"
 

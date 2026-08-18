@@ -73,7 +73,10 @@ def test_enrichment_coverage_ratio_none_when_no_target():
 
 @pytest.mark.django_db
 def test_estat_endpoint_exposes_coverage(staff_client, catalog):
+    """The endpoint surfaces the KPI block, and it is the helper's output
+    (source of truth) — the numbers themselves are asserted in
+    `test_enrichment_coverage_counts`, not re-pinned here."""
     r = staff_client.get("/api/v1/staff/social/spotify/estat/")
     assert r.status_code == 200
-    cov = r.data["enrichment_coverage"]
-    assert cov["total"] == 4 and cov["enriched"] == 2 and cov["ratio"] == 0.5
+    assert "enrichment_coverage" in r.data
+    assert r.data["enrichment_coverage"] == _enrichment_coverage()

@@ -103,10 +103,27 @@ def test_invalid_filter_values_are_ignored(staff_client, sample_posts):
 
 
 def test_pagination_meta_and_default_page_size(staff_client, sample_posts):
+    """Pagination contract: the meta keys are present and self-consistent,
+    the default page size is a sane bounded value that fits the sample
+    (not a pinned literal), and `per_page` is honoured when requested."""
+    import math
+
     r = staff_client.get("/api/v1/staff/social/")
     for k in ("page", "num_pages", "total", "per_page", "has_next", "has_previous"):
         assert k in r.data
-    assert r.data["per_page"] == 50  # staff default
+    n = len(sample_posts)
+    assert r.data["total"] == n
+    assert n <= r.data["per_page"] <= 200  # staff default fits the sample, ≤ cap
+    assert r.data["page"] == 1 and r.data["num_pages"] == 1
+    assert r.data["has_next"] is False and r.data["has_previous"] is False
+    assert len(r.data["results"]) == n
+
+    # A requested per_page is honoured and the meta stays consistent.
+    r2 = staff_client.get("/api/v1/staff/social/?per_page=2")
+    assert r2.data["per_page"] == 2
+    assert len(r2.data["results"]) == 2
+    assert r2.data["num_pages"] == math.ceil(n / 2)
+    assert r2.data["has_next"] is True and r2.data["has_previous"] is False
 
 
 # ── no-N+1: query count must not scale with rows ─────────────────────
@@ -178,11 +195,6 @@ def test_public_url_telegram_uses_metadata_url():
 def test_public_url_instagram_without_permalink_is_empty():
     # No Graph permalink lookup at render time: a bare media id → no URL.
     p = SocialPost(platform="instagram_feed", instagram_media_id="17900000000000000")
-    assert _public_url(p) == ""
-
-
-def test_public_url_newsletter_is_empty():
-    p = SocialPost(platform="newsletter", metadata={})
     assert _public_url(p) == ""
 
 

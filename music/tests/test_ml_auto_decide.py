@@ -103,61 +103,49 @@ def test_subtiers_cover_full_axis_no_overlap():
             assert bands[i][1] == bands[i + 1][0], f"gap/overlap: {bands}"
 
 
-def test_subtiers_high_to_low_order():
-    """Display order: A++ first, C-- last."""
-    labels = [label for label, _, _ in ML_SUBTIERS]
-    assert labels[0] == "A++"
-    assert labels[-1] == "C--"
-    assert labels == [
-        "A++",
-        "A+",
-        "A-",
-        "A--",
-        "B++",
-        "B+",
-        "B-",
-        "B--",
-        "C++",
-        "C+",
-        "C-",
-        "C--",
-    ]
-
-
 # ── _is_auto_approve_subtier ──────────────────────────────────────────
 
 
 def test_no_subtier_is_currently_auto():
     """As of 2026-04-30 no sub-tier has been graduated to auto-decision
-    — the original A++ pin was based on a flawed metric."""
-    assert ML_AUTO_APPROVE_SUBTIERS == ()
-    assert ML_AUTO_REJECT_SUBTIERS == ()
-    # And the helper returns False for every band.
+    — the original A++ pin was based on a flawed metric.
+
+    Property asserted (instead of pinning the lists to `()`, which would
+    block a legitimate graduation): the graduated lists are consistent
+    with the tier semantics — every entry is a real sub-tier label,
+    auto-approve tiers are class A and auto-reject tiers class C, no
+    tier is in both lists, and `_is_auto_approve_subtier` is True for
+    exactly the confidences that fall in a graduated approve tier.
+    Whether a graduated tier really clears the honest-accuracy bar is
+    a live measurement (`_ml_subtier_stats` on HistorialRevisio) that
+    cannot be pinned in a unit test."""
+    labels = {label for label, _, _ in ML_SUBTIERS}
+    approve = set(ML_AUTO_APPROVE_SUBTIERS)
+    reject = set(ML_AUTO_REJECT_SUBTIERS)
+    assert approve <= labels
+    assert reject <= labels
+    assert not (approve & reject)
+    assert all(label.startswith("A") for label in approve)
+    assert all(label.startswith("C") for label in reject)
+    # The helper mirrors the constant band-by-band (probe just inside
+    # each band's lower bound).
     for label, lo, _ in ML_SUBTIERS:
-        assert _is_auto_approve_subtier(label[0], lo + 0.001) is False
+        assert _is_auto_approve_subtier(label[0], lo + 0.001) is (label in approve)
 
 
 # ── maybe_auto_decide ─────────────────────────────────────────────────
 
 
 @pytest.mark.django_db
-def test_no_auto_decision_today(canco):
-    """No sub-tier qualifies today, so even an A++ canco is left
-    alone for HITL."""
-    canco.ml_classe = "A"
-    canco.ml_confianca = 0.999
-    canco.save()
+def test_already_verified_skipped(canco, monkeypatch):
+    """An already-verified canço is never re-decided, even when its
+    sub-tier IS graduated. Graduate A++ for the test so the `verificada`
+    guard is the only thing standing between the canço and an auto-approval
+    (with today's empty ML_AUTO_APPROVE_SUBTIERS the guard would be
+    unobservable — mutation audit 2026-08-18)."""
+    import music.ml as ml
 
-    result = maybe_auto_decide(canco)
-
-    assert result is None
-    canco.refresh_from_db()
-    assert canco.verificada is False
-    assert HistorialRevisio.objects.count() == 0
-
-
-@pytest.mark.django_db
-def test_already_verified_skipped(canco):
+    monkeypatch.setattr(ml, "ML_AUTO_APPROVE_SUBTIERS", ("A++",))
     canco.ml_classe = "A"
     canco.ml_confianca = 0.999
     canco.verificada = True
@@ -166,18 +154,50 @@ def test_already_verified_skipped(canco):
     assert maybe_auto_decide(canco) is None
     assert HistorialRevisio.objects.count() == 0
 
+    # Contrast: the same canço, still pending, IS auto-approved — proves
+    # the graduation took and the guard is what stopped the first call.
+    canco.verificada = False
+    canco.save()
+    assert maybe_auto_decide(canco) == "aprovada"
+    assert HistorialRevisio.objects.filter(motiu="auto_ml").exists()
+
 
 # ── Training filter ──────────────────────────────────────────────────
 
 
 @pytest.mark.django_db
-def test_auto_ml_decisions_excluded_from_training(canco):
+def test_auto_ml_decisions_excluded_from_training(canco, tmp_path, monkeypatch):
     """If a sub-tier is graduated in the future, auto-decisions must
-    not feed back into the training set."""
+    not feed back into the training set.
+
+    Property asserted: with only auto_ml decisions on record — more than
+    `MIN_TRAINING_SAMPLES` of them — `entrenar_model()` still finds no
+    training data and refuses to train (returns False, writes no
+    model). Exercises the real training-set selection instead of
+    re-implementing the exclude in the test."""
+    from music import ml
+    from music.constants import MIN_TRAINING_SAMPLES
+
     aprovar_canco_auto_ml(canco)
     assert HistorialRevisio.objects.filter(motiu=MOTIU_AUTO_ML).count() == 1
-    trainable = HistorialRevisio.objects.exclude(motiu=MOTIU_AUTO_ML).count()
-    assert trainable == 0
+    # Pad with more auto_ml rows so the count alone would clear the
+    # minimum — only the exclude keeps them out of the training set.
+    for i in range(MIN_TRAINING_SAMPLES + 5):
+        HistorialRevisio.objects.create(
+            canco_nom=f"auto {i}",
+            artista_nom="Test Artist",
+            decisio="aprovada",
+            motiu=MOTIU_AUTO_ML,
+        )
+
+    # Never write joblib into the repo, and don't let a deploy lock on
+    # the dev box short-circuit the call.
+    monkeypatch.setattr(ml, "MODEL_PATH", tmp_path / "model.joblib")
+    monkeypatch.setattr(ml, "TFIDF_PATH", tmp_path / "tfidf.joblib")
+    monkeypatch.setattr(ml, "_is_deploy_in_progress", lambda: False)
+
+    assert ml.entrenar_model() is False
+    assert not (tmp_path / "model.joblib").exists()
 
 
 # ── Constants invariants ─────────────────────────────────────────────

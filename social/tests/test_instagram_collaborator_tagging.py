@@ -346,31 +346,66 @@ def test_slide_tags_round_robin_when_multiple_entries_have_collabs():
     data = {"entries": [a, b]}
     out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 2, data)
     handles = [t["username"] for t in out[1]]
-    # Principals first (reversed block order → b before a).
-    assert handles[0] == "b_p"
-    assert handles[1] == "a_p"
-    # Then 1st collab of every entry before any 2nd collab.
-    assert handles[2] == "b_c1"
-    assert handles[3] == "a_c1"
-    # Then 2nd collabs.
-    assert handles[4] == "b_c2"
-    assert handles[5] == "a_c2"
+    # Property asserted now (rewrite 2026-08-18): by rank tiers, not by
+    # exact index — every principal precedes every 1st collab, and every
+    # 1st collab precedes every 2nd collab; nobody is dropped. The
+    # in-slide entry order (renderer reversal) is a separate promise,
+    # covered by test_slide_tags_top_mirror_renderer_countdown_order.
+    assert set(handles) == {"a_p", "b_p", "a_c1", "b_c1", "a_c2", "b_c2"}
+    rank = {h: i for i, h in enumerate(handles)}
+    principals = {rank["a_p"], rank["b_p"]}
+    firsts = {rank["a_c1"], rank["b_c1"]}
+    seconds = {rank["a_c2"], rank["b_c2"]}
+    assert max(principals) < min(firsts) < max(firsts) < min(seconds)
 
 
-def test_slide_tags_top_mirror_renderer_countdown_order():
+@pytest.mark.parametrize("n_entries", [40, 25])
+def test_slide_tags_top_mirror_renderer_countdown_order(
+    monkeypatch, tmp_path, n_entries
+):
     """Regression for the pre-2026-06 bug: slides render 40→1 but tags
     were built 1→40, mismatching every tag to the wrong artist. The
     tag chunks must now mirror `render_feed_top`'s countdown blocks
-    ([(30,40),(20,30),(10,20),(0,10)], each reversed)."""
-    # 40 entries, principal handle = "p{posicio}" (posicio = i + 1).
-    entries = [_entry([f"https://instagram.com/p{i + 1}"]) for i in range(40)]
-    data = {"entries": entries}
-    # 1 cover + 4 list slides.
-    out = Command._slide_tags(SocialPost.TIPUS_TOP_PPCC, 5, data)
-    # Slide 1 = block (30,40) reversed → positions 40,39,…,31.
-    assert [t["username"] for t in out[1]] == [f"p{n}" for n in range(40, 30, -1)]
-    # Slide 4 = block (0,10) reversed → positions 10,9,…,1.
-    assert [t["username"] for t in out[4]] == [f"p{n}" for n in range(10, 0, -1)]
+    ([(30,40),(20,30),(10,20),(0,10)], each reversed).
+
+    Property asserted now (rewrite 2026-08-18): the expected chunks are
+    DERIVED from the renderer — `render_feed_top` is run with the list
+    builder spied on, and slide k's tags must name exactly the rows the
+    renderer drew on slide k, in the drawn order, with the tag anchor
+    descending the canvas row by row. No block table is hardcoded here;
+    a short top (25) also checks the present-block filtering aligns."""
+    from PIL import Image
+
+    from social import renderer, top_redesign
+
+    drawn: list[list[dict]] = []
+
+    def spy_list(rows, *a, **k):
+        drawn.append(list(rows))
+        return Image.new("RGB", (8, 8))
+
+    monkeypatch.setattr(renderer, "_renders_dir", lambda: tmp_path)
+    monkeypatch.setattr(top_redesign, "build_top_list", spy_list)
+    monkeypatch.setattr(
+        top_redesign, "build_top_cover", lambda *a, **k: Image.new("RGB", (8, 8))
+    )
+    # principal handle = "p{posicio}" (posicio = i + 1).
+    entries = [
+        dict(_entry([f"https://instagram.com/p{i + 1}"]), posicio=i + 1)
+        for i in range(n_entries)
+    ]
+    paths = renderer.render_feed_top("top_ppcc", "PPCC", date(2026, 6, 8), entries)
+    assert drawn and len(paths) == 1 + len(drawn)
+
+    out = Command._slide_tags(
+        SocialPost.TIPUS_TOP_PPCC, len(paths), {"entries": entries}
+    )
+    assert len(out) == len(paths) and out[0] == []
+    for k, rows in enumerate(drawn, start=1):
+        expected = [f"p{r['posicio']}" for r in rows]
+        assert [t["username"] for t in out[k]] == expected, k
+        ys = [t["y"] for t in out[k]]
+        assert ys == sorted(ys) and len(set(ys)) == len(ys), k  # row by row
 
 
 def test_slide_tags_novetats_singles_tags_collabs():

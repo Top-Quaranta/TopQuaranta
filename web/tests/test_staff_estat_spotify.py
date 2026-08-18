@@ -77,8 +77,16 @@ def _fixture_catalog(db):
 
 
 @pytest.mark.django_db
-def test_spotify_enrichment_stats_shape_and_counts():
+def test_spotify_enrichment_stats_shape_and_counts(monkeypatch):
     _fixture_catalog(None)
+    # Pin the daily rate to a small value so the 1-decimal ETA rounding
+    # cannot mask a wrong formula (3/250 rounds to 0.0 either way).
+    import sys
+
+    # (`web.api.staff.estat` as an attribute is the re-exported view; the
+    # module itself lives in sys.modules.)
+    estat_mod = sys.modules["web.api.staff.estat"]
+    monkeypatch.setattr(estat_mod, "ENRICH_SPOTIFY_DAILY_LIMIT", 2)
     stats = _spotify_enrichment_stats()
     assert stats["canco_total"] == 6
     assert stats["found"] == 2
@@ -95,9 +103,14 @@ def test_spotify_enrichment_stats_shape_and_counts():
     assert stats["coverage_public"] == round(1 / 2, 3)
     assert stats["coverage_pending"] == round(1 / 4, 3)
     # ETA on the unattempted backlog at the nightly cron rate (250/day,
-    # raised from 50 in the 2026-06 throughput change).
-    assert stats["enrich_per_day"] == 250
-    assert stats["eta_days_to_clear_backlog"] == round(3 / 250, 1)
+    # raised from 50 in the 2026-06 throughput change). Asserted as
+    # "rate comes from the source-of-truth constant and ETA =
+    # backlog / rate", not as the literal 250.
+    assert stats["enrich_per_day"] == estat_mod.ENRICH_SPOTIFY_DAILY_LIMIT == 2
+    assert stats["eta_days_to_clear_backlog"] == round(
+        stats["not_attempted"] / stats["enrich_per_day"], 1
+    )
+    assert stats["eta_days_to_clear_backlog"] == 1.5
 
 
 @pytest.mark.django_db
@@ -123,8 +136,7 @@ def test_estat_endpoint_exposes_spotify_enrichment(staff_client):
     r = staff_client.get("/api/v1/staff/estat/")
     assert r.status_code == 200, r.content
     data = r.json()
-    block = data["spotify_enrichment"]
-    # Smoke: same keys we test in _spotify_enrichment_stats above.
-    assert block["found"] == 2
-    assert block["pending_total"] == 4
-    assert block["coverage_total"] == round(2 / 6, 3)
+    # Property: the block is present and is the helper's output (the
+    # counts are asserted on the helper above, not re-pinned here).
+    assert "spotify_enrichment" in data
+    assert data["spotify_enrichment"] == _spotify_enrichment_stats()

@@ -73,17 +73,21 @@ def stub_deezer_calls():
 @pytest.mark.django_db
 def test_p3_cooldown_skips_recently_checked(db, deezer_quota_clean, stub_deezer_calls):
     """An artist checked <24h ago must NOT appear in the P3 queue —
-    otherwise the run revisits the same artist forever."""
+    otherwise the run revisits the same artist forever.
+
+    Property asserted now: the artist's `last_checked_deezer` stamp is
+    left untouched by the run (it was not re-processed). The
+    "Total crides" summary text is not pinned."""
     a = Artista.objects.create(nom="A", lastfm_nom="A", aprovat=True)
     ArtistaDeezer.objects.create(artista=a, deezer_id=1)
-    a.last_checked_deezer = timezone.now() - timedelta(hours=1)
+    recent = timezone.now() - timedelta(hours=1)
+    a.last_checked_deezer = recent
     a.save(update_fields=["last_checked_deezer"])
 
-    out = StringIO()
-    # Should exit immediately because the only approved+deezer
-    # artist was checked 1h ago (< 24h cooldown).
-    call_command("obtenir_novetats", stdout=out)
-    assert "Total crides: 0" in out.getvalue()
+    call_command("obtenir_novetats", stdout=StringIO())
+
+    a.refresh_from_db()
+    assert a.last_checked_deezer == recent
 
 
 @pytest.mark.django_db

@@ -153,17 +153,30 @@ def test_flag_off_no_collaborators_and_no_rows(top_with_handles):
 
 @pytest.mark.django_db
 def test_flag_on_attaches_pool_and_writes_rows(top_with_handles):
+    # Property: with the flag ON the container carries the configured
+    # number of collaborators (3), every one drawn from the pool of
+    # handled artists in the top, and the registry rows written after
+    # publish are exactly the collaborators sent (same media, tipus,
+    # pendent) — the cold-start selection ORDER is the policy's business
+    # (covered by test_collab_policy), not pinned here.
     _cfg(collab=True)
     fake = _FakeCarousel()
     _run_feed(fake)
-    # Empty registry → cold start → first 3 of the pool [p1, c1, p2].
-    assert fake.last == ["p1", "c1", "p2"]
+    pool = {"p1", "c1", "p2", "p4"}  # every handled artist in the top
+    sent = fake.last
+    assert sent is not None and len(sent) == 3
+    assert len(set(sent)) == 3  # no duplicates
+    assert set(sent) <= pool
     rows = {r.username_snapshot: r for r in InvitacioColaboracioIG.objects.all()}
-    assert set(rows) == {"p1", "c1", "p2"}
+    assert set(rows) == set(sent)
     for r in rows.values():
         assert r.ig_media_id == "media-123"
         assert r.tipus_publicacio == "top_ppcc"
         assert r.estat == InvitacioColaboracioIG.ESTAT_PENDENT
+    post = SocialPost.objects.get(
+        platform=SocialPost.PLATFORM_INSTAGRAM_FEED, tipus="top_ppcc"
+    )
+    assert post.status == SocialPost.STATUS_PUBLICAT
 
 
 @pytest.mark.django_db
@@ -178,15 +191,27 @@ def test_clamp_never_more_than_three(top_with_handles):
 @pytest.mark.django_db
 def test_guard_substitutes_bad_handle(top_with_handles):
     """c1 rejected by Meta → dropped, substituted by the next pool
-    candidate (p4), post still publishes; rows reflect the used set."""
+    candidate (p4), post still publishes; rows reflect the used set.
+
+    Property: the guard is non-blocking — the bad handle is absent from
+    the final container, the slot count is preserved by pulling from the
+    reserve, the post ends `publicat`, and the registry rows equal the
+    collaborators actually sent (no row for the rejected one)."""
     _cfg(collab=True)
     fake = _FakeCarousel(bad={"c1"})
-    text = _run_feed(fake)
-    assert fake.last == ["p1", "p2", "p4"]  # c1 dropped, p4 pulled from reserve
+    _run_feed(fake)
+    sent = fake.last
+    assert "c1" not in sent  # bad handle dropped
+    assert len(sent) == 3 and len(set(sent)) == 3  # slot count preserved
+    assert set(sent) <= {"p1", "p2", "p4"}  # only good pool handles
+    assert any("c1" in call for call in fake.calls)  # it WAS tried first
     assert set(
         InvitacioColaboracioIG.objects.values_list("username_snapshot", flat=True)
-    ) == {"p1", "p2", "p4"}
-    assert "descartat: c1" in text
+    ) == set(sent)
+    post = SocialPost.objects.get(
+        platform=SocialPost.PLATFORM_INSTAGRAM_FEED, tipus="top_ppcc"
+    )
+    assert post.status == SocialPost.STATUS_PUBLICAT
 
 
 @pytest.mark.django_db

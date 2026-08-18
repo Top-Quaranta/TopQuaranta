@@ -10,13 +10,20 @@ including the newsletter's Sunday send. The only editable control is
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from rest_framework.test import APIClient
 
 from comptes.models import Usuari
 from music.models import StaffAuditLog
 from ranking.models import MatriuPublicacio
-from social.calendari import NEWSLETTER_PUBLISH_WEEKDAY, publish_weekdays_for
+from social.calendari import (
+    CALENDARI,
+    NEWSLETTER_PUBLISH_WEEKDAY,
+    publish_weekdays_for,
+)
 
 
 def _set(*, canal, tipus, actiu=True):
@@ -38,25 +45,60 @@ def staff_client(db):
 
 # ── indicator derivation (publish_weekdays_for) ──────────────────────
 
+_CRON_FILE = Path(__file__).resolve().parents[2] / "deploy" / "cron.topquaranta"
+_PUSH_CANALS = ("instagram", "mastodon", "bluesky", "telegram")
+_FEED_TIPUS = ("top_ppcc", "top_territorial", "nous_singles", "nous_albums")
+
+
+def _cron_weekdays(command_pattern: str) -> set[int]:
+    """Python weekdays (Mon=0 … Sun=6) on which a cron line whose command
+    matches `command_pattern` fires. Parsed from `deploy/cron.topquaranta`
+    (the real schedule) so the tests never mirror a literal weekday."""
+    days: set[int] = set()
+    for line in _CRON_FILE.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 7 or not re.search(command_pattern, " ".join(parts[6:])):
+            continue
+        for tok in parts[4].split(","):
+            days.add((int(tok) - 1) % 7)  # cron: Sun=0 … Sat=6 → Python
+    return days
+
 
 def test_push_channels_follow_calendar():
-    # weekday(): Mon=0 … Sun=6. top_ppcc=Sat, territorial=Mon+Wed,
-    # singles=Fri, albums=Tue (matches social/calendari.py CALENDARI).
-    for canal in ("instagram", "mastodon", "bluesky", "telegram"):
-        assert publish_weekdays_for(canal, "top_ppcc") == [5]
-        assert publish_weekdays_for(canal, "top_territorial") == [0, 2]
-        assert publish_weekdays_for(canal, "nous_singles") == [4]
-        assert publish_weekdays_for(canal, "nous_albums") == [1]
+    # Property: for the push channels the indicator is derived from the
+    # real `CALENDARI` (one weekday per slot of that tipus, no invented
+    # day), it is never empty for a tipus the calendar carries, it is
+    # identical across the four push channels, and every day it reports is
+    # a day the push-channel cron (`publicar_canal`) actually fires on.
+    cron_days = _cron_weekdays(r"publicar_canal --channel mastodon")
+    for tipus in _FEED_TIPUS:
+        expected = sorted({s.weekday for s in CALENDARI if s.tipus == tipus})
+        assert expected, tipus  # the calendar does carry this tipus
+        for canal in _PUSH_CANALS:
+            got = publish_weekdays_for(canal, tipus)
+            assert got == expected, (canal, tipus)
+            assert set(got) <= cron_days, (canal, tipus, got, cron_days)
+    # A tipus the calendar never carries → [] (honest, no day invented).
+    assert publish_weekdays_for("mastodon", "no_existeix") == []
 
 
 def test_newsletter_is_sunday_for_ppcc_only():
     # Newsletter only sends the PPCC top, on Sunday (its own enviar_newsletter
     # cron, NOT the calendari). Everything else → empty (not published).
-    assert NEWSLETTER_PUBLISH_WEEKDAY == 6  # Sunday — must match the cron
-    assert publish_weekdays_for("newsletter", "top_ppcc") == [6]
-    assert publish_weekdays_for("newsletter", "top_territorial") == []
-    assert publish_weekdays_for("newsletter", "nous_singles") == []
-    assert publish_weekdays_for("newsletter", "nous_albums") == []
+    # Property: the Sunday constant is checked against the real cron line
+    # in deploy/cron.topquaranta, not against a literal; and no tipus other
+    # than top_ppcc gets a day.
+    cron_days = _cron_weekdays(r"\benviar_newsletter\b")
+    assert cron_days == {NEWSLETTER_PUBLISH_WEEKDAY}
+    assert publish_weekdays_for("newsletter", "top_ppcc") == [
+        NEWSLETTER_PUBLISH_WEEKDAY
+    ]
+    for tipus in _FEED_TIPUS:
+        if tipus != "top_ppcc":
+            assert publish_weekdays_for("newsletter", tipus) == []
 
 
 # ── GET exposes the indicator ────────────────────────────────────────
@@ -64,19 +106,19 @@ def test_newsletter_is_sunday_for_ppcc_only():
 
 @pytest.mark.django_db
 def test_get_matriu_exposes_dies_publicacio(staff_client):
+    # Property: no cell leaks the removed editable `dia_setmana`; every
+    # cell's `dies_publicacio` equals `publish_weekdays_for(canal, tipus)`
+    # (the calendar-derived source), and the newsletter × territorial cell
+    # is empty (UI renders "—").
     r = staff_client.get("/api/v1/staff/social/matriu/")
     assert r.status_code == 200
+    assert r.data["cells"]
+    for c in r.data["cells"]:
+        assert "dia_setmana" not in c
+        assert c["dies_publicacio"] == publish_weekdays_for(c["canal"], c["tipus"])
     cells = {(c["canal"], c["tipus"]): c for c in r.data["cells"]}
-    # No editable day field is leaked anymore.
-    assert "dia_setmana" not in cells[("mastodon", "top_ppcc")]
-    # Push channel: top_ppcc → Saturday.
-    assert cells[("mastodon", "top_ppcc")]["dies_publicacio"] == [5]
-    # Territorial → Monday + Wednesday.
-    assert cells[("mastodon", "top_territorial")]["dies_publicacio"] == [0, 2]
-    # Newsletter top_ppcc → Sunday.
-    assert cells[("newsletter", "top_ppcc")]["dies_publicacio"] == [6]
-    # Newsletter never publishes territorial → empty (UI renders "—").
     assert cells[("newsletter", "top_territorial")]["dies_publicacio"] == []
+    assert cells[("mastodon", "top_ppcc")]["dies_publicacio"]  # non-empty
 
 
 # ── toggle is actiu-only ─────────────────────────────────────────────

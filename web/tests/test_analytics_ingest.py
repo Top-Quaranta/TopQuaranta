@@ -79,7 +79,11 @@ def test_a_known_event_key_is_recorded():
 @pytest.mark.django_db
 def test_long_values_are_truncated_not_stored_whole():
     """The only bound on what a stranger can put in our database. Without
-    it, a beacon becomes free storage — and the column would raise."""
+    it, a beacon becomes free storage — and the column would raise.
+
+    Asserts the property: the stored value fits the column (whatever its
+    ``max_length`` is today) and is much shorter than what was sent — not
+    the literal 80."""
     llarg = "x" * 5000
     assert (
         _c()
@@ -87,7 +91,10 @@ def test_long_values_are_truncated_not_stored_whole():
         .status_code
         == 204
     )
-    assert len(_files("search_query").get().dimensio_1) == 80
+    max_len = MetricaEsdeveniment._meta.get_field("dimensio_1").max_length
+    desat = _files("search_query").get().dimensio_1
+    assert 0 < len(desat) <= max_len
+    assert len(desat) < len(llarg) // 10
 
 
 @pytest.mark.django_db

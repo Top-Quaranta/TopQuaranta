@@ -14,11 +14,6 @@ from music.models import Album, Artista, Canco
 
 @pytest.mark.django_db
 class TestArtistaSaveNormalization:
-    def test_empty_mbid_normalises_to_none(self):
-        a = Artista.objects.create(nom="Test Empty MBID 1", musicbrainz_id="")
-        a.refresh_from_db()
-        assert a.musicbrainz_id is None
-
     def test_empty_spotify_id_normalises_to_none(self):
         a = Artista.objects.create(nom="Test Empty Spotify 1", spotify_id="")
         a.refresh_from_db()

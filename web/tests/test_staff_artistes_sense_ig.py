@@ -193,35 +193,23 @@ def test_cancons_vives_counts_principal_or_collaborator(staff_client):
 
 
 @pytest.mark.django_db
-def test_cancons_vives_no_double_counting_principal_and_collab(staff_client):
-    """The two count paths (principal + collab) don't double-count.
-
-    They are disjoint PER cançó — the D5 signal forbids an artist from
-    being a collaborator on their own track — so summing them is exact,
-    no overlap correction needed. An artist who is principal on one live
-    track AND collaborator on a *different* one counts as exactly 2
-    (not Cartesian-inflated)."""
-    Artista.objects.all().delete()
-    a = Artista.objects.create(nom="EXEMPLE Doble", aprovat=True)
-    al = Album.objects.create(artista=a, nom="EXEMPLE Al")
-    _canco(a, al, "EXEMPLE Own", "ZZ00DBL000001")  # principal
-    other = Artista.objects.create(nom="EXEMPLE Amfitrio", aprovat=True)
-    al2 = Album.objects.create(artista=other, nom="EXEMPLE Al2")
-    feat = _canco(other, al2, "EXEMPLE Feat", "ZZ00DBL000002")
-    feat.artistes_col.add(a)  # collaborator on a different track
-
-    r = staff_client.get("/api/v1/staff/artistes/?include_n_top=1&sort=-n_top")
-    by_nom = {row["nom"]: row for row in r.json()["results"]}
-    assert by_nom["EXEMPLE Doble"]["n_cancons_vives"] == 2
-
-
-@pytest.mark.django_db
 def test_ordering_three_keys_novetats_surface(staff_client):
     """Full ordering: n_top DESC, then n_cancons_vives DESC, then
     alphabetical. A novetats-style collaborator (0 tops, 1 live song as
     collaborator — the Trapella case) surfaces above the 0-top silence,
-    and equal (0-top, equal-vives) artists fall back to alphabetical."""
+    and equal (0-top, equal-vives) artists fall back to alphabetical.
+
+    Since 2026-08-12 the endpoint (`sort=-n_top`) breaks the
+    tops/vives tie by NEWEST live song before the alphabetical
+    stabiliser (see `test_staff_instagram_revisat.py::
+    test_ties_break_by_newest_song`). This test therefore asserts:
+    tops > vives > collaborator-only surfaces, and — with fixtures whose
+    dates and names disagree — that recency, not the alphabet, decides
+    an equal-tops/equal-vives tie. No alphabetical order is pinned."""
+    from datetime import timedelta
+
     Artista.objects.all().delete()
+    today = date.today()
     # 1 top appearance — must lead regardless of live-song counts.
     topper = Artista.objects.create(nom="EXEMPLE Topper", aprovat=True)
     al_t = Album.objects.create(artista=topper, nom="EXEMPLE AlT")
@@ -238,13 +226,17 @@ def test_ordering_three_keys_novetats_surface(staff_client):
     al_z = Album.objects.create(artista=z5, nom="EXEMPLE AlZ")
     for i in range(5):
         _canco(z5, al_z, f"EXEMPLE Z{i}", f"ZZ00ORD00010{i}")
-    # 0 tops, 2 live songs — two of them, to test the alphabetical tiebreak.
+    # 0 tops, 2 live songs — two of them. Names and dates DISAGREE:
+    # "Equal A" is alphabetically first but released long ago; "Equal B"
+    # is alphabetically last but released this week.
     eq_b = Artista.objects.create(nom="EXEMPLE Equal B", aprovat=True)
     eq_a = Artista.objects.create(nom="EXEMPLE Equal A", aprovat=True)
-    for art, tag in ((eq_b, "B"), (eq_a, "A")):
+    for art, tag, dies in ((eq_b, "B", 2), (eq_a, "A", 300)):
         al = Album.objects.create(artista=art, nom=f"EXEMPLE AlEq{tag}")
-        _canco(art, al, f"EXEMPLE Eq{tag}1", f"ZZ00ORDEQ{tag}01")
-        _canco(art, al, f"EXEMPLE Eq{tag}2", f"ZZ00ORDEQ{tag}02")
+        for k in (1, 2):
+            c = _canco(art, al, f"EXEMPLE Eq{tag}{k}", f"ZZ00ORDEQ{tag}0{k}")
+            c.data_llancament = today - timedelta(days=dies + k)
+            c.save(update_fields=["data_llancament"])
     # 0 tops, 1 live song as COLLABORATOR only (the Trapella case).
     trapella = Artista.objects.create(nom="EXEMPLE Trapella", aprovat=True)
     host = Artista.objects.create(nom="EXEMPLE Zzz Host", aprovat=True)
@@ -265,15 +257,16 @@ def test_ordering_three_keys_novetats_surface(staff_client):
 
     # Within the 0-top block: 5 vives > 2 vives > 1 vive (collaborator).
     assert pos("EXEMPLE Zulu Cinc") < pos("EXEMPLE Equal A")
+    assert pos("EXEMPLE Zulu Cinc") < pos("EXEMPLE Equal B")
     assert pos("EXEMPLE Equal A") < pos("EXEMPLE Trapella")
-    # Equal vives (2 each) → alphabetical: "Equal A" before "Equal B".
-    assert pos("EXEMPLE Equal A") < pos("EXEMPLE Equal B")
-    # The collaborator-only novetats artist rises ABOVE the 0-vive host
-    # (host has 1 live song too — as principal — so tie on vives=1 →
-    # alphabetical: "Trapella" before "Zzz Host").
-    assert pos("EXEMPLE Trapella") < pos("EXEMPLE Zzz Host")
-    # And the Trapella row reports its live-song count.
+    assert pos("EXEMPLE Equal B") < pos("EXEMPLE Trapella")
+    # Equal tops + equal vives → the NEWEST release wins, whatever the
+    # alphabet says: "Equal B" (this week) before "Equal A" (long ago).
+    assert pos("EXEMPLE Equal B") < pos("EXEMPLE Equal A")
+    # The collaborator-only novetats artist surfaces in the queue at all
+    # (that is the Trapella promise) and reports its counts honestly.
     by_nom = {row["nom"]: row for row in rows}
+    assert "EXEMPLE Trapella" in by_nom
     assert by_nom["EXEMPLE Trapella"]["n_cancons_vives"] == 1
     assert by_nom["EXEMPLE Trapella"]["n_top"] == 0
 

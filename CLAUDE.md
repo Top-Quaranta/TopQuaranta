@@ -349,8 +349,8 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **1481 passed, 10 skipped** (July 2026, CI on main 98e1d00).
-Run: `.venv/bin/python -m pytest -q`.
+Mock all external HTTP — no real API calls. Current suite: **1952 passed, 5 skipped** (2026-08-18, ~75 s).
+Run: `.venv/bin/python -m pytest -q` (parallel `-n 4` via `pytest-xdist` is in `addopts`; add `-n 0` for a single test — ADR-0017).
 
 `pytest.ini` pins `addopts = --ds=topquaranta.settings.test`, so env-var
 overrides can't silently flip pytest to production settings. Vegeu

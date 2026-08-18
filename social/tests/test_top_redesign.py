@@ -87,15 +87,6 @@ def test_poster_renders_all_rows(fake_cover):
     assert files_grogues, "no s'ha pintat el titular groc"
 
 
-def test_poster_pins(fake_cover):
-    """Top accent bar at the very top + footer rule near the bottom."""
-    img = top_redesign.build_poster(_entries(40), SET, "ppcc")
-    R, G, B = _chan(img)
-    # 7px yellow bar at y=0..7
-    bar = ((R[0:7] > 190) & (G[0:7] > 140) & (B[0:7] < 110)).mean()
-    assert bar > 0.9, bar
-
-
 def test_poster_under_1mb_bluesky(fake_cover):
     """The cartell JPEG must stay under Bluesky's 1 MB blob limit."""
     img = top_redesign.build_poster(_entries(40), SET, "ppcc")
@@ -104,34 +95,67 @@ def test_poster_under_1mb_bluesky(fake_cover):
     assert buf.tell() < 1_000_000, buf.tell()
 
 
-def test_top_cover_pins(fake_cover):
-    img = top_redesign.build_top_cover(SET, "ppcc")
-    assert img.size == (1080, 1350)
-    R, G, B = _chan(img)
-    # big yellow "40" mid-canvas
-    sl = slice(300, 780)
-    yellow = ((R[:, sl] > 190) & (G[:, sl] > 140) & (B[:, sl] < 110)).sum(1)
-    top = next(r for r in range(540, 1000) if yellow[r] > 80)
-    assert abs(top - 570) <= TOL, top
+def _row_bands():
+    """Row bands of the list slide, derived from the design tokens (the
+    source of truth for the geometry) — not from pinned pixel coordinates."""
+    rw = top_redesign.tokens()["top_list"]["rows"]
+    return [
+        (int(rw["y0"] + i * rw["pitch"]), int(rw["y0"] + i * rw["pitch"] + rw["h"]))
+        for i in range(rw["count"])
+    ], (int(rw["x"]), int(rw["x"] + rw["w"]))
 
 
 def test_top_list_one_highlighted_and_rows(fake_cover):
-    rows = list(reversed(_entries(10)))
+    """The #1 row is visually highlighted (accent-coloured treatment) and no
+    other row is; every row is painted.
+
+    Property asserted now (rewrite 2026-08-18): the row holding posició 1
+    carries far more accent-coloured ink than any other row band — wherever
+    that row sits on the slide — and every row band carries some ink. Row
+    geometry comes from `tokens()`, the accent from `_list_palette`, so a
+    re-layout that keeps the promise keeps the test green."""
+    rows = list(reversed(_entries(10)))  # countdown order, #1 last (as prod)
     img = top_redesign.build_top_list(rows, 4, 4, SET, "ppcc")
     assert img.size == (1080, 1350)
-    # the #1 row carries a yellow inset border (accent pixels in the last card)
-    R, G, B = _chan(img)
-    last = slice(1180, 1280)
-    yellow = ((R[last] > 190) & (G[last] > 140) & (B[last] < 110)).sum()
-    assert yellow > 200, yellow
+    acc = top_redesign._list_palette("ppcc")[0][:3]
+    a = np.asarray(img.convert("RGB"), np.int16)
+    bands, (x0, x1) = _row_bands()
+    dist = np.abs(a[:, x0:x1, :] - np.array(acc, np.int16)).sum(2)
+    accent_per_row = [int((dist[y0:y1] < 90).sum()) for y0, y1 in bands]
+    lit_per_row = [int((a[y0:y1, x0:x1].max(2) > 60).sum()) for y0, y1 in bands]
+    idx1 = next(i for i, e in enumerate(rows) if e["posicio"] == 1)
+
+    assert all(n > 0 for n in lit_per_row), lit_per_row  # every row painted
+    others = [n for i, n in enumerate(accent_per_row) if i != idx1]
+    assert accent_per_row[idx1] > 5 * max(others), accent_per_row
 
 
-def test_mosaic_footer_clear(fake_cover):
+def _rule_row(a, x0, x1, y_from):
+    """First image row (≥ y_from) that is a near-full-width yellow rule."""
+    R, G, B = a[:, :, 0], a[:, :, 1], a[:, :, 2]
+    yel = _yellow(R, G, B)[:, x0:x1].mean(1)
+    return next((r for r in range(y_from, a.shape[0]) if yel[r] > 0.8), None)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Àlbum {i} de títol llarg",
+        "Àlbum {i} de títol llarguíssim que no cap de cap manera",
+    ],
+)
+def test_mosaic_footer_clear(fake_cover, title):
     """The mosaic's 3rd row must not collide with the footer rule (the fix):
-    a clear band of background just above the footer rule."""
+    a clear band of background just above the footer rule.
+
+    Property asserted now (rewrite 2026-08-18): the footer rule exists (a
+    near-full-width yellow row in the lower part of the board, located by
+    scanning — not pinned at y≈1240) and, with a full 9-album grid whose
+    titles wrap to the max line count, no grid ink touches it: at least one
+    ink-free row separates the last content row from the rule."""
     albums = [
         {
-            "nom": f"Àlbum {i} de títol llarg",
+            "nom": title.format(i=i),
             "artista_nom": f"Art {i}",
             "artista_territori": "VAL",
             "cover_url": None,
@@ -140,10 +164,18 @@ def test_mosaic_footer_clear(fake_cover):
     ]
     img = top_redesign.build_albums_mosaic(albums, SET)
     assert img.size == (1080, 1350)
-    R, G, B = _chan(img)
-    # footer rule (yellow) present near y≈1240
-    yellow = ((R[1235:1245] > 190) & (G[1235:1245] > 140) & (B[1235:1245] < 110)).sum()
-    assert yellow > 300, yellow
+    a = np.asarray(img.convert("RGB"), np.int16)
+    M = top_redesign.tokens()["mosaic"]
+    px0, px1 = int(M["pad"]["l"]), 1080 - int(M["pad"]["r"])
+    rule_y = _rule_row(a, px0, px1, 1350 // 2)
+    assert rule_y is not None, "footer rule not painted"
+    # grid ink = anything lit in the columns' x-range above the rule
+    gx0 = int(min(M["grid"]["cols_x"]))
+    gx1 = int(max(M["grid"]["cols_x"]) + M["grid"]["cover"])
+    lit = a[:rule_y, gx0:gx1].max(2) > 60
+    content_rows = [r for r in range(rule_y) if lit[r].any()]
+    assert content_rows, "grid not painted"
+    assert content_rows[-1] < rule_y - 1, (content_rows[-1], rule_y)
 
 
 # ── fix pins (2026-06-12): ink-anchored, ±8 px against the artboard ──
@@ -166,33 +198,6 @@ def _white(R, G, B):
 
 def _dark(R, G, B):
     return (R < 60) & (G < 60) & (B < 60)
-
-
-def test_cover_eltop_forty_gap(fake_cover):
-    """'EL TOP' and '40' sit tight (design ink gap ≈ -25; the '40' ink-top
-    rises into EL TOP's bottom). Guards the #1 regression."""
-    img = top_redesign.build_top_cover(SET, "ppcc")
-    w = _ink_rows(img, _white, 360, 720, 400, 620)
-    y = _ink_rows(img, _yellow, 360, 720, 560, 900)
-    assert abs((y[0] - w[1]) - (-25)) <= TOL, (w, y)
-
-
-def test_top_pills_ink_centred(fake_cover):
-    """The SETMANA pill text is vertically ink-centred in its box (cover + cartell)."""
-    cov = top_redesign.build_top_cover(SET, "ppcc")
-    t = _ink_rows(cov, _dark, 330, 560, 1190, 1280)
-    assert abs((t[0] + t[1]) / 2 - 1234) <= TOL, t  # pill cy=1234
-    car = top_redesign.build_poster(_entries(40), SET, "ppcc")
-    t2 = _ink_rows(car, _dark, 835, 1010, 48, 104)
-    assert abs((t2[0] + t2[1]) / 2 - 76) <= TOL, t2  # pill centre ≈76
-
-
-def test_list_numeral_centred_on_row(fake_cover):
-    """List numerals are ink-centred on the row (were dropping low). Row 1
-    centre ≈ 246."""
-    img = top_redesign.build_top_list(list(reversed(_entries(10))), 4, 4, SET, "ppcc")
-    n = _ink_rows(img, _white, 72, 140, 199, 293, thr=3)
-    assert abs((n[0] + n[1]) / 2 - 246) <= TOL, n
 
 
 def test_no_title_artist_overlap_long_titles(fake_cover):

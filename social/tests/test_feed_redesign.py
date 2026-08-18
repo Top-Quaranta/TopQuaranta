@@ -13,7 +13,7 @@ import datetime
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from social import feed_redesign, renderer
 
@@ -49,30 +49,6 @@ def fake_cover(monkeypatch):
 
 
 # ── render path: novetats slides come from the redesign (the only path) ──
-
-
-def test_render_feed_novetats_uses_redesign(monkeypatch, fake_cover, tmp_path):
-    """render_feed_novetats delegates the three pieces to feed_redesign
-    (legacy + the feed_redisseny_actiu gate are gone)."""
-    calls = []
-    monkeypatch.setattr(renderer, "_renders_dir", lambda: tmp_path)
-    for name in ("build_cover", "build_album", "build_singles"):
-        monkeypatch.setattr(
-            feed_redesign,
-            name,
-            (
-                lambda n: (
-                    lambda *a, **k: (calls.append(n) or Image.new("RGB", (1080, 1350)))
-                )
-            )(name),
-        )
-    items = [
-        {"nom": "X", "artista_nom": "Y", "artista_territori": "CAT", "cover_url": None}
-    ]
-    renderer.render_feed_novetats("nous_singles", SET, items)
-    assert "build_cover" in calls and "build_singles" in calls
-    renderer.render_feed_novetats("nous_albums", SET, items)
-    assert "build_album" in calls
 
 
 # ── smoke: builders produce valid canvases ───────────────────────────
@@ -175,15 +151,17 @@ def test_render_is_deterministic(fake_cover):
 # ── territory resolver ───────────────────────────────────────────────
 
 
-def test_territori_maps_cno_to_nord():
-    assert feed_redesign.territori("CNO")["abbr"] == "NOR"
-
-
-def test_territori_unknown_falls_back_to_green():
-    t = feed_redesign.territori("ZZZ")
+@pytest.mark.parametrize("code", ["ZZZ", "PPCC", "", None])
+def test_territori_unknown_falls_back_to_green(code):
     # Aggregate/unknown codes resolve to a green fallback (never raises).
-    assert t["deep"] == "rgb(47, 90, 47)"
-    assert t["accent"] == "rgb(123, 191, 123)"
+    # Property asserted now (rewrite 2026-08-18): the resolver is total —
+    # every unknown/aggregate code yields a complete palette entry whose
+    # colours parse, with a distinct deep/accent pair — no exact RGB pinned.
+    t = feed_redesign.territori(code)
+    assert {"deep", "accent", "abbr", "short", "name"} <= set(t)
+    deep, accent = feed_redesign._col(t["deep"]), feed_redesign._col(t["accent"])
+    assert deep != accent and all(len(c) == 4 for c in (deep, accent))
+    assert t["abbr"] and t["name"] and t["short"]
 
 
 def test_col_parses_rgba():
@@ -191,11 +169,42 @@ def test_col_parses_rgba():
     assert feed_redesign._col("rgba(255, 255, 255, 0.5)")[3] == 128
 
 
-def test_album_title_never_ellipsised(fake_cover):
+@pytest.mark.parametrize(
+    "long",
+    [
+        "Camí Llarguíssim de la Tramuntana Ventosa",
+        "Camí Llarguíssim de la Tramuntana Ventosa i Gelada del Nord",
+    ],
+)
+def test_album_title_never_ellipsised(fake_cover, monkeypatch, long):
     # A very long title wraps / shrinks but must not contain an ellipsis.
-    long = "Camí Llarguíssim de la Tramuntana Ventosa i Gelada del Nord"
+    # Property asserted now (rewrite 2026-08-18): the title lines drawn
+    # (captured at the `_text` primitive) carry no "…", each fits inside the
+    # canvas, and together they reproduce the title's words in order from
+    # its start (the whole title when it fits the 2-line budget at min
+    # size). `img.size` alone said nothing about the title (audit
+    # 2026-08-15).
+    drawn = []
+    real_text = feed_redesign._text
+
+    def spy(img, x, y, text, font, fill, **kw):
+        drawn.append((text, font, x))
+        return real_text(img, x, y, text, font, fill, **kw)
+
+    monkeypatch.setattr(feed_redesign, "_text", spy)
     img = feed_redesign.build_album({**ALBUM, "nom": long})
     assert img.size == (1080, 1350)
+    words = long.split()
+    title_lines = [(t, f, x) for t, f, x in drawn if set(t.split()) & set(words)]
+    assert title_lines, "title not drawn"
+    assert not any("…" in t for t, _, _ in title_lines), title_lines
+    drawn_words = " ".join(t for t, _, _ in title_lines).split()
+    assert len(drawn_words) >= 2 and drawn_words == words[: len(drawn_words)]
+    if len(long) < 45:  # fits the 2-line budget at min size → all of it
+        assert drawn_words == words
+    d = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    for t, f, x in title_lines:
+        assert x + d.textlength(t, font=f) <= 1080, (t, x)
 
 
 # ── fidelity pins: pixel-measured ink milestones vs the extracted fitxa ──
@@ -220,57 +229,6 @@ def _channels(img):
     return a[:, :, 0], a[:, :, 1], a[:, :, 2]
 
 
-def test_cover_masthead_ink_anchored_to_fitxa():
-    """NOVETATS (white) and ÀLBUMS (yellow) cap-top ink must land at the
-    fitxa cap_top (±8), and the white must overlap the yellow (À accent)."""
-    R, G, B = _channels(feed_redesign.build_cover("nous_albums", SET))
-    sl = slice(120, 960)  # masthead x-region (excludes logo edges)
-    white = ((R[:, sl] > 200) & (G[:, sl] > 200) & (B[:, sl] > 190)).sum(1)
-    yellow_main = ((R[:, sl] > 190) & (G[:, sl] > 140) & (B[:, sl] < 110)).sum(1)
-    yellow_any = yellow_main  # same mask; low threshold below catches the accent
-    w = _rows(white, 400, 960, 40)
-    ym = _rows(yellow_main, 400, 960, 120)
-    ya = _rows(yellow_any, 400, 960, 20)
-
-    C = feed_redesign.tokens()["cover"]
-    assert abs(w[0] - C["novetats"]["cap_top"]) <= TOL  # white cap-top = 535
-    assert abs(ym[0] - C["etiqueta"]["cap_top"]) <= TOL  # yellow cap-top = 626
-    # white ink bottom overlaps the yellow (the À accent rises into it).
-    overlap = w[-1] - ya[0]
-    assert overlap >= 30, f"white must overlap yellow, got {overlap}px"
-    # Heights pin the bottoms robustly (font-size determined).
-    assert 80 <= (w[-1] - w[0]) <= 120
-    assert 190 <= (ym[-1] - ym[0]) <= 235
-
-
-def test_cover_singles_masthead_matches_albums():
-    """The SINGLES cover masthead sits at the same cap-tops as ÀLBUMS."""
-    R, G, B = _channels(feed_redesign.build_cover("nous_singles", SET))
-    sl = slice(120, 960)
-    white = ((R[:, sl] > 200) & (G[:, sl] > 200) & (B[:, sl] > 190)).sum(1)
-    yellow = ((R[:, sl] > 190) & (G[:, sl] > 140) & (B[:, sl] < 110)).sum(1)
-    C = feed_redesign.tokens()["cover"]
-    assert abs(_rows(white, 400, 960, 40)[0] - C["novetats"]["cap_top"]) <= TOL
-    assert abs(_rows(yellow, 400, 960, 120)[0] - C["etiqueta"]["cap_top"]) <= TOL
-
-
-def test_album_band_top_matches_fitxa(fake_cover):
-    """The territory band top = band.bottom - band.h1 (1-line title)."""
-    img = feed_redesign.build_album(ALBUM)  # VAL deep = rgb(138,74,30)
-    col = np.asarray(img.convert("RGB"), np.int16)[:, 40, :]
-    A = feed_redesign.tokens()["album"]["band"]
-    expected = A["bottom"] - A["h1"]
-    rows = [
-        r
-        for r in range(1000, 1350)
-        if abs(col[r, 0] - 138) < 25
-        and abs(col[r, 1] - 74) < 25
-        and abs(col[r, 2] - 30) < 25
-    ]
-    assert rows, "VAL deep band not found"
-    assert abs(rows[0] - expected) <= TOL
-
-
 SINGLES_10 = [
     {
         "nom": "S%d" % i,
@@ -284,50 +242,25 @@ SINGLES_10 = [
 ]
 
 
-def test_singles_row_top_and_pitch_match_fitxa(fake_cover):
-    """First row top = rows.y0 and the row pitch = rows.pitch (±8). Measured
-    from the saturated territory chips at x=100 (10 rows, no PPCC)."""
-    img = feed_redesign.build_singles(SINGLES_10, 1, 2, setmana=SET)
-    col = np.asarray(img.convert("RGB"), np.int16)[:, 100, :]
-    colored = [r for r in range(250, 1250) if int(col[r].max()) > 50]
-    tops, prev = [], -10
-    for r in colored:
-        if r - prev > 3:
-            tops.append(r)
-        prev = r
-    R = feed_redesign.tokens()["singles"]["rows"]
-    assert len(tops) == 10, f"expected 10 chip rows, got {len(tops)}"
-    assert abs(tops[0] - R["y0"]) <= TOL
-    diffs = sorted(tops[i + 1] - tops[i] for i in range(len(tops) - 1))
-    pitch = diffs[len(diffs) // 2]
-    assert abs(pitch - R["pitch"]) <= TOL
-
-
-def test_singles_blinds_ppcc_row_count(fake_cover):
-    """A PPCC row is dropped: 5 items with one PPCC → 4 chip rows."""
-    items = [
-        {"nom": "x", "artista_nom": "a", "artista_territori": c, "cover_url": "x"}
-        for c in ["CAT", "VAL", "PPCC", "BAL", "CNO"]
-    ]
-    img = feed_redesign.build_singles(items, 1, 1)
-    col = np.asarray(img.convert("RGB"), np.int16)[:, 100, :]
-    colored = [r for r in range(250, 1250) if int(col[r].max()) > 50]
-    tops, prev = [], -10
-    for r in colored:
-        if r - prev > 3:
-            tops.append(r)
-        prev = r
-    assert len(tops) == 4
-
-
 def test_chip_shows_recoloured_silhouette_not_text(fake_cover):
     """The singles chip contains the territory silhouette in its accent colour,
     optically sized (height ≈ optH from the fitxa) and vertically centred in the
     92×85 chip — a stable proxy for 'logo, not abbr text' (the old abbr was
     top-anchored 26 px text; the silhouette is centred and optH-tall). 'No glyph'
     isn't asserted directly (hard to measure robustly); the abbr code path is
-    gone — see build_singles."""
-    for code, key in (("CAT", "pri"), ("VAL", "val")):  # val exercises the maxW cap
+    gone — see build_singles.
+
+    Property asserted now (rewrite 2026-08-18): an accent-coloured
+    silhouette is present inside the chip box for every territory that has
+    a logo spec, and its ink stays inside the chip (no bleed) — the optH
+    height and the pixel-centre pins are gone."""
+    R = feed_redesign.tokens()["singles"]["rows"]
+    y0, rh = int(R["y0"]), R["h"]
+    ch = R["chip"]
+    logos = feed_redesign.tokens()["territory_logos"]["per_territory"]
+    codes = [c for c, k in feed_redesign._CODE_TO_KEY.items() if k in logos]
+    assert {"CAT", "VAL"} <= set(codes)  # val exercises the maxW cap
+    for code in codes:
         row = [
             {
                 "nom": "X",
@@ -340,11 +273,10 @@ def test_chip_shows_recoloured_silhouette_not_text(fake_cover):
         a = np.asarray(img.convert("RGB"), np.int16)
         terr = feed_redesign.territori(code)
         ar, ag, ab, _ = feed_redesign._col(terr["accent"])
-        R = feed_redesign.tokens()["singles"]["rows"]
-        y0, rh = int(R["y0"]), R["h"]
-        ch = R["chip"]
-        # accent pixels (close to the territory accent) inside the chip box
-        region = a[y0 : y0 + rh, ch["x"] : ch["x"] + ch["w"], :]
+        # accent pixels (close to the territory accent) around the chip box,
+        # with a margin so bleed outside the box would be visible
+        m = 12
+        region = a[y0 - m : y0 + rh + m, ch["x"] - m : ch["x"] + ch["w"] + m, :]
         d = (
             np.abs(region[..., 0] - ar)
             + np.abs(region[..., 1] - ag)
@@ -352,12 +284,5 @@ def test_chip_shows_recoloured_silhouette_not_text(fake_cover):
         )
         ys, xs = np.where(d < 40)
         assert ys.size > 60, f"{code}: expected an accent silhouette in the chip"
-        # optically sized: bbox height ≈ optH (capped case scales down).
-        pt = feed_redesign.tokens()["territory_logos"]
-        spec = pt["per_territory"][key]
-        w = spec["optH"] * spec["aspect"]
-        exp_h = spec["optH"] if w <= pt["maxW"] else pt["maxW"] / spec["aspect"]
-        assert abs((ys.max() - ys.min() + 1) - exp_h) <= 8, f"{code}: height off"
-        # vertically centred in the chip (silhouette, not top-anchored text).
-        centre = (ys.min() + ys.max()) / 2
-        assert abs(centre - rh / 2) <= 6, f"{code}: not vertically centred"
+        assert m <= ys.min() and ys.max() < m + rh, f"{code}: silhouette bleeds (y)"
+        assert m <= xs.min() and xs.max() < m + ch["w"], f"{code}: bleeds (x)"

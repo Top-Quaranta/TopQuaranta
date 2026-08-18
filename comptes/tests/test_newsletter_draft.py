@@ -224,26 +224,38 @@ def test_send_pendent_ships_and_marks(mock_send, mock_top):
 
 
 @pytest.mark.django_db
-@patch("social.payload.build_top")
-@patch("comptes.management.commands.enviar_newsletter.send_top_newsletter")
-def test_send_uses_edited_text_and_rebuilds_list(mock_send, mock_top):
-    _seed_top()
+def test_send_uses_edited_text_and_rebuilds_list(mailoutbox, django_user_model):
+    """Property asserted on the email that actually goes out (no mock on
+    the sender, no positional/kwarg pins): the subscriber receives the
+    staff-edited subject + narrative, and the list is the top as it is
+    AT SEND TIME — a song that entered the top after the draft was
+    written is in the mail."""
+    from comptes.models import PerfilUsuari
+
     _enable_newsletter()
-    _draft(subject="EDITAT", narrative_html="<p>editat</p>", editat=True)
-    # Final top at send time (rebuilt fresh, not stored on the draft).
-    final_entries = [
-        {"posicio": 1, "canco_nom": "Final"},
-        {"posicio": 2, "canco_nom": "B"},
-    ]
-    mock_top.return_value = {"entries": final_entries}
-    mock_send.return_value = "sent=1 fail=0"
+    _draft(
+        subject="EDITAT-SUBJ-9Z",
+        narrative_html="<p>NARRATIVA-EDITADA-9Z</p>",
+        editat=True,
+    )
+    # The top only consolidates AFTER the draft exists → must be rebuilt
+    # fresh at send time, not frozen on the draft.
+    _seed_top(posicio=1, nom="Canco Final Q7")
+    _seed_top(posicio=2, nom="Segona Q7")
+    user = django_user_model.objects.create_user(
+        username="sub_ed", email="sub_ed@example.com", password="x"
+    )
+    PerfilUsuari.objects.filter(usuari=user).update(vol_newsletter=True)
     call_command("enviar_newsletter", stdout=StringIO())
-    _, kwargs = mock_send.call_args
-    args = mock_send.call_args.args
-    assert kwargs["subject_override"] == "EDITAT"
-    assert kwargs["narrative_html_override"] == "<p>editat</p>"
-    # entries (positional arg 5) rebuilt from build_top at send time.
-    assert args[4] == final_entries
+    sent = [m for m in mailoutbox if "sub_ed@example.com" in m.to]
+    assert len(sent) == 1, [m.to for m in mailoutbox]
+    m = sent[0]
+    assert "EDITAT-SUBJ-9Z" in m.subject
+    html = m.alternatives[0][0]
+    assert "NARRATIVA-EDITADA-9Z" in html
+    assert "Canco Final Q7" in html and "Segona Q7" in html
+    d = NewsletterDraft.objects.get(setmana=SETMANA)
+    assert d.estat == NewsletterDraft.ESTAT_ENVIAT
 
 
 @pytest.mark.django_db

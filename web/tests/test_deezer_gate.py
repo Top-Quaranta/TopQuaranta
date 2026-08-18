@@ -16,7 +16,14 @@ from django.core.management import call_command
 from rest_framework.test import APIClient
 
 from comptes.models import Usuari
-from music.models import Artista, ArtistaDeezer, ArtistaLocalitat, Municipi, Territori
+from music.models import (
+    Artista,
+    ArtistaDeezer,
+    ArtistaLocalitat,
+    Municipi,
+    StaffAuditLog,
+    Territori,
+)
 
 
 @pytest.fixture
@@ -122,10 +129,22 @@ def test_command_moves_ghosts_and_is_idempotent():
     assert ghost.aprovat is False and ghost.pendent_review is True
     assert keeper.aprovat is True  # untouched (has Deezer)
 
-    # Second run finds nothing to do.
-    out2 = io.StringIO()
-    call_command("tornar_pendents_sense_deezer", stdout=out2)
-    assert "Res a fer" in out2.getvalue()
+    # Second run finds nothing to do: asserted as "no state change" —
+    # the artist flags and the audit trail are identical before and
+    # after — not as a stdout string.
+    def _snapshot():
+        return (
+            list(
+                Artista.objects.order_by("pk").values_list(
+                    "pk", "aprovat", "pendent_review"
+                )
+            ),
+            StaffAuditLog.objects.count(),
+        )
+
+    abans = _snapshot()
+    call_command("tornar_pendents_sense_deezer", stdout=io.StringIO())
+    assert _snapshot() == abans
 
 
 @pytest.mark.django_db

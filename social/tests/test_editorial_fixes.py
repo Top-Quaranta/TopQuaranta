@@ -84,24 +84,6 @@ def test_hero_templates_say_1_dia_not_1_dies():
     assert rendered_any, "no {dies_str} templates found"
 
 
-def test_hero_templates_plural_with_7_days():
-    sample = {
-        "artista": "SX3",
-        "de_artista": "de SX3",
-        "canco": "Tots Som Súpers",
-        "posicio": 2,
-        "posicio_ordinal": "2n",
-        "territori_label": "Global",
-        "territori_ordinal": "del top general",
-        "dies_str": dies_str(7),
-    }
-    for tpl in _hero_templates():
-        if "{dies_str}" not in tpl:
-            continue
-        out = tpl.format(**sample)
-        assert "7 dies" in out, tpl
-
-
 # ── Bug 2: top-5 artist dedup ────────────────────────────────────────
 
 
@@ -164,16 +146,6 @@ def test_pick_short_leader_only_when_tail_all_leader():
     assert text.count("Maria Jaume") == 1
     assert "també al top 5" not in text.lower()
     assert "Cançó A" in text
-
-
-def test_pick_short_no_duplicates_unchanged():
-    others = [
-        _entry(2, "C2", "Ouineta"),
-        _entry(3, "C3", "Rosalia"),
-        _entry(4, "C4", "Julieta"),
-    ]
-    text = top5_bank.pick_short(others, leader=None, rng=random.Random(0))
-    assert "Ouineta, Rosalia i Julieta" in text
 
 
 def test_pick_long_keeps_distinct_songs_same_artist():

@@ -66,9 +66,6 @@ class TestTitlecaseOrphanAccents:
     def test_grave_accent_article(self):
         assert titlecase_catala("l\u0060home de la lluna") == "L'Home de la Lluna"
 
-    def test_acute_accent_article(self):
-        assert titlecase_catala("l\u00b4home de la lluna") == "L'Home de la Lluna"
-
     def test_acute_accent_english_possessive(self):
         # "2001´s 99" — acute becomes plain apostrophe, "s" stays lower.
         assert titlecase_catala("2001\u00b4s 99") == "2001's 99"

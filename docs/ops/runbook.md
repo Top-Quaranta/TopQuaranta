@@ -799,6 +799,14 @@ correu apuntant a un relay que ja no els servia. **Si edites un fitxer
 d'infraestructura directament a la màquina, el següent desplegament no
 el toca i ningú se n'assabenta fins que falla.**
 
+Afegir-hi un fitxer és **només** posar una línia al mapa `FILES` de
+l'script. Les branques del `case` que hi ha a sota existeixen únicament
+per als fitxers que a més necessiten validar-se (Caddyfile) o provocar un
+reload (unit de systemd); la resta cau a la branca per defecte. Eixa
+branca no hi era fins al 2026-08-18, i sense ella una entrada nova no
+s'instal·lava **i l'script eixia igualment amb èxit** — el pitjor mode de
+fallada possible en un desplegament.
+
 Vegeu `docs/decisions/0001-gunicorn-no-reload.md` i
 `docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
 

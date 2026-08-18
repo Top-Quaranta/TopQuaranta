@@ -440,13 +440,15 @@ Configuration lives in `ConfiguracioGlobal`, editable from
 operator opts in. Recommended entries when you do:
 
 ```
-mail.topquaranta.cat:993
-mail.topquaranta.cat:465
-mail.topquaranta.cat:25
 topquaranta.cat:443
 api.cercol.team:443
-autoconfig.topquaranta.cat:443
 ```
+
+L'exemple portava els ports de correu de `mail.topquaranta.cat` i el
+subdomini `autoconfig`. Els primers van morir amb Stalwart i el segon mai
+no va apuntar ací, així que vigilar-los hauria estat una alarma horària
+sobre res. En producció `tls_endpoints_vigilats` només ha de portar el
+que existeix.
 
 A failing endpoint escalates `overall`, so the hourly
 `tq-health --email-on-fail` cron mails admin@ within the hour, and it

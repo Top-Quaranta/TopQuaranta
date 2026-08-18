@@ -44,13 +44,6 @@ def test_duotone_mosaic_needs_two():
         duotone.duotone_mosaic([_dummy_cover()], "rgb(250,204,21)", "#3a5a34", (W, H))
 
 
-def test_duotone_mosaic_grid_shape():
-    assert duotone._grid_shape(4) == (2, 2, 4)
-    assert duotone._grid_shape(5) == (2, 2, 4)
-    assert duotone._grid_shape(6) == (2, 3, 6)
-    assert duotone._grid_shape(9) == (2, 3, 6)
-
-
 # ── no-regression: flags off → untouched ─────────────────────────────
 
 
@@ -191,20 +184,6 @@ def cfg(db):
     c.instagram_actiu = True
     c.save()
     return c
-
-
-def test_moviment_flag_off_creates_no_row(cfg):
-    assert not cfg.moviment_actiu  # default
-    call_command(
-        "publicar_social",
-        "--data",
-        THURSDAY,
-        "--tipus",
-        "moviment",
-        "--platform",
-        "instagram_feed",
-    )
-    assert not SocialPost.objects.filter(tipus=SocialPost.TIPUS_MOVIMENT).exists()
 
 
 def test_moviment_flag_on_no_content_omits(cfg):

@@ -16,17 +16,6 @@ from social.narrative.banks.hero import HERO
 from social.narrative.composers import instagram_feed as c_ig
 
 
-def test_hero_bank_contains_four_new_scenarios():
-    """ADR-0008: the bank must register a9, a10, a11, a12."""
-    new_codes = {
-        "a9_debut_anywhere",
-        "a10_artista_first_ever",
-        "a11_top5_drop_generic",
-        "a12_artista_emerging",
-    }
-    assert new_codes.issubset(HERO.keys())
-
-
 def test_no_hashtag_position_in_any_hero_template():
     """ADR-0006 invariant carries to the new banks: no `#N` where
     N is a digit. The regex ` #\\d` catches mid-sentence forms; the

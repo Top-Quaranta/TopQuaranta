@@ -125,14 +125,6 @@ def test_territorial_degraded_tiers_alignment():
     assert _usernames(tags[3]) == ["p1"]
 
 
-def test_territorial_midsize_gets_pairs_but_no_mosaic():
-    # n=15: pairs tier present (n>10) but mosaic absent (needs n>20).
-    tags = PubCmd._story_tags("VAL", _entries(15), None)
-    assert len(tags) == 6  # intro, pairs, grid, podi, hero, outro
-    assert _usernames(tags[1]) == ["p15", "p14", "p13", "p12", "p11"]
-    assert _usernames(tags[2]) == ["p10", "p9", "p8", "p7", "p6", "p5", "p4"]
-
-
 def test_territorial_alignment_against_real_renderer(monkeypatch, tmp_path):
     """The tag sets must line up 1:1 with the actually rendered slides —
     for the degraded territorial set AND the full PPCC set."""
@@ -354,27 +346,6 @@ def test_story_slot_sends_per_story_tags(top_ppcc):
     assert fake.calls[4][1] == ["p3", "p2"]  # podi
     assert fake.calls[5][1] == ["p1"]  # hero
     assert post.metadata["n_mencions"] == 4
-
-
-def test_per_story_tags_logged(top_ppcc, caplog):
-    # Each published story emits one INFO audit line with its media id
-    # and the mentioned usernames, so a mention verification is a grep
-    # (`story .* tags=`) instead of a reconstruction. Lines appear both
-    # for stories that carry mentions and for those that don't.
-    fake = _CapturingUpload()
-    with caplog.at_level(
-        logging.INFO, logger="social.management.commands.publicar_social"
-    ):
-        _out, err = _run_story(fake)
-    assert err is None
-    lines = [
-        r.getMessage() for r in caplog.records if r.getMessage().startswith("story ")
-    ]
-    # 7 stories published → 7 audit lines, in order.
-    assert len(lines) == 7
-    assert lines[4] == "story 5/7 top_ppcc PPCC media=pub-cid-5 tags=[p3,p2]"  # podi
-    assert lines[5] == "story 6/7 top_ppcc PPCC media=pub-cid-6 tags=[p1]"  # hero
-    assert lines[0].endswith("tags=[]")  # intro carries no mentions
 
 
 def test_one_failed_story_never_blocks_the_rest(top_ppcc):

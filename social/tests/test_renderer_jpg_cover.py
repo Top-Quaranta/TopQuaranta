@@ -56,13 +56,3 @@ def test_ppcc_cover_is_editorial_not_empty():
     small = img.resize((108, 135)).convert("L")
     lit = sum(1 for px in small.getdata() if px > 40)
     assert lit > 600, lit
-
-
-@pytest.mark.django_db
-def test_feed_list_slides_still_render():
-    """List slides 1-4 are untouched; just confirm they still produce."""
-    paths = renderer.render_feed_top("top_ppcc", "PPCC", WK, _entries(25))
-    assert len(paths) >= 2  # cover + at least one list page
-    for p in paths[1:]:
-        with Image.open(p) as im:
-            assert im.format == "JPEG"

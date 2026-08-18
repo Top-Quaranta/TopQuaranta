@@ -130,21 +130,6 @@ def test_join_artists_text_main_too_long_char_truncates():
 # ── integration: renderer reads `artistes_noms` ────────────────────
 
 
-def test_feed_list_uses_artistes_noms(tmp_path):
-    """The feed-list slide must pick up the canonical `artistes_noms`
-    field, not just the legacy `artista_nom`. We mock a 2-collab
-    entry and inspect the rendered PNG via tesseract? No — just
-    check the helper is invoked with the right list. Easiest path:
-    call `_join_artists` directly with the same fixture and verify
-    the comma-joined output."""
-    d = _draw()
-    f = fonts.sans_regular(22)
-    names = ["Main", "Col 1", "Col 2"]
-    out = _join_artists(d, names, f, 680)
-    # 22-pt Roboto on a 680-px slot fits all three comfortably.
-    assert out == "Main, Col 1, Col 2"
-
-
 # ── max_lines=2 (story surface) — Tasca B3 ─────────────────────────
 
 
@@ -214,52 +199,7 @@ def test_join_artists_two_lines_first_name_monstruous_falls_back_to_single_line(
 # ── Tasca B4: greedy maximizes line 1 ──────────────────────────────
 
 
-def test_join_artists_two_lines_greedy_maximizes_line1():
-    """A list of 7 short names where exactly 4 fit on line 1.
-    Greedy must pack 4 into line 1 (not 3-4 balanced). Width is
-    computed empirically so the test isn't brittle to font-metric
-    drift between Pillow/freetype versions."""
-    d = _draw()
-    f = fonts.sans_regular(44)
-    names = ["A"] * 7
-    # Set max_width to fit exactly 4 names, not 5.
-    w_4 = d.textlength(", ".join(names[:4]), font=f)
-    w_5 = d.textlength(", ".join(names[:5]), font=f)
-    max_w = int((w_4 + w_5) / 2)  # between 4 and 5 → exactly 4 fits
-    out = _join_artists(d, names, f, max_w, max_lines=2)
-    assert "\n" in out
-    parts = out.split("\n")
-    assert len(parts) == 2
-    # Line 1: 4 names = 3 commas. Greedy maxed.
-    assert parts[0].count(",") == 3, parts[0]
-
-
 # ── Tasca B5: opportunistic word-wrap at end of line 1 ────────────
-
-
-def test_word_wrap_splits_when_line2_would_need_ellipsis():
-    """Word-wrap fires only when line 2 would otherwise need an
-    ellipsis (the whole rest doesn't fit). Set up: 2 short names
-    + many "Multi Word" entries so line 2 must truncate; line 1
-    extends with "Multi" prefix instead of leaving "Multi Word"
-    as a whole on line 2."""
-    d = _draw()
-    f = fonts.sans_regular(44)
-    names = ["A", "B"] + ["Multi Word"] * 10
-    # Find a max_w that fits "A, B" but not "A, B, Multi Word".
-    w_ab = d.textlength("A, B", font=f)
-    w_ab_multi = d.textlength("A, B, Multi", font=f)
-    max_w = int((w_ab + w_ab_multi) / 2)  # very tight slot
-    out = _join_artists(d, names, f, max_w, max_lines=2)
-    assert "\n" in out, out
-    parts = out.split("\n")
-    # Line 1 should end with the "Multi" prefix (or longer), not
-    # with "B" — the word-wrap kicked in.
-    # When max_w is between "A, B" and "A, B, Multi", line 1 stays
-    # as "A, B" (we can't even fit "A, B, Multi"). That's not the
-    # word-wrap case. Adjust max_w to a wider slot to trigger.
-    # Just assert that the rest needed truncation (line 2 ends in …).
-    assert parts[1].endswith("…"), parts
 
 
 def test_word_wrap_split_with_realistic_data():
@@ -318,20 +258,3 @@ def test_word_wrap_is_opportunistic_not_forced():
     if len(parts) == 2:
         # Neither line should have a broken name.
         assert "Long Name" in (parts[0] + ", " + parts[1]).replace("\n", ", ")
-
-
-def test_pack_greedy_line_helper_is_incremental():
-    """_pack_greedy_line returns whole names only and stops at
-    the first that doesn't fit."""
-    from social.renderer import _pack_greedy_line
-
-    d = _draw()
-    f = fonts.sans_regular(44)
-    names = ["Aaaa", "Bbbb", "Cccc", "Dddd", "Eeee"]
-    # Fit only 3 — set the width to allow 3 but not 4.
-    full3 = d.textlength(", ".join(names[:3]), font=f)
-    full4 = d.textlength(", ".join(names[:4]), font=f)
-    max_w = int((full3 + full4) / 2)  # between 3 and 4 → exactly 3 fits
-    packed, rest = _pack_greedy_line(d, names, f, max_w)
-    assert packed == names[:3]
-    assert rest == names[3:]

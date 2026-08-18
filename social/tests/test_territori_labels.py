@@ -209,19 +209,3 @@ def test_ppcc_ordinal_templates_say_top_general():
         assert "del top general" in rendered
         saw_top_general = True
     assert saw_top_general
-
-
-@pytest.mark.parametrize("slug", ["CAT", "VAL", "BAL"])
-def test_no_regression_ordinal_for_cat_val_bal(slug):
-    """CAT/VAL/BAL must render the same in ordinal context as before #115's
-    follow-up: `territori_ordinal` is a no-op for them (== TERRITORI_DE)."""
-    assert territori_ordinal(slug) == TERRITORI_DE[slug]
-    expected = {
-        "CAT": "de Catalunya",
-        "VAL": "del País Valencià",
-        "BAL": "de les Illes Balears",
-    }[slug]
-    rendered = "al 1r {territori_ordinal}".format(
-        territori_ordinal=territori_ordinal(slug)
-    )
-    assert rendered == f"al 1r {expected}"

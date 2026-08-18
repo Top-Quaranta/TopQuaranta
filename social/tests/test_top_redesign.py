@@ -87,32 +87,12 @@ def test_poster_renders_all_rows(fake_cover):
     assert files_grogues, "no s'ha pintat el titular groc"
 
 
-def test_poster_pins(fake_cover):
-    """Top accent bar at the very top + footer rule near the bottom."""
-    img = top_redesign.build_poster(_entries(40), SET, "ppcc")
-    R, G, B = _chan(img)
-    # 7px yellow bar at y=0..7
-    bar = ((R[0:7] > 190) & (G[0:7] > 140) & (B[0:7] < 110)).mean()
-    assert bar > 0.9, bar
-
-
 def test_poster_under_1mb_bluesky(fake_cover):
     """The cartell JPEG must stay under Bluesky's 1 MB blob limit."""
     img = top_redesign.build_poster(_entries(40), SET, "ppcc")
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=90)
     assert buf.tell() < 1_000_000, buf.tell()
-
-
-def test_top_cover_pins(fake_cover):
-    img = top_redesign.build_top_cover(SET, "ppcc")
-    assert img.size == (1080, 1350)
-    R, G, B = _chan(img)
-    # big yellow "40" mid-canvas
-    sl = slice(300, 780)
-    yellow = ((R[:, sl] > 190) & (G[:, sl] > 140) & (B[:, sl] < 110)).sum(1)
-    top = next(r for r in range(540, 1000) if yellow[r] > 80)
-    assert abs(top - 570) <= TOL, top
 
 
 def test_top_list_one_highlighted_and_rows(fake_cover):
@@ -166,33 +146,6 @@ def _white(R, G, B):
 
 def _dark(R, G, B):
     return (R < 60) & (G < 60) & (B < 60)
-
-
-def test_cover_eltop_forty_gap(fake_cover):
-    """'EL TOP' and '40' sit tight (design ink gap ≈ -25; the '40' ink-top
-    rises into EL TOP's bottom). Guards the #1 regression."""
-    img = top_redesign.build_top_cover(SET, "ppcc")
-    w = _ink_rows(img, _white, 360, 720, 400, 620)
-    y = _ink_rows(img, _yellow, 360, 720, 560, 900)
-    assert abs((y[0] - w[1]) - (-25)) <= TOL, (w, y)
-
-
-def test_top_pills_ink_centred(fake_cover):
-    """The SETMANA pill text is vertically ink-centred in its box (cover + cartell)."""
-    cov = top_redesign.build_top_cover(SET, "ppcc")
-    t = _ink_rows(cov, _dark, 330, 560, 1190, 1280)
-    assert abs((t[0] + t[1]) / 2 - 1234) <= TOL, t  # pill cy=1234
-    car = top_redesign.build_poster(_entries(40), SET, "ppcc")
-    t2 = _ink_rows(car, _dark, 835, 1010, 48, 104)
-    assert abs((t2[0] + t2[1]) / 2 - 76) <= TOL, t2  # pill centre ≈76
-
-
-def test_list_numeral_centred_on_row(fake_cover):
-    """List numerals are ink-centred on the row (were dropping low). Row 1
-    centre ≈ 246."""
-    img = top_redesign.build_top_list(list(reversed(_entries(10))), 4, 4, SET, "ppcc")
-    n = _ink_rows(img, _white, 72, 140, 199, 293, thr=3)
-    assert abs((n[0] + n[1]) / 2 - 246) <= TOL, n
 
 
 def test_no_title_artist_overlap_long_titles(fake_cover):

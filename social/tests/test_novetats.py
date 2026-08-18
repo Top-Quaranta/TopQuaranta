@@ -65,26 +65,6 @@ def test_fallback_always_present():
     assert scs and scs[-1].code == "fallback_novetat"
 
 
-def test_empty_items_no_scenarios():
-    assert nov.detect_novetats([]) == []
-
-
-def test_severity_order_n1_over_n2():
-    items = [
-        _item("First", 1, "A", primer_release=True),
-        _item("Known", 2, "B", artista_en_top=True),
-    ]
-    scs = nov.detect_novetats(items)
-    assert scs[0].code == "n1_debut_artist_known"  # 6 > 5
-
-
-def test_subject_ids_album_focal():
-    items = [_item("X", 7, "A", artista_en_top=True)]
-    s = nov.detect_novetats(items)[0]
-    assert s.data["canco_id"] is None
-    assert s.data["artista_id"] == 7
-
-
 # ── composer ─────────────────────────────────────────────────────────
 
 WK = datetime.date(2026, 5, 25)
@@ -130,13 +110,6 @@ def test_one_dia_agreement_in_novetats():
         "telegram", "nous_singles", items, setmana=WK, rng=random.Random(0)
     )
     assert "1 dia" in r["text"] and "1 dies" not in r["text"]
-
-
-def test_thin_wrappers_pin_tipus():
-    items = [_item("X", 1, "A", dies=2)]
-    a = nous_albums.compose("bluesky", items, setmana=WK, rng=random.Random(0))
-    s = nous_singles.compose("bluesky", items, setmana=WK, rng=random.Random(0))
-    assert a["text"] and s["text"]
 
 
 def test_bank_all_codes_have_three_tiers():

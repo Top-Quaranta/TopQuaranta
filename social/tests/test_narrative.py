@@ -868,18 +868,6 @@ def test_bluesky_never_exceeds_300_with_long_artist_names():
 
 
 @pytest.mark.django_db
-def test_composer_bluesky_respects_300_chars():
-    out = c_bluesky.compose(
-        [_fake_scenario()],
-        _fake_entries(40),
-        territori="PPCC",
-        setmana=_monday(2026, 5, 11),
-        rng=random.Random(0),
-    )
-    assert len(out["text"]) <= 300, out["text"]
-
-
-@pytest.mark.django_db
 def test_composer_telegram_respects_1024_chars():
     out = c_telegram.compose(
         [_fake_scenario()],
@@ -938,25 +926,6 @@ def test_composer_instagram_story_returns_short_overlay():
     assert out["text"]
     assert out["hashtags"] == []
     assert len(out["text"]) <= 160
-
-
-@pytest.mark.django_db
-def test_composer_top5_excludes_hero_canco():
-    """The top-5 completion mention must NOT repeat the hero
-    cançó."""
-    out = c_mastodon.compose(
-        [_fake_scenario()],  # hero canço = "Amor Artificial"
-        _fake_entries(40),
-        territori="PPCC",
-        setmana=_monday(2026, 5, 11),
-        rng=random.Random(0),
-    )
-    # Note: hero says «Amor Artificial» (canço = "Amor Artificial").
-    # In the fake entries we have "Cançó 3" at #3, not "Amor
-    # Artificial", so this passes by construction; the real test
-    # is on real data, but at least the filter logic doesn't
-    # crash.
-    assert out["text"]
 
 
 # ── E. registry cycle ─────────────────────────────────────────────

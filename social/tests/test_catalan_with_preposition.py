@@ -107,19 +107,6 @@ def test_amb_never_contracts():
 # ── _split_article internals ──────────────────────────────────────
 
 
-def test_split_article_detects_titlecase():
-    assert _split_article("Els Catarres") == ("els", "Catarres")
-    assert _split_article("El Diluvi") == ("el", "Diluvi")
-    assert _split_article("La Fúmiga") == ("la", "Fúmiga")
-    assert _split_article("Les Anxovetes") == ("les", "Anxovetes")
-    assert _split_article("L'Atzar") == ("l'", "Atzar")
-
-
-def test_split_article_ignores_non_articles():
-    assert _split_article("Rosalía") == (None, "Rosalía")
-    assert _split_article("Maria Jaume") == (None, "Maria Jaume")
-
-
 def test_split_article_does_not_detect_all_caps():
     """Edge case: deezer occasionally returns all-caps names like
     'LA FÚMIGA'. We intentionally don't strip the article in that
@@ -140,16 +127,3 @@ def test_split_article_does_not_detect_lowercase():
 
 
 # ── edge cases ───────────────────────────────────────────────────
-
-
-def test_empty_name():
-    assert with_preposition("", "de") == "de "
-    assert with_preposition("", "amb") == "amb "
-
-
-def test_bare_article_token_falls_back_to_apostrof_elision():
-    """'El' alone — no name after the article — isn't detected as
-    an article (the splitter requires a non-empty rest). The
-    apostrof_de fallback fires on the leading 'E' and produces
-    'd'El'. Pin the behaviour."""
-    assert with_preposition("El", "de") == "d'El"

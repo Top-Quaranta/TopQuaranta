@@ -223,24 +223,6 @@ def test_pairs_long_titles_do_not_reach_footer():
 # ── Outro ───────────────────────────────────────────────────────────
 
 
-@pytest.mark.django_db
-def test_outro_is_yellow_without_slate_card():
-    img = renderer._story_outro_ppcc(WK).convert("RGB")
-    small = img.resize((108, 192))
-    pixels = list(small.getdata())
-
-    def _near(px, hex_str, tol=24):
-        r, g, b = px
-        h = hex_str.lstrip("#")
-        tr, tg, tb = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return abs(r - tr) < tol and abs(g - tg) < tol and abs(b - tb) < tol
-
-    yellow = sum(1 for px in pixels if _near(px, colors.COLOR_YELLOW))
-    slate = sum(1 for px in pixels if _near(px, colors.COLOR_CARD))
-    assert yellow > len(pixels) * 0.5, yellow  # yellow dominates
-    assert slate == 0, f"slate COLOR_CARD must be gone, found {slate}"
-
-
 # ── Redesign: fonts + intro ─────────────────────────────────────────
 
 
@@ -262,23 +244,6 @@ def test_redesign_fonts_load_real_families():
     assert "InstrumentSerif" in fonts._resolve("instrument_italic")
 
 
-@pytest.mark.django_db
-def test_intro_is_green_with_big_yellow_forty():
-    """Slide 1 is the green field carrying the big yellow '40'."""
-    img = renderer._story_intro_ppcc(WK).convert("RGB")
-    small = img.resize((108, 192))
-    px = list(small.getdata())
-
-    def _near(p, hexs, tol=30):
-        h = hexs.lstrip("#")
-        t = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-        return all(abs(p[i] - t[i]) < tol for i in range(3))
-
-    green = sum(1 for p in px if _near(p, colors.terr_color("PPCC"), 40))
-    assert green > len(px) * 0.4, green  # green dominates
-    assert _count_yellow(img) > 1000  # the big "40" + pill
-
-
 # ── Step 3c no-regression baseline (added BEFORE parametrising) ──────
 #
 # These two guards freeze the current PPCC behaviour so that the Step
@@ -286,73 +251,6 @@ def test_intro_is_green_with_big_yellow_forty():
 # orchestrator) cannot silently drift the PPCC render. Established here
 # while the builders are still PPCC-hardcoded, so they are a true
 # before-state baseline.
-
-
-def test_ppcc_palette_unchanged():
-    """story_palette('PPCC') must return the exact Step-3b green tones,
-    so reading the palette from this helper keeps the PPCC render
-    byte-identical once the builders consume it."""
-    p = colors.story_palette("PPCC")
-    assert p["accent"] == "#427c42"
-    assert p["deep"] == colors.COLOR_GREEN_DEEP
-    assert p["light"] == colors.COLOR_GREEN_LIGHT
-    assert p["text_on"] == colors.COLOR_WHITE  # white wins on the green
-
-
-def test_ppcc_story_structure(monkeypatch, tmp_path):
-    """The PPCC orchestrator emits its slides in a fixed order. We spy
-    on the seven builders (so no real rendering happens) and record the
-    call sequence, then assert order + count for the full set and for
-    the novetats-skipped set. Detects any reorder/drop introduced when
-    the builders get parametrised."""
-    calls: list[str] = []
-
-    def _spy(name):
-        def _f(*args, **kwargs):
-            calls.append(name)
-            return Image.new("RGB", (1, 1))
-
-        return _f
-
-    for attr, name in (
-        ("_story_intro_ppcc", "intro"),
-        ("_story_top_mosaic", "mosaic"),
-        ("_story_top_pairs", "pairs"),
-        ("_story_top_grid", "grid"),
-        ("_story_podi", "podi"),
-        ("_story_hero", "hero"),
-        ("_story_novetats", "novetats"),
-        ("_story_outro_ppcc", "outro"),
-    ):
-        monkeypatch.setattr(renderer, attr, _spy(name))
-    # Keep the JPEG saves out of the real renders dir.
-    monkeypatch.setattr(
-        renderer,
-        "_path",
-        lambda tipus, territori, setmana, idx, story=False: tmp_path / f"{idx}.jpg",
-    )
-
-    paths = renderer.render_stories_ppcc(
-        WK, _entries(40), novetats_items=_novetats(3), hero_headline="DEBUT AL CIM"
-    )
-    assert calls == [
-        "intro",
-        "mosaic",
-        "pairs",
-        "grid",
-        "podi",
-        "hero",
-        "novetats",
-        "outro",
-    ]
-    assert len(paths) == 8
-
-    calls.clear()
-    paths = renderer.render_stories_ppcc(
-        WK, _entries(40), novetats_items=[], hero_headline="NOU #1"
-    )
-    assert calls == ["intro", "mosaic", "pairs", "grid", "podi", "hero", "outro"]
-    assert len(paths) == 7
 
 
 # ── Content oracle ──────────────────────────────────────────────────

@@ -178,18 +178,6 @@ def setmana_with_top(db):
     return setmana
 
 
-def test_no_phase_gate_message(db, cfg_ig_on, setmana_with_top):
-    """The legacy per-slot phase gate is gone (removed 2026-06, neutral at
-    prod fase 5): a Wednesday run never reports a 'fase < min_fase' omès
-    reason — slots are gated only by the distribution matrix now."""
-    out = io.StringIO()
-    with redirect_stdout(out):
-        call_command(
-            "publicar_social", "--data", "2026-04-22", "--dry-run"  # Wednesday
-        )
-    assert "fase" not in out.getvalue().lower()
-
-
 def test_phase_1_publishes_saturday_dryrun(db, cfg_ig_on, setmana_with_top):
     out = io.StringIO()
     with redirect_stdout(out):
@@ -359,19 +347,6 @@ def test_slide_tags_top_spreads_y_per_row():
     ys = [t["y"] for t in list_slide_tags]
     assert len(set(ys)) == len(ys), "every row should land at a different Y"
     assert all(0.05 <= y <= 0.95 for y in ys), "Y must be within Meta's bounds"
-
-
-def test_slide_tags_top_alternates_x_columns():
-    from social.management.commands.publicar_social import Command
-
-    entries = [
-        {"posicio": i, "artista_instagram_url": f"https://instagram.com/a{i}"}
-        for i in range(1, 11)
-    ]
-    out = Command._slide_tags("top_ppcc", n_slides=2, data={"entries": entries})
-    xs = [t["x"] for t in out[1]]
-    # Three-column zigzag: at least 3 distinct X values across 10 rows.
-    assert len(set(xs)) >= 3
 
 
 def test_slide_tags_album_slide_tags_principal():

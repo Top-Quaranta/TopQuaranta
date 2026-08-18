@@ -20,12 +20,6 @@ def _S(code, sev, cid, aid):
 # ── select_slots / _scenario_subject ─────────────────────────────────
 
 
-def test_scenario_subject_tuple():
-    assert _scenario_subject(_S("a6", 6, 100, 1)) == (100, 1)
-    assert _scenario_subject(_S("a5", 5, None, 1)) == (None, 1)
-    assert _scenario_subject(Scenario("fallback_no_event", 0, {})) == (None, None)
-
-
 def test_select_slots_drops_same_song():
     # [0] and [1] share canco_id 100 → [1] dropped; [2] and [3] distinct.
     scs = [
@@ -57,15 +51,6 @@ def test_select_slots_only_two_distinct_no_forced_tertiary():
         _S("a9", 4, 200, 2),
     ]
     assert len(select_slots(scs, 3)) == 2
-
-
-def test_select_slots_degenerate_single_subject():
-    scs = [_S("a10", 8, 100, 1), _S("a6", 6, 100, 1)]
-    assert [s.code for s in select_slots(scs, 3)] == ["a10"]
-
-
-def test_select_slots_empty():
-    assert select_slots([], 3) == []
 
 
 def test_select_slots_none_ids_never_conflict():

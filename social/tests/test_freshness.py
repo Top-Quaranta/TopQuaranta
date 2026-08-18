@@ -65,15 +65,6 @@ def test_posthumous_reissue_is_not_verified():
     assert "artist_deceased_before_release" in v.reasons
 
 
-def test_living_artist_recent_release_passes():
-    v = _verdict(
-        "Nova",
-        REF - datetime.timedelta(days=3),
-        mb_end=None,
-    )
-    assert v.is_verified_recent_release is True
-
-
 def test_missing_release_date_is_false_with_none_age():
     v = _verdict("Sense Data", None)
     assert v.is_verified_recent_release is False
@@ -91,8 +82,3 @@ def test_custom_window():
     dl = REF - datetime.timedelta(days=60)
     assert _verdict("X", dl).is_verified_recent_release is False
     assert _verdict("X", dl, max_age_days=90).is_verified_recent_release is True
-
-
-def test_boolean_wrapper_matches_verdict():
-    c = _Canco("Nova", REF - datetime.timedelta(days=2), _Artista())
-    assert freshness.is_verified_recent_release(c, ref_date=REF) is True

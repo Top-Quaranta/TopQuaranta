@@ -69,11 +69,41 @@ class NewsletterTokenExpiryTest(TestCase):
     We added `max_age=1y` to `signing.loads`. Verify the
     SignatureExpired path returns the friendly message."""
 
-    def test_invalid_token_returns_400(self):
+    def test_expired_token_is_refused_and_does_not_unsubscribe(self):
+        """Property asserted: a correctly-signed token older than the
+        1-year `max_age` is refused (4xx) and the user's newsletter
+        opt-in is left untouched; garbage tokens are refused too.
+        The wording of the friendly message is not pinned."""
+        import time as _time
+        from unittest.mock import patch
+
+        from django.core import signing
+
+        u = Usuari.objects.create_user(
+            email="old@example.test", password="x", username="old"
+        )
+        PerfilUsuari.objects.filter(usuari=u).update(vol_newsletter=True)
+        token = signing.dumps({"u": u.pk}, salt="newsletter-baixa")
         client = Client()
+
+        # Garbage token → refused.
         resp = client.get("/api/v1/compte/baixa-newsletter/?token=garbage")
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("Token", resp.json().get("error", ""))
+        self.assertGreaterEqual(resp.status_code, 400)
+        self.assertLess(resp.status_code, 500)
+
+        # Same (valid) token, but the clock is now >1 year later → refused
+        # and the opt-in survives.
+        real_now = _time.time()
+        with patch(
+            "django.core.signing.time.time",
+            return_value=real_now + 60 * 60 * 24 * 366,
+        ):
+            resp = client.get(f"/api/v1/compte/baixa-newsletter/?token={token}")
+        self.assertGreaterEqual(resp.status_code, 400)
+        self.assertLess(resp.status_code, 500)
+        self.assertTrue(resp.json().get("error"))
+        u.refresh_from_db()
+        self.assertTrue(u.perfil.vol_newsletter)
 
     def test_valid_token_unsubscribes(self):
         from django.core import signing

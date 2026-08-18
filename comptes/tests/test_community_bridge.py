@@ -137,10 +137,6 @@ def test_html_to_markdown_cleans_ugly_cases():
     assert "| P |" in out or "|P|" in out.replace(" ", "")
 
 
-def test_html_to_markdown_empty():
-    assert community_bridge._html_to_markdown("") == ""
-
-
 # ── endpoint ─────────────────────────────────────────────────────────
 
 

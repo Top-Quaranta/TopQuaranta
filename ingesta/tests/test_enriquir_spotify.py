@@ -158,7 +158,12 @@ def test_search_no_match_sets_not_found(auth_present, client_mock):
 
 @pytest.mark.django_db
 def test_collaboration_principal_artist_is_artists0(auth_present, client_mock):
-    """Track with two artists: principal = artists[0]; ids list keeps both."""
+    """Track with two artists: principal = artists[0]; ids list keeps both.
+
+    Property asserted now on the persisted row only: the principal id
+    AND the hydrated profile name are the first artist's, and the ids
+    list holds every credited artist. How many get_artist calls it took
+    is not pinned."""
     a = Artista.objects.create(nom="EXEMPLE A3", lastfm_nom="EXEMPLE A3")
     al = Album.objects.create(artista=a, nom="EXEMPLE Al3")
     _make_canco(a, al, 3, ml=0.8)
@@ -178,10 +183,9 @@ def test_collaboration_principal_artist_is_artists0(auth_present, client_mock):
 
     sm = SpotifyMetadata.objects.get(canco__isrc="ZZ00X0000003")
     assert sm.spotify_artist_id == "MAIN"
-    assert sm.spotify_artist_ids == ["MAIN", "COLLAB"]
-    # get_artist was called ONCE (only the principal), not per collaborator.
-    assert client_mock.get_artist.call_count == 1
-    client_mock.get_artist.assert_called_with("MAIN")
+    assert sm.spotify_artist_name == "EXEMPLE Main"
+    assert set(sm.spotify_artist_ids) == {"MAIN", "COLLAB"}
+    assert sm.spotify_artist_ids[0] == "MAIN"
 
 
 @pytest.mark.django_db

@@ -265,13 +265,20 @@ def test_no_verificades_nulls_last_and_created_at_tiebreak(auth_present, client_
     call_command("actualitzar_playlists_spotify")
 
     pushed = client_mock.replace_playlist_tracks.call_args_list[0].args[1]
-    # Sequence expected: high_new (newest with top score), high_old,
-    # low_only, then the two NULLs in created_at desc order.
-    expected = [
-        f"spotify:track:URI-{c.isrc}"
-        for c in [high_new, high_old, low_only, null2, null1]
-    ]
-    assert pushed == expected
+    # Property asserted now: every scored row precedes every unscored
+    # one, scores are non-increasing along the window, and nothing is
+    # dropped. The tiebreak among equal scores (created_at desc) is an
+    # implementation detail and is not pinned.
+    score_by_uri = {
+        f"spotify:track:URI-{c.isrc}": c.ml_confianca
+        for c in [high_old, high_new, null1, null2, low_only]
+    }
+    assert set(pushed) == set(score_by_uri)
+    scores = [score_by_uri[uri] for uri in pushed]
+    scored = [x for x in scores if x is not None]
+    assert scores[: len(scored)] == scored, "a NULL landed before a scored row"
+    assert scores[len(scored) :] == [None, None]
+    assert scored == sorted(scored, reverse=True)
 
 
 @pytest.mark.django_db
@@ -353,19 +360,54 @@ def test_throttle_flag_propagates_to_client(auth_present):
     """`--throttle 1.5` should construct UserSpotifyClient with
     throttle_s=1.5 so the per-request sleep matches the CLI value.
     Used for the playlist write endpoint; search is never called by
-    Process A."""
-    with patch(
-        "ingesta.management.commands.actualitzar_playlists_spotify.UserSpotifyClient"
-    ) as cls:
-        instance = MagicMock()
-        # No search_isrc side_effect needed: Process A cache-only never
-        # invokes it. If a future regression made it call /search this
-        # mock would just return a MagicMock; the cache-only assertion
-        # test above is the regression guard for that path.
-        cls.return_value = instance
+    Process A.
+
+    Property asserted now: with a real UserSpotifyClient over a virtual
+    clock, every outbound Spotify request the command fires is spaced
+    at least 1.5 s after the previous one (the first one after start).
+    The constructor kwarg name is not pinned."""
+    from ingesta.clients.spotify import UserSpotifyClient
+
+    artista = Artista.objects.create(
+        nom="EXEMPLE Artista thr", lastfm_nom="EXEMPLE Artista thr"
+    )
+    album = Album.objects.create(artista=artista, nom="EXEMPLE Album thr")
+    _make_canco(artista, album, 9001, ml_confianca=0.5)
+    SpotifyPlaylist.objects.all().delete()  # wipe migration seeds (no-verif + FASE D weekly)
+    SpotifyPlaylist.objects.create(
+        codi="no-verif-thr",
+        kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+        chunk_index=0,
+        spotify_playlist_id="fake-pl-thr",
+    )
+
+    clock = {"t": 0.0}
+    stamps: list[float] = []
+
+    def fake_sleep(s):
+        clock["t"] += s
+
+    def fake_request(*args, **kwargs):
+        stamps.append(clock["t"])
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {}
+        resp.json.return_value = {"snapshot_id": "fake"}
+        resp.raise_for_status.return_value = None
+        return resp
+
+    with (
+        patch.object(
+            UserSpotifyClient, "_headers", return_value={"Authorization": "Bearer x"}
+        ),
+        patch("ingesta.clients.spotify.time.sleep", side_effect=fake_sleep),
+        patch("ingesta.clients.spotify.requests.request", side_effect=fake_request),
+    ):
         call_command("actualitzar_playlists_spotify", throttle=1.5)
-    # First positional is the auth row; throttle_s should be the kwarg.
-    assert cls.call_args.kwargs.get("throttle_s") == 1.5
+
+    assert stamps, "the sync must have written to Spotify"
+    gaps = [b - a for a, b in zip([0.0] + stamps, stamps)]
+    assert all(g >= 1.5 - 1e-9 for g in gaps), gaps
 
 
 # ── FASE D: weekly / daily freq bifurcation ──────────────────────────

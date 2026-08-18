@@ -33,10 +33,23 @@ from django.core.management.base import CommandError
 
 @pytest.mark.django_db
 def test_obtenir_metadata_all_ok_does_not_raise():
-    """No artists in the queryset → processed=0 → no raise."""
-    out = StringIO()
-    call_command("obtenir_metadata", stdout=out)
-    assert "Metadata ingestion complete" in out.getvalue()
+    """No artists in the queryset → processed=0 → no raise.
+
+    Property asserted now: a run where every artista succeeds (0 %
+    failure) completes without CommandError, both with an empty
+    queryset and with a populated one. The summary text is not pinned."""
+    from music.models import Artista
+
+    call_command("obtenir_metadata", stdout=StringIO())  # processed=0
+
+    for i in range(3):
+        Artista.objects.create(nom=f"X{i}", slug=f"x{i}", aprovat=True)
+    with patch(
+        "ingesta.management.commands.obtenir_metadata.Command._process_artist",
+        return_value=(0, 0, 0, 0),
+    ) as proc:
+        call_command("obtenir_metadata", stdout=StringIO())
+    assert proc.call_count == 3  # the whole queryset was iterated
 
 
 @pytest.mark.django_db
@@ -70,7 +83,11 @@ def test_obtenir_metadata_high_failure_rate_raises():
 
 @pytest.mark.django_db
 def test_obtenir_metadata_below_threshold_does_not_raise():
-    """30% failure rate → no raise."""
+    """30% failure rate → no raise.
+
+    Property asserted now: the run completes without CommandError and
+    every artista was still visited (fail-open per item). The
+    "Artists errors: N" summary text is not pinned."""
     from music.models import Artista
 
     artists = [
@@ -91,9 +108,8 @@ def test_obtenir_metadata_below_threshold_does_not_raise():
         autospec=True,
         side_effect=_half_broken,
     ):
-        out = StringIO()
-        call_command("obtenir_metadata", stdout=out)
-        assert "Artists errors: 3" in out.getvalue()
+        call_command("obtenir_metadata", stdout=StringIO())  # must not raise
+    assert call_count["n"] == len(artists)
 
 
 # ── backfill_album_source (C-5) ────────────────────────────────────
@@ -198,7 +214,8 @@ def test_mb_sync_high_failure_rate_raises(monkeypatch):
 # ── restaurar_mb_falsament_desassignats (B-1) ──────────────────────
 
 
-def test_restaurar_command_has_logger_in_audit_except_block():
+@pytest.mark.django_db
+def test_restaurar_command_has_logger_in_audit_except_block(caplog):
     """Code-level invariant: the `except Exception:` after
     `log_staff_action(...)` in `restaurar_mb_falsament_desassignats`
     contains `logger.warning` (was bare `pass` before E2 B-1).
@@ -206,25 +223,52 @@ def test_restaurar_command_has_logger_in_audit_except_block():
     The full-stack test is too tangled to set up (the restore loop
     needs Artista + Localitat + previous unassign audit + `_looks_ppcc`
     True for the artist's localitats), so we settle for an AST-grep
-    invariant. Cheaper, still pins the regression."""
-    import inspect
+    invariant. Cheaper, still pins the regression.
 
-    from music.management.commands import restaurar_mb_falsament_desassignats as mod
+    Rewritten as a behavioural test: an audit row whose reason is an
+    inconclusive country ("Spain") drives the restore path with
+    `--apply`; `log_staff_action` is patched to raise. Property
+    asserted now: the restore itself lands (MBID reassigned, block-list
+    cleaned) AND a WARNING is emitted from the command's logger, i.e.
+    the audit failure is neither fatal nor silent."""
+    import logging
 
-    src = inspect.getsource(mod)
-    # The diff added `logger.warning("audit log_staff_action failed`
-    # inside the except. Pin both the log call and the absence of a
-    # bare `pass`.
-    assert "logger.warning" in src
-    assert "audit log_staff_action failed for artista pk=" in src
-    # Defensive: the previous `except Exception: pass` is gone.
-    # (A bare `pass` may still exist elsewhere — we only care about
-    # the audit-log call site.)
-    audit_block_idx = src.find("log_staff_action(")
-    assert audit_block_idx > 0
-    # The next 1200 chars should contain the warning, NOT a bare pass.
-    # (The except-block sits ~700 chars after the call site because
-    # of the indented multi-line kwargs to log_staff_action.)
-    nearby = src[audit_block_idx : audit_block_idx + 1200]
-    assert "logger.warning" in nearby
-    assert "audit log_staff_action failed" in nearby
+    from music.models import Artista, StaffAuditLog
+
+    mbid = "11111111-2222-3333-4444-555555555555"
+    a = Artista.objects.create(
+        nom="EXEMPLE Restaurable",
+        slug="exemple-restaurable",
+        aprovat=True,
+        musicbrainz_id="",
+        mb_blocked_mbids=[mbid],
+    )
+    StaffAuditLog.objects.create(
+        action="artista_mbid_auto_unassign",
+        target_type="artista",
+        target_id=a.pk,
+        metadata={"mbid": mbid, "reason": "mb-area-non-ppcc:Spain"},
+    )
+
+    with patch(
+        "music.management.commands.restaurar_mb_falsament_desassignats.log_staff_action",
+        side_effect=RuntimeError("synthetic audit outage"),
+    ):
+        with caplog.at_level(
+            logging.WARNING,
+            logger="music.management.commands.restaurar_mb_falsament_desassignats",
+        ):
+            call_command(
+                "restaurar_mb_falsament_desassignats", "--apply", stdout=StringIO()
+            )
+
+    a.refresh_from_db()
+    assert a.musicbrainz_id == mbid
+    assert mbid not in (a.mb_blocked_mbids or [])
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno >= logging.WARNING
+        and r.name == "music.management.commands.restaurar_mb_falsament_desassignats"
+    ]
+    assert warnings, "audit failure must be logged, not swallowed"

@@ -22,6 +22,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+from django.core.management import call_command
 
 from ingesta.clients import spotify_metadata_cooldown as cd
 
@@ -151,20 +155,64 @@ def test_clear_expired_idempotent_when_no_files(tmp_path):
 # ---------------------------------------------------------------------
 
 
-def test_playlist_sync_does_not_reference_metadata_cooldown():
+@pytest.mark.django_db
+def test_playlist_sync_does_not_reference_metadata_cooldown(tmp_path):
     """Static assertion: the playlist sync command must not
     import the shared metadata cooldown. Different endpoint
     bucket, separate quota; routing it through this module would
-    cause spurious skips of writes that Spotify allows."""
-    src = (
-        Path(__file__).resolve().parent.parent.parent
-        / "ingesta"
-        / "management"
-        / "commands"
-        / "actualitzar_playlists_spotify.py"
+    cause spurious skips of writes that Spotify allows.
+
+    Rewritten as a behavioural check. Property asserted now: with an
+    ACTIVE metadata ban in every cooldown file (shared + both legacy),
+    `actualitzar_playlists_spotify` still pushes the playlist write.
+    Whether or not the module is imported is not pinned."""
+    from music.models import Album, Artista, Canco, SpotifyMetadata, SpotifyPlaylist
+
+    shared, legacy = _paths(tmp_path)
+    far = datetime(2099, 1, 1, 0, 0, 0)
+    _write(shared, far)
+    for path in legacy:
+        _write(path, far)
+
+    artista = Artista.objects.create(nom="EXEMPLE cd", lastfm_nom="EXEMPLE cd")
+    album = Album.objects.create(artista=artista, nom="EXEMPLE cd Al")
+    c = Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="EXEMPLE cd c",
+        isrc="ZZ00X0000777",
+        verificada=False,
+        ml_confianca=0.5,
     )
-    text = src.read_text(encoding="utf-8")
-    assert "spotify_metadata_cooldown" not in text, (
-        "actualitzar_playlists_spotify must not import the metadata "
-        "cooldown; the playlist-write bucket is separate."
+    sm, _ = SpotifyMetadata.objects.get_or_create(canco=c)
+    sm.enrichment_status = SpotifyMetadata.STATUS_FOUND
+    sm.spotify_id = "URI-cd"
+    sm.save(update_fields=["enrichment_status", "spotify_id"])
+    SpotifyPlaylist.objects.all().delete()
+    SpotifyPlaylist.objects.create(
+        codi="no-verif-cd",
+        kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+        chunk_index=0,
+        spotify_playlist_id="fake-pl-cd",
     )
+
+    with (
+        patch.object(cd, "SHARED_PATH", shared),
+        patch.object(cd, "LEGACY_PATHS", legacy),
+        patch(
+            "ingesta.management.commands.actualitzar_playlists_spotify.SpotifyAuth.load",
+            return_value=MagicMock(refresh_token="x", spotify_user_id="u"),
+        ),
+        patch(
+            "ingesta.management.commands.actualitzar_playlists_spotify.UserSpotifyClient"
+        ) as cls,
+    ):
+        assert cd.is_active(), "precondition: the metadata ban must be live"
+        client = MagicMock()
+        cls.return_value = client
+        call_command("actualitzar_playlists_spotify")
+
+    pushed = [c.args for c in client.replace_playlist_tracks.call_args_list]
+    assert pushed, "playlist write must not be gated by the metadata cooldown"
+    assert pushed[0][0] == "fake-pl-cd"
+    assert "spotify:track:URI-cd" in pushed[0][1]

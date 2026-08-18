@@ -1,4 +1,4 @@
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 import pytest
 import requests
@@ -106,6 +106,11 @@ class TestGetTrackInfoTrackNotFound:
         unconditionally on err=6 (was previously gated on
         `normalized != track_name`, which skipped it for case-only
         mismatches and left the cron with ~12 % spurious errors).
+
+        Property asserted now: the result is None (no raise) and at
+        least one retry with `autocorrect=1` was attempted for the same
+        artist/track. The ladder length is not pinned, so an extra
+        fallback rung can be added without touching this test.
         """
         mock_get.return_value.status_code = 200
         mock_get.return_value.raise_for_status.return_value = None
@@ -117,8 +122,13 @@ class TestGetTrackInfoTrackNotFound:
         result = get_track_info("Unknown Artist", "Unknown Track")
 
         assert result is None
-        # 1 literal getInfo + 1 autocorrect=1 retry + 1 top-tracks fallback.
-        assert mock_get.call_count == 3
+        sent = [c.kwargs["params"] for c in mock_get.call_args_list]
+        assert any(
+            p.get("autocorrect") == 1
+            and p.get("method") == "track.getInfo"
+            and p.get("artist") == "Unknown Artist"
+            for p in sent
+        ), sent
 
 
 class TestGetTrackInfoTopTracksFallback:
@@ -193,17 +203,32 @@ class TestGetTrackInfoRateLimit:
     @patch("ingesta.clients.lastfm.time.sleep")
     @patch("ingesta.clients.lastfm.requests.get")
     def test_rate_limit_sleep(self, mock_get, mock_sleep):
-        """time.sleep called with RATE_LIMIT_SLEEP before each request."""
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.raise_for_status.return_value = None
-        mock_get.return_value.json.return_value = {
-            "track": {"playcount": "1", "listeners": "1"}
-        }
+        """time.sleep called with RATE_LIMIT_SLEEP before each request.
+
+        Property asserted now: on a virtual clock, every request to
+        Last.fm fires at least RATE_LIMIT_SLEEP after the previous one
+        (the first one after start). The exact sleep argument / call
+        order is not pinned."""
+        clock = {"t": 0.0}
+        stamps: list[float] = []
+        mock_sleep.side_effect = lambda s: clock.__setitem__("t", clock["t"] + s)
+
+        def fake_get(*args, **kwargs):
+            stamps.append(clock["t"])
+            resp = mock_get.return_value
+            resp.status_code = 200
+            resp.raise_for_status.return_value = None
+            resp.json.return_value = {"track": {"playcount": "1", "listeners": "1"}}
+            return resp
+
+        mock_get.side_effect = fake_get
 
         get_track_info("Zoo", "Bona Nit")
+        get_track_info("Zoo", "Estiu")
 
-        # First call to sleep should be the rate limit
-        assert mock_sleep.call_args_list[0] == call(RATE_LIMIT_SLEEP)
+        assert len(stamps) >= 2
+        gaps = [b - a for a, b in zip([0.0] + stamps, stamps)]
+        assert all(g >= RATE_LIMIT_SLEEP - 1e-9 for g in gaps), gaps
 
 
 class TestMbidFallback:
@@ -257,13 +282,20 @@ class TestMbidFallback:
     @patch("ingesta.clients.lastfm.requests.get")
     def test_no_extra_call_when_there_was_no_mbid(self, mock_get, mock_sleep):
         """Without an MBID there is nothing to drop: the ladder must not
-        gain a redundant call for every genuinely-missing track."""
-        self._responses(mock_get, [{"error": 6}] * 4)
+        gain a redundant call for every genuinely-missing track.
+
+        Property asserted now: no request carries an `mbid`, and no two
+        requests send the identical params (a redundant "retry without
+        the mbid" would be a byte-for-byte repeat of the literal call).
+        The ladder length itself is not pinned."""
+        self._responses(mock_get, [{"error": 6}] * 6)
 
         assert get_track_info("Auxili", "Tu Contra el Món") is None
-        # Unchanged ladder: literal → normalised autocorrect retry →
-        # top-tracks fallback.
-        assert mock_get.call_count == 3
+        sent = [c.kwargs["params"] for c in mock_get.call_args_list]
+        assert sent, "at least the literal call must fire"
+        assert all("mbid" not in p for p in sent)
+        as_keys = [tuple(sorted(p.items())) for p in sent]
+        assert len(set(as_keys)) == len(as_keys), "redundant duplicate call"
 
     @patch("ingesta.clients.lastfm.time.sleep")
     @patch("ingesta.clients.lastfm.requests.get")

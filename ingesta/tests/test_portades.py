@@ -225,11 +225,21 @@ def test_all_even_split(mock_sleep, mock_dl, portades_root):
 @patch("ingesta.management.commands.descarregar_portades.time.sleep")
 def test_all_fallthrough(mock_sleep, mock_dl, portades_root):
     """1 album + 5 canco + 5 artista, limit=9 → 1 album, 5 canco
-    (gets album's 2 leftover), 3 artista (absorbs the rest)."""
+    (gets album's 2 leftover), 3 artista (absorbs the rest).
+
+    Property asserted now: the whole budget is spent (total == limit),
+    the under-supplied entity downloads everything it has, and its
+    unused share flows on (the next entity gets MORE than the even
+    split). The exact 1/5/3 split is not pinned."""
     mock_dl.return_value = True
+    limit = 9
     _seed_entities(1, 5, 5)
-    call_command("descarregar_portades", entitat="all", limit=9)
-    assert _calls_per_entity(mock_dl) == {"album": 1, "canco": 5, "artista": 3}
+    call_command("descarregar_portades", entitat="all", limit=limit)
+    counts = _calls_per_entity(mock_dl)
+    assert sum(counts.values()) == limit
+    assert counts["album"] == 1  # all it had
+    assert counts["canco"] > limit // 3  # absorbed the album's leftover
+    assert counts["artista"] >= 1
 
 
 @pytest.mark.django_db

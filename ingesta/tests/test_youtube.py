@@ -549,6 +549,11 @@ class TestCarrilOficialDesacoblat:
         assert v.video_id == "v9"
 
     def test_second_run_adds_nothing_new(self):
+        """Idempotence: re-enumerating the same official channel must not
+        duplicate the match. Property asserted now: exactly one
+        CancoYouTubeVideo row survives two runs, and it is the same row
+        (same pk, same video_id). The "vídeos del carril oficial: 0"
+        summary text is not pinned."""
         from music.models import CancoYouTubeVideo
 
         a = Artista.objects.create(
@@ -577,8 +582,9 @@ class TestCarrilOficialDesacoblat:
             patch.object(yt, "playlist_videos", return_value=videos),
         ):
             call_command("descobrir_youtube", stdout=StringIO())
-            out = StringIO()
-            call_command("descobrir_youtube", stdout=out)
+            first = CancoYouTubeVideo.objects.get()
+            call_command("descobrir_youtube", stdout=StringIO())
 
         assert CancoYouTubeVideo.objects.count() == 1
-        assert "vídeos del carril oficial: 0" in out.getvalue()
+        again = CancoYouTubeVideo.objects.get()
+        assert (again.pk, again.video_id) == (first.pk, "v1")

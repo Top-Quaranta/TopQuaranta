@@ -107,22 +107,20 @@ class TestIngestarMetadataDeezer:
 
         mock_deezer.search_artist.return_value = {"id": 98469, "name": "ZOO"}
         mock_deezer.get_artist_info.return_value = {"nb_fan": 1000, "nb_album": 5}
-        # First get_artist_albums call: for ISRC validation (up to 3 albums)
-        # Second call: for actual album fetching
-        mock_deezer.get_artist_albums.side_effect = [
-            [
-                {
-                    "id": 900,
-                    "title": "Val Album",
-                    "release_date": RECENT,
-                    "cover_xl": "",
-                    "record_type": "album",
-                }
-            ],
-            [MOCK_ALBUM],
-        ]
-        mock_deezer.get_album_tracks.side_effect = [
-            [
+        # Property asserted now: the Deezer link is created because ONE
+        # of the candidate's albums carries a track with the known ISRC.
+        # Mocks are keyed by album id, not by call position, so the
+        # validation/ingestion call sequence is not pinned.
+        val_album = {
+            "id": 900,
+            "title": "Val Album",
+            "release_date": RECENT,
+            "cover_xl": "",
+            "record_type": "album",
+        }
+        mock_deezer.get_artist_albums.return_value = [val_album, MOCK_ALBUM]
+        tracks_by_album = {
+            900: [
                 {
                     "id": 901,
                     "title": "Match",
@@ -132,13 +130,17 @@ class TestIngestarMetadataDeezer:
                     "artist_name": "Zoo",
                 }
             ],
-            [MOCK_TRACK],
-        ]
+            100: [{**MOCK_TRACK, "isrc": "ES9999999999"}],
+        }
+        mock_deezer.get_album_tracks.side_effect = lambda album_id, *a, **k: (
+            tracks_by_album[album_id]
+        )
 
         call_command("obtenir_metadata", artista_id=artista.pk)
 
         artista.refresh_from_db()
         assert artista.deezer_id_principal == 98469
+        assert ArtistaDeezer.objects.filter(artista=artista, deezer_id=98469).exists()
 
     @patch("ingesta.management.commands.obtenir_metadata.deezer")
     def test_marks_not_found_when_search_fails(self, mock_deezer):

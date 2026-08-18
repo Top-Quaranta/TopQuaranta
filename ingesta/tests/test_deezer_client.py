@@ -163,10 +163,12 @@ class TestGetArtistAlbums:
 class TestGetAlbumTracks:
     @patch("ingesta.clients.deezer._get")
     def test_returns_tracks_with_isrc(self, mock_get):
-        # First call: album tracks listing
-        # Second call: full track details
-        mock_get.side_effect = [
-            {
+        # The album listing gives id/title/duration/artist; the ISRC only
+        # lives on the per-track endpoint. Property asserted now: the
+        # merged row carries both, whichever order the client fetches
+        # them in — the mock is keyed by URL, not by call position.
+        responses = {
+            "/album/100/tracks": {
                 "data": [
                     {
                         "id": 500,
@@ -176,12 +178,20 @@ class TestGetAlbumTracks:
                     },
                 ]
             },
-            {
+            "/track/500": {
                 "id": 500,
                 "title": "La Cançó",
                 "isrc": "ES80D2511602",
             },
-        ]
+        }
+
+        def by_url(url, *args, **kwargs):
+            for suffix, payload in responses.items():
+                if url.endswith(suffix):
+                    return payload
+            raise AssertionError(f"unexpected Deezer URL {url}")
+
+        mock_get.side_effect = by_url
 
         tracks = get_album_tracks(100)
 

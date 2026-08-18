@@ -90,6 +90,45 @@ class ConfiguracioGlobal(models.Model):
         "queden fora del top. Si això fa que un territori no arribi "
         "a 40 cançons, el top és més curt — no s'omple amb soroll.",
     )
+    # ── YouTube com a segona font (2026-08) ─────────────────────────
+    # Apagat per defecte: encendre'l canvia el top publicat, i eixa és
+    # una decisió editorial que ha de ser un clic conscient i reversible.
+    youtube_al_top = models.BooleanField(
+        default=False,
+        help_text="Si està actiu, el senyal del top suma les "
+        "visualitzacions de YouTube a les escoltes de Last.fm. "
+        "Apagat, el top només mira Last.fm (comportament fins al 2026-08).",
+    )
+    # Quantes visualitzacions val una escolta. NO és una conversió
+    # mesurada —la proporció real varia per artista de 3 a 67— sinó el
+    # pes editorial que decidim donar-li a cada font.
+    #
+    # Es multipliquen les ESCOLTES en lloc de dividir les
+    # visualitzacions perquè `min_escoltes_top` és un número absolut: si
+    # dividires, una cançó amb 400 visualitzacions i cap escolta cauria a
+    # 2 i quedaria fora, que és exactament la gent que volem deixar de
+    # perdre. Multiplicant, el llindar deixa de fer eixe mal.
+    #
+    # Mesurat el 2026-08-18 amb dades netes: a 1000, el top valencià
+    # passa de 30 files a 40 i YouTube no supera Last.fm en cap fila —
+    # només decideix on Last.fm calla.
+    youtube_pes_escolta = models.IntegerField(
+        default=1000,
+        validators=_COUNT_RANGE,
+        help_text="Quantes visualitzacions de YouTube val una escolta de "
+        "Last.fm. Més alt = YouTube pesa menys. A 1000, YouTube només "
+        "omple els buits i no reordena res del que Last.fm ja veu.",
+    )
+    # El terra quan la font combinada està activa. En unitats del senyal
+    # combinat, no d'escoltes: a pes 1000, 200 vol dir «200
+    # visualitzacions o una cinquena part d'una escolta».
+    min_senyal_combinat = models.IntegerField(
+        default=200,
+        validators=_COUNT_RANGE,
+        help_text="Terra per a entrar al top quan YouTube està actiu. "
+        "Substitueix min_escoltes_top, que és en unitats d'escoltes.",
+    )
+
     # PPCC aggregator weight per source position. Was a module-level
     # constant in `ranking/algorisme.py`; promoted to the configurable
     # surface 2026-04-25 (Sprint A) so editorial tuning doesn't require

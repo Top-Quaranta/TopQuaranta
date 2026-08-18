@@ -383,3 +383,32 @@ def test_a_new_video_counts_from_the_day_after_it_appears():
     assert c["comparables"] == 1
     # (50 + 700) / 10 escoltes = 75
     assert c["factor"]["mediana"] == 75
+
+
+@pytest.mark.django_db
+def test_the_report_says_what_would_happen_to_the_chart():
+    """Once the decision is close, the useful question stops being "what
+    is the ratio" and becomes "how many rows change, and who decides
+    them". Computed with the live configuration, so moving the weight in
+    the panel changes tomorrow's mail.
+    """
+    from ranking.models import ConfiguracioGlobal
+
+    cfg, _ = ConfiguracioGlobal.objects.get_or_create(pk=1)
+
+    escoltada = _canco("Escoltada")
+    _senyal(escoltada, lfm=100)
+    muda = _canco("Muda")
+    _senyal(muda, yt=50_000)
+
+    e = _ctx()["efecte_top"]
+    assert e["actiu"] is False  # apagat mentre no es decidisca
+    assert e["pes"] == cfg.youtube_pes_escolta
+
+    val = next(t for t in e["territoris"] if t["codi"] == "VAL")
+    assert val["ara"] == 1  # només la que Last.fm veu
+    assert val["amb_yt"] == 2  # …i la muda hi entra
+    assert val["noves"] == 1
+    # Al pes per defecte, les escoltes manen: cap fila decidida per YouTube
+    # per damunt d'una que Last.fm ja veu.
+    assert val["mana_yt"] == 1  # la muda, que no té escoltes

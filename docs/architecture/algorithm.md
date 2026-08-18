@@ -240,25 +240,46 @@ la setmana immediatament anterior (TopSetmanal ordenat per
 
 ---
 
-## 2.4 `SenyalYouTube` — encara fora del càlcul
+## 2.4 `SenyalYouTube` — la segona font, darrere d'un interruptor
 
-La segona font de senyal (§`pipeline.md` 3.1 bis) **no entra al top**:
-`_top_for_territoris` només llig `SenyalDiari`. La taula existeix a part
-a posta, perquè una visualització no és un scrobble i unir-les a la capa
-d'emmagatzematge forçaria una decisió que volem mantindre editorial.
+Des del 2026-08-19 el càlcul pot sumar les visualitzacions de YouTube,
+però **apagat per defecte** (`ConfiguracioGlobal.youtube_al_top`):
+encendre-ho canvia el top publicat, i eixa és una decisió editorial que
+ha de ser un clic conscient i reversible.
 
-Si algun dia hi entra, dues coses hi han d'anar amb ella:
+Amb l'interruptor encés, el senyal d'una cançó passa a ser:
 
-1. **L'increment se suma per vídeo**, no restant sumes. `views` és la
-   suma de tots els carrils d'una cançó i un carril nou entra amb el seu
-   comptador de tota la vida; `views_per_video` guarda el detall
-   justament per a poder restar només els vídeos presents a les dues
-   fotos. Sense això, aparellar un videoclip es llig com una setmana de
-   públic (Andreu Valor, 2026-08-18: 103.048 falses contra 17 de reals).
-2. **La unitat.** Dividir les visualitzacions per un factor les fa
-   xocar contra `min_escoltes_top`, que és un número absolut en unitats
-   de Last.fm, i expulsa cançons que sí que tenen públic. Multiplicar
-   les escoltes és equivalent per a l'ordre i deixa el llindar en pau.
+```
+senyal = escoltes × youtube_pes_escolta + visualitzacions_setmanals
+```
+
+i el terra passa de `min_escoltes_top` a `min_senyal_combinat`, perquè
+els dos números deixen d'estar en unitats d'escoltes.
+
+**Per què es multipliquen les escoltes i no es divideixen les
+visualitzacions.** Són equivalents per a l'ordre, però no per a qui
+entra: `min_escoltes_top` és un número absolut, així que dividint, una
+cançó amb 400 visualitzacions i cap escolta cau a 2 i queda fora —
+precisament la gent que la segona font existeix per a no perdre. Mesurat
+el 2026-08-18: dividint quedaven **857** cançons només-YouTube per davall
+del terra; multiplicant, **393**, i eixes tenen menys de cinc
+visualitzacions en una setmana.
+
+**El pes és editorial, no una conversió mesurada.** La proporció real
+entre visualitzacions i escoltes va de 3 a 67 segons l'artista (vegeu
+[`analytics-youtube.md`](analytics-youtube.md)), així que no hi ha cap
+número «correcte». A 1000 —el valor per defecte— el top valencià passa
+de 30 files a 40 i YouTube **no supera Last.fm en cap fila**: només
+decideix on Last.fm calla.
+
+**L'increment se suma per vídeo**, mai restant sumes. `views` és la suma
+de tots els carrils i un carril nou entra amb el seu comptador de tota la
+vida; `SenyalYouTube.views_per_video` guarda el detall per a restar
+només els vídeos presents a les dues fotos. Sense això, aparellar un
+videoclip es llig com una setmana de públic (Andreu Valor, 2026-08-18:
+103.048 falses contra 17 de reals). La lectura viu a
+`ranking/senyal_youtube.py`, compartida amb l'informe diari perquè dues
+implementacions del mateix delta és com es desincronitzen.
 
 ## 3. Agregació PPCC
 

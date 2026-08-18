@@ -264,6 +264,77 @@ def _per_artista(ratios, en_finestra):
     }
 
 
+def _efecte_al_top(today):
+    """Què li passaria al top si s'encengués — o què li passa, si ja ho està.
+
+    És la pregunta que substitueix «es poden juntar?» una vegada la
+    decisió estiga presa: no un factor abstracte sinó **quantes files
+    canvien** i **qui les decideix**. Es calcula amb la configuració
+    real, així que si el Miquel mou el pes al panell, l'endemà el correu
+    li conta l'efecte del número nou.
+
+    Simula sense tocar res: llegeix els mateixos senyals que el rànquing
+    i compara el conjunt de candidates amb i sense la segona font.
+    """
+    from django.db.models import Q
+
+    from music.constants import DIES_CADUCITAT
+    from music.models import Canco
+    from ranking.models import ConfiguracioGlobal
+    from ranking.senyal_youtube import visualitzacions_setmanals
+
+    cfg = ConfiguracioGlobal.load()
+    pes = int(getattr(cfg, "youtube_pes_escolta", 1000) or 1000)
+    terra_lfm = int(cfg.min_escoltes_top or 0)
+    terra_comb = int(getattr(cfg, "min_senyal_combinat", 200) or 0)
+
+    vives = Canco.objects.filter(
+        verificada=True,
+        activa=True,
+        data_llancament__gte=today - datetime.timedelta(days=DIES_CADUCITAT),
+    )
+    lfm = _increments(SenyalDiari, "lastfm_playcount", today)
+    yt = visualitzacions_setmanals(list(vives.values_list("id", flat=True)), today)
+
+    files = []
+    for codi in ("CAT", "VAL", "BAL", "ALT"):
+        ids = set(
+            vives.filter(
+                Q(artista__territoris__codi=codi)
+                | Q(artistes_col__territoris__codi=codi)
+            )
+            .distinct()
+            .values_list("id", flat=True)
+        )
+        ara = sorted(
+            (c for c in ids if lfm.get(c, 0) >= terra_lfm),
+            key=lambda c: -lfm.get(c, 0),
+        )[:40]
+        combinat = sorted(
+            (c for c in ids if lfm.get(c, 0) * pes + yt.get(c, 0) >= terra_comb),
+            key=lambda c: -(lfm.get(c, 0) * pes + yt.get(c, 0)),
+        )[:40]
+        files.append(
+            {
+                "codi": codi,
+                "ara": len(ara),
+                "amb_yt": len(combinat),
+                # Files que entren al top 40 i abans no hi eren.
+                "noves": len(set(combinat) - set(ara)),
+                # …i en quantes mana YouTube per damunt de Last.fm.
+                "mana_yt": sum(
+                    1 for c in combinat if yt.get(c, 0) > lfm.get(c, 0) * pes
+                ),
+            }
+        )
+    return {
+        "actiu": bool(getattr(cfg, "youtube_al_top", False)),
+        "pes": pes,
+        "terra": terra_comb,
+        "territoris": files,
+    }
+
+
 def _comparativa(en_finestra, today):
     """Es poden juntar les dues fonts, i què guanyaríem.
 
@@ -347,6 +418,7 @@ def _comparativa(en_finestra, today):
         "historial": historial,
         "per_artista": _per_artista(ratios_avui, en_finestra),
         "per_carril": _per_carril(ratios_avui, en_finestra),
+        "efecte_top": _efecte_al_top(today),
     }
 
 

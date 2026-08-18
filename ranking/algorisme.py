@@ -332,6 +332,26 @@ def _top_for_territoris(
     # entries. If this leaves a territori with <40 candidates the
     # top is shorter — no padding with noise.
     min_plays = int(cfg.min_escoltes_top or 0)
+
+    # ── YouTube com a segona font ───────────────────────────────────
+    # Apagat per defecte. Encés, el senyal passa a ser
+    #     escoltes × pes + visualitzacions
+    # i el terra passa a `min_senyal_combinat`, perquè els dos números
+    # deixen d'estar en unitats d'escoltes.
+    #
+    # Es multipliquen les escoltes en lloc de dividir les
+    # visualitzacions: `min_escoltes_top` és absolut, i dividint, una
+    # cançó amb 400 visualitzacions i cap escolta cauria a 2 i quedaria
+    # fora — precisament la gent que la segona font existeix per a no
+    # perdre.
+    yt_actiu = bool(getattr(cfg, "youtube_al_top", False))
+    yt_pes = int(getattr(cfg, "youtube_pes_escolta", 1000) or 1000)
+    yt_views: dict[int, float] = {}
+    if yt_actiu:
+        from ranking.senyal_youtube import visualitzacions_setmanals
+
+        yt_views = visualitzacions_setmanals(list(cancons.keys()), today)
+        min_plays = int(getattr(cfg, "min_senyal_combinat", 200) or 0)
     # Adaptive outlier knee for this territori (None when the cap is off).
     # Computed once: it depends on the territori's history, not the song.
     soft_cap_knee = _soft_cap_knee(territori, cfg, today)
@@ -344,8 +364,15 @@ def _top_for_territoris(
             today=today,
             primer_llancament=primer_llancament,
         )
-        # Eligibility (min_escoltes_top) is judged on RAW plays; the soft
-        # cap only reshapes how a song's plays translate into score.
+        if yt_actiu:
+            # Les escoltes pugen a les unitats del senyal combinat i
+            # s'hi sumen les visualitzacions de la setmana. Una cançó
+            # sense parella de fotos comparables simplement no aporta
+            # res per YouTube — mai un zero, que seria una afirmació.
+            plays = plays * yt_pes + yt_views.get(canco.pk, 0.0)
+
+        # Eligibility is judged on RAW plays; the soft cap only reshapes
+        # how a song's plays translate into score.
         if plays < min_plays:
             continue
 

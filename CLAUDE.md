@@ -349,7 +349,7 @@ DJANGO_SETTINGS_MODULE = topquaranta.settings.test
 python_files = tests/test_*.py
 ```
 
-Mock all external HTTP — no real API calls. Current suite: **1952 passed, 5 skipped** (2026-08-18, ~75 s).
+Mock all external HTTP — no real API calls. Current suite: **1805 passed, 5 skipped** (2026-08-18 after the test audit, ~75 s).
 Run: `.venv/bin/python -m pytest -q` (parallel `-n 4` via `pytest-xdist` is in `addopts`; add `-n 0` for a single test — ADR-0017).
 
 `pytest.ini` pins `addopts = --ds=topquaranta.settings.test`, so env-var
@@ -358,6 +358,14 @@ overrides can't silently flip pytest to production settings. Vegeu
 
 React SPA: Vitest not yet wired for runtime tests; builds validated via
 `npm run build` in CI-style deploys.
+
+**Test policy (audit 2026-08-18, `docs/audits/2026-08-18-auditoria-tests.md`):**
+anchor tests to the *promise*, never to today's coordinates/copy/call
+shape. Diagnostic question: *if someone improved this code, would the
+test fail?* If yes it obstructs. Every test that survives an audit must
+be shown to fail under a mutation of the code it guards —
+`scripts/mutacio/mut.py` (coverage-guided) + `mut2.py` (data banks,
+non-Python files) automate most of it.
 
 ## 10. Code conventions
 

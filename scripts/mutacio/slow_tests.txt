@@ -1,0 +1,7 @@
+social/tests/test_matriu_distribucio.py::test_actiu_per_default_and_off
+social/tests/test_matriu_distribucio.py::test_newsletter_matrix_off_does_not_send
+social/tests/test_matriu_distribucio.py::test_one_cell_off_blocks_only_that_combo
+social/tests/test_matriu_distribucio.py::test_pot_publicar_tipus_combines_three_gates
+social/tests/test_matriu_distribucio.py::test_publicar_canal_respects_matrix
+social/tests/test_matriu_distribucio.py::test_seed_creates_todays_combos
+social/tests/test_matriu_distribucio.py::test_toggle_writes_staff_audit

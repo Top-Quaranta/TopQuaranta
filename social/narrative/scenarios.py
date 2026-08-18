@@ -214,15 +214,22 @@ def detect_a1_outside_to_top1(
     prev_pos = prev.get(top1.canco_id)
     if prev_pos is not None and prev_pos < 5:
         return None
+    # Two forms, because Catalan contracts the preposition. `_str` goes
+    # after "estava …" ("estava al 15è"); `_de` goes after a verb of
+    # movement ("puja del 15è"). Writing "de {posicio_anterior_str}"
+    # produced the published "puja de al 15è" (2026-08-17, BAL).
     if prev_pos is None:
-        severity, prev_str = 10, "fora del top"
+        severity, prev_str, prev_de = 10, "fora del top", "de fora del top"
     elif prev_pos >= 10:
         severity, prev_str = 8, f"al {ordinal_ca(prev_pos)}"
+        prev_de = f"del {ordinal_ca(prev_pos)}"
     else:
         severity, prev_str = 6, f"al {ordinal_ca(prev_pos)}"
+        prev_de = f"del {ordinal_ca(prev_pos)}"
     artista, canco = _row_data(top1, territori)
     data = _base_data(artista, canco, territori, row=top1)
     data["posicio_anterior_str"] = prev_str
+    data["posicio_anterior_de"] = prev_de
     return Scenario("a1_outside_to_top1", severity, data)
 
 
@@ -394,7 +401,10 @@ def detect_a6_canco_recent(
 
 def detect_a7_long_runner(territori: str, setmana: datetime.date) -> Optional[Scenario]:
     """Cançó publicada fa >=180 dies actualment al top 10. Severity
-    fixa 5 (context, no notícia forta)."""
+    fixa 5 (context, no notícia forta).
+
+    Emet `mesos_estrena`: **edat de la cançó**, no temps al top.
+    """
     rows = list(_load_week(territori, setmana)[:10])
     threshold = setmana - datetime.timedelta(days=180)
     best = None
@@ -409,9 +419,15 @@ def detect_a7_long_runner(territori: str, setmana: datetime.date) -> Optional[Sc
         return None
     artista, canco = _row_data(best, territori)
     dies = max(180, (setmana - best.canco.data_llancament).days)
-    mesos = max(6, dies // 30)
+    # Months since RELEASE, not months in the chart. The phrase bank says
+    # so explicitly, and the key is named for it: until 2026-08-17 it was
+    # `mesos` and the phrases read "N mesos a la llista", which is a
+    # different — and false — claim. Our chart history starts 2026-04-13,
+    # so any tenure over ~4 months is impossible by construction; the
+    # Balearic post that triggered this said 9 months about a song that
+    # had charted for 14 weeks, with gaps.
     data = _base_data(artista, canco, territori, row=best)
-    data["mesos"] = mesos
+    data["mesos_estrena"] = max(6, dies // 30)
     return Scenario("a7_long_runner", 5, data)
 
 

@@ -14,6 +14,8 @@ Outputs (committed to the repo, served at /static/…):
 Re-run with `manage.py generar_assets_newsletter` after a logo refresh.
 """
 
+# Spec: docs/architecture/comptes-newsletter.md
+
 from __future__ import annotations
 
 from pathlib import Path

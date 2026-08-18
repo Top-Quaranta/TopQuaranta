@@ -1,25 +1,25 @@
 """Shared helpers and throttle classes for the compte_views subpackage."""
 
-from rest_framework.throttling import ScopedRateThrottle
+from web.api.utils import ScopedThrottle
 
 
-class _DataExportThrottle(ScopedRateThrottle):
+class _DataExportThrottle(ScopedThrottle):
     scope = "data_export"
 
 
-class _NewsletterUnsubThrottle(ScopedRateThrottle):
+class _NewsletterUnsubThrottle(ScopedThrottle):
     scope = "newsletter_unsubscribe"
 
 
-class _FeedbackCreateThrottle(ScopedRateThrottle):
+class _FeedbackCreateThrottle(ScopedThrottle):
     scope = "feedback_crear"
 
 
-class _AccountDeleteThrottle(ScopedRateThrottle):
+class _AccountDeleteThrottle(ScopedThrottle):
     scope = "account_delete"
 
 
-class _DMSendThrottle(ScopedRateThrottle):
+class _DMSendThrottle(ScopedThrottle):
     scope = "dm_send"
 
 

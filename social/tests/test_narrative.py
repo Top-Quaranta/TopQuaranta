@@ -358,7 +358,7 @@ def test_detect_a7_long_runner():
     )
     _seed(c, "PPCC", setmana, 5)
     s = scen.detect_a7_long_runner("PPCC", setmana)
-    assert s and s.data["mesos"] >= 12
+    assert s and s.data["mesos_estrena"] >= 12
 
 
 @pytest.mark.django_db
@@ -526,13 +526,14 @@ def test_short_phrases_fit_under_120_chars():
         "posicio": 3,
         "posicio_ordinal": "3r",
         "posicio_anterior_str": "fora del top",
+        "posicio_anterior_de": "de fora del top",
         "posicio_anterior": 3,
         "posicio_anterior_ordinal": "3r",
         "posicio_nova_str": "al 5è",
         "n_cancons": 4,
         "dies": 18,
         "dies_str": "18 dies",
-        "mesos": 8,
+        "mesos_estrena": 8,
         "pujada": 15,
         "gap_setmanes": 5,
         "gap_setmanes_str": "5 setmanes",
@@ -581,13 +582,14 @@ def test_phrases_interpolate_with_diverse_artist_names():
         "posicio": 3,
         "posicio_ordinal": "3r",
         "posicio_anterior_str": "fora del top",
+        "posicio_anterior_de": "de fora del top",
         "posicio_anterior": 3,
         "posicio_anterior_ordinal": "3r",
         "posicio_nova_str": "al 5è",
         "n_cancons": 4,
         "dies": 18,
         "dies_str": "18 dies",
-        "mesos": 8,
+        "mesos_estrena": 8,
         "pujada": 15,
         "gap_setmanes": 5,
         "gap_setmanes_str": "5 setmanes",
@@ -672,13 +674,14 @@ def _full_scenario(code, sev, canco_id, artista_id, canco, artista):
             "posicio": 3,
             "posicio_ordinal": "3r",
             "posicio_anterior_str": "fora del top",
+            "posicio_anterior_de": "de fora del top",
             "posicio_anterior": 3,
             "posicio_anterior_ordinal": "3r",
             "posicio_nova_str": "al 5è",
             "n_cancons": 4,
             "dies": 12,
             "dies_str": "12 dies",
-            "mesos": 8,
+            "mesos_estrena": 8,
             "pujada": 15,
             "gap_setmanes": 5,
             "gap_setmanes_str": "5 setmanes",

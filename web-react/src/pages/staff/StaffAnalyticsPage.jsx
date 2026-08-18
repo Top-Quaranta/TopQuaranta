@@ -782,10 +782,14 @@ function WebTab({ data }) {
         }
       >
         <p className="text-xs text-tq-ink/70">
-          GoAccess processa <code>/var/log/caddy/topquaranta_access.log</code> i
-          mostra el que Django no veu (assets estàtics, errors 404, distribució
-          geogràfica, bots…). El fitxer es serveix només a través d'aquest
-          endpoint amb sessió staff + 2FA — no és accessible públicament.
+          GoAccess processa el registre d'accés viu de Caddy{" "}
+          <code>topquaranta_access.log</code> i tots els seus segments rotats{" "}
+          <code>.log.gz</code>, i mostra el que Django no veu (assets estàtics,
+          errors 404, distribució geogràfica, bots…). L'informe indica a dalt
+          l'interval realment cobert, que pot ser més curt que els 30 dies
+          demanats si la rotació ha menjat la cua. El fitxer es serveix només a
+          través d'aquest endpoint amb sessió staff + 2FA — no és accessible
+          públicament.
         </p>
       </Card>
       <Card

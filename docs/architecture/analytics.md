@@ -100,101 +100,7 @@ new KPIs ship without a migration.
 
 ## Ingest paths
 
-### 1. Django middleware → pageviews + UTM
-
-`analytics.middleware.AnalyticsMiddleware` records:
-
-* `pageview` for every 2xx/3xx GET on a public Django path, with
-  `dim2` = `bot`/`human`. The class comes from `analytics.bots.classify_ua`,
-  which matches the request User-Agent against `BOT_UA_MARKERS` — the
-  Python mirror of the Caddy `@bot` matcher in `deploy/Caddyfile`. The
-  UA is read transiently and never stored. A parity test
-  (`analytics/tests/test_bots.py`) keeps the Python list equivalent to
-  the Caddyfile regex so the bot/human split matches how Caddy actually
-  routes crawlers. Historic rows (pre-Fase 2) carry an empty `dim2` and
-  are surfaced as "unclassified" — not reclassifiable, since the UA was
-  never persisted.
-* `utm_landing` whenever the request URL carries `?utm_source=…`.
-* `referrer` for every **human** public pageview: `dim1` = acquisition
-  bucket (`directe` / `cerca_organica` / `social` / `referral`), `dim2`
-  = bare referring host. `analytics.referrers.classify_referrer` matches
-  the host by DNS label (so `google.es`, `news.google.com` resolve
-  without enumeration, and `client.com` isn't mistaken for the `t.co`
-  shortener). Only bucket + host are stored — the Referer **path/query
-  are dropped** (tokens could live there) and in-site (`intern`)
-  referrers aren't recorded. Answers "where do humans come from?" for
-  non-UTM traffic.
-
-Skips `/api/`, `/static/`, `/media/`, `/favicon`, `/robots.txt`,
-`/sitemap.xml`, `/staff/`, `/compte/2fa/`, `/health` — these would
-either spam the table or duplicate work GoAccess does on Caddy logs.
-
-### 2. SPA beacon → pageviews + curated events
-
-The React SPA is served as static `dist/` files by Caddy and never
-hits Django for navigation, so the middleware can't see SPA route
-changes. Two POST endpoints fill that gap:
-
-* `POST /api/v1/analytics/pageview/` — `{path, utm_source?, utm_campaign?}`
-* `POST /api/v1/analytics/event/` — `{clau, dim1?, dim2?}` where
-  `clau` ∈ `_PUBLIC_EVENT_KEYS` (closed allowlist).
-
-Both return 204. Throttled per-IP at 60/min via the project default.
-*(SPA wiring of these beacons happens in K3+ as the React pages add
-share-click / escolta-click hooks.)*
-
-Community funnel events (Slice E, 2026-06) added to the allowlist +
-fired from the SPA: `onboarding_{inici,pas,complet,saltat}`,
-`comunitat_directori_vista`, `comunitat_directori_filtre` (dim1=filter
-key), `perfil_visible_toggle` (dim1=on/off). The connection events
-`dm_enviat`, `denuncia_creada` (dim1=tipus) and `bloqueig_creat` are
-fired SERVER-side via `register()` in the community endpoints (not via
-the public ingest, so they're not in the allowlist).
-
-### 3. Backend `register()` calls
-
-The flows that already write to the DB also bump a counter:
-
-| Where | Event |
-|---|---|
-| `web/api/auth_views.register_view` | `registre_complet` (dim1: `newsletter` or `no_newsletter`) |
-| `web/api/compte_views/propostes.proposta_crear` | `proposta_crear` |
-| `web/api/compte_views/propostes.solicitud_crear` | `solicitud_gestor_crear` |
-| `web/api/compte_views/feedback.feedback_crear` | `feedback_crear` (dim1: target_type) |
-| `social/management/commands/publicar_canal._handle` | `social_publicat` (dim1: channel, dim2: tipus) |
-| `social/management/commands/publicar_social._publish_*` | `social_publicat` (dim1: platform, dim2: tipus) |
-
-### 4. Daily snapshot cron
-
-`analytics/management/commands/snapshot_pipeline.py` runs at 23:00 UTC.
-Writes ~15 gauges in one short transaction:
-
-* Catalog totals (verificades, pendents, rebutjades_acumulades).
-* Coverage percentages (Whisper LID, MusicBrainz).
-* Community gauges (usuaris actius, newsletter, directori).
-* Per-territori catalog distribution (one row per territori).
-
-### 5. Social metrics cron *(K2)*
-
-`analytics/management/commands/recollir_metrics_social.py` runs at
-22:30 UTC. Two passes:
-
-1. Per-post engagement: every `SocialPost` published in the last
-   30 days, fetched via `get_post_metrics()` on each platform's
-   client. Upserted into `MetricaSocialPost(socialpost, data=today)`.
-2. Per-platform account stats: one call per platform via
-   `get_account_stats()`. Upserted into `MetricaSocialPlatform`.
-
-Wrapped in `SingletonLock("analytics_metrics_social")` so two cron
-instances can't double-spend rate-limit budgets. Fail-open per
-platform: a Mastodon hiccup doesn't stop Bluesky/IG.
-
-Telegram per-post engagement is **not supported** — the Bot API
-doesn't expose channel-post views (would need MTProto via Telethon
-or Pyrogram, not worth the dependency for one number). We mark
-`raw.not_supported = "telegram_bot_api_lacks_post_views"` so the
-dashboard can hide Telegram engagement instead of charting fake
-silence.
+Vegeu [`analytics-ingest.md`](analytics-ingest.md): els dos escriptors (middleware de Django i beacon de la SPA), la classificació bot/humà, i què NO es compta.
 
 ## Dashboards
 
@@ -227,7 +133,13 @@ needed, downloads in the browser without a server round-trip.
 
 ### Weekly admin digest — "Setmanari" *(K4, redesigned 2026-06)*
 
-Every Monday at 08:00 UTC, `enviar_digest_setmanal` emails the `ADMINS`
+Every Monday at 08:00 UTC, `enviar_digest_setmanal` reports the **last
+complete calendar week, Mon → Sun** (`today.weekday() + 7` back) against
+the seven days before it. A rolling "last 7 days" would have ended on a
+few hours of the current Monday and split the weekend publishing block
+across two mails. Gauges read the *Sunday* snapshot; "Setmana N" is the
+project week of the reported Monday, not of the send date. It emails
+the `ADMINS`
 recipients a **brand-coherent HTML** summary in the "redisseny" email
 language (#060608, 640px, Anton/Bricolage/Instrument Serif; mirrors
 `email_newsletter_top.html`), plus a text fallback. Sent via
@@ -241,9 +153,32 @@ decisions grouped from `StaffAuditLog`, Whisper/MB coverage, backlog
 alert; (4) **Ranking per territori** — `TopSetmanal` entries per
 territory; (5) **SEO i enllaços externs** — GSC impressions/clicks/
 position, Bing inbound links, Core Web Vitals; (6) **Distribució
-social** — publications, followers + deltas, top post. A "frescor de
-dades" line flags a stale snapshot. `--dry-run` prints text;
-`--html-out PATH` renders the HTML for local preview without sending.
+social** — publications, followers + deltas, top post, plus a
+**calendari** grid (channel × day of the window, cell = content type,
+`✕` = failed, dashed = omitted) built from `SocialPost`, the canonical
+one-row-per-slot ledger — the headline count is derived from the same
+grid so the two can't disagree; (7) **Incidències** — failed
+`SocialPost` slots, Instagram handles Meta refused, crons in a bad state
+and the week's Django ERROR records, gathered by `analytics/incidents.py`. A "frescor de dades"
+line flags a stale snapshot. `--dry-run` prints text; `--html-out PATH`
+renders the HTML for local preview without sending.
+
+**Deltas are not always percentages.** `_delta()` reports the absolute
+move (`+7`, `−4`) when the change rounds under 1 % or the base is under
+10; an unchanged metric shows `=` with no number; a 0-click SEO query
+falls back to impressions. Before 2026-08 the percentage was rounded
+*first* and a real change rounding to 0 % was then read as "flat" — the
+grid reported a week of moderation work as a metric that hadn't moved.
+
+**`analytics/incidents.py`** reads two files on the box, best-effort
+(missing file → empty result, never an exception): `errors.log` (+
+`errors.log.1`, logrotate is weekly with `delaycompress`), grouping
+repeats by logger + digit-masked message; and the `tq-run` status tags,
+classified by `health_report.gather_crons` — the function `tq-health`
+runs hourly, so mail and watchdog can't disagree. Cron state is
+point-in-time ("what is broken now"), not a history of the week.
+
+> **Informe diari de YouTube** (temporal, 2026-08): [`analytics-youtube.md`](analytics-youtube.md).
 
 ## What we deliberately don't measure
 
@@ -330,6 +265,7 @@ a STABLE dedup key over the anomaly identity (escalating crons by
 `(name, state)` + per-threshold booleans, no ages/timestamps/counters)
 that `tq-health` uses so a persistent failure emails once (2026-06-07).
 See `pipeline.md` §7. Tested at `analytics/tests/test_health_report.py`.
+Also renders a `CERTIFICATS TLS` block (2026-07-27) — see `docs/ops/runbook.md`.
 
 Two coverage states beyond the bash original (auditoria 2026-06-07):
 
@@ -362,38 +298,9 @@ headroom. When (and if) we ever need a retention cron, key it on
 
 ### GoAccess (Caddy log analysis)
 
-`generar_goaccess` (cron 23:30 daily) reads
-`/var/log/caddy/topquaranta_access.log`, converts the per-line Caddy
-JSON into Combined Log Format with a small Python preprocessor, and
-runs `goaccess` to produce
-`/var/cache/topquaranta/goaccess/report.html`.
-
-The HTML is **never served by Caddy directly** — only through the
-Django proxy at `/api/v1/staff/analytics/goaccess/`, which requires
-`IsStaff` (session + 2FA). That keeps Caddy access analytics behind
-the same auth as the rest of the staff panel.
-
-Complements the Django dashboard:
-
-* The Django side measures **what people do** (events, conversions,
-  funnel deltas).
-* GoAccess measures **how the server responds** (404 leaderboard,
-  bot traffic, hot files, geo distribution, asset-cache hit ratios).
-
-GoAccess never writes to the Django DB; it's pure log analytics.
-
-**Filesystem setup** (one-time, on a fresh box):
-
-```bash
-sudo apt install -y goaccess
-sudo setfacl -m u:topquaranta:rx /var/log/caddy
-sudo setfacl -m u:topquaranta:r  /var/log/caddy/topquaranta_access.log
-sudo mkdir -p /var/cache/topquaranta/goaccess
-sudo chown topquaranta:topquaranta /var/cache/topquaranta/goaccess
-```
-
-Caddy rotates the log automatically on size (10 MiB) into
-`topquaranta_access-<ts>.log.gz`; the ACL needs to be re-applied to
-the live file after a Caddy package upgrade if the file is recreated
-from scratch (rare). The default ACL on the parent dir keeps new
-rotated files reachable for traversal.
+Moved to [`analytics-goaccess.md`](analytics-goaccess.md) (2026-07-31,
+docs-size split — same pattern as `social-narrative.md`). In one line:
+`generar_goaccess` (cron 23:30 daily) converts the Caddy JSON access
+logs to Combined Log Format and runs `goaccess` into
+`/var/cache/topquaranta/goaccess/report.html`, served only behind
+`IsStaff` at `/api/v1/staff/analytics/goaccess/`.

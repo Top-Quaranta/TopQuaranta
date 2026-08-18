@@ -10,9 +10,9 @@
      ignore the link and fall back to the safe stacks below. -->
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bricolage+Grotesque:wght@400;700;800&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <style>
-  /* Progressive enhancement ONLY. Gmail may drop this whole block
-     (non-Google accounts, clipped messages), so every layout-critical
-     property is duplicated inline + as an HTML attribute below. */
+  /* Enhancement ONLY. Every column below is a full-width <div> by
+     default, so dropping this block degrades to a clean single column
+     instead of breaking the layout (Gmail mobile, 2026-08-01). */
   body { margin:0; padding:0; width:100%; background:#060608; }
   table { border-collapse:collapse; mso-table-lspace:0; mso-table-rspace:0; }
   img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; display:block; }
@@ -22,9 +22,19 @@
   .crit { font-family:'Anton','Arial Black','Helvetica Neue',Arial,sans-serif; }
   .whisper { font-family:Georgia,'Times New Roman',serif; font-style:italic; }
   .body-font { font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif; }
+  /* Hybrid columns: the max-width caps turn the stacked divs into a row
+     on wide viewports. Class-on-class, so the @media block below wins by
+     source order alone — no !important needed. */
+  .hcol-a { max-width:400px; }
+  .hcol-b { max-width:184px; text-align:right; }
+  .hero-img { max-width:330px; }
+  .hero-txt { max-width:250px; }
+  .col2 { max-width:290px; }
+  .col3 { max-width:192px; }
   @media (max-width:640px) {
     .px { padding-left:18px !important; padding-right:18px !important; }
-    .gridcell { display:block !important; width:100% !important; }
+    .hcol-a, .hcol-b, .hero-img, .hero-txt, .col2, .col3 { max-width:100% !important; }
+    .hcol-b { text-align:left !important; padding-top:10px !important; }
     .heronum { font-size:64px !important; }
   }
   /* Already a dark email; lock the dark surface for clients that honour
@@ -45,49 +55,69 @@
 
 {% comment %} 1. HEADER {% endcomment %}
 <tr><td class="px" align="left" valign="top" bgcolor="#060608" style="background-color:#060608;padding:26px 28px 18px;border-bottom:1px solid #1a1a1c;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td align="left" valign="middle" bgcolor="#060608" style="background-color:#060608;">
+  <div style="font-size:0;line-height:0;">
+    <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="400" valign="middle"><![endif]-->
+    <div class="hcol-a" style="display:inline-block;width:100%;vertical-align:middle;font-size:17px;line-height:1.3;text-align:left;">
       <img src="{{ site_url }}{% static 'web/img/newsletter/logo_email.png' %}" width="190" alt="TopQuaranta" style="width:190px;height:auto;">
       <div class="whisper" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;color:#facc15;font-size:17px;margin-top:10px;">Setmana {{ project_week }} &middot; Top {{ territori_nom }}</div>
-    </td>
-    <td align="right" valign="top" bgcolor="#060608" style="background-color:#060608;font-size:11px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+    </div>
+    <!--[if mso]></td><td width="184" valign="top" align="right"><![endif]-->
+    <div class="hcol-b" style="display:inline-block;width:100%;vertical-align:top;font-size:11px;line-height:1.4;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
       <a href="{{ browser_url }}" style="color:#9aa0a6;text-decoration:none;">Veure al navegador</a>
-    </td>
-  </tr></table>
+    </div>
+    <!--[if mso]></td></tr></table><![endif]-->
+  </div>
 </td></tr>
 
 {% comment %} 2. PODI (#1 hero + #2-3) {% endcomment %}
 {% if podi %}
 <tr><td class="px" align="left" valign="top" bgcolor="#060608" style="padding:30px 28px 8px;background-color:#060608;">
   {% with one=podi.0 %}
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" bgcolor="#141319" style="background-color:#141319;border:1px solid #2c2b30;border-radius:18px;"><tr>
-    <td width="300" align="left" valign="top" class="gridcell" bgcolor="#141319" style="background-color:#141319;padding:16px;">
-      <a href="{{ one.url }}"><img src="{{ one.cover }}" width="300" alt="Portada de {{ one.canco_nom }}" style="width:100%;max-width:300px;height:auto;border-radius:12px;"></a>
-    </td>
-    <td align="left" valign="middle" class="gridcell" bgcolor="#141319" style="background-color:#141319;padding:16px 18px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
-      <div class="crit heronum" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:72px;color:#facc15;line-height:0.86;">1</div>
-      <div class="ink" style="font-size:23px;font-weight:800;color:#ffffff;margin:8px 0 3px;line-height:1.15;"><a class="ink" href="{{ one.url }}" style="color:#ffffff;text-decoration:none;">{{ one.canco_nom }}</a></div>
-      <div class="muted" style="font-size:15px;color:#b7b7be;">{% include "comptes/_nl_artistes.html" with arts=one.artistes_render trunc=one.artistes_truncated %}</div>
-      <div style="margin-top:8px;">{% include "comptes/_trend_badge.html" with t=one.trend %}</div>
-    </td>
-  </tr></table>
+  <div class="card" style="background-color:#141319;border:1px solid #2c2b30;border-radius:18px;">
+    <div style="font-size:0;line-height:0;">
+      <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="330" valign="top"><![endif]-->
+      <div class="hero-img" style="display:inline-block;width:100%;vertical-align:middle;font-size:15px;line-height:1.3;">
+        <div style="padding:16px;">
+          <a href="{{ one.url }}"><img src="{{ one.cover }}" width="300" alt="Portada de {{ one.canco_nom }}" style="width:100%;max-width:300px;height:auto;border-radius:12px;"></a>
+        </div>
+      </div>
+      <!--[if mso]></td><td width="250" valign="middle"><![endif]-->
+      <div class="hero-txt" style="display:inline-block;width:100%;vertical-align:middle;font-size:15px;line-height:1.3;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+        <div style="padding:16px 18px;">
+          <div class="crit heronum" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:72px;color:#facc15;line-height:0.86;">1</div>
+          <div class="ink" style="font-size:23px;font-weight:800;color:#ffffff;margin:8px 0 3px;line-height:1.15;"><a class="ink" href="{{ one.url }}" style="color:#ffffff;text-decoration:none;">{{ one.canco_nom }}</a></div>
+          <div class="muted" style="font-size:15px;color:#b7b7be;">{% include "comptes/_nl_artistes.html" with arts=one.artistes_render trunc=one.artistes_truncated %}</div>
+          <div style="margin-top:8px;">{% include "comptes/_trend_badge.html" with t=one.trend %}</div>
+        </div>
+      </div>
+      <!--[if mso]></td></tr></table><![endif]-->
+    </div>
+  </div>
   {% endwith %}
   {% if podi|length > 1 %}
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;table-layout:fixed;"><tr>
+  <div style="font-size:0;line-height:0;margin-top:12px;text-align:center;">
+    <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><![endif]-->
     {% for e in podi %}{% if forloop.counter > 1 %}
-    <td width="50%" align="left" valign="top" class="gridcell" style="width:50%;padding:5px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" bgcolor="#141319" style="background-color:#141319;border:1px solid #2c2b30;border-radius:14px;"><tr>
-        <td width="72" align="left" valign="top" bgcolor="#141319" style="background-color:#141319;padding:10px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="62" alt="Portada de {{ e.canco_nom }}" style="width:62px;height:auto;border-radius:8px;"></a></td>
-        <td align="left" valign="middle" bgcolor="#141319" style="background-color:#141319;padding:10px 10px 10px 0;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
-          <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:18px;color:#facc15;line-height:1;">{{ e.posicio }}</div>
-          <div class="ink" style="font-size:15px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ e.url }}" style="color:#ffffff;text-decoration:none;">{{ e.canco_nom }}</a></div>
-          <div class="muted" style="font-size:12px;color:#b7b7be;">{% include "comptes/_nl_artistes.html" with arts=e.artistes_render trunc=e.artistes_truncated %}</div>
-          <div style="margin-top:4px;">{% include "comptes/_trend_badge.html" with t=e.trend %}</div>
-        </td>
-      </tr></table>
-    </td>
+    <!--[if mso]><td width="290" valign="top"><![endif]-->
+    <div class="col2" style="display:inline-block;width:100%;vertical-align:top;font-size:15px;line-height:1.3;text-align:left;">
+      <div style="padding:5px;">
+        <div class="card" style="background-color:#141319;border:1px solid #2c2b30;border-radius:14px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#141319" style="width:100%;background-color:#141319;border-radius:14px;"><tr>
+            <td width="72" align="left" valign="top" style="padding:10px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="62" alt="Portada de {{ e.canco_nom }}" style="width:62px;height:auto;border-radius:8px;"></a></td>
+            <td align="left" valign="middle" style="padding:10px 10px 10px 0;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+              <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:18px;color:#facc15;line-height:1;">{{ e.posicio }}</div>
+              <div class="ink" style="font-size:15px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ e.url }}" style="color:#ffffff;text-decoration:none;">{{ e.canco_nom }}</a></div>
+              <div class="muted" style="font-size:12px;color:#b7b7be;">{% include "comptes/_nl_artistes.html" with arts=e.artistes_render trunc=e.artistes_truncated %}</div>
+              <div style="margin-top:4px;">{% include "comptes/_trend_badge.html" with t=e.trend %}</div>
+            </td>
+          </tr></table>
+        </div>
+      </div>
+    </div>
+    <!--[if mso]></td><![endif]-->
     {% endif %}{% endfor %}
-  </tr></table>
+    <!--[if mso]></tr></table><![endif]-->
+  </div>
   {% endif %}
 </td></tr>
 {% endif %}
@@ -104,15 +134,17 @@
 <tr><td class="px" align="left" valign="top" bgcolor="#060608" style="padding:6px 28px;background-color:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Del 4 al 10</div>
   {% for e in resta %}
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" bgcolor="#141319" style="width:100%;background-color:#141319;border:1px solid #27262b;border-radius:12px;margin:6px 0;"><tr>
-    <td width="56" align="left" valign="middle" bgcolor="#141319" style="width:56px;background-color:#141319;padding:8px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="48" alt="Portada de {{ e.canco_nom }}" style="width:48px;height:auto;border-radius:8px;"></a></td>
-    <td align="left" valign="middle" bgcolor="#141319" style="background-color:#141319;padding:8px 8px 8px 0;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
-      <span class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;">{{ e.posicio }}</span>
-      <span class="ink" style="font-size:15px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ e.url }}" style="color:#ffffff;text-decoration:none;">{{ e.canco_nom }}</a></span>
-      <span class="muted" style="font-size:13px;color:#b7b7be;"> &mdash; {% include "comptes/_nl_artistes.html" with arts=e.artistes_render trunc=e.artistes_truncated %}</span>
-    </td>
-    <td width="70" align="right" valign="middle" bgcolor="#141319" style="width:70px;background-color:#141319;padding:8px;">{% include "comptes/_trend_badge.html" with t=e.trend %}</td>
-  </tr></table>
+  <div class="card" style="background-color:#141319;border:1px solid #27262b;border-radius:12px;margin:6px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#141319" style="width:100%;background-color:#141319;border-radius:12px;"><tr>
+      <td width="56" align="left" valign="middle" style="width:56px;padding:8px;"><a href="{{ e.url }}"><img src="{{ e.cover }}" width="48" alt="Portada de {{ e.canco_nom }}" style="width:48px;height:auto;border-radius:8px;"></a></td>
+      <td align="left" valign="middle" style="padding:8px 8px 8px 0;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+        <span class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;">{{ e.posicio }}</span>
+        <span class="ink" style="font-size:15px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ e.url }}" style="color:#ffffff;text-decoration:none;">{{ e.canco_nom }}</a></span>
+        <span class="muted" style="font-size:13px;color:#b7b7be;"> &mdash; {% include "comptes/_nl_artistes.html" with arts=e.artistes_render trunc=e.artistes_truncated %}</span>
+      </td>
+      <td width="70" align="right" valign="middle" style="width:70px;padding:8px;">{% include "comptes/_trend_badge.html" with t=e.trend %}</td>
+    </tr></table>
+  </div>
   {% endfor %}
 </td></tr>
 {% endif %}
@@ -126,18 +158,24 @@
 {% if territorials %}
 <tr><td class="px" align="left" valign="top" bgcolor="#060608" style="padding:8px 28px;background-color:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Els tops territorials</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;"><tr>
+  <div style="font-size:0;line-height:0;text-align:center;">
+    <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><![endif]-->
     {% for c in territorials %}
-    <td width="33%" align="center" valign="top" class="gridcell" style="width:33.33%;padding:5px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" bgcolor="#141319" style="width:100%;background-color:#141319;border:1px solid #2c2b30;border-radius:14px;"><tr><td align="center" valign="top" bgcolor="#141319" style="background-color:#141319;padding:12px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
-        <a href="{{ c.url }}"><img src="{{ c.cover }}" width="64" alt="Portada de {{ c.canco_nom }}" style="width:64px;height:auto;border-radius:8px;margin:0 auto 8px;"></a>
-        <div class="whisper" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;color:#facc15;"><a href="{{ c.url }}" style="color:#facc15;text-decoration:none;">{{ c.territori_nom }}</a></div>
-        <div class="ink" style="font-size:13px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ c.url }}" style="color:#ffffff;text-decoration:none;">{{ c.canco_nom }}</a></div>
-        <div class="muted" style="font-size:11px;color:#b7b7be;"><strong>{{ c.artistes_display }}</strong></div>
-      </td></tr></table>
-    </td>
+    <!--[if mso]><td width="192" valign="top"><![endif]-->
+    <div class="col3" style="display:inline-block;width:100%;vertical-align:top;font-size:13px;line-height:1.35;text-align:center;">
+      <div style="padding:5px;">
+        <div class="card" style="background-color:#141319;border:1px solid #2c2b30;border-radius:14px;padding:12px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+          <a href="{{ c.url }}"><img src="{{ c.cover }}" width="64" alt="Portada de {{ c.canco_nom }}" style="width:64px;height:auto;border-radius:8px;margin:0 auto 8px;"></a>
+          <div class="whisper" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:13px;color:#facc15;"><a href="{{ c.url }}" style="color:#facc15;text-decoration:none;">{{ c.territori_nom }}</a></div>
+          <div class="ink" style="font-size:13px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ c.url }}" style="color:#ffffff;text-decoration:none;">{{ c.canco_nom }}</a></div>
+          <div class="muted" style="font-size:11px;color:#b7b7be;"><strong>{{ c.artistes_display }}</strong></div>
+        </div>
+      </div>
+    </div>
+    <!--[if mso]></td><![endif]-->
     {% endfor %}
-  </tr></table>
+    <!--[if mso]></tr></table><![endif]-->
+  </div>
 </td></tr>
 {% endif %}
 
@@ -145,17 +183,23 @@
 {% if novetats %}
 <tr><td class="px" align="left" valign="top" bgcolor="#060608" style="padding:8px 28px;background-color:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1px;margin:8px 0;">Novetats de la setmana</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;"><tr>
+  <div style="font-size:0;line-height:0;text-align:center;">
+    <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><![endif]-->
     {% for n in novetats %}
-    <td width="33%" align="center" valign="top" class="gridcell" style="width:33.33%;padding:5px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" bgcolor="#141319" style="width:100%;background-color:#141319;border:1px solid #2c2b30;border-radius:14px;"><tr><td align="center" valign="top" bgcolor="#141319" style="background-color:#141319;padding:12px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
-        <a href="{{ n.url }}"><img src="{{ n.cover }}" width="64" alt="Portada de {{ n.nom }}" style="width:64px;height:auto;border-radius:8px;margin:0 auto 8px;"></a>
-        <div class="ink" style="font-size:13px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ n.url }}" style="color:#ffffff;text-decoration:none;">{{ n.nom }}</a></div>
-        <div class="muted" style="font-size:11px;color:#b7b7be;"><strong>{{ n.artista_nom }}</strong></div>
-      </td></tr></table>
-    </td>
+    <!--[if mso]><td width="192" valign="top"><![endif]-->
+    <div class="col3" style="display:inline-block;width:100%;vertical-align:top;font-size:13px;line-height:1.35;text-align:center;">
+      <div style="padding:5px;">
+        <div class="card" style="background-color:#141319;border:1px solid #2c2b30;border-radius:14px;padding:12px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+          <a href="{{ n.url }}"><img src="{{ n.cover }}" width="64" alt="Portada de {{ n.nom }}" style="width:64px;height:auto;border-radius:8px;margin:0 auto 8px;"></a>
+          <div class="ink" style="font-size:13px;font-weight:800;color:#ffffff;"><a class="ink" href="{{ n.url }}" style="color:#ffffff;text-decoration:none;">{{ n.nom }}</a></div>
+          <div class="muted" style="font-size:11px;color:#b7b7be;"><strong>{{ n.artista_nom }}</strong></div>
+        </div>
+      </div>
+    </div>
+    <!--[if mso]></td><![endif]-->
     {% endfor %}
-  </tr></table>
+    <!--[if mso]></tr></table><![endif]-->
+  </div>
 </td></tr>
 {% endif %}
 
@@ -170,13 +214,13 @@
 {% comment %} 9. MANAGEMENT BLOCK (admin/preview ONLY — never sent to subscribers) {% endcomment %}
 {% if gestio_url %}
 <tr><td class="px" align="left" valign="top" bgcolor="#060608" style="padding:10px 28px 4px;background-color:#060608;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1c1a10" style="width:100%;background-color:#1c1a10;border:1px solid #facc15;border-radius:14px;"><tr><td align="left" valign="top" bgcolor="#1c1a10" style="background-color:#1c1a10;padding:16px 18px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <div style="background-color:#1c1a10;border:1px solid #facc15;border-radius:14px;padding:16px 18px;font-family:'Bricolage Grotesque','Helvetica Neue',Helvetica,Arial,sans-serif;">
     <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:14px;color:#facc15;text-transform:uppercase;letter-spacing:1px;">Còpia de gestió &middot; només administració</div>
     <div style="font-size:13px;color:#e9e9ec;line-height:1.6;margin:8px 0 12px;">
       Aquest és l'esborrany que s'enviarà als subscriptors diumenge. Per <strong>modificar el contingut</strong> o <strong>paralitzar l'enviament</strong>, obre l'editor de l'esborrany.
     </div>
     <a href="{{ gestio_url }}" style="display:inline-block;padding:11px 22px;background-color:#facc15;color:#0a0a0a;font-weight:800;border-radius:999px;font-size:13px;text-decoration:none;">Editar o paralitzar l'esborrany</a>
-  </td></tr></table>
+  </div>
 </td></tr>
 {% endif %}
 

@@ -69,7 +69,7 @@ def _scenario(code, severity, **data):
         "streak": 2,
         "n_cancons": 3,
         "dies": 10,
-        "mesos": 6,
+        "mesos_estrena": 6,
         "pujada": 12,
         "territori_label": "Global",
     }

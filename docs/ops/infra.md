@@ -229,7 +229,10 @@ muntatge no queda res ací.
 El que hi havia i s'ha llevat: el servei, els listeners de 25/465/587/993,
 `/etc/stalwart`, `/var/lib/stalwart`, i la parella
 `stalwart-cert-sync.path` + `.service` que copiava el certificat de Caddy
-cap a Stalwart.
+cap a Stalwart. Les quatre regles d'entrada del firewall de Hetzner
+(25/465/587/993, etiquetades «Stalwart») es van tancar el 2026-08-18 en
+comprovar que ja no hi escoltava res; el firewall torna a obrir només
+22, 80-443 i els ports dels altres projectes de la caixa.
 
 Es conserven dues coses, a posta:
 

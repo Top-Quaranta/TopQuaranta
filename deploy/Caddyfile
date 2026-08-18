@@ -245,10 +245,14 @@ www.topquaranta.cat {
 # IMAP/SMTP traffic does NOT pass through Caddy — those listeners are
 # in Stalwart directly on ports 993/465/25/587.
 mail.topquaranta.cat {
-	# Mozilla Thunderbird autoconfig "well-known" lookup. Lookup
-	# order is: ISPDB → autoconfig.<domain> → <domain>/.well-known/
-	# autoconfig/... → MX-derived guess. We publish here AND on
-	# the dedicated `autoconfig.<domain>` site below to cover both.
+	# Mozilla Thunderbird autoconfig. L'ordre de cerca és: ISPDB →
+	# autoconfig.<domini> → <domini>/.well-known/autoconfig/… → deducció
+	# des de l'MX. Publiquem només aquest camí: el subdomini
+	# `autoconfig.topquaranta.cat` va tindre un bloc ací des de l'abril
+	# del 2026 esperant un registre A que no es va crear mai —resol a
+	# CDMON—, així que durant quatre mesos els clients ja trobaven la
+	# configuració per aquesta via i prou. Llevat el 2026-08-18: menys
+	# superfície, i estava demostrat que basta.
 	handle /.well-known/autoconfig/mail/config-v1.1.xml {
 		root * /var/www/autoconfig
 		rewrite * /config-v1.1.xml
@@ -260,19 +264,6 @@ mail.topquaranta.cat {
 	# Thunderbird autoconfig above stays here, now pointing at Purelymail;
 	# there is no longer anything on :8080 to proxy to.
 	respond "mail.topquaranta.cat no longer hosts mail. IMAP: imap.purelymail.com:993, SMTP: smtp.purelymail.com:465" 410
-}
-
-# Subdomain that Thunderbird probes first (`autoconfig.<domain>/mail/
-# config-v1.1.xml`). Caddy will auto-issue a Let's Encrypt cert as
-# soon as the A record at CDMON points here. Pair with:
-#     A autoconfig → 188.245.60.20
-autoconfig.topquaranta.cat {
-	# Mateix fitxer que el camí `.well-known` de dalt: n'hi havia dues
-	# còpies a disc i es van desincronitzar quan es va retirar Stalwart.
-	root * /var/www/autoconfig
-	rewrite * /config-v1.1.xml
-	file_server
-	header Content-Type "application/xml; charset=utf-8"
 }
 
 # Per-project Caddy snippets owned by other repos installed at

@@ -52,7 +52,11 @@ i qualsevol altra petició respon **410** amb els paràmetres de Purelymail.
 
 El fitxer és [`deploy/autoconfig-topquaranta.xml`](../deploy/autoconfig-topquaranta.xml),
 i l'instal·la `bin/tq-sync-infra` com qualsevol altre fitxer que viu fora
-de l'arbre de treball.
+de l'arbre de treball. Es publica **només** al camí `.well-known` de
+`mail.topquaranta.cat`: Thunderbird prova abans
+`autoconfig.<domini>`, però eixe subdomini mai no va apuntar ací —resol a
+CDMON— i durant quatre mesos els clients ja el trobaven per aquesta via.
+El bloc que l'esperava es va llevar el 2026-08-18.
 
 **Va viure només al servidor fins al 2026-08-18, i es va desincronitzar
 exactament per això**: en retirar Stalwart es va corregir a mà el servidor

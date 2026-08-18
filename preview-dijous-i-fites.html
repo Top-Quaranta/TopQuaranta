@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TopQuaranta · Preview dijous i fites</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Playfair+Display:ital,wght@1,500&family=Archivo:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--page-bg:#17191b;--page-ink:#e8e6e0;--page-mut:#9a9890}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--page-bg);color:var(--page-ink);font-family:'Archivo',sans-serif;padding:48px 40px 96px}
+  h1{font-family:'Anton',sans-serif;font-weight:400;font-size:44px;letter-spacing:.01em;margin:0 0 8px}
+  h2{font-family:'Anton',sans-serif;font-weight:400;font-size:26px;letter-spacing:.02em;margin:72px 0 6px;color:#f0eee6}
+  .lead{max-width:840px;color:var(--page-mut);line-height:1.55;font-size:15px;margin:0 0 8px}
+  .row{display:flex;flex-wrap:wrap;gap:28px;margin-top:26px;align-items:flex-start}
+  .cel{width:300px}
+  .cel .cap{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--page-mut);margin:10px 2px 0;line-height:1.5}
+  .cel .cap b{color:var(--page-ink);font-weight:600}
+
+  .post{aspect-ratio:4/5;width:100%;position:relative;overflow:hidden;background:var(--bg);color:#fff;container-type:inline-size;border-radius:2px}
+  .pal-global{--bg:#3a5233;--accent:#ecc23a;--dark:#20301b}
+  .pal-cat{--bg:#37502f;--accent:#9dc37b;--dark:#1e2d19}
+  .pal-bal{--bg:#3b5560;--accent:#92c3d5;--dark:#20323a}
+  .pal-val{--bg:#7a4b28;--accent:#dd9c4f;--dark:#402511}
+  .pal-nov{--bg:#3a5a34;--accent:#ecc23a;--dark:#1f331b}
+
+  .bg{position:absolute;inset:0;z-index:0;isolation:isolate}
+  .bg .ph{position:absolute;inset:0;background-size:cover;background-position:center;filter:grayscale(1) contrast(1.06) brightness(1.02)}
+  .bg .tint{position:absolute;inset:0;background:var(--accent);mix-blend-mode:multiply}
+  .bg .hue{position:absolute;inset:0;background:var(--bg);opacity:.30}
+  .bg .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,10,6,.66) 0%,rgba(8,10,6,.16) 30%,rgba(8,10,6,.16) 56%,rgba(8,10,6,.72) 100%)}
+  .mosaic{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .mosaic .t{background-size:cover;background-position:center;filter:grayscale(1) contrast(1.06)}
+  .m6{grid-template-rows:1fr 1fr 1fr}
+
+  .inner{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6.5cqw 7cqw 6cqw;text-align:center}
+  .brand{display:flex;align-items:center;gap:1.8cqw;font-weight:700;font-size:4.4cqw;letter-spacing:.01em}
+  .brand svg{width:5.2cqw;height:5.2cqw;display:block}
+  .sub{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:4.5cqw;margin-top:2.2cqw;opacity:.95}
+  .cap-zone{display:flex;flex-direction:column;align-items:center}
+  .mid{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1}
+  .l1{font-family:'Anton',sans-serif;font-size:13cqw;line-height:1;letter-spacing:.02em;position:relative;z-index:1;text-shadow:0 .4cqw 1.6cqw rgba(0,0,0,.25)}
+  .l2{font-family:'Anton',sans-serif;font-size:47cqw;line-height:.82;margin-top:-3.5cqw;color:var(--accent);text-shadow:0 .6cqw 2.4cqw rgba(0,0,0,.3)}
+  .nv .l1{font-size:10.5cqw}
+  .nv .l2{font-size:17.5cqw;line-height:1;margin-top:-1cqw;letter-spacing:.01em}
+  .mov .l1{font-size:11cqw}
+  .mov .l2{font-size:36cqw;line-height:.9;margin-top:-1.5cqw}
+  .fit .l1{font-size:9cqw;letter-spacing:.05em}
+  .fit .l2{font-size:44cqw;line-height:.85;margin-top:-2cqw}
+  .peu{width:100%;display:flex;flex-direction:column;align-items:center;gap:2.6cqw}
+  .credit{font-size:3.5cqw;font-weight:600;letter-spacing:.03em;opacity:.95;text-shadow:0 .3cqw 1.2cqw rgba(0,0,0,.4)}
+  .rule{width:100%;position:relative;border-top:1px solid rgba(255,255,255,.35)}
+  .rule .star{position:absolute;left:50%;top:0;transform:translate(-50%,-58%);color:var(--accent);font-size:3.2cqw;line-height:1;padding:0 1.6cqw}
+  .meta{display:flex;align-items:baseline;gap:2.6cqw}
+  .badge{background:var(--accent);color:var(--dark);font-family:'Anton',sans-serif;font-size:3.9cqw;letter-spacing:.06em;padding:1cqw 2.4cqw}
+  .lbl{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:4.1cqw}
+
+  .note{max-width:900px;color:var(--page-mut);font-size:13.5px;line-height:1.6;margin-top:28px;border-left:2px solid #3a3d40;padding-left:14px}
+
+  .gwrap{width:640px;margin-top:30px}
+  .gtitle{font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+  .gsub{font-size:12.5px;color:var(--page-mut);margin:0 0 10px;line-height:1.45}
+  .igrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:#0d0e0f;padding:3px;border-radius:3px}
+  .igrid .post{border-radius:0}
+  .dies{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:0 3px;margin-top:6px}
+  .dies div{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--page-mut);text-align:center}
+</style>
+</head>
+<body>
+
+<h1>Dijous i fites · preview amb dades reals</h1>
+<p class="lead">El calendari real només deixa lliure el dijous (diumenge ja l'ocupa la newsletter). Proposta: dijous, el moviment de la setmana com a publicació pròpia; i la fita o ratxa com a slide extra del post global de dissabte, sense tipus nou. Tots els números són els que hauria produït el pipeline real les setmanes 43 i 44.</p>
+
+<!-- ====================== DIJOUS: MOVIMENT ====================== -->
+<h2>Dijous: el moviment de la setmana</h2>
+<p class="lead">La pujada més forta o l'entrada més destacada del Top Global (PPCC), amb l'artwork del protagonista. Regla proposada: si hi ha una entrada directa al top 10, guanya l'entrada; si no, la pujada.</p>
+
+<div class="row">
+  <!-- Pujada wk43 -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/913528081-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el moviment de la setmana</div>
+        </div>
+        <div class="mid mov"><div class="l1">LA PUJADA</div><div class="l2">+28</div></div>
+        <div class="peu">
+          <div class="credit">Maria Jaume · Es Teus Besos · del 38 al 10</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dijous</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Pujada</b> · setmana 43 real · #38 → #10</div>
+  </div>
+
+  <!-- Entrada wk43 -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/1011458081-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el moviment de la setmana</div>
+        </div>
+        <div class="mid mov"><div class="l1">L'ENTRADA</div><div class="l2">Nº2</div></div>
+        <div class="peu">
+          <div class="credit">The Tyets · Era Això! · directa al 2</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dijous</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Entrada</b> · setmana 43 real · nova, directa al #2</div>
+  </div>
+
+  <!-- Pujada wk44 -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/913528081-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el moviment de la setmana</div>
+        </div>
+        <div class="mid mov"><div class="l1">LA PUJADA</div><div class="l2">+14</div></div>
+        <div class="peu">
+          <div class="credit">Maria Jaume · Sant Domingo Forever · del 31 al 17</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dijous</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Pujada</b> · setmana 44 real · #31 → #17</div>
+  </div>
+</div>
+
+<!-- ====================== FITA ====================== -->
+<h2>La fita, com a slide del post global de dissabte</h2>
+<p class="lead">Sense tipus nou de publicació: una slide extra dins del carrusel de dissabte quan hi ha ratxa o rècord. Converteix la repetició del número 1 en contingut.</p>
+
+<div class="row">
+  <!-- Fita Divinize -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">la fita de la setmana</div>
+        </div>
+        <div class="mid fit"><div class="l1">SETMANES AL Nº1</div><div class="l2">7</div></div>
+        <div class="peu">
+          <div class="credit">Rosalía · Divinize · des de la setmana 38</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Top Global</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Fita</b> · PPCC setmana 44 real · 7 setmanes consecutives</div>
+  </div>
+
+  <!-- Fita Sant Joan BAL -->
+  <div class="cel">
+    <div class="post pal-bal">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/996473461-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">la fita de la setmana</div>
+        </div>
+        <div class="mid fit"><div class="l1">SETMANES AL Nº1</div><div class="l2">3</div></div>
+        <div class="peu">
+          <div class="credit">Fades, Triquell · Sant Joan · des de la setmana 42</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Illes Balears</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Fita</b> · Illes Balears setmana 44 real · 3 setmanes</div>
+  </div>
+</div>
+
+<!-- ====================== SETMANA SENCERA ====================== -->
+<h2>La setmana sencera al feed</h2>
+<p class="lead">Els sis posts de feed d'una setmana completa amb la proposta aplicada, en ordre de graella d'Instagram (el més recent primer: dissabte dalt a l'esquerra). Composta amb el contingut real més recent de cada slot, perquè cap setmana real de les tres té tots els slots sense errors ni omissions.</p>
+
+<div class="gwrap">
+  <div class="gtitle">Proposta completa + dijous nou</div>
+  <div class="gsub">Dissabte global, divendres singles, dijous moviment / dimecres territorial A, dimarts novetats, dilluns territorial B.</div>
+  <div class="igrid">
+    <!-- Dissabte: Global (Lux) -->
+    <div class="post pal-global"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Rosalía · Divinize</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dissabte</span></div></div></div></div>
+    <!-- Divendres: singles mosaic -->
+    <div class="post pal-nov"><div class="bg"><div class="mosaic m6"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0d07ad2b7ca89a67a301cdc6ea58bdf1/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fb845ef54d20de36809e123be6f3130c/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0f608de70d31be9e76d75513ae56e855/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1015271581-500.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/13900ff079fd7b8e5f9ff26ce38c5431/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/923bfff6175616ed86693cb10873915d/1000x1000-000000-80-0-0.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">SINGLES</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada divendres</span></div></div></div></div>
+    <!-- Dijous: moviment -->
+    <div class="post pal-global"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/913528081-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el moviment de la setmana</div></div><div class="mid mov"><div class="l1">LA PUJADA</div><div class="l2">+14</div></div><div class="peu"><div class="credit">Maria Jaume · Sant Domingo Forever</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dijous</span></div></div></div></div>
+    <!-- Dimecres: BAL artwork -->
+    <div class="post pal-bal"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/996473461-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Fades, Triquell · Sant Joan</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Illes Balears</span></div></div></div></div>
+    <!-- Dimarts: novetats albums mosaic -->
+    <div class="post pal-nov"><div class="bg"><div class="mosaic"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/34e371583ff1cc78fcfd123a4e95e168/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1027843302-500.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/abafc78e06cc8d8a82b63ce32037226c/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fe5fb6438102da57b56ea92e34bedf41/1000x1000-000000-80-0-0.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dimarts</span></div></div></div></div>
+    <!-- Dilluns: CAT artwork -->
+    <div class="post pal-cat"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Rosalía · Divinize</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Principal</span></div></div></div></div>
+  </div>
+  <div class="dies"><div>Dissabte</div><div>Divendres</div><div>Dijous</div><div>Dimecres</div><div>Dimarts</div><div>Dilluns</div></div>
+</div>
+
+<p class="note">
+Notes: (1) Setmana composta: dilluns, dimecres, dijous, dissabte i dimarts són de la setmana 44 real; divendres usa les novetats singles de la 42 perquè la 44 no en va tindre. (2) El dijous amb artwork de Maria Jaume és exactament la diversitat buscada: el protagonista quasi mai coincidix amb el nº1. (3) La fita com a slide de dissabte no apareix a la graella (només la primera slide del carrusel es veu al perfil), però sí a qui obri el post. (4) Duotons CSS aproximats, tipografies de Google Fonts, colors a ull; el render real el farà Pillow.
+</p>
+
+</body>
+</html>

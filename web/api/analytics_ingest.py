@@ -14,6 +14,8 @@ POST /api/v1/analytics/event/      {clau, dim1?, dim2?}
 `event/` accepts a strict allowlist of `clau` values to prevent
 the SPA (or anyone forging requests) from polluting the table with
 arbitrary keys. Throttled per-IP at 60/min via the project default.
+
+# Spec: docs/architecture/analytics-ingest.md
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from analytics.bots import CLASS_HUMAN
 from analytics.events import register
 
 # Whitelist of `clau` values the SPA is allowed to push. New events
@@ -68,7 +71,17 @@ def pageview(request: Request) -> Response:
     """
     data = request.data or {}
     path = _clean(data.get("path") or "/", max_len=80)
-    register("pageview", dim1=path or "/")
+    # Classified **by construction**, without reading anything about the
+    # caller: this endpoint is only reached when the SPA's JavaScript
+    # runs, which is the definition of a real visit here. Crawlers get
+    # the server-rendered pages and are classified by the middleware.
+    #
+    # Until 2026-08-17 these rows carried no class at all, so the weekly
+    # digest — which filters on `dimensio_2="human"` — excluded every
+    # real SPA visit and reported only the Django-served leftovers. The
+    # week of 10/08 that was 98 "humans" (mostly sitemap fetches) while
+    # 373 actual visits sat unclassified.
+    register("pageview", dim1=path or "/", dim2=CLASS_HUMAN)
 
     utm_source = _clean(data.get("utm_source"), max_len=80)
     if utm_source:

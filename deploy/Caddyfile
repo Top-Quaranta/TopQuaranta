@@ -29,6 +29,21 @@ topquaranta.cat {
 www.topquaranta.cat {
 	encode zstd gzip
 
+	# Autoconfiguració de correu.
+	#
+	# Purelymail ja en publica un de comodí i en teoria un client hi
+	# arriba des de l'MX; a la pràctica Spark Desktop llig el del domini
+	# i, si no el troba, es queda amb el que tenia — i després no deixa
+	# editar els servidors, de manera que l'única eixida és esborrar el
+	# compte i perdre'n la configuració. A cercol.team, publicar-lo va
+	# fer que es reconfigurara sol.
+	handle /.well-known/autoconfig/mail/config-v1.1.xml {
+		root * /var/www/autoconfig
+		rewrite * /config-v1.1.xml
+		file_server
+		header Content-Type "application/xml; charset=utf-8"
+	}
+
 	# Django staticfiles (admin/OTP assets, legacy template CSS/JS).
 	handle_path /static/* {
 		root * /home/topquaranta/app/staticfiles
@@ -221,43 +236,41 @@ www.topquaranta.cat {
 		# /api/v1/staff/analytics/goaccess/, which needs `data:` fonts
 		# and `'unsafe-eval'` for D3 to render. Every other response
 		# inherits the strict baseline below.
-		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-Wu+kU5EkXi0rgxBYNZgraQVbF2AN72hbhCSUJEGoGu8=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-0dI/35d/q1kSRrsl7FM1dCM2OAnMbtxWIzs+ucZbUxw=' 'sha256-4Hn6sH+ypoj5nK93WMu6mUFQpfobPWpZ7lhDC+66jX8=' 'sha256-roWz13kQTOWWGhpVzbqgbscn0jzVYDnLtBFjN9TlD5Q=' 'sha256-cI/S3TUZCuIHtTmLlnwGR4k/NbGwEg2EVdeKKX6TwDo=' 'sha256-ZS6tnpohjy2235uLNOQs8/B1pJbrxq6BEHLFX266P1E=' 'sha256-0DAOj4yIIGTkmqj8368zp/RrGHhjbwL8eb3rvrPuexY=' 'sha256-sAf3d2w1WbdjN6OhzrAjRW1FpsEzrRxTF2QjXmClp/Q=' 'sha256-cq9KN8BfABBMKv4RfBHUMY77nIRgWQfbLcCyn6sOB08=' 'sha256-aUbj/Fc3SMOAnlQIrovaPz0fox9uC2ttH7W2XXvJae4=' 'sha256-Wu+kU5EkXi0rgxBYNZgraQVbF2AN72hbhCSUJEGoGu8=' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
 	}
+	# Access log retention. Rotation is by size; a rotated segment is
+	# gzipped ~15x, so 10 MiB of log costs ~640 KiB on disk. With
+	# roll_keep 5 the window collapsed under crawler load: a ClaudeBot
+	# sweep on 2026-07-30 burned a whole segment in 2 h 11, leaving
+	# generar_goaccess 1 h 32 min of history to report on. 30 segments
+	# cost ~19 MiB gzipped and buy ~34 days at the observed baseline.
+	# roll_keep_for caps the tail so a quiet period cannot hoard
+	# segments indefinitely. See docs/architecture/analytics-goaccess.md.
 	log {
 		output file /var/log/caddy/topquaranta_access.log {
 			roll_size 10MiB
-			roll_keep 5
+			roll_keep 30
+			roll_keep_for 90d
 		}
 	}
 }
 
-# ── Stalwart Mail Server ──
-# Reverse-proxy to Stalwart's HTTP admin (bound to localhost:8080).
-# IMAP/SMTP traffic does NOT pass through Caddy — those listeners are
-# in Stalwart directly on ports 993/465/25/587.
-mail.topquaranta.cat {
-	# Mozilla Thunderbird autoconfig "well-known" lookup. Lookup
-	# order is: ISPDB → autoconfig.<domain> → <domain>/.well-known/
-	# autoconfig/... → MX-derived guess. We publish here AND on
-	# the dedicated `autoconfig.<domain>` site below to cover both.
-	handle /.well-known/autoconfig/mail/config-v1.1.xml {
-		root * /var/www/autoconfig/.well-known/autoconfig/mail
-		rewrite * /config-v1.1.xml
-		file_server
-		header Content-Type "application/xml; charset=utf-8"
-	}
-	reverse_proxy localhost:8080
-}
-
-# Subdomain that Thunderbird probes first (`autoconfig.<domain>/mail/
-# config-v1.1.xml`). Caddy will auto-issue a Let's Encrypt cert as
-# soon as the A record at CDMON points here. Pair with:
-#     A autoconfig → 188.245.60.20
-autoconfig.topquaranta.cat {
-	root * /var/www/autoconfig
-	file_server
-	header Content-Type "application/xml; charset=utf-8"
-}
+# Correu: ni allotjat ací, ni configurat des d'ací.
+#
+# `mail.topquaranta.cat` va desaparéixer del DNS el 2026-08-19 i el seu
+# site block se'n va anar amb ell — mantindre'l hauria fet que Caddy
+# demanara indefinidament un certificat per a un nom que ja no apunta
+# ací.
+#
+# Tampoc publiquem cap fitxer d'autoconfiguració. Purelymail ja en
+# serveix un a `autoconfig.purelymail.com/mail/config-v1.1.xml` amb
+# `%EMAILDOMAIN%` de comodí, així que val per als seus clients i per
+# tant per a nosaltres: un client que no troba res al nostre domini
+# dedueix la configuració des de l'MX i hi arriba. Vam arribar a
+# publicar-ne una còpia pròpia; era un duplicat del mateix contingut, i
+# el duplicat es va desincronitzar (deia d'enviar per Brevo amb una clau
+# compartida mesos després que això deixara de ser cert). Qui allotja el
+# correu és qui ha de dir com s'hi connecta.
 
 # Per-project Caddy snippets owned by other repos installed at
 # /etc/caddy/conf.d/. Each project ships and reloads its own

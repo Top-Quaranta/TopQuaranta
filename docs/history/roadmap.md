@@ -3,7 +3,147 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-07-13.
+> Last updated: 2026-08-13.
+
+---
+
+## Sprint 2026-08-13 — Sondes «la cançó del dia» (motor)
+
+Estratègia investigada i auditada el mateix dia (nota local
+`investigacio-canco-del-dia-2026-08-13.md`): els 4 dies sense story
+(dt/dj/dv/dg), 2 sondes/dia (matí/vesprada) amb una cançó mai al top
+d'un artista amb IG mai col·laborador, per a detectar receptius i
+omplir el registre de col·laboracions (línia base actual: ~6%
+d'acceptació a cegues). Implementat el motor complet, ACTIU des del
+deploy (sense toggle dedicat, a petició del Miquel — la matriu de
+distribució ja dona l'interruptor genèric): model `SondaStoryIG` + selector
+`social/sonda.py` (escala de 3 esglaons + quota 1-de-6 no-CAT +
+round-robin de gènere + tiebreak determinista) + detector de reacció
+REACH-ONLY (mediana+3·MAD; replies està morta per a comptes UE des de
+2020-12, verificat) + slide `_story_canco_dia` + `SocialPost.slot_key`
+(discriminador intradia additiu) + runs `--franja` (crons 07:00/16:00
+UTC) + estampat de handles refusats. 15 tests nous. Taxonomia
+d'actituds de 7 estats documentada a la investigació.
+
+## Sprint 2026-08-12 — Stories del top en trams de 10
+
+El mosaic 40→11 de les stories (5×6, 30 caràtules de 150 px) estava
+massa enforfoguit. Re-tiering alineat amb el feed carousel (que ja va
+per blocs de 10): el set PPCC passa de 7 a 8 slides — intro · **40→21**
+(mosaic 4×5, caràtules 175 px) · **20→11** (nova slide 3+3+3+1 amb
+l'#11 centrat, "CAMÍ DEL TOP 10", caràtules 240 px, reutilitza el
+builder del mosaic amb tier `pairs`) · 10→4 · podi · hero ·
+[novetats] · outro.
+Territorial: degradació per omissió actualitzada (mosaic n>20, pairs
+n>10, grid n>3). `_story_tags` + `_pos_story_pairs` sincronitzats al
+mateix commit (el guard de mismatch hauria publicat el set sencer sense
+mencions). Benefici col·lateral mesurat: el mosaic antic saturava el cap
+de Meta de 20 user_tags/imatge (verificació 2026-07-15); ara cada tram
+cap dins del cap → ~+10 mencions/set. Geometria nova com a DATA a
+`story-tokens.json` (seccions `mosaic` re-tierada + `pairs` nova); test
+de desbordament worst-case (10 títols a 2 línies) per a la slide nova.
+Docs: `social-stories.md` re-escrit al set de 8. Nota de recon prèvia:
+`investigacio-stories-trams-2026-08-12.md` (untracked).
+
+Mateixa sessió, fora de repo: neteja de disc al Hetzner (90%→73%,
++6.1G: builds vells de vscode-server, revisions snap disabled, caches
+pip/npm/apt, 2 venvs morts de /root; `/root/TopQuaranta_dev` conservat
+sense venv — 1.2M de codi legacy pendent de decisió del Miquel).
+`sembrar_canals_youtube` MISSING diagnosticat com a fals positiu (cron
+nou d'ahir, primer tret 2026-08-13 02:00 UTC). Pendents amb tasca:
+retenció de `/var/topquaranta/portades` (+700 MB/mes) i glob `.jpg` del
+logrotate de renders socials.
+
+## Sprint 2026-08-10 — Setmanari: calendari, incidències i finestra Dl–Dg
+
+Tres queixes del Miquel sobre el correu setmanal, i una que va aparèixer
+mentre s'arreglaven.
+
+**Finestra.** El digest reportava `today-6 … today`: enviant-se dilluns
+al matí, la setmana anava de dimarts a dilluns i el darrer dia eren tres
+hores comptades com un dia sencer, amb el bloc de publicació del cap de
+setmana partit entre dos correus. Ara reporta la **darrera setmana
+natural completa, dilluns → diumenge** (`today.weekday() + 7`) contra
+els set dies anteriors. Els gauges es llegeixen al snapshot de diumenge
+i «Setmana N» és la del dilluns reportat, no la de la data d'enviament
+(per això el número baixa un cop, de 49 a 48, i després continua).
+
+**Calendari de publicacions.** Graella canal × dia dins de «Distribució
+social»: sis files fixes (IG feed, IG stories, Mastodon, Bluesky,
+Telegram, Newsletter) i set columnes amb el nom del dia. La cel·la porta
+el tipus (`Top`, `Terr`, `Àlb`, `Sing`, `Mov`, `×N`), `✕N` si alguna ha
+fallat i caixa discontínua si es va ometre. Un canal buit tota la
+setmana continua tenint fila: el silenci és el senyal. La font és
+`SocialPost` — el titular «Publicacions aquesta setmana» es deriva de la
+mateixa graella, així que ja no poden discrepar (el comptador
+`social_publicat` era append-only i depenia de cada call site).
+
+**Incidències.** Secció nova amb tres fonts: slots de `SocialPost` en
+error amb el missatge, crons en mal estat i els errors Django de la
+setmana. El mòdul nou `analytics/incidents.py` llegeix `errors.log`
+(+ `errors.log.1`, perquè el logrotate és setmanal amb `delaycompress`)
+agrupant repeticions per logger + missatge amb els dígits emmascarats, i
+delega la classificació de crons a `health_report.gather_crons` — la
+mateixa funció que corre `tq-health` cada hora, així que el correu
+setmanal i el watchdog no poden discrepar. Tot best-effort: fitxer que
+falta → resultat buit, mai una excepció.
+
+**Els zeros per cent.** `_delta()` arrodonia el percentatge *primer* i
+després llegia aquell 0 com «sense canvi»: 3.905 → 3.912 cançons
+verificades es reportava com «= 0%». Ara un canvi per sota de l'1% o amb
+base menor de 10 mostra el moviment absolut (`+7`, `−4`), una mètrica
+realment igual mostra només `=`, i una cerca amb 0 clics mostra les
+impressions. De propina, les barres de «D'on venen» dibuixaven totes el
+100% (una cel·la `width:N%` sola s'estira): ara la fila porta la resta
+com a segona cel·la.
+
+**`docs-novelty` honra el `.gitignore`.** El gate fallava només a la
+màquina del Miquel per un export DYI d'Instagram a l'arrel — gitignorat
+i invisible a CI. Un gate dur que només es posa roig en local és un gate
+que s'aprèn a ignorar.
+
+Pendent: el `_kpi.html` del Setmanari encara fa servir el
+`.gridcell { display:block; width:100% }` que #354 acaba de substituir a
+la newsletter pel patró híbrid. Mateix bug latent a Gmail Android, no
+tocat en aquest sprint.
+
+## Sprint 2026-08-01 — newsletter: columnes híbrides (Gmail mòbil)
+
+Segona passada de compatibilitat Gmail del template de la newsletter,
+després que la de 2026-07-13 (#312) arreglara la inversió de colors i
+l'Outlook però no el mòbil. Símptoma reportat des de Gmail Android (a
+Spark es veia bé): cap card no s'estirava a l'amplada de la fila —
+files 4-10 irregulars (cadascuna amb l'amplada del seu text), podi #2/#3
+a mitja amplada, cards territorials encongides a la caràtula de 64 px, i
+les dues meitats del hero acabant en x diferents.
+
+Causa: el mòbil s'apilava amb `.gridcell { display:block; width:100% }`
+sobre `<td>`s amb amplada percentual en línia. Gmail aplica el
+`display:block` però no el `width:100%`, i cada card cau a *shrink-to-fit*
+(a Gmail una taula niuada no s'estira: només ho semblen les que tenen
+text llarg, com el bloc de gestió o el footer). A sobre, `width:100%` +
+`padding:5px` al mateix `<td>` feia l'email de 410 px en un viewport de
+393 px — desbordament mesurat en local, i probablement el que dispara la
+re-maquetació de Gmail.
+
+Arreglat amb el patró híbrid: cada columna és un `<div>` d'amplada
+completa **per defecte** i el `<style>` només afegeix els topalls
+`max-width` que la converteixen en fila en pantalles amples (reset a
+100 % dins del `@media`, classe-sobre-classe: guanya per ordre encara
+que un client lleve els `!important`). El fons/vora/radi de cada card
+passa a un `<div>`; les taules que queden són només de maquetació
+interna. Outlook manté columnes en píxels via ghost tables. Verificat
+en local amb Chromium a 393 px (desbordament 410 → 393 px, cards
+uniformes), amb el `<style>` sencer llevat (degrada a una columna neta)
+i a 786 px (desktop idèntic al d'abans). 6 tests `test_gmail_*`.
+
+**Pendent de confirmació visual del Miquel a Gmail Android.** El
+mecanisme intern de Gmail no es pot reproduir des del repo. Si encara
+falla, el següent pas és llevar la taula interna de les files 4-10
+(la insígnia de tendència passaria a continuació del text). Nota: el
+digest d'analytics (`analytics/templates/analytics/digest_setmanal.html`
++ `_kpi.html`) encara fa servir el `.gridcell` antic i té el mateix
+defecte — fora d'abast d'aquesta passada.
 
 ---
 
@@ -378,22 +518,7 @@ Items petits per fer en sessions curtes:
       l'allowlist.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
-- [ ] **Stalwart polish** (post Sprint I bis):
-  - [ ] Habilitar port 587 STARTTLS submission (ara només 465 SMTPS).
-        Útil per a clients mòbils que no accepten SMTPS implicit.
-  - [ ] Crear alias `postmaster@topquaranta.cat` per a rebre els
-        reports DMARC (`rua=mailto:postmaster@…`). El build OSS de
-        Stalwart 0.16.1 actual no exposa `/api/principal*`; el camí
-        és (a) servir el webadmin OSS (`stalwartlabs/webadmin`
-        v0.1.37) afegint un `handle /webadmin/*` a Caddy o (b) parar
-        el servei un moment i usar `stalwart -c … -o` (store
-        console). Mentrestant, **quick-fix**: canviar `rua` del
-        DMARC TXT a `admin@topquaranta.cat` (que ja existeix), via
-        `dns-backup/cdmon_clean.py`-style script.
-  - [ ] Integrar parsejat de DMARC reports al panell staff (gràfic de
-        què passa SPF/DKIM en nom nostre + alertes de potencial
-        spoofing). Alternativa: subscriure'ns a [dmarcian.com](https://dmarcian.com)
-        free tier i delegar el parseig.
+- [x] ~~**Stalwart polish**~~ — sense objecte des del 2026-08-18: Stalwart s'ha retirat i les bústies han passat a Purelymail. Vegeu `docs/EMAIL.md`.
 - [ ] **Gmail avatar** per `info@`/`admin@` quan se reseti el límit
       del telèfon (ara només `miquel@` té Google Account associat).
 - [ ] (Quan Hetzner ens desbloca port 25 outbound) considerar treure

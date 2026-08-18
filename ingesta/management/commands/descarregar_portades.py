@@ -182,11 +182,19 @@ class Command(BaseCommand):
         never starved by the catalogue backlog within the nightly limit
         (caught 2026-06-07: Rosalía's #1 cover was missing from the
         newsletter). Only rows with both a deezer_id and a non-empty
-        image URL."""
+        image URL.
+
+        Retention (2026-08-12): candidates are bounded to the PUBLIC
+        catalogue — no descartat albums, no unverified cançons, no
+        unapproved artistes. The old unbounded iteration had quietly
+        downloaded covers for ~2.5k descartat albums (the disk-90%
+        alert); `netejar_portades` prunes what this filter no longer
+        yields."""
         prio = self._ranking_priority_ids(entitat)
         if entitat == "album":
             qs = (
-                Album.objects.exclude(deezer_id__isnull=True)
+                Album.objects.filter(descartat=False)
+                .exclude(deezer_id__isnull=True)
                 .exclude(imatge_url="")
                 .annotate(
                     _prio=Case(
@@ -202,7 +210,8 @@ class Command(BaseCommand):
             yield from qs
         elif entitat == "canco":
             qs = (
-                Canco.objects.exclude(deezer_id__isnull=True)
+                Canco.objects.filter(verificada=True, album__descartat=False)
+                .exclude(deezer_id__isnull=True)
                 .exclude(album__imatge_url="")
                 .exclude(album__isnull=True)
                 .annotate(
@@ -223,7 +232,8 @@ class Command(BaseCommand):
             # artistes with a stored image are candidates. Ranking
             # artistes (by id) come first.
             arts = (
-                Artista.objects.exclude(imatge_url="")
+                Artista.objects.filter(aprovat=True)
+                .exclude(imatge_url="")
                 .annotate(
                     _prio=Case(
                         When(id__in=prio, then=Value(0)),

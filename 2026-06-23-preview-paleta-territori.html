@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TopQuaranta — preview paleta territori (before/after) 2026-06-23</title>
+<style>
+  :root { font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+  body { margin: 0; padding: 24px; background: #0a0a0a; color: #f3ecdd; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 28px 0 8px; color: #facc15; }
+  p.note { color: #9aa0a6; font-size: 12.5px; line-height: 1.5; max-width: 70ch; }
+  code { background: #1a1a1a; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 12.5px; }
+  th, td { border: 1px solid #27272a; padding: 6px 8px; text-align: left; vertical-align: middle; }
+  th { background: #141210; color: #facc15; font-weight: 600; }
+  .sw { display: inline-flex; align-items: center; gap: 7px; }
+  .chip { width: 26px; height: 26px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); flex: 0 0 auto; }
+  .hex { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  .pair { display: inline-flex; gap: 4px; }
+  .pair .chip { width: 18px; height: 26px; border-radius: 4px; }
+  .flag { color: #facc15; font-weight: 700; }
+  .dead { color: #9aa0a6; font-style: italic; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 6px 0 0; font-size: 12px; color: #9aa0a6; }
+  .barrow { display: flex; align-items: center; gap: 2px; margin: 2px 0; }
+  .bar { height: 18px; border-radius: 2px; }
+  .lbl { width: 56px; font-size: 11px; color: #c9c5bb; }
+  .surface-white { background: #ffffff; color: #0a0a0a; border-radius: 8px; padding: 12px; }
+  .surface-white .lbl { color: #444; }
+  small.src { color: #6b7280; }
+</style>
+</head>
+<body>
+<h1>Paleta de territori — preview before / after</h1>
+<p class="note">
+  Artefacte INERT del recon de disseny (2026-06-23). Tots els hex són
+  <strong>grepejats del codi de producció</strong> a <code>1a58ecd</code>, mai
+  inventats. Les fonts i les seues línies estan a l'informe
+  <code>docs/audits/2026-06-23-recon-disseny-unificacio.md</code>. La paleta
+  <strong>NO viu a ConfiguracioGlobal</strong> (35 camps, cap de color): tot és
+  en codi, no hi ha valor de prod a llegir.
+</p>
+<p class="legend">
+  <span><span class="chip" style="display:inline-block;width:14px;height:14px;background:#2f5a2f"></span> deep</span>
+  <span><span class="chip" style="display:inline-block;width:14px;height:14px;background:#7bbf7b"></span> accent</span>
+  <span class="flag">★ = superfície VIVA que canviaria de color visiblement → requereix OK</span>
+</p>
+
+<h2>1 · Canon (rd/terr.js PAL ≡ index.css --color-terr-*) — deep / accent</h2>
+<p class="note"><small class="src">rd/terr.js:17-28 · index.css:152-160 — aquestes dues AGREEN exactament.</small></p>
+<table id="canon"></table>
+
+<h2>2 · Taula before → after per territori i per font</h2>
+<p class="note"><small class="src">
+  Família llegada = un sol hex per territori (color de sèrie de gràfic).
+  <code>editorial.jsx:27-38</code> està <span class="dead">MORT (0 importadors)</span>.
+  <code>StaffAnalyticsPage.jsx:42-52</code> (★, fill de cel·la, línia 492) i
+  <code>CancoChart.jsx:34-38</code> (★, públic, stroke de línia) són IDÈNTICS entre
+  ells i divergeixen de l'editorial. Cap té CAR (→ fallback negre).
+</small></p>
+<table id="beforeafter"></table>
+
+<h2>3 · Com es veurien les sèries de gràfic (barres sobre fons blanc)</h2>
+<p class="note"><small class="src">
+  Esquerra = llegat VIU actual (StaffAnalytics/CancoChart). Dreta = canon proposat
+  (deep, més llegible sobre blanc que l'accent). Decisió deep-vs-accent = pendent del teu OK.
+</small></p>
+<div class="surface-white">
+  <div id="bars"></div>
+</div>
+
+<script>
+// All hexes grepped from prod code at 1a58ecd. Order: display order.
+const TERR = ["PPCC","CAT","VAL","BAL","AND","CNO","FRA","ALG","ALT","CAR"];
+// Canon deep/accent (rd/terr.js PAL ≡ index.css --color-terr-*)
+const CANON = {
+  PPCC:["#2f5a2f","#7bbf7b"], CAT:["#2f5a2f","#7bbf7b"], VAL:["#8a4a1e","#e8a44d"],
+  BAL:["#1f5a63","#5cc0cc"], AND:["#2c3f63","#7595cf"], CNO:["#7a2730","#dd7882"],
+  FRA:["#6e5520","#d8b257"], ALG:["#7a3340","#d986a0"], ALT:["#33373d","#9aa0a6"],
+  CAR:["#4a4034","#bda988"],
+};
+// editorial.jsx::TERR_COLORS (DEAD — 0 importers)
+const EDIT = {
+  PPCC:"#427c42", CAT:"#8a6900", VAL:"#cf3339", BAL:"#0047ba", AND:"#7c3aed",
+  CNO:"#0e7490", FRA:"#c2410c", ALG:"#db2777", ALT:"#525252", CAR:"#525252",
+};
+// StaffAnalyticsPage::TERR_COLORS + CancoChart::TERRITORI_COLORS (LIVE, identical)
+const CHART = {
+  PPCC:"#427c42", CAT:"#c99b0c", VAL:"#cf3339", BAL:"#0047ba", AND:"#7c3aed",
+  CNO:"#0891b2", FRA:"#ea580c", ALG:"#db2777", ALT:"#6b7280", CAR:null, // absent → #0a0a0a fallback
+};
+
+const chip = h => `<span class="chip" style="background:${h}"></span>`;
+const cell = h => h ? `<span class="sw">${chip(h)}<span class="hex">${h}</span></span>`
+                    : `<span class="dead">— (fallback #0a0a0a)</span>`;
+const pair = ([d,a]) => `<span class="sw"><span class="pair">${chip(d)}${chip(a)}</span>`
+                      + `<span class="hex">${d} / ${a}</span></span>`;
+
+// table 1: canon
+let t = "<tr><th>Codi</th><th>deep / accent (canon)</th></tr>";
+TERR.forEach(c => { t += `<tr><td><strong>${c}</strong></td><td>${pair(CANON[c])}</td></tr>`; });
+document.getElementById("canon").innerHTML = t;
+
+// table 2: before/after
+let b = "<tr><th>Codi</th><th>editorial (MORT)</th><th>chart VIU ★ (Staff+Canco)</th>"
+      + "<th>→ canon deep</th><th>→ canon accent</th><th>canvi visible?</th></tr>";
+TERR.forEach(c => {
+  const live = CHART[c];
+  const [d,a] = CANON[c];
+  const changes = (live||"#0a0a0a").toLowerCase() !== d.toLowerCase();
+  b += `<tr><td><strong>${c}</strong></td>`
+     + `<td>${cell(EDIT[c])}</td>`
+     + `<td>${cell(live)}</td>`
+     + `<td>${cell(d)}</td>`
+     + `<td>${cell(a)}</td>`
+     + `<td>${changes ? '<span class="flag">★ sí</span>' : 'no'}</td></tr>`;
+});
+document.getElementById("beforeafter").innerHTML = b;
+
+// bars
+let bars = "";
+TERR.forEach(c => {
+  const live = CHART[c] || "#0a0a0a";
+  const canon = CANON[c][0];
+  bars += `<div class="barrow"><span class="lbl">${c}</span>`
+        + `<span class="bar" style="width:160px;background:${live}"></span>`
+        + `<span class="hex" style="width:78px">${CHART[c]||'∅→#0a0a0a'}</span>`
+        + `<span style="opacity:.4">→</span>`
+        + `<span class="bar" style="width:160px;background:${canon}"></span>`
+        + `<span class="hex">${canon}</span></div>`;
+});
+document.getElementById("bars").innerHTML = bars;
+</script>
+</body>
+</html>

@@ -440,18 +440,62 @@ Configuration lives in `ConfiguracioGlobal`, editable from
 operator opts in. Recommended entries when you do:
 
 ```
-mail.topquaranta.cat:993
-mail.topquaranta.cat:465
-mail.topquaranta.cat:25
 topquaranta.cat:443
 api.cercol.team:443
-autoconfig.topquaranta.cat:443
 ```
+
+L'exemple portava els ports de correu de `mail.topquaranta.cat` i el
+subdomini `autoconfig`. Els primers van morir amb Stalwart i el segon mai
+no va apuntar ací, així que vigilar-los hauria estat una alarma horària
+sobre res. En producció `tls_endpoints_vigilats` només ha de portar el
+que existeix.
 
 A failing endpoint escalates `overall`, so the hourly
 `tq-health --email-on-fail` cron mails admin@ within the hour, and it
 contributes `tls:certs` to the dedup signature — one mail per distinct
 problem, not one per hour.
+
+**SPA asset check** (hardened 2026-07-31): the `Web SPA shell` row is
+produced by `scripts/health/spa_assets.sh`, same sub-check pattern as
+the TLS and Spotify rows. It fetches `/`, asserts `<div id="root">`,
+extracts the two hashed paths the shell references, and probes both.
+
+It asserts **content-type, not just the status code**. The SPA vhost
+ends in `try_files {path} /index.html` (`deploy/Caddyfile`), so a
+missing asset is served as the SPA shell with HTTP 200 — never a 404.
+Measured on prod 2026-07-31:
+
+```
+/assets/index-Cmw8JJjD.css    200  [text/css; charset=utf-8]
+/assets/index-7Kggo81f.js     200  [text/javascript; charset=utf-8]
+/assets/index-NOEXISTEIX.css  200  [text/html; charset=utf-8]   <-- fallback
+```
+
+The status-only check this replaced was therefore unfalsifiable: its
+`(dist stale?)` branch could not be reached by a stale dist. The module
+script was not probed at all; now it is, expecting
+`text/javascript` or `application/javascript`.
+
+Three failure branches, each naming its own cause:
+
+| Branch | Detail says | Where to look |
+|---|---|---|
+| No HTTP response | `000 cap resposta HTTP (transport: …)` | network, TLS, Caddy up? |
+| Unexpected status | `HTTP <code> (el servidor respon…)` | Caddy routing, backend |
+| Wrong content-type | `200 però content-type '…' (fallback try_files)` | the dist — asset genuinely absent |
+
+A transport failure is retried once after a short wait before it goes
+red. A probe that recovers stays green and appends `— reintent OK: …`
+to the detail, so a flapping edge stays visible instead of being
+swallowed. This is why the hourly tick of 2026-07-31 11:15 paged: one
+dropped connection, no dist problem, and the detail read `000000`
+because `%{http_code}` already emits `000` and the old
+`|| echo 000` appended a second one.
+
+Tested at `topquaranta/tests/test_health_spa_assets.py`, which runs the
+real script against a stub server that emulates the `try_files`
+fallback. Env overrides for a manual run: `TQ_HEALTH_WEB_PUBLIC`,
+`TQ_HEALTH_ASSET_TIMEOUT`, `TQ_HEALTH_RETRY_WAIT`.
 
 **Git-tree drift detection** (added 2026-06-02): `tq-health` also
 emits a `Git tree: ...` row, delegating the classification to
@@ -746,6 +790,34 @@ Backup del unit file anterior (amb `--reload`):
 Font de veritat del unit: `deploy/topquaranta-web.service` al repo.
 `bin/tq-sync-infra` el sincronitza a `/etc/systemd/system/` quan
 detecta drift, i fa `systemctl daemon-reload`.
+
+`tq-sync-infra` és, en general, **l'única via** per a qualsevol fitxer
+que viu fora de l'arbre de treball: Caddyfile, cron, logrotate i el unit
+de systemd. **Si edites un fitxer d'infraestructura directament a la
+màquina, el següent desplegament no el toca i ningú se n'assabenta fins
+que falla.**
+
+L'autoconfig de correu (`deploy/autoconfig-topquaranta.xml` →
+`/var/www/autoconfig/`) és el cas que ho va ensenyar: va viure només al
+servidor, es va desincronitzar en retirar Stalwart, i durant dies va
+dir als clients que enviaren per un relay que ja no els servia. Ara entra
+per ací com la resta.
+
+De pas va deixar una regla més general que el fitxer: **si una cosa ha
+d'existir fora de l'arbre de treball, va a `deploy/` i entra per ací; i
+abans d'afegir-la, val la pena preguntar-se si ha d'existir.** En aquest
+cas la resposta va ser que sí —Spark Desktop llig l'autoconfig del
+domini i sense ell no es reconfigura— però la pregunta va estalviar-ne
+dos: els site blocks de `mail.` i `autoconfig.`, que servien el mateix
+per camins que ja no resolen.
+
+Afegir-hi un fitxer és **només** posar una línia al mapa `FILES` de
+l'script. Les branques del `case` que hi ha a sota existeixen únicament
+per als fitxers que a més necessiten validar-se (Caddyfile) o provocar un
+reload (unit de systemd); la resta cau a la branca per defecte. Eixa
+branca no hi era fins al 2026-08-18, i sense ella una entrada nova no
+s'instal·lava **i l'script eixia igualment amb èxit** — el pitjor mode de
+fallada possible en un desplegament.
 
 Vegeu `docs/decisions/0001-gunicorn-no-reload.md` i
 `docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.

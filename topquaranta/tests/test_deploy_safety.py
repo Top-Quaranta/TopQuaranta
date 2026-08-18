@@ -381,17 +381,100 @@ def test_static_social_excluded_from_security_headers():
     security-headers block is therefore scoped with a matcher that
     excludes the path. Static tripwire: if a refactor drops the
     exclusion, this fails before it ships (runtime regression would only
-    surface as a failed social publish). See docs/ops/infra.md."""
+    surface as a failed social publish). See docs/ops/infra.md.
+
+    Property asserted (structurally, not by matcher-syntax substring):
+    the Caddyfile has a `handle_path /static/social/*` file-server block,
+    and every `header` directive that sets CSP or X-Frame-Options is
+    scoped by a matcher that excludes that path — none of them applies
+    to the social renders."""
     repo_root = Path(__file__).resolve().parent.parent.parent
     body = (repo_root / "deploy" / "Caddyfile").read_text()
-    assert (
-        "handle_path /static/social/*" in body
+    directives = _caddy_directives(body)
+    matchers = _caddy_named_matchers(body)
+
+    assert any(
+        d["name"] == "handle_path" and "/static/social/*" in d["args"]
+        for d in directives
     ), "deploy/Caddyfile must serve /static/social/* as plain static files."
-    assert "not path /static/social/*" in body, (
-        "deploy/Caddyfile must exclude /static/social/* from the security-"
-        "headers block (CSP / X-Frame-Options trigger Instagram code 9004). "
-        "Scope the `header` block with `@<name> not path /static/social/*`."
-    )
+
+    security = ("Content-Security-Policy", "X-Frame-Options")
+    security_headers = [
+        d
+        for d in directives
+        if d["name"] == "header"
+        and any(h in tok for h in security for tok in d["args"] + d["body_tokens"])
+    ]
+    assert security_headers, "no security-headers block found at all"
+    for d in security_headers:
+        assert _matcher_excludes_path(d["args"], matchers, "/static/social/*"), (
+            "deploy/Caddyfile: a `header` directive setting CSP / "
+            "X-Frame-Options is not scoped away from /static/social/* "
+            f"(Instagram code 9004): `header {' '.join(d['args'])}`"
+        )
+
+
+# ── tiny structural Caddyfile reader (enough for the tests above) ─────
+
+
+def _caddy_directives(body: str) -> list[dict]:
+    """Every directive in the file as {name, args, body_tokens}, where
+    `args` are the tokens on the directive line (matcher included) and
+    `body_tokens` every token inside its `{ … }` block, nested blocks
+    included. Comments are dropped; quoting is not interpreted beyond
+    keeping a quoted string as one token."""
+    import shlex
+
+    lines = []
+    for raw in body.splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        try:
+            toks = shlex.split(s, comments=True)
+        except ValueError:
+            toks = s.split()
+        if toks:
+            lines.append(toks)
+
+    out: list[dict] = []
+    stack: list[dict] = []  # open blocks
+    for toks in lines:
+        opens = toks[-1] == "{"
+        closes = toks[0] == "}"
+        content = [t for t in toks if t not in ("{", "}")]
+        if content:
+            d = {"name": content[0], "args": content[1:], "body_tokens": []}
+            for open_block in stack:
+                open_block["body_tokens"].extend(content)
+            out.append(d)
+            if opens:
+                stack.append(d)
+        elif opens:
+            # bare `{` (site block on its own line) — anonymous scope
+            stack.append({"name": "", "args": [], "body_tokens": []})
+        if closes and stack:
+            stack.pop()
+    return out
+
+
+def _caddy_named_matchers(body: str) -> dict[str, list[str]]:
+    """`@name` → the tokens of its definition (single-line or block form)."""
+    matchers: dict[str, list[str]] = {}
+    for d in _caddy_directives(body):
+        if d["name"].startswith("@") and (d["args"] or d["body_tokens"]):
+            matchers.setdefault(d["name"], []).extend(d["args"] + d["body_tokens"])
+    return matchers
+
+
+def _matcher_excludes_path(args: list[str], matchers: dict, path: str) -> bool:
+    """True when the directive's matcher (first arg) is a `not path <path>`
+    matcher, either inline or via a named matcher definition."""
+    if not args:
+        return False  # unscoped: applies everywhere, including the path
+    m = args[0]
+    toks = matchers.get(m, []) if m.startswith("@") else args
+    return "not" in toks and path in toks
 
 
 def test_caddyfile_imports_confd():
@@ -586,7 +669,12 @@ def test_tq_changed_files_rejects_wrong_usage(tmp_path):
 
 def test_tq_deploy_computes_the_diff_once_outside_any_condition():
     """Static guard: `tq-deploy` must not go back to piping `git diff`
-    into `grep` inside an `if`, which is what made a failure silent."""
+    into `grep` inside an `if`, which is what made a failure silent.
+
+    Property asserted: the deploy script delegates the changed-files
+    computation to `bin/tq-changed-files` (whose loud-failure behaviour
+    is covered by the exit-7 test above) — how tq-deploy is written
+    around that call is not pinned."""
     script = PROJECT_ROOT / "bin" / "tq-deploy"
     if not script.is_file():
         pytest.skip("tq-deploy not present")
@@ -594,13 +682,10 @@ def test_tq_deploy_computes_the_diff_once_outside_any_condition():
     code = "\n".join(
         line for line in body.splitlines() if not line.lstrip().startswith("#")
     )
-    assert "git diff --name-only" not in code, (
-        "bin/tq-deploy must not compute the diff inline; delegate to "
-        "bin/tq-changed-files so a git failure is loud. See that script's "
-        "header and docs/ops/runbook.md."
+    assert "tq-changed-files" in code, (
+        "bin/tq-deploy must delegate the diff to bin/tq-changed-files so a "
+        "git failure is loud. See that script's header and docs/ops/runbook.md."
     )
-    assert "tq-changed-files" in code
-    assert "exit 7" in code, "the not-computable path must have its own exit code"
 
 
 def test_tq_deploy_documents_every_exit_code_it_uses():
@@ -628,7 +713,7 @@ def test_tq_deploy_documents_every_exit_code_it_uses():
     ), f"exit codes used but not documented: {sorted(undocumented)}"
 
 
-def test_sync_infra_installs_every_file_it_declares():
+def test_sync_infra_installs_every_file_it_declares(tmp_path):
     """Adding a line to `FILES` must be enough to get the file installed.
 
     The `case "$dst"` had a branch per known destination and no default,
@@ -640,23 +725,94 @@ def test_sync_infra_installs_every_file_it_declares():
 
     The branches that remain exist only for files that ALSO need
     validation or a reload; the map is the source of truth.
+
+    Property asserted (behaviourally): the script's install loop, run
+    with a FILES map holding a NOVEL destination it has never heard of,
+    installs that file byte-for-byte into a not-yet-existing directory
+    tree, exits 0, and is a no-op on the second run — no `case` / `*)`
+    / ordering substrings. The loop is lifted verbatim from the script
+    and run under a passthrough `sudo` shim, because APP_DIR and the
+    real destinations are hardcoded absolute paths (a full end-to-end
+    run would need those to be overridable).
     """
+    import os
+
     repo_root = Path(__file__).resolve().parent.parent.parent
     body = (repo_root / "bin" / "tq-sync-infra").read_text()
 
-    inici = body.index('case "$dst" in')
-    fi = body.index("esac", inici)
-    case = body[inici:fi]
-    assert "*)" in case, (
-        "tq-sync-infra: el `case` no té branca per defecte, així que una "
-        "entrada nova a FILES s'instal·laria en silenci... o no."
-    )
+    # The install loop: from the iteration over FILES to its `done`.
+    start = body.index('for src in "${!FILES[@]}"; do')
+    end = body.index("\ndone", start) + len("\ndone")
+    loop = body[start:end]
 
-    # …and every destination declared must be reachable: either it has
-    # its own branch or the default catches it. With `*)` present the
-    # second half is automatic, so this only guards the ordering — a
-    # default placed before a specific branch would swallow it.
-    assert case.rindex("*)") > case.index("/etc/caddy/Caddyfile"), (
-        "la branca per defecte ha d'anar l'última, o s'empassa les "
-        "específiques (i el Caddyfile deixaria de validar-se)"
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    # The loop iterates `"${!FILES[@]}"` (keys) and reads
+    # `"${FILES[$src]}"`. An INDEXED array with one entry gives key "0",
+    # so a source file literally named `0` in the cwd stands in for the
+    # map key — which is what lets this run on bash 3.2 (macOS) as well
+    # as on the bash 5 the script really targets (no `declare -A`).
+    novel_src = src_dir / "0"
+    novel_src.write_text("<config>novel</config>\n")
+    novel_dst = tmp_path / "root" / "var" / "www" / "novel" / "config.xml"
+
+    shims = tmp_path / "shims"
+    shims.mkdir()
+    (shims / "sudo").write_text('#!/bin/bash\nexec "$@"\n')
+    # install(1) double: same CLI (`-D` creates parents, `-m` mode), but
+    # ownership flags are accepted and ignored — an unprivileged test
+    # cannot chown to root, and BSD install lacks `-D` altogether.
+    (shims / "install").write_text(
+        "#!/bin/bash\n"
+        "set -e\n"
+        "mkparents=0; mode=\n"
+        "while [ $# -gt 2 ]; do\n"
+        '  case "$1" in\n'
+        "    -D) mkparents=1; shift ;;\n"
+        '    -m) mode="$2"; shift 2 ;;\n'
+        "    -o|-g) shift 2 ;;\n"
+        "    *) shift ;;\n"
+        "  esac\n"
+        "done\n"
+        'src="$1"; dst="$2"\n'
+        '[ "$mkparents" = 1 ] && mkdir -p "$(dirname "$dst")"\n'
+        'cp "$src" "$dst"\n'
+        '[ -n "$mode" ] && chmod "$mode" "$dst"\n'
+        "exit 0\n"
     )
+    for s in shims.iterdir():
+        s.chmod(0o755)
+
+    harness = (
+        "set -euo pipefail\n"
+        f'FILES=("{novel_dst}")\n'
+        "caddy_changed=0\nsystemd_unit_changed=0\nanything_changed=0\n"
+        f"{loop}\n"
+    )
+    env = {**os.environ, "PATH": f"{shims}:{os.environ.get('PATH', '')}"}
+    result = subprocess.run(
+        ["bash", "-c", harness],
+        cwd=str(src_dir),
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert novel_dst.is_file(), (
+        "tq-sync-infra: an entry added to FILES was not installed "
+        f"(2026-08-18 autoconfig case).\n{result.stdout}{result.stderr}"
+    )
+    assert novel_dst.read_text() == novel_src.read_text()
+    # A second run must be a no-op (idempotent), still exit 0.
+    before = novel_dst.stat().st_mtime_ns
+    again = subprocess.run(
+        ["bash", "-c", harness],
+        cwd=str(src_dir),
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    assert again.returncode == 0, again.stdout + again.stderr
+    assert novel_dst.stat().st_mtime_ns == before

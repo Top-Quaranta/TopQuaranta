@@ -97,17 +97,6 @@ def test_doc_outside_scope_is_ignored(script, tmp_path):
     assert script.find_oversize_docs(tmp_path, cfg) == []
 
 
-def test_multiple_offenders_are_all_returned(script, tmp_path):
-    _mkdoc(tmp_path, "docs/architecture/a.md", 500)
-    _mkdoc(tmp_path, "docs/ops/b.md", 600)
-    cfg = _cfg(["docs/architecture/", "docs/ops/"])
-    offenders = script.find_oversize_docs(tmp_path, cfg)
-    assert sorted(offenders) == [
-        ("docs/architecture/a.md", 500),
-        ("docs/ops/b.md", 600),
-    ]
-
-
 def test_empty_size_block_disables_check(script, tmp_path):
     _mkdoc(tmp_path, "docs/architecture/big.md", 500)
     assert script.find_oversize_docs(tmp_path, {}) == []

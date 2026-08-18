@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from io import StringIO
 
@@ -43,10 +44,13 @@ def test_report_counts_coverage_and_the_blind_spot():
     call_command("enviar_informe_youtube", "--dry-run", stdout=out)
     body = out.getvalue()
 
+    # Property asserted: the coverage figures 1/2 and 50% appear under
+    # their labels — whitespace-tolerant, column alignment is not the
+    # promise.
     assert "DESCOBRIMENT" in body
-    assert "Cançons connectades       1/2" in body
+    assert re.search(r"Cançons connectades\s+1/2\b", body)
     # Neither track has Last.fm signal, so both are blind spot; one covered.
-    assert "Ja tenen YouTube          1/2 (50%)" in body
+    assert re.search(r"Ja tenen YouTube\s+1/2\b.*50%", body)
 
 
 @pytest.mark.django_db

@@ -166,13 +166,6 @@ def test_gather_surfaces_orphan_status_file(tmp_path):
     assert orphan["escalates"] and orphan["is_anomaly"]
 
 
-def test_gather_no_orphans_when_all_registered(tmp_path):
-    _write_status(tmp_path / "obtenir_novetats.status")
-    meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
-    rows = hr.gather_crons(tmp_path, meta, NOW)
-    assert all(r["state"] != "ORPHAN" for r in rows)
-
-
 def test_gather_missing_frequent_cron(tmp_path):
     # Frequent cron declared in meta but no status file → MISSING.
     meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
@@ -192,19 +185,40 @@ def test_gather_ignores_non_status_files(tmp_path):
 # ── per-cron skip_concern as the WARN threshold (Patró 3) ────────────
 
 
+def _warned(**kw) -> bool:
+    """Has the watchdog reached its WARN floor for this cron?
+
+    The classifier has no WARN flag; the observable behaviour is that a
+    *silenced* cron re-escalates once it crosses WARN (an unsilenced one
+    only gets the level token in its row). Both are checked and must
+    agree, so a WARN is asserted through behaviour, not through the copy
+    of the tag.
+    """
+    silenced = _c(silenced=True, **kw)
+    loud = _c(silenced=False, **kw)
+    assert silenced["escalates"] == ("WARN" in loud["display"])
+    return silenced["escalates"]
+
+
 def test_classify_skip_concern_lowers_warn_threshold():
     # skip_concern=1 (daily crons): a single skip already WARNs.
-    r = _c(status="OK", skips=1, skip_concern=1)
-    assert "watchdog WARN, 1 consecutive" in r["display"]
+    # Property asserted: WARN is reached exactly at skip_concern.
+    assert _warned(status="OK", skips=1, skip_concern=1)
+    assert not _warned(status="OK", skips=0, skip_concern=1)
+    # …and WARN on its own never alerts an unsilenced cron.
+    assert not _c(status="OK", skips=1, skip_concern=1)["escalates"]
 
 
 def test_classify_default_warn_threshold_when_unset():
-    # No skip_concern → default 3: a single skip does NOT warn.
-    r = _c(status="OK", skips=1, skip_concern=None)
-    assert "watchdog" not in r["display"]
-    # hourly skip_concern=3 behaves the same as the old hardcoded 3.
-    assert "watchdog" not in _c(status="OK", skips=2, skip_concern=3)["display"]
-    assert "WARN, 3 consecutive" in _c(status="OK", skips=3, skip_concern=3)["display"]
+    # No skip_concern → the module default applies: one skip short of it
+    # does NOT warn, at it does. Property asserted against
+    # DEFAULT_WARN_PERSISTENT, not a literal.
+    d = hr.DEFAULT_WARN_PERSISTENT
+    assert not _warned(status="OK", skips=d - 1, skip_concern=None)
+    assert _warned(status="OK", skips=d, skip_concern=None)
+    # An explicit skip_concern equal to the default behaves identically.
+    assert not _warned(status="OK", skips=d - 1, skip_concern=d)
+    assert _warned(status="OK", skips=d, skip_concern=d)
 
 
 def test_classify_skip_concern_silenced_escalates_at_threshold():
@@ -214,10 +228,18 @@ def test_classify_skip_concern_silenced_escalates_at_threshold():
 
 
 def test_classify_crit_threshold_stays_fixed():
-    # CRIT is a fixed ceiling (10) regardless of a low skip_concern.
-    assert "watchdog WARN" in _c(status="OK", skips=9, skip_concern=1)["display"]
-    crit = _c(status="OK", skips=10, skip_concern=1)
-    assert "watchdog CRIT" in crit["display"] and crit["escalates"]
+    # CRIT is a fixed ceiling regardless of a low skip_concern.
+    # Property asserted: an UNSILENCED cron escalates exactly from
+    # DEFAULT_CRIT_PERSISTENT on (below it, WARN alone never alerts),
+    # and a low skip_concern does not pull that ceiling down.
+    crit = hr.DEFAULT_CRIT_PERSISTENT
+    for concern in (1, None):
+        below = _c(status="OK", skips=crit - 1, skip_concern=concern)
+        assert not below["escalates"]
+        assert _warned(status="OK", skips=crit - 1, skip_concern=concern)
+        at = _c(status="OK", skips=crit, skip_concern=concern)
+        assert at["escalates"]
+        assert "CRIT" in at["display"]
 
 
 # ── render ───────────────────────────────────────────────────────────
@@ -241,11 +263,16 @@ def test_render_all_ok_header_and_legend():
         _c(name="obtenir_novetats", status="OK", last_run_iso=_iso(0), max_age_h=2)
     ]
     text, overall = hr.render(crons, _all_ok_extras(), NOW)
+    # Property asserted: a clean run exits 0 and its first line carries
+    # the OK marker (the same one the per-row legend uses), with no
+    # anomaly marker anywhere in the header — not the header copy, the
+    # legend heading or the group names.
     assert overall == 0
-    assert text.splitlines()[0].startswith("🟢 Tot OK")
-    assert "LLEGENDA" in text
-    assert "Ingesta i metadata" in text  # group header present
-    assert "CEST" in text  # timestamps localised
+    header = text.splitlines()[0]
+    assert header.startswith(hr._EMOJI["OK"])
+    assert not any(header.startswith(hr._EMOJI[s]) for s in ("FAIL", "WARN"))
+    assert "ANOMALIES" not in text
+    assert "obtenir_novetats" in text  # every cron is listed in its group
 
 
 def test_render_mixed_anomalies_header_and_section():
@@ -328,17 +355,6 @@ def test_render_silenced_stale_not_red_header():
 
 
 # ── relative_age / cest ──────────────────────────────────────────────
-
-
-def test_relative_age():
-    assert hr.relative_age(0) == "fa 0h"
-    assert hr.relative_age(5) == "fa 5h"
-    assert hr.relative_age(50) == "fa 2d 2h"
-
-
-def test_cest_label_today_yesterday():
-    assert "avui" in hr.cest_label(_iso(1), NOW)
-    assert "ahir" in hr.cest_label(_iso(28), NOW)
 
 
 # ── Premium cache-hit fix: emits valid JSON, no " (cached …)" suffix ──

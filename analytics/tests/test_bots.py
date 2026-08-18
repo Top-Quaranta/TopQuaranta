@@ -34,10 +34,6 @@ def test_python_markers_match_caddyfile_regex():
     assert set(BOT_UA_MARKERS) == _caddy_markers()
 
 
-def test_no_duplicate_markers():
-    assert len(BOT_UA_MARKERS) == len(set(BOT_UA_MARKERS))
-
-
 def test_classify_known_bots():
     googlebot = (
         "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"

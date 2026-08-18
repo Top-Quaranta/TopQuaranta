@@ -231,8 +231,10 @@ El que hi havia i s'ha llevat: el servei, els listeners de 25/465/587/993,
 `stalwart-cert-sync.path` + `.service` que copiava el certificat de Caddy
 cap a Stalwart. Les quatre regles d'entrada del firewall de Hetzner
 (25/465/587/993, etiquetades «Stalwart») es van tancar el 2026-08-18 en
-comprovar que ja no hi escoltava res; el firewall torna a obrir només
-22, 80-443 i els ports dels altres projectes de la caixa.
+comprovar que ja no hi escoltava res. El mateix dia es van tancar també
+5432/5000/5001/8081/10000 (herència de muntatges anteriors; res hi
+escoltava públicament, Postgres només a localhost). El firewall obri
+només 22, ICMP i 80-443; tot el que serveix la caixa passa per Caddy.
 
 Es conserven dues coses, a posta:
 

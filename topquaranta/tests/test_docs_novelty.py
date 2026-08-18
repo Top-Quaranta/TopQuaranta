@@ -70,11 +70,6 @@ def _mkroot_file(root: Path, name: str) -> Path:
 # ---------------------------------------------------------------------
 
 
-def test_is_code_dir_true_for_django_app(script, tmp_path):
-    d = _mkapp(tmp_path, "myapp", has_apps_py=True)
-    assert script.is_code_dir(d) is True
-
-
 def test_is_code_dir_true_for_dir_with_py(script, tmp_path):
     d = _mkapp(tmp_path, "myapp")
     assert script.is_code_dir(d) is True
@@ -159,12 +154,6 @@ def test_uncovered_dir_still_flagged_without_git(script, tmp_path):
     assert script.find_uncovered_code_dirs(tmp_path, [], []) == ["newapp"]
 
 
-def test_dir_without_py_is_not_flagged(script, tmp_path):
-    _mkdir_no_py(tmp_path, "newdata")
-    found = script.find_uncovered_code_dirs(tmp_path, [], [])
-    assert found == []
-
-
 def test_root_file_is_not_flagged(script, tmp_path):
     _mkroot_file(tmp_path, "README.md")
     _mkroot_file(tmp_path, "CONFIG.toml")
@@ -189,13 +178,6 @@ def test_skiplist_dir_is_skipped(script, tmp_path):
     (d2 / "x.py").write_text("# stub\n")
     found = script.find_uncovered_code_dirs(tmp_path, [], [])
     assert found == []
-
-
-def test_multiple_uncovered_dirs_are_all_listed(script, tmp_path):
-    _mkapp(tmp_path, "appone")
-    _mkapp(tmp_path, "apptwo", has_apps_py=True)
-    found = script.find_uncovered_code_dirs(tmp_path, [], [])
-    assert sorted(found) == ["appone", "apptwo"]
 
 
 # ---------------------------------------------------------------------

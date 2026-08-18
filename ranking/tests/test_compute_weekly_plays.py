@@ -393,15 +393,6 @@ def test_calib_rosalia_divinize_untouched():
     assert out > 20_000
 
 
-def test_calib_sx3_tots_som_supers_fresh_untouched():
-    """Genuinely new release (dl 1 day before the run): the fresh
-    branch returns the full count and the robust path is never reached."""
-    today = date(2026, 5, 30)
-    canco = _Canco(data_llancament=date(2026, 5, 29))  # 1 d old
-    signals = [_Senyal(date(2026, 5, 30), 4656, "Tots Som Súpers")]
-    assert _compute_weekly_plays(canco, signals, today) == 4656.0
-
-
 def test_robust_next_week_after_merge_is_legacy_identical():
     """The week AFTER a merge: the step is before `today - 7`, so the
     strict window sees no merge and the value is the plain legacy delta

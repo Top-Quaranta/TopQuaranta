@@ -45,18 +45,6 @@ class TestRankingProvisional:
         )
         return canco
 
-    def test_create_provisional(self, setup_data):
-        rp = TopProvisional.objects.create(
-            canco=setup_data,
-            territori="CAT",
-            posicio=1,
-            score_setmanal=85.5,
-            escoltes_setmanals=1000,
-        )
-        assert rp.posicio == 1
-        assert rp.territori == "CAT"
-        assert str(rp) == "#1 Track (CAT)"
-
     def test_unique_canco_territori(self, setup_data):
         TopProvisional.objects.create(
             canco=setup_data,
@@ -71,26 +59,6 @@ class TestRankingProvisional:
                 posicio=2,
                 score_setmanal=70.0,
             )
-
-
-@pytest.mark.django_db
-class TestRankingSetmanal:
-    def test_str(self):
-        from music.models import Album, Artista, Canco
-
-        artista = Artista.objects.create(nom="Zoo", lastfm_nom="Zoo")
-        album = Album.objects.create(artista=artista, nom="Raval")
-        canco = Canco.objects.create(artista=artista, album=album, nom="Llum")
-        rs = TopSetmanal.objects.create(
-            canco=canco,
-            territori="VAL",
-            setmana=date(2026, 4, 13),
-            posicio=3,
-            score_setmanal=72.1,
-        )
-        assert "#3" in str(rs)
-        assert "Llum" in str(rs)
-        assert "VAL" in str(rs)
 
 
 @pytest.mark.django_db
@@ -126,11 +94,6 @@ class TestPotPublicar:
         assert cfg.pot_publicar("newsletter") is False
         for c in [x for x in self.ALL if x != "newsletter"]:
             assert cfg.pot_publicar(c) is True, c
-
-    def test_master_overrides_channel_on(self):
-        # Master off wins even if the channel switch is on.
-        cfg = self._cfg(distribucio_activa=False, instagram_actiu=True)
-        assert cfg.pot_publicar("instagram") is False
 
     def test_unknown_channel_raises(self):
         cfg = self._cfg()

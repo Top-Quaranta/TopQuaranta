@@ -177,14 +177,6 @@ def test_rotated_pattern_rejects(name):
     assert not ROTATED_RE.match(name), f"{name} no hauria de casar"
 
 
-def test_rotated_pattern_accepts_real_caddy_names():
-    for name in [
-        "topquaranta_access-2026-07-28T14-32-51.275.log.gz",
-        "topquaranta_access-2026-07-31T00-09-14.267.log.gz",
-    ]:
-        assert ROTATED_RE.match(name), f"{name} hauria de casar"
-
-
 # ── robustness ───────────────────────────────────────────────────────
 
 

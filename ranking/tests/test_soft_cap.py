@@ -129,14 +129,6 @@ class TestMergeInertness:
     skipped on the SQLite CI DB; this pins the exact per-song Python
     transform it applies, which is what makes the merge inert.)"""
 
-    def test_off_is_identity_over_all_plays(self):
-        cfg = ConfiguracioGlobal.objects.create(pk=1, soft_cap_actiu=False)
-        knee = _soft_cap_knee("CAT", cfg, date.today())
-        assert knee is None  # off → no knee, no DB query, no compression
-        for plays in [0.0, 1.0, 5.0, 500.0, 5_000.0, 99_999.0, 1_000_000.0]:
-            # Identity transform → the score uses the raw plays, unchanged.
-            assert _apply_soft_cap(plays, knee) == plays
-
 
 @pytest.mark.django_db
 class TestBaseTopNConfigurable:

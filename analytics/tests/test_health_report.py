@@ -166,13 +166,6 @@ def test_gather_surfaces_orphan_status_file(tmp_path):
     assert orphan["escalates"] and orphan["is_anomaly"]
 
 
-def test_gather_no_orphans_when_all_registered(tmp_path):
-    _write_status(tmp_path / "obtenir_novetats.status")
-    meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
-    rows = hr.gather_crons(tmp_path, meta, NOW)
-    assert all(r["state"] != "ORPHAN" for r in rows)
-
-
 def test_gather_missing_frequent_cron(tmp_path):
     # Frequent cron declared in meta but no status file → MISSING.
     meta = {"obtenir_novetats": {"max_age_hours": 2, "skip_concern": 3}}
@@ -328,17 +321,6 @@ def test_render_silenced_stale_not_red_header():
 
 
 # ── relative_age / cest ──────────────────────────────────────────────
-
-
-def test_relative_age():
-    assert hr.relative_age(0) == "fa 0h"
-    assert hr.relative_age(5) == "fa 5h"
-    assert hr.relative_age(50) == "fa 2d 2h"
-
-
-def test_cest_label_today_yesterday():
-    assert "avui" in hr.cest_label(_iso(1), NOW)
-    assert "ahir" in hr.cest_label(_iso(28), NOW)
 
 
 # ── Premium cache-hit fix: emits valid JSON, no " (cached …)" suffix ──

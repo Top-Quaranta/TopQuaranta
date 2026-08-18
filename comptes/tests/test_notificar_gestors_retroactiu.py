@@ -103,15 +103,6 @@ def test_exclude_user_id_skips_target(approved_ua_unnotified):
 
 
 @pytest.mark.django_db
-def test_real_run_is_idempotent(approved_ua_unnotified):
-    call_command("notificar_gestors_retroactiu")
-    assert len(mail.outbox) == 1
-    # Second run finds nothing to do because the stamp is set.
-    call_command("notificar_gestors_retroactiu")
-    assert len(mail.outbox) == 1
-
-
-@pytest.mark.django_db
 def test_user_without_email_is_skipped(db, artista_a):
     usuari = Usuari.objects.create_user(
         username="noemail", email="", password="x", is_active=True

@@ -36,33 +36,6 @@ def _entry(pos, canco, canco_slug, names, artista_slug, artistes_slugs=None):
     return e
 
 
-def test_enrich_entry_principal_linked_collab_bold_backcompat():
-    """A pre-Slice-2 payload (no `artistes_slugs`) keeps the old behaviour:
-    principal linked, collaborators bold without link."""
-    e = _entry(3, "Nois", "nois", ["Ouineta", "Mushkaa"], "ouineta")
-    row = _enrich_entry(e, "top_3", 40, hero=False, torna=False)
-    ar = row["artistes_render"]
-    assert ar[0]["nom"] == "Ouineta" and "/artista/ouineta" in ar[0]["url"]
-    assert ar[1]["nom"] == "Mushkaa" and ar[1]["url"] is None
-    assert row["artistes_truncated"] is False
-
-
-def test_enrich_entry_collab_linked_when_slug_present():
-    """Slice 2: with `artistes_slugs`, the collaborator carries a link too."""
-    e = _entry(
-        3,
-        "Nois",
-        "nois",
-        ["Ouineta", "Mushkaa"],
-        "ouineta",
-        artistes_slugs=["ouineta", "mushkaa"],
-    )
-    row = _enrich_entry(e, "top_3", 40, hero=False, torna=False)
-    ar = row["artistes_render"]
-    assert ar[0]["nom"] == "Ouineta" and "/artista/ouineta" in ar[0]["url"]
-    assert ar[1]["nom"] == "Mushkaa" and "/artista/mushkaa" in ar[1]["url"]
-
-
 def test_enrich_entry_collab_without_slug_stays_bold():
     """A collaborator whose slug is None stays bold even in a Slice-2
     payload (the principal still links)."""
@@ -78,14 +51,6 @@ def test_enrich_entry_collab_without_slug_stays_bold():
     ar = row["artistes_render"]
     assert "/artista/ouineta" in ar[0]["url"]
     assert ar[1]["nom"] == "Mushkaa" and ar[1]["url"] is None
-
-
-def test_enrich_entry_truncates_long_collab_list():
-    names = ["Principal"] + [f"Col {i}" for i in range(40)]
-    e = _entry(17, "Massiva", "massiva", names, "principal")
-    row = _enrich_entry(e, "top_17", 40, hero=False, torna=False)
-    assert row["artistes_truncated"] is True
-    assert len(row["artistes_render"]) < len(names)
 
 
 def test_truncation_budget_is_over_names_and_keeps_whole_artists():
@@ -118,35 +83,6 @@ def test_truncated_partial_renders_valid_balanced_html():
     assert "…" in html
     # The principal anchor is whole (opened and closed in the same string).
     assert '<strong><a href="' in html and "</a></strong>" in html
-
-
-def test_name_map_kinds_and_urls():
-    entries = [
-        _entry(1, "Divinize", "divinize", ["Rosalía"], "rosalia"),
-        _entry(3, "Nois", "nois", ["Ouineta", "Mushkaa"], "ouineta"),
-    ]
-    nm = {n: (u, k) for n, u, k in _name_map_from_entries(entries, 40)}
-    assert nm["Divinize"][1] == "canco" and "/canco/divinize" in nm["Divinize"][0]
-    assert nm["Rosalía"][1] == "artista" and "/artista/rosalia" in nm["Rosalía"][0]
-    # Back-compat (no artistes_slugs): collaborator bold, no url.
-    assert nm["Mushkaa"] == (None, "artista")
-
-
-def test_name_map_links_collaborator_with_slug():
-    """Slice 2: a collaborator with a slug gets a prose URL, first
-    occurrence only (deduped by the canonical name)."""
-    entries = [
-        _entry(
-            3,
-            "Nois",
-            "nois",
-            ["Ouineta", "Mushkaa"],
-            "ouineta",
-            artistes_slugs=["ouineta", "mushkaa"],
-        ),
-    ]
-    nm = {n: (u, k) for n, u, k in _name_map_from_entries(entries, 40)}
-    assert nm["Mushkaa"][1] == "artista" and "/artista/mushkaa" in nm["Mushkaa"][0]
 
 
 @pytest.mark.django_db

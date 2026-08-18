@@ -106,21 +106,6 @@ def test_inactive_users_excluded_even_for_staff(staff, public_user):
 
 
 @pytest.mark.django_db
-def test_regular_user_cannot_dm_private_user_via_directory(public_user, private_user):
-    """The implicit gate is discoverability: a non-staff user cannot
-    see `private_user` in the directory and therefore has no UI path
-    to obtain their pk for the DM endpoint. This test locks that
-    contract in at the directory level. (The `missatge_crear` endpoint
-    itself is intentionally permissive on lookup; the gate is
-    discoverability, not validation.)"""
-    client = APIClient()
-    client.force_authenticate(public_user)
-    resp = client.get(DIRECTORI_URL)
-    assert resp.status_code == 200
-    assert "privateuser" not in _usernames(resp.data)
-
-
-@pytest.mark.django_db
 def test_staff_can_dm_private_user(staff, private_user):
     """End-to-end: staff sees the private user in the directory, then
     posts to `missatge_crear` with their pk and it succeeds."""

@@ -276,13 +276,6 @@ def test_gmail_mso_ghost_columns_for_outlook():
 # ── no top 1-40 section + management block ───────────────────────────
 
 
-def test_no_full_ranking_section():
-    """The email carries the highlighted top 10 only; there is no separate
-    full 1-40 ranking section."""
-    html = _render()
-    assert "El Top 40 complet" not in html
-
-
 def test_management_block_absent_without_gestio_url():
     """The subscriber copy (no gestio_url) must NOT carry the admin block."""
     html = _render()

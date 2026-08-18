@@ -37,6 +37,8 @@ import time
 import requests
 from django.conf import settings
 
+from music.models import normalitza_nom_homonim
+
 logger = logging.getLogger(__name__)
 
 API_URL = "https://www.googleapis.com/youtube/v3/"
@@ -63,8 +65,19 @@ def _get(endpoint: str, **params) -> dict:
     data = r.json()
     if "error" in data:
         reasons = {e.get("reason", "") for e in data["error"].get("errors", []) or [{}]}
-        if "quotaExceeded" in reasons or "dailyLimitExceeded" in reasons:
-            raise QuotaExhausted(data["error"].get("message", "quota exceeded"))
+        message = data["error"].get("message", "")
+        # Google's per-metric limits ("Search Queries per day") come back
+        # with reasons OUTSIDE the two canonical ones. On 2026-08-12/13
+        # that mismatch turned quota death into "empty result", and
+        # discovery stamped 27 artists as "has no channel" — a silent
+        # lie that parked them out of the queue. Match the message too.
+        if (
+            "quotaExceeded" in reasons
+            or "dailyLimitExceeded" in reasons
+            or "rateLimitExceeded" in reasons
+            or "quota exceeded" in message.lower()
+        ):
+            raise QuotaExhausted(message or "quota exceeded")
         logger.warning(
             "YouTube %s failed: %s", endpoint, data["error"].get("message", "")[:200]
         )
@@ -72,8 +85,53 @@ def _get(endpoint: str, **params) -> dict:
     return data
 
 
+# YouTube localises the auto-generated channel suffix: a Catalan browser
+# shows "Malifeta - Tema", an English one "Malifeta - Topic". Our server
+# currently gets English, but that is an accident of the API's default
+# locale, not a contract — and if it ever changes, requiring the English
+# word would make discovery return nothing at all, silently. Cheap
+# insurance.
+_TOPIC_SUFIXOS = (
+    "topic",
+    "tema",
+    "thema",
+    "sujet",
+    "tópico",
+    "tópicos",
+    "argomento",
+    "onderwerp",
+)
+
+
+def topic_suffix_name(title: str) -> str | None:
+    """The artist name when `title` is an auto-generated channel, else None.
+
+    "Malifeta - Topic" → "Malifeta"; "Malifeta - Tema" → "Malifeta";
+    "MALIFETA" → None (that is the band's own channel).
+    """
+    net = (title or "").strip()
+    for sufix in _TOPIC_SUFIXOS:
+        cua = f"- {sufix}"
+        if net.lower().endswith(cua):
+            return net[: -len(cua)].strip()
+    return None
+
+
 def _norm_channel_title(title: str) -> str:
-    return title.strip().lower()
+    """Fold a channel title down to a comparable key.
+
+    Lowercasing alone is not enough, and the two misses it produced are
+    both real: our "Bèrnia" never matched the channel literally called
+    `bernia - Topic`, and "Clàudia Xiva" never matched `Clàudia Xiva -
+    Topic` because one side was NFC and the other NFD. Reuses the
+    project's existing homonym key (NFKD, drop diacritics, drop
+    everything non-alphanumeric) rather than growing a second one.
+
+    Loosening this does NOT widen the exploit surface: the candidate
+    must still carry the literal "- Topic" suffix, which is what keeps
+    the padel channels and the events companies out.
+    """
+    return normalitza_nom_homonim(title)
 
 
 def find_topic_channel(artist_name: str) -> str | None:
@@ -94,11 +152,42 @@ def find_topic_channel(artist_name: str) -> str | None:
     target = _norm_channel_title(artist_name)
     for item in data.get("items", []):
         title = (item.get("snippet", {}).get("title") or "").strip()
-        if not title.lower().endswith("- topic"):
+        nom = topic_suffix_name(title)
+        if nom is None:
             continue
-        if _norm_channel_title(title[: -len("- topic")]) == target:
+        if _norm_channel_title(nom) == target:
             return item["snippet"].get("channelId") or None
     return None
+
+
+def channel_info(*, channel_id: str = "", handle: str = "") -> dict | None:
+    """`{"id", "title"}` for a channel, by id or by handle. Costs `COST_LIST`.
+
+    One unit, not the hundred a `search.list` would cost, which is what
+    makes accepting handles viable at all: YouTube stopped showing the
+    `UC…` id anywhere in its UI, so the handle is what a human can copy
+    out of the address bar. The title comes back too because the caller
+    needs it to tell an artist's own channel from the auto-generated one.
+    """
+    if handle:
+        data = _get("channels", part="snippet", forHandle=handle.lstrip("@"))
+    elif channel_id:
+        data = _get("channels", part="snippet", id=channel_id)
+    else:
+        return None
+    items = data.get("items") or []
+    if not items:
+        return None
+    return {
+        "id": items[0].get("id") or "",
+        "title": (items[0].get("snippet", {}).get("title") or "").strip(),
+    }
+
+
+def resolve_handle(handle: str) -> str | None:
+    """`@malifeta` → `UCZ_RdKPMxRUQv4j3XX8Hsjg`. Costs `COST_LIST`."""
+    info = channel_info(handle=handle)
+    return info["id"] if info else None
 
 
 def uploads_playlist(channel_id: str) -> str | None:

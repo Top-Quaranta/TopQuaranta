@@ -97,8 +97,8 @@ export const STAFF_GROUPS = [
       },
       {
         to: "/staff/artistes/sense-youtube",
-        label: "Canal oficial de YouTube",
-        title: "Canal oficial de YouTube",
+        label: "Artistes sense YouTube",
+        title: "Artistes sense YouTube",
         desc: "Decidir el canal propi de cada artista: el segon carril de senyal.",
       },
       {

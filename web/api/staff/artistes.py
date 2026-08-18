@@ -8,9 +8,9 @@ module and let the shim handle the re-export.
 
 from __future__ import annotations
 
+import datetime
 import logging
-
-logger = logging.getLogger(__name__)
+import re
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -46,6 +46,7 @@ from music.models import (
 from web.api.search_utils import normalize_search_term as _normalize_search_term
 from web.api.search_utils import unaccent_field as _unaccent_field
 
+logger = logging.getLogger(__name__)
 Usuari = get_user_model()
 # Shared helpers from the staff package.
 from web.api.staff._common import IsStaff, _paginate, noms_amb_homonims
@@ -118,6 +119,19 @@ def artistes_list(request: Request) -> Response:
         qs = qs.filter(Q(instagram_url="") | Q(instagram_url__isnull=True))
     elif instagram == "si":
         qs = qs.exclude(instagram_url="").exclude(instagram_url__isnull=True)
+    elif instagram == "pendent":
+        # Third state, mirroring `youtube=pendent`: no URL AND nobody has
+        # looked. An artist reviewed as genuinely having no Instagram is
+        # DONE, not outstanding. `instagram=no` keeps its old meaning
+        # (simply has no URL) so existing callers don't shift under them.
+        qs = qs.filter(
+            Q(instagram_url="") | Q(instagram_url__isnull=True),
+            instagram_revisat=False,
+        ).filter(_te_canco_viva())
+    elif instagram == "rebutjat":
+        # Handles Meta refused while publishing. They HAVE a URL, so they
+        # never show up in the `instagram=no` queue — a separate hole.
+        qs = qs.filter(instagram_rebutjat_at__isnull=False)
 
     # YouTube official-channel workflow (2026-08). Three states, so the
     # filter is `pendent` (nobody has looked) rather than "empty": an
@@ -125,7 +139,7 @@ def artistes_list(request: Request) -> Response:
     # outstanding, and must not come back in the queue forever.
     youtube = request.GET.get("youtube", "")
     if youtube == "pendent":
-        qs = qs.filter(youtube_canal_revisat=False)
+        qs = qs.filter(youtube_canal_revisat=False).filter(_te_canco_viva())
     elif youtube == "revisat":
         qs = qs.filter(youtube_canal_revisat=True)
 
@@ -285,11 +299,34 @@ def artistes_list(request: Request) -> Response:
             .order_by("-n_cancons_tops", Lower("nom"))
         )
     elif sort_raw == "-n_top":
-        # Tops first, then live-songs as the tiebreaker (novetats artists
-        # with 0 tops but active songs surface above the 0-top silence),
-        # then alphabetical. `n_cancons_vives` is guaranteed annotated
-        # here (this branch is inside the annotation gate above).
-        qs = qs.distinct().order_by("-n_top", "-n_cancons_vives", Lower("nom"))
+        # Tops first, then live-songs, then NEWEST song first (2026-08-12,
+        # demanat pel Miquel): an artist who released this week and has no
+        # handle yet will be published untagged in the very next "nous
+        # singles" post — that is the one case where recency beats
+        # everything else at equal tops/vives. Alphabetical only as the
+        # final stabiliser.
+        from django.db.models import DateField, Subquery, Value
+        from django.db.models.functions import Coalesce as _C
+        from django.db.models.functions import Greatest
+
+        viva = {"verificada": True, "activa": True}
+        _fons = Value(datetime.date(1900, 1, 1), output_field=DateField())
+        dp = Subquery(
+            Canco.objects.filter(artista=OuterRef("pk"), **viva)
+            .order_by("-data_llancament")
+            .values("data_llancament")[:1],
+            output_field=DateField(),
+        )
+        dc = Subquery(
+            Canco.objects.filter(artistes_col=OuterRef("pk"), **viva)
+            .order_by("-data_llancament")
+            .values("data_llancament")[:1],
+            output_field=DateField(),
+        )
+        qs = qs.annotate(darrera_canco=Greatest(_C(dp, _fons), _C(dc, _fons)))
+        qs = qs.distinct().order_by(
+            "-n_top", "-n_cancons_vives", "-darrera_canco", Lower("nom")
+        )
     else:
         qs = qs.distinct().order_by(Lower("nom"))
 
@@ -335,6 +372,133 @@ def artistes_search(request: Request) -> Response:
             ]
         }
     )
+
+
+_CANAL_ID = re.compile(r"^UC[\w-]{20,30}$")
+_CANAL_URL = re.compile(r"youtube\.com/channel/(UC[\w-]{20,30})", re.I)
+_CANAL_HANDLE = re.compile(r"(?:youtube\.com/)?@([\w.-]+)", re.I)
+
+
+def _te_canco_viva():
+    """Q for the fill-in queues: the artist touches ≥1 verified+active
+    song, as principal or collaborator.
+
+    Without it the queues carried every approved artist ever — 1.727 rows
+    of which ~1.500 had nothing a handle would ever be used for (no song
+    to tag, no video to match). Kept OUT of `instagram=no`/`si`, which
+    keep their old semantics.
+    """
+    from django.db.models import Exists
+
+    viva = {"verificada": True, "activa": True}
+    return Q(Exists(Canco.objects.filter(artista=OuterRef("pk"), **viva))) | Q(
+        Exists(Canco.objects.filter(artistes_col=OuterRef("pk"), **viva))
+    )
+
+
+def _adopta_canal_tema(artista, channel_id: str) -> int:
+    """Store a Topic channel supplied by hand and match its songs now.
+
+    The matching cannot wait for the nightly cron: `_cua()` only queues
+    artists whose `youtube_channel_id` is empty, so the moment we store
+    it the artist stops being revisited. Khimera (DUPLICATS) sat with a
+    perfectly good channel and no matched song for exactly that reason
+    until it was repaired by hand on 2026-08-14.
+
+    Returns how many songs got a video.
+    """
+    from django.utils import timezone
+
+    from ingesta.clients import youtube as yt
+    from ingesta.management.commands.descobrir_youtube import _norm
+
+    playlist = yt.uploads_playlist(channel_id)
+    artista.youtube_channel_id = channel_id
+    artista.youtube_uploads_playlist = playlist or ""
+    artista.youtube_checked_at = timezone.now()
+    artista.save(
+        update_fields=[
+            "youtube_channel_id",
+            "youtube_uploads_playlist",
+            "youtube_checked_at",
+        ]
+    )
+    if not playlist:
+        return 0
+    videos = {_norm(v["title"]): v["video_id"] for v in yt.playlist_videos(playlist)}
+    fets = 0
+    for canco in Canco.objects.filter(artista=artista, youtube_video_id=""):
+        vid = videos.get(_norm(canco.nom))
+        if vid:
+            canco.youtube_video_id = vid
+            canco.youtube_match = Canco.MATCH_EXACTE
+            canco.youtube_matched_at = timezone.now()
+            canco.save(
+                update_fields=[
+                    "youtube_video_id",
+                    "youtube_match",
+                    "youtube_matched_at",
+                ]
+            )
+            fets += 1
+    return fets
+
+
+def _resol_canal_youtube(brut: str) -> tuple[str, str]:
+    """Accept an id, a /channel/ URL or a handle.
+
+    Returns `(id, error, info_tema)`. `info_tema` is set — with an empty
+    id and no error — when the channel is the auto-generated Topic one:
+    it belongs to the other lane, so the caller decides what to do with
+    it rather than losing it.
+
+    Resolving here rather than in the browser keeps the API key server-
+    side, and it is where a bad value can still be refused: better a 400
+    the operator reads than a channel id that silently points nowhere.
+    """
+    from ingesta.clients import youtube as yt
+
+    brut = (brut or "").strip()
+    kwargs: dict[str, str] = {}
+    if _CANAL_ID.match(brut):
+        kwargs = {"channel_id": brut}
+    elif _CANAL_URL.search(brut):
+        kwargs = {"channel_id": _CANAL_URL.search(brut).group(1)}
+    elif _CANAL_HANDLE.search(brut):
+        kwargs = {"handle": _CANAL_HANDLE.search(brut).group(1)}
+    else:
+        return (
+            "",
+            (
+                "No reconec això com un canal. Enganxa l'enllaç del canal "
+                "(youtube.com/@nom o youtube.com/channel/UC…) o l'id UC…"
+            ),
+            None,
+        )
+
+    try:
+        info = yt.channel_info(**kwargs)
+    except yt.QuotaExhausted:
+        return "", "Quota de YouTube exhaurida; torna-ho a provar demà.", None
+    except Exception:  # pragma: no cover - transport
+        logger.exception("resolent el canal de YouTube %r", brut)
+        return "", "No s'ha pogut consultar YouTube. Torna-ho a provar.", None
+    if not info:
+        return "", f"YouTube no coneix {brut}.", None
+
+    # Refuse the auto-generated channel. It is the OTHER lane and the
+    # discovery cron already finds it on its own; pasting it here would
+    # make us count the same Art Track twice and lose the videoclip lane
+    # entirely. Easy mistake: searching an artist surfaces both, and the
+    # Topic one often ranks first.
+    if yt.topic_suffix_name(info["title"]) is not None:
+        # Signalled, not just refused: when discovery missed the Topic
+        # channel the operator has nowhere else to put it, and search
+        # DOES miss them — it buries brand-new or tiny ones (DUPLICATS,
+        # 2026-08-14: 4 videos, invisible to `search.list`). The caller
+        # routes it to the Topic lane when that lane is empty.
+        return "", "", info
+    return info["id"], "", None
 
 
 @api_view(["POST"])
@@ -412,8 +576,55 @@ def _homonims_payload(artista: Artista) -> list[dict]:
 @permission_classes([IsStaff])
 def artista_detail(request: Request, pk: int) -> Response:
     artista = get_object_or_404(Artista, pk=pk)
+    avis_tema = ""
     if request.method == "PATCH":
         data = request.data or {}
+        # A YouTube handle is what a human can actually copy: the site
+        # stopped showing the `UC…` id anywhere, so asking for it made the
+        # staff queue unusable (caught 2026-08-12 filling in Malifeta).
+        # `channels.list?forHandle=` resolves it for ONE quota unit.
+        if data.get("youtube_canal_oficial"):
+            resolt, err, tema = _resol_canal_youtube(data["youtube_canal_oficial"])
+            if err:
+                return Response({"error": err}, status=400)
+            if tema is not None:
+                # A Topic channel was pasted. If discovery already found
+                # one, this is the classic mix-up and we refuse it. If it
+                # did NOT — and search does miss small channels — this is
+                # the only way the operator can supply it, so take it,
+                # into the lane it belongs to.
+                if artista.youtube_channel_id:
+                    return Response(
+                        {
+                            "error": (
+                                f"«{tema['title']}» és el canal automàtic de "
+                                "YouTube Music, i d'aquest artista ja el tenim. "
+                                "Ací va el canal propi, el dels videoclips."
+                            )
+                        },
+                        status=400,
+                    )
+                n = _adopta_canal_tema(artista, tema["id"])
+                avis_tema = (
+                    f"«{tema['title']}» és el canal automàtic de YouTube Music. "
+                    f"No en teníem cap per a aquest artista, així que l'he desat "
+                    f"com a Art Track i he aparellat {n} cançons. El camp del "
+                    f"canal propi (el dels videoclips) continua buit."
+                )
+                # Drop the "reviewed" flag too, not just the field. The
+                # queue sends both in one PATCH, and the videoclip
+                # channel — the whole point of that queue — is still
+                # missing, so the artist has to stay in it. Xafogor
+                # vanished from the list minutes after this shipped
+                # (2026-08-17): the Topic channel landed correctly and
+                # the row left anyway.
+                data = {
+                    k: v
+                    for k, v in data.items()
+                    if k not in ("youtube_canal_oficial", "youtube_canal_revisat")
+                }
+            else:
+                data = {**data, "youtube_canal_oficial": resolt}
         simple_fields = [
             "nom",
             "lastfm_nom",
@@ -422,7 +633,7 @@ def artista_detail(request: Request, pk: int) -> Response:
             "percentatge_femeni",
             "musicbrainz_id",
             "youtube_canal_oficial",
-            "youtube_canal_revisat",
+            "instagram_suggerit",
         ] + [f for f, _ in Artista.SOCIAL_LINK_FIELDS]
         # Whole PATCH is one transaction: a rejected approval (no Deezer)
         # or a Deezer collision must NOT leave half-written localitats /
@@ -441,9 +652,40 @@ def artista_detail(request: Request, pk: int) -> Response:
             if "genere_locked" in data:
                 artista.genere_locked = bool(data["genere_locked"])
             old_mbid = artista.musicbrainz_id
+            # Clearing a non-empty suggestion IS the dismissal — record it
+            # so the seeder never proposes that handle again. MUST run
+            # BEFORE the simple_fields loop: the loop overwrites the field,
+            # and reading the old value afterwards reads "". The accept
+            # path (below, via instagram_url) clears WITHOUT recording: an
+            # accepted handle is not a refused one.
+            if "instagram_suggerit" in data:
+                _nou = (data.get("instagram_suggerit") or "").strip()
+                _vell = artista.instagram_suggerit
+                if _vell and not _nou:
+                    _desc = list(artista.instagram_suggerits_descartats or [])
+                    if _vell.lower() not in {d.lower() for d in _desc}:
+                        _desc.append(_vell)
+                    artista.instagram_suggerits_descartats = _desc
             for f in simple_fields:
                 if f in data:
                     setattr(artista, f, (data.get(f) or "").strip())
+            # Editing the handle is the fix for a Meta rejection, so the
+            # flag clears itself: leaving it set would keep an already-
+            # corrected artist in the "broken handle" list forever.
+            if "instagram_url" in data:
+                artista.instagram_rebutjat_at = None
+                artista.instagram_rebutjat_url = ""
+                # Accepting (or typing) a URL consumes the suggestion.
+                artista.instagram_suggerit = ""
+                # Filling the URL IS the review, so the operator doesn't
+                # have to say so twice.
+                if (data.get("instagram_url") or "").strip():
+                    artista.instagram_revisat = True
+            # Boolean, so it can't ride the `.strip()` loop above.
+            if "youtube_canal_revisat" in data:
+                artista.youtube_canal_revisat = bool(data["youtube_canal_revisat"])
+            if "instagram_revisat" in data:
+                artista.instagram_revisat = bool(data["instagram_revisat"])
             # Staff assigning a non-blank MBID manually overrides the
             # auto-match lockout: the decision is that this specific ID is
             # correct, so re-enable automatic sync for future cron runs.
@@ -669,6 +911,8 @@ def artista_detail(request: Request, pk: int) -> Response:
             },
         }
     )
+    if avis_tema:
+        row["avis"] = avis_tema
     return Response(row)
 
 

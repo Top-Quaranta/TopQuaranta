@@ -56,7 +56,7 @@ from analytics.models import (
 )
 from music.constants import TERRITORI_NOMS
 from music.dates import project_week_number
-from music.models import StaffAuditLog
+from music.models import Artista, StaffAuditLog
 from ranking.models import TopSetmanal
 from social.models import SocialPost
 
@@ -357,15 +357,27 @@ def _incidencies(since: datetime.date, until: datetime.date, now_ts: int) -> dic
         updated_at__date__lte=until,
     ).count()
 
+    # Instagram handles Meta refused while publishing. They are invisible
+    # everywhere else: the artist HAS a URL, so the "sense Instagram"
+    # queue never shows them, and the post that hit it published fine
+    # (untagged). Without this line nobody would ever learn.
+    handles = [
+        {"nom": a.nom, "url": a.instagram_url}
+        for a in Artista.objects.filter(
+            instagram_rebutjat_at__date__gte=since,
+            instagram_rebutjat_at__date__lte=until,
+        ).order_by("nom")[:8]
+    ]
     crons = incidents.cron_anomalies(now_ts)
     errors_log = incidents.django_errors(since, until)
 
     return {
+        "handles_rebutjats": handles,
         "social_fallades": fallades,
         "social_omesos": omesos,
         "crons": crons,
         "errors_log": errors_log,
-        "total": len(fallades) + len(crons) + errors_log["total"],
+        "total": (len(fallades) + len(crons) + errors_log["total"] + len(handles)),
         # `omesos` is intentionally out of the total: an omitted slot is
         # usually the calendar saying "no content for this phase", not a
         # failure. It is reported, not counted as an incident.
@@ -741,6 +753,8 @@ def render_text(ctx: dict) -> str:
             f"  [cron] {c['name']} — {c['display']}"
             + ("  (silenciat)" if c.get("silenced") else "")
         )
+    for h in inc["handles_rebutjats"]:
+        lines.append(f"  [instagram] {h['nom']} — Meta rebutja {h['url']}")
     for fallada in inc["social_fallades"]:
         lines.append(
             f"  [social] {fallada['quan']} {fallada['label']} — {fallada['error']}"

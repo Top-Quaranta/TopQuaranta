@@ -63,9 +63,10 @@ from `music/constants.py`. Never raise — return `None` on any failure.
   etc., and converts Unicode quotes to ASCII. Recovers ~10–15% of errors.
 
 ### `spotify.py` — playlist output (active since 2026-04)
-- Two classes. `SpotifyClient` is the legacy Client-Credentials wrapper
-  (ingest endpoints no longer available to us since Spotify gated Web API
-  behind Premium in 2024).
+- Una sola classe viva. La `SpotifyClient` de Client-Credentials es va
+  llevar el 2026-08-16: no la cridava ningú des que Spotify va tancar els
+  endpoints d'ingesta darrere de Premium (2024), i les seues 10 proves
+  eren l'única cosa que la tocava — vigilaven codi que no s'executava.
 - **`UserSpotifyClient`** is the live path: OAuth refresh-token flow for the
   admin account. Rotates access tokens on 401 mid-flight, honours 429
   `Retry-After`, persists a rotated refresh_token when Spotify issues one.
@@ -156,11 +157,68 @@ de pagament (ampliar-la exigeix una auditoria manual de Google):
 Per tant `descobrir_youtube` (03:00) només pot resoldre ~90 artistes al
 dia i **l'ordre importa més que la velocitat**: primer els artistes amb
 cançons sense senyal de Last.fm, després la resta de VAL/BAL, i al final
-CAT. `obtenir_senyal_youtube` (06:30) fotografia tot el catàleg per ~60
+CAT. El dia de quota de Google es reinicia a les 09:00 CEST, així que
+qualsevol one-off diürn resta directament del pressupost dels crons de
+la matinada següent. Quan la quota mor, el client alça `QuotaExhausted`
+i el descobriment aborta netament **sense estampar `youtube_checked_at`**
+— l'error de quota per mètrica («Search Queries per day») arriba amb un
+`reason` no canònic i el 2026-08-12/13 es va colar com a «cap resultat»,
+marcant 27 artistes com a «no té canal» en fals; ara es detecta també
+pel missatge. `obtenir_senyal_youtube` (06:30) fotografia tot el catàleg per ~60
 unitats i escriu `SenyalYouTube`, bessona de `SenyalDiari` — taula a
 part a posta, perquè una visualització no és un scrobble i unir-les a
 la capa d'emmagatzematge forçaria una decisió que volem mantindre
 editorial.
+
+**Si la cerca perd un canal Tema, es pot posar a mà.** `search.list`
+enterra els canals nous i menuts —DUPLICATS en tenia un de perfecte amb 4
+vídeos i el descobriment no el va vore mai (2026-08-14)— i fins al
+2026-08-17 no hi havia cap lloc al panell per a donar-lo: el camp del
+canal oficial el refusava, correctament, perquè és l'altre carril.
+
+Ara, si enganxes un canal «- Topic» a eixe camp i l'artista **no en té**
+cap, s'adopta al carril de l'Art Track, s'aparellen les cançons a l'acte
+i el camp del videoclip es queda buit, amb un avís que ho explica. Si
+l'artista ja en té un, es continua refusant: eixa és la confusió clàssica
+i acceptar-la comptaria l'Art Track dues vegades.
+
+L'aparellament immediat no és una comoditat: `_cua()` només visita
+artistes amb `youtube_channel_id` buit, així que desar el canal sense
+aparellar deixaria l'artista congelat amb canal i sense cap cançó — que
+és exactament l'estat en què estava Khimera.
+
+**Cada foto guarda les visualitzacions de cada vídeo**
+(`SenyalYouTube.views_per_video`, `{video_id: views}`, des del
+2026-08-19). L'increment setmanal se suma **per vídeo** en lloc de restar
+sumes, i això fa que un carril nou no puga passar per públic: entra sense
+base el primer dia i compta a partir de l'endemà. Comptar-ne només la
+quantitat (`n_videos`) no bastava — si un dia en marxa un de menut i
+n'entra un de gran, el compte no es mou i el bot es cola. Detall a
+[`analytics-youtube.md`](analytics-youtube.md).
+
+**Un carril sense dades no és un carril amb zero reproduccions.** Si un
+vídeo ha desaparegut, l'id és ranci, o l'autor amaga el comptador
+(`viewCount` absent), eixe carril no compta: no se suma i no puja
+`n_videos`. Si TOTS els carrils d'una cançó estan així, la fila ix amb
+`error=True` i `views=NULL`. Sumar un comptador amagat com a zero
+escrivia la cançó com a 0 reproduccions amb `error=False` —
+indistingible d'una cançó que ningú ha escoltat— i a més inflava
+`n_videos`, que és el denominador que fa que una lectura parcial
+semble completa (auditoria 2026-08-15; cap fila falsa arribà a
+producció).
+
+YouTube **localitza** el sufix: un navegador en català ensenya
+«Malifeta - Tema». Al servidor ens torna l'anglés, però això és el locale
+per defecte de l'API, no un contracte — i exigir la paraula anglesa faria
+que el descobriment no trobara res i en silenci. `topic_suffix_name()`
+accepta les variants conegudes.
+
+La comparació de noms va per `normalitza_nom_homonim` (NFKD, sense
+diacrítics, sense puntuació): «Bèrnia» ha de trobar el canal que es diu
+literalment `bernia - Topic`, i «Clàudia Xiva» fallava contra un canal
+de nom idèntic perquè un costat era NFC i l'altre NFD. Afluixar això no
+eixampla la superfície d'exploit — el candidat continua havent de portar
+el sufix literal, que és el que deixa fora els canals de pàdel.
 
 **El sufix `- Topic` no és opcional.** Cercar «Auxili - Topic» retorna
 primer el canal humà de la banda («AUXILI»), ple de videoclips titulats
@@ -181,7 +239,7 @@ l'artista**. Per això el senyal d'una cançó és la **suma** de:
 2. el **canal oficial** — zero o molts vídeos, a `CancoYouTubeVideo`,
    i el canal el tria **una persona** a `/staff/artistes/sense-youtube`.
 
-`sembrar_canals_youtube` agafa gratis els enllaços curats de
+`sembrar_canals_youtube` (02:00) agafa gratis els enllaços curats de
 MusicBrainz. Els `/channel/UC…` no costen res; els `/@handle` necessiten
 una cerca (100 unitats), i per això `--resolve` va amb `--budget` i
 `--nomes-finestra`: 655 handles serien set dies de quota, i el sostre fa
@@ -200,6 +258,27 @@ final i vàlida, distinta de «ningú no ho ha mirat».
 i un altre amb dos fa que qualsevol conversió entre artistes no signifique
 res. Un artista sense canal propi no està infravalorat; un amb la decisió
 pendent, sí.
+
+**L'enumeració del carril oficial va desacoblada del descobriment**
+(2026-08-12): un canal confirmat des de la cua de staff (o per la sembra)
+arriba DESPRÉS de la passada Topic de l'artista, i sense una segona fase
+no s'escanejaria mai — el dia que es van aplicar les primeres 58
+confirmacions hi havia exactament 1 vídeo aparellat. Cada execució
+re-enumera els canals oficials dels artistes amb cançons en finestra
+(idempotent per `get_or_create`; els menys coberts primer), cosa que de
+propina captura els videoclips que les bandes pengen dies després del
+llançament.
+
+`suggerir_instagram` (02:30) tanca el cercle de l'estat estacionari: per
+als artistes que entren a la cua de staff (aprovats, amb cançó viva, sense
+URL ni suggeriment), busca un candidat al seu web propi i, si no, a
+Viasona — que NO és font curada, per això només pot escriure
+`instagram_suggerit` (mai `instagram_url`): un humà mira el perfil abans
+d'acceptar. Els candidats descartats amb ✕ queden vetats a
+`instagram_suggerits_descartats` i no es proposen mai més — buidar el camp
+no bastava, perquè la font torna a publicar el mateix handle l'endemà
+(caçat 2026-08-13). El vet és per handle, no per artista: una font
+diferent pot proposar-ne un altre. Sense quota de YouTube.
 
 Dins del canal oficial els títols són text lliure («AUXILI - TARRINETES
 AL SOL ft DJ Trapella»), així que l'aparellament és per prefix +

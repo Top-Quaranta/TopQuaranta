@@ -47,6 +47,30 @@ Identity: `spotify_id` (legacy), `deezer_id` (nullable BigInteger), `slug`.
 
 ✦ = `db_index=True`.
 
+**`instagram_revisat` (2026-08).** Tercer estat de la cua de staff,
+bessó de `youtube_canal_revisat`: «revisat, no en té» és una resposta
+final. Sense ell, un artista que genuïnament no té Instagram tornava a la
+cua cada passada. Omplir la URL el marca sol.
+
+**`instagram_suggerits_descartats` (2026-08).** Handles descartats amb
+✕ a la cua. Buidar el suggeriment no bastava: el sembrador nocturn tornava
+a trobar el mateix handle a la mateixa font i el tornava a posar (caçat
+l'endemà del primer dia). El sembrador no proposa mai res d'aquesta llista.
+
+**`instagram_suggerit` (2026-08, PROVISIONAL).** Candidat trobat pels
+escombratges (Viasona, web propi). No és evidència — els handles d'IG no
+es poden validar per API — així que la cua el mostra amb enllaç perquè un
+humà mire el perfil abans d'acceptar. Es neteja en posar `instagram_url`.
+El camp s'esborra quan la cua estiga buidada.
+
+**`instagram_rebutjat_at` (2026-08).** Es marca quan Meta refusa aquest
+compte en publicar (code 110). No podem validar handles per endavant, així
+que un rebuig en publicar és l'única evidència que un compte ha canviat.
+En marcar-lo, `instagram_url` es **buida** (és públic: fitxa + JSON-LD
+`sameAs`) i el valor va a `instagram_rebutjat_url`, amb
+`instagram_revisat=False` perquè l'artista torne a la cua. Editar la URL
+neteja les dues marques. Vegeu `social-etiquetatge.md`.
+
 **Canal oficial (2026-08).** `youtube_canal_oficial` és el canal PROPI
 de l'artista (videoclips), segon carril de senyal i sovint el més gran.
 El tria **una persona** a `/staff/artistes/sense-youtube`; no s'endevina

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TopQuaranta — Fase 1 paleta de gràfic: before/after (PR B)</title>
+<style>
+  :root { font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+  body { margin: 0; padding: 24px; background: #0a0a0a; color: #f3ecdd; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 26px 0 8px; color: #facc15; }
+  p.note { color: #9aa0a6; font-size: 12.5px; line-height: 1.5; max-width: 74ch; }
+  code { background: #1a1a1a; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 12.5px; }
+  th, td { border: 1px solid #27272a; padding: 6px 8px; text-align: left; vertical-align: middle; }
+  th { background: #141210; color: #facc15; }
+  .sw { display: inline-flex; align-items: center; gap: 7px; }
+  .chip { width: 26px; height: 26px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); flex: 0 0 auto; }
+  .hex { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+  .flag { color: #facc15; font-weight: 700; }
+  .hi { color: #ff6b6b; font-weight: 700; }
+  .surface-white { background: #fff; color: #0a0a0a; border-radius: 8px; padding: 14px; margin-top: 8px; }
+  .barrow { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .bar { height: 20px; border-radius: 2px; }
+  .lbl { width: 52px; font-size: 11px; color: #444; }
+  small.src { color: #6b7280; }
+  .legendrow { display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:#9aa0a6; margin-top:6px; }
+</style>
+</head>
+<body>
+<h1>Fase 1 — paleta de sèrie de gràfic: before → after</h1>
+<p class="note">
+  PR B de la unificació. <strong>Tots els hex grepejats del codi</strong> (worktree
+  PR B). <em>Before</em> = la paleta llegada VIVA que s'esborra
+  (<code>StaffAnalyticsPage::TERR_COLORS</code> + <code>CancoChart::TERRITORI_COLORS</code>,
+  idèntiques). <em>After</em> = <code>rd/terr.js::terrChart(code)</code> = <strong>deep
+  canònic</strong> (font única, inclou CAR). La paleta <strong>NO viu a
+  ConfiguracioGlobal</strong> — tot és en codi (això és Fase 2).
+</p>
+<p class="legendrow">
+  <span class="flag">★ = canvi de color visible</span>
+  <span class="hi">●● = ALTA visibilitat</span>
+  <span>superfícies vives afectades: <strong>CancoChart (PÚBLIC)</strong> · StaffAnalyticsPage (staff)</span>
+</p>
+
+<h2>Taula per territori (before viu → after deep)</h2>
+<table id="t"></table>
+
+<h2>Sèries com es veurien sobre fons blanc (la superfície real dels gràfics)</h2>
+<div class="surface-white"><div id="bars"></div></div>
+
+<script>
+const TERR = ["PPCC","CAT","VAL","BAL","AND","CNO","FRA","ALG","ALT","CAR"];
+// BEFORE — legacy live chart palette (StaffAnalytics + CancoChart), now deleted.
+const BEFORE = {
+  PPCC:"#427c42", CAT:"#c99b0c", VAL:"#cf3339", BAL:"#0047ba", AND:"#7c3aed",
+  CNO:"#0891b2", FRA:"#ea580c", ALG:"#db2777", ALT:"#6b7280", CAR:null, // absent → #0a0a0a fallback
+};
+// AFTER — terrChart(code) = terr(code).deep (rd/terr.js PAL deep).
+const AFTER = {
+  PPCC:"#2f5a2f", CAT:"#2f5a2f", VAL:"#8a4a1e", BAL:"#1f5a63", AND:"#2c3f63",
+  CNO:"#7a2730", FRA:"#6e5520", ALG:"#7a3340", ALT:"#33373d", CAR:"#4a4034",
+};
+const HI = { CAR:"passa de SENSE color (negre) a #4a4034", CAT:"ambre #c99b0c → verd deep #2f5a2f" };
+
+const chip = h => `<span class="chip" style="background:${h}"></span>`;
+const cell = h => h ? `<span class="sw">${chip(h)}<span class="hex">${h}</span></span>`
+                    : `<span style="color:#9aa0a6;font-style:italic">∅ → fallback #0a0a0a</span>`;
+
+let t = "<tr><th>Codi</th><th>before (llegat viu)</th><th>after = terrChart (deep)</th>"
+      + "<th>canvi</th></tr>";
+TERR.forEach(c => {
+  const b = BEFORE[c], a = AFTER[c];
+  const changed = (b||"#0a0a0a").toLowerCase() !== a.toLowerCase();
+  const tag = HI[c] ? `<span class="hi">●● ${HI[c]}</span>`
+            : changed ? '<span class="flag">★ sí</span>' : 'no';
+  t += `<tr><td><strong>${c}</strong></td><td>${cell(b)}</td><td>${cell(a)}</td><td>${tag}</td></tr>`;
+});
+document.getElementById("t").innerHTML = t;
+
+let bars = "";
+TERR.forEach(c => {
+  const b = BEFORE[c] || "#0a0a0a", a = AFTER[c];
+  bars += `<div class="barrow"><span class="lbl">${c}</span>`
+        + `<span class="bar" style="width:150px;background:${b}"></span>`
+        + `<span class="hex" style="width:74px">${BEFORE[c]||'∅'}</span>`
+        + `<span style="opacity:.4">→</span>`
+        + `<span class="bar" style="width:150px;background:${a}"></span>`
+        + `<span class="hex">${a}</span></div>`;
+});
+document.getElementById("bars").innerHTML = bars;
+</script>
+</body>
+</html>

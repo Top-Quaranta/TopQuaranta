@@ -272,6 +272,35 @@ class Artista(models.Model):
     tiktok_url = models.URLField(blank=True)
     facebook_url = models.URLField(blank=True)
     instagram_url = models.URLField(blank=True)
+    # Stamped when Meta refuses this handle while publishing (code 110,
+    # "cannot be accessed"). We cannot validate handles up front — this
+    # app flavour has no `business_discovery` — so a publish rejection is
+    # the ONLY evidence we ever get that an account was renamed, closed
+    # or made private. Cleared when the URL is edited.
+    instagram_rebutjat_at = models.DateTimeField(null=True, blank=True)
+    # The refused value, kept after `instagram_url` is emptied. Meta's own
+    # error covers two very different cases — "private profile OR invalid
+    # username" — and we can't tell them apart. A renamed account is a
+    # dead link we're right to drop (it is public: the artist page and the
+    # JSON-LD `sameAs` both carry it). A merely private one still works
+    # for humans, so the old value has to survive for staff to restore.
+    instagram_rebutjat_url = models.CharField(max_length=200, blank=True)
+    # Same third state as `youtube_canal_revisat`, for the same reason:
+    # without it, an artist who genuinely has no Instagram sits in the
+    # staff queue forever and gets re-checked by hand every pass.
+    instagram_revisat = models.BooleanField(default=False, db_index=True)
+    # PROVISIONAL — candidate handle found by a sweep (Viasona, the
+    # artist's own site…), surfaced in the staff queue for one-click
+    # accept. A suggestion is NOT evidence: Instagram handles can't be
+    # validated by API, so a human eyeballs the profile and decides.
+    # Cleared whenever `instagram_url` is set. Drop the field once the
+    # backlog is worked through.
+    instagram_suggerit = models.CharField(max_length=64, blank=True)
+    # Handles the operator dismissed with ✕. Clearing the field alone
+    # left no trace of WHAT was refused, so the next nightly run found
+    # the same handle at the same source and put it straight back —
+    # caught by the operator the morning after day one (2026-08-13).
+    instagram_suggerits_descartats = models.JSONField(default=list, blank=True)
     # X (formerly Twitter). Both x.com and twitter.com URLs land here;
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)

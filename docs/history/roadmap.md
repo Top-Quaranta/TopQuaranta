@@ -3,9 +3,56 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-10.
+> Last updated: 2026-08-13.
 
 ---
+
+## Sprint 2026-08-13 — Sondes «la cançó del dia» (motor)
+
+Estratègia investigada i auditada el mateix dia (nota local
+`investigacio-canco-del-dia-2026-08-13.md`): els 4 dies sense story
+(dt/dj/dv/dg), 2 sondes/dia (matí/vesprada) amb una cançó mai al top
+d'un artista amb IG mai col·laborador, per a detectar receptius i
+omplir el registre de col·laboracions (línia base actual: ~6%
+d'acceptació a cegues). Implementat el motor complet, ACTIU des del
+deploy (sense toggle dedicat, a petició del Miquel — la matriu de
+distribució ja dona l'interruptor genèric): model `SondaStoryIG` + selector
+`social/sonda.py` (escala de 3 esglaons + quota 1-de-6 no-CAT +
+round-robin de gènere + tiebreak determinista) + detector de reacció
+REACH-ONLY (mediana+3·MAD; replies està morta per a comptes UE des de
+2020-12, verificat) + slide `_story_canco_dia` + `SocialPost.slot_key`
+(discriminador intradia additiu) + runs `--franja` (crons 07:00/16:00
+UTC) + estampat de handles refusats. 15 tests nous. Taxonomia
+d'actituds de 7 estats documentada a la investigació.
+
+## Sprint 2026-08-12 — Stories del top en trams de 10
+
+El mosaic 40→11 de les stories (5×6, 30 caràtules de 150 px) estava
+massa enforfoguit. Re-tiering alineat amb el feed carousel (que ja va
+per blocs de 10): el set PPCC passa de 7 a 8 slides — intro · **40→21**
+(mosaic 4×5, caràtules 175 px) · **20→11** (nova slide 3+3+3+1 amb
+l'#11 centrat, "CAMÍ DEL TOP 10", caràtules 240 px, reutilitza el
+builder del mosaic amb tier `pairs`) · 10→4 · podi · hero ·
+[novetats] · outro.
+Territorial: degradació per omissió actualitzada (mosaic n>20, pairs
+n>10, grid n>3). `_story_tags` + `_pos_story_pairs` sincronitzats al
+mateix commit (el guard de mismatch hauria publicat el set sencer sense
+mencions). Benefici col·lateral mesurat: el mosaic antic saturava el cap
+de Meta de 20 user_tags/imatge (verificació 2026-07-15); ara cada tram
+cap dins del cap → ~+10 mencions/set. Geometria nova com a DATA a
+`story-tokens.json` (seccions `mosaic` re-tierada + `pairs` nova); test
+de desbordament worst-case (10 títols a 2 línies) per a la slide nova.
+Docs: `social-stories.md` re-escrit al set de 8. Nota de recon prèvia:
+`investigacio-stories-trams-2026-08-12.md` (untracked).
+
+Mateixa sessió, fora de repo: neteja de disc al Hetzner (90%→73%,
++6.1G: builds vells de vscode-server, revisions snap disabled, caches
+pip/npm/apt, 2 venvs morts de /root; `/root/TopQuaranta_dev` conservat
+sense venv — 1.2M de codi legacy pendent de decisió del Miquel).
+`sembrar_canals_youtube` MISSING diagnosticat com a fals positiu (cron
+nou d'ahir, primer tret 2026-08-13 02:00 UTC). Pendents amb tasca:
+retenció de `/var/topquaranta/portades` (+700 MB/mes) i glob `.jpg` del
+logrotate de renders socials.
 
 ## Sprint 2026-08-10 — Setmanari: calendari, incidències i finestra Dl–Dg
 
@@ -471,22 +518,7 @@ Items petits per fer en sessions curtes:
       l'allowlist.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
-- [ ] **Stalwart polish** (post Sprint I bis):
-  - [ ] Habilitar port 587 STARTTLS submission (ara només 465 SMTPS).
-        Útil per a clients mòbils que no accepten SMTPS implicit.
-  - [ ] Crear alias `postmaster@topquaranta.cat` per a rebre els
-        reports DMARC (`rua=mailto:postmaster@…`). El build OSS de
-        Stalwart 0.16.1 actual no exposa `/api/principal*`; el camí
-        és (a) servir el webadmin OSS (`stalwartlabs/webadmin`
-        v0.1.37) afegint un `handle /webadmin/*` a Caddy o (b) parar
-        el servei un moment i usar `stalwart -c … -o` (store
-        console). Mentrestant, **quick-fix**: canviar `rua` del
-        DMARC TXT a `admin@topquaranta.cat` (que ja existeix), via
-        `dns-backup/cdmon_clean.py`-style script.
-  - [ ] Integrar parsejat de DMARC reports al panell staff (gràfic de
-        què passa SPF/DKIM en nom nostre + alertes de potencial
-        spoofing). Alternativa: subscriure'ns a [dmarcian.com](https://dmarcian.com)
-        free tier i delegar el parseig.
+- [x] ~~**Stalwart polish**~~ — sense objecte des del 2026-08-18: Stalwart s'ha retirat i les bústies han passat a Purelymail. Vegeu `docs/EMAIL.md`.
 - [ ] **Gmail avatar** per `info@`/`admin@` quan se reseti el límit
       del telèfon (ara només `miquel@` té Google Account associat).
 - [ ] (Quan Hetzner ens desbloca port 25 outbound) considerar treure

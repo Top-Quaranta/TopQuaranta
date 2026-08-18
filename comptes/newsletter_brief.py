@@ -17,7 +17,7 @@ Design notes:
   - Low-confidence Last.fm tags live in their own section, explicitly
     separated from the grounded facts.
 
-# Spec: docs/architecture/comptes.md
+# Spec: docs/architecture/comptes-newsletter.md
 """
 
 from __future__ import annotations

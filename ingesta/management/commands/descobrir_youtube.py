@@ -167,6 +167,28 @@ def _cua(limit: int | None) -> list[Artista]:
     return cua
 
 
+def _amb_canal_oficial() -> list[Artista]:
+    """Artists whose official channel should be (re-)enumerated today.
+
+    Scoped to in-window songs: the seeder filled 1.382 channels but most
+    belong to artists with nothing eligible, and scanning those would be
+    pure quota burn. Ordered so the least-covered artists go first when
+    the budget runs short.
+    """
+    cutoff = timezone.localdate() - datetime.timedelta(days=DIES_CADUCITAT)
+    return list(
+        Artista.objects.exclude(youtube_canal_oficial="")
+        .filter(
+            cancons__verificada=True,
+            cancons__activa=True,
+            cancons__data_llancament__gte=cutoff,
+        )
+        .annotate(n_videos=Count("cancons__youtube_videos", distinct=True))
+        .order_by("n_videos", "pk")
+        .distinct()
+    )
+
+
 class Command(BaseCommand):
     help = "Descobreix el canal Topic de YouTube dels artistes i aparella les cançons."
 
@@ -191,6 +213,7 @@ class Command(BaseCommand):
         trobats = 0
         sense = 0
         aparellades = 0
+        aparellades_oficial = 0
         try:
             for artista in cua:
                 if gastat + yt.COST_SEARCH + 2 * yt.COST_LIST > budget:
@@ -233,18 +256,36 @@ class Command(BaseCommand):
                 # comment on `Artista.youtube_canal_oficial`.
                 if artista.youtube_canal_oficial:
                     gastat += self._carril_oficial(artista)
+            # Second phase: enumerate OFFICIAL channels. Decoupled from
+            # discovery on purpose — a channel confirmed from the staff
+            # queue (or the seeder) lands AFTER the artist's Topic pass,
+            # and without this loop it would never be scanned: the day the
+            # first 58 confirmations were applied, exactly 1 video had
+            # been matched. Daily re-scan is the feature, not waste: bands
+            # post the videoclip days after the release, and
+            # `get_or_create` keeps it idempotent.
+            for artista in _amb_canal_oficial():
+                cost_estimat = yt.COST_LIST * 8
+                if gastat + cost_estimat > budget:
+                    self.stdout.write("Pressupost exhaurit (carril oficial).")
+                    break
+                if dry:
+                    continue
+                gastat += self._carril_oficial(artista)
+                aparellades_oficial += self._aparella_oficial_count
         except yt.QuotaExhausted as exc:
             self.stdout.write(self.style.WARNING(f"Quota de YouTube exhaurida: {exc}"))
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Canals trobats: {trobats} · sense canal: {sense} · "
-                f"cançons aparellades: {aparellades} · quota gastada: {gastat}"
+                f"cançons aparellades: {aparellades} · vídeos del carril "
+                f"oficial: {aparellades_oficial} · quota gastada: {gastat}"
             )
         )
         # WORK_DONE protocol: tq-run surfaces this so a run that resolves
         # nothing several days running is visible instead of silently OK.
-        self.stdout.write(f"WORK_DONE={trobats + aparellades}")
+        self.stdout.write(f"WORK_DONE={trobats + aparellades + aparellades_oficial}")
 
     def _carril_oficial(self, artista: Artista) -> int:
         """Enumerate the official channel and attach its videos.
@@ -257,6 +298,9 @@ class Command(BaseCommand):
         we know belongs to this artist, a title containing "Tarrinetes al
         sol" is that song. Across YouTube at large it would not be.
         """
+        # Reset first: every early return below must leave the counter in
+        # a defined state, or the caller reads the previous artist's.
+        self._aparella_oficial_count = 0
         playlist = yt.uploads_playlist(artista.youtube_canal_oficial)
         cost = yt.COST_LIST
         if not playlist:
@@ -265,24 +309,27 @@ class Command(BaseCommand):
         cost += yt.COST_LIST * max(1, (len(videos) + 49) // 50)
 
         cancons = list(Canco.objects.filter(artista=artista))
+        nous = 0
         for v in videos:
             titol_norm = _norm(v["title"])
             for c in cancons:
                 clau = _norm(c.nom)
                 # Guard against short/common titles swallowing unrelated
                 # videos: "Llibertat" must not match "Buscant la
-                # llibertat". Substring only above a length floor, and the
-                # match has to sit on a word boundary.
+                # llibertat". See _conte_titol.
                 if len(clau) < 3 or not _conte_titol(
                     titol_norm, clau, _norm(artista.nom)
                 ):
                     continue
-                CancoYouTubeVideo.objects.get_or_create(
+                _, creat = CancoYouTubeVideo.objects.get_or_create(
                     canco=c,
                     video_id=v["video_id"],
                     defaults={"titol": v["title"][:300]},
                 )
+                if creat:
+                    nous += 1
                 break
+        self._aparella_oficial_count = nous
         return cost
 
     def _aparella(self, artista: Artista, videos: list[dict]) -> int:

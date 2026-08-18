@@ -11,6 +11,8 @@ transiently, only its classification is persisted in `dimensio_2`).
 
 A parity test (`analytics/tests/test_bots.py`) asserts this list stays
 equivalent to the Caddyfile regex so the two never drift.
+
+# Spec: docs/architecture/analytics-ingest.md
 """
 
 from __future__ import annotations

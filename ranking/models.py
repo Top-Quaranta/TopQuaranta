@@ -90,6 +90,55 @@ class ConfiguracioGlobal(models.Model):
         "queden fora del top. Si això fa que un territori no arribi "
         "a 40 cançons, el top és més curt — no s'omple amb soroll.",
     )
+    # ── YouTube com a segona font (2026-08) ─────────────────────────
+    # No hi ha interruptor. Que YouTube compte o no depén d'un fet
+    # comprovable —quants dies de detall per vídeo tenim— i no d'un clic
+    # que algú va donar o no va donar. Un interruptor només afegiria una
+    # segona cosa que pot estar malament: el dia que les dades estan
+    # llestes i la casella apagada, o al revés.
+    #
+    # A 7 dies, el dia que s'encén tota cançó fotografiada cada dia té
+    # una base d'exactament una setmana enrere, i el delta mesura una
+    # setmana en lloc d'extrapolar-la (amb una base de 4 dies, la
+    # reescalada infla un 75 %). Baixar-ho avança el dia i eixampla eixa
+    # extrapolació; pujar-ho el retarda.
+    youtube_dies_minims = models.IntegerField(
+        default=7,
+        validators=_COUNT_RANGE,
+        help_text="Dies de detall per vídeo que demanem abans de deixar "
+        "que YouTube compte al top. Quan se n'acumulen tants, s'activa "
+        "sol. Més alt = més tard i amb un delta menys extrapolat.",
+    )
+    # Quantes visualitzacions val una escolta. NO és una conversió
+    # mesurada —la proporció real varia per artista de 3 a 67— sinó el
+    # pes editorial que decidim donar-li a cada font.
+    #
+    # Es multipliquen les ESCOLTES en lloc de dividir les
+    # visualitzacions perquè `min_escoltes_top` és un número absolut: si
+    # dividires, una cançó amb 400 visualitzacions i cap escolta cauria a
+    # 2 i quedaria fora, que és exactament la gent que volem deixar de
+    # perdre. Multiplicant, el llindar deixa de fer eixe mal.
+    #
+    # Mesurat el 2026-08-18 amb dades netes: a 1000, el top valencià
+    # passa de 30 files a 40 i YouTube no supera Last.fm en cap fila —
+    # només decideix on Last.fm calla.
+    youtube_pes_escolta = models.IntegerField(
+        default=1000,
+        validators=_COUNT_RANGE,
+        help_text="Quantes visualitzacions de YouTube val una escolta de "
+        "Last.fm. Més alt = YouTube pesa menys. A 1000, YouTube només "
+        "omple els buits i no reordena res del que Last.fm ja veu.",
+    )
+    # El terra quan la font combinada està activa. En unitats del senyal
+    # combinat, no d'escoltes: a pes 1000, 200 vol dir «200
+    # visualitzacions o una cinquena part d'una escolta».
+    min_senyal_combinat = models.IntegerField(
+        default=200,
+        validators=_COUNT_RANGE,
+        help_text="Terra per a entrar al top quan YouTube està actiu. "
+        "Substitueix min_escoltes_top, que és en unitats d'escoltes.",
+    )
+
     # PPCC aggregator weight per source position. Was a module-level
     # constant in `ranking/algorisme.py`; promoted to the configurable
     # surface 2026-04-25 (Sprint A) so editorial tuning doesn't require
@@ -571,6 +620,24 @@ class SenyalYouTube(models.Model):
     # audience. Recording the count is what lets a reader tell a real
     # spike from a lane being added.
     n_videos = models.PositiveSmallIntegerField(default=1)
+    # `{video_id: views}` d'aquell dia. Comptar els carrils no basta:
+    # si avui en marxa un de menut i n'entra un de gran, `n_videos` no
+    # es mou i el bot es cola igual (ho va vore el Miquel el 18/08).
+    #
+    # Amb el detall per vídeo l'increment setmanal es calcula sumant
+    # restes per vídeo en lloc de restar sumes, i llavors:
+    #
+    #   · un vídeo nou no aporta res el dia que apareix — no en tenim
+    #     base— i sí a partir de l'endemà;
+    #   · un vídeo que desapareix deixa d'aportar sense restar el que
+    #     havia acumulat;
+    #   · substituir-ne un per un altre ja no es pot confondre amb
+    #     públic.
+    #
+    # Un mapa a la mateixa fila i no una taula nova: sempre es llig una
+    # foto sencera d'una cançó, mai vídeos solts, i estalvia ~3.800
+    # files al dia.
+    views_per_video = models.JSONField(default=dict, blank=True)
 
     error = models.BooleanField(default=False)
     error_msg = models.TextField(blank=True)

@@ -246,6 +246,14 @@ Es conserven dues coses, a posta:
   en va eixir és genèrica i continua activa per a qualsevol endpoint que
   es configure a `tls_endpoints_vigilats`.
 
+L'autoconfig es publica **només** al camí `.well-known` de
+`mail.topquaranta.cat`. Hi havia també un site block per a
+`autoconfig.topquaranta.cat` —el subdomini que Thunderbird prova
+primer— però el registre A que necessitava no es va crear mai: resol a
+CDMON i respon un Apache. Durant quatre mesos els clients ja trobaven la
+configuració pel camí `.well-known`, així que el bloc es va llevar el
+2026-08-18 en lloc de completar el DNS.
+
 Arquitectura de correu actual a [`../EMAIL.md`](../EMAIL.md).
 
 

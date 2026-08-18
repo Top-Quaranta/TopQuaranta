@@ -39,11 +39,29 @@ def test_pagination_splits_into_pages_of_per_page():
         assert p.suffix == ".jpg"
 
 
-def test_per_page_clamped_and_empty():
+def test_per_page_clamped_and_empty(monkeypatch):
+    """Out-of-range `per_page` never crashes and never loses a release;
+    no items → no pages.
+
+    Property asserted now (rewrite 2026-08-18): for per_page 0 and 99 the
+    set still comes out with ≥1 non-empty page and the pages, concatenated
+    in order, are exactly the input items (every release appears once);
+    the clamp bounds themselves (1/8) are not pinned."""
     setmana = datetime.date(2026, 6, 22)
-    # per_page below 1 is clamped to 1 → one page per item.
-    assert len(renderer.render_stories_novetats(setmana, _items(3), per_page=0)) == 3
-    # above 8 is clamped to 8 → 9 items become 2 pages (8 + 1).
-    assert len(renderer.render_stories_novetats(setmana, _items(9), per_page=99)) == 2
+    chunks: list[list[dict]] = []
+    real = renderer._story_novetats
+
+    def spy(setmana_, chunk, **kw):
+        chunks.append(list(chunk))
+        return real(setmana_, chunk, **kw)
+
+    monkeypatch.setattr(renderer, "_story_novetats", spy)
+    for n, per_page in ((3, 0), (9, 99), (5, -4)):
+        chunks.clear()
+        items = _items(n)
+        paths = renderer.render_stories_novetats(setmana, items, per_page=per_page)
+        assert paths and len(paths) == len(chunks), (n, per_page)
+        assert all(chunks), (n, per_page)  # no empty page
+        assert [it for c in chunks for it in c] == items, (n, per_page)
     # no items → no pages.
     assert renderer.render_stories_novetats(setmana, [], per_page=4) == []

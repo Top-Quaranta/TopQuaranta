@@ -67,10 +67,14 @@ def _count_yellow(img: Image.Image) -> int:
 
 @pytest.mark.django_db
 def test_ppcc_story_set_outputs_8_jpeg_slides():
+    """Property asserted now (rewrite 2026-08-18): the full set is a
+    non-empty, distinct list of story-sized JPEG files under IG's weight
+    comfort limit — the exact "8 slides" design pin is gone (the slide
+    order/count contract lives in test_ppcc_story_structure)."""
     paths = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=_novetats(3), hero_headline="DEBUT AL CIM"
     )
-    assert len(paths) == 8, [p.name for p in paths]
+    assert paths and len(set(paths)) == len(paths), [p.name for p in paths]
     for p in paths:
         assert p.suffix == ".jpg", p.name
         assert p.is_file()
@@ -82,10 +86,16 @@ def test_ppcc_story_set_outputs_8_jpeg_slides():
 
 @pytest.mark.django_db
 def test_ppcc_story_set_skips_novetats_when_empty():
-    paths = renderer.render_stories_ppcc(
+    """Property asserted now (rewrite 2026-08-18): with no novetats the set
+    is exactly one slide shorter than the same set with novetats — the
+    novetats slide is the only thing that goes; no absolute count pinned."""
+    amb = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=_novetats(3), hero_headline="NOU #1"
+    )
+    sense = renderer.render_stories_ppcc(
         WK, _entries(40), novetats_items=[], hero_headline="NOU #1"
     )
-    assert len(paths) == 7, [p.name for p in paths]
+    assert len(sense) == len(amb) - 1, ([p.name for p in amb], [p.name for p in sense])
 
 
 @pytest.mark.django_db
@@ -102,14 +112,23 @@ def test_ppcc_story_set_skips_novetats_when_items_falsy():
 def test_ppcc_story_set_handles_short_top():
     """Only 5 ranked entries (the test fixture's size): no crash, the
     21-40 mosaic, 11-20 pairs and 4-10 grid simply render empty, slides
-    still produce."""
+    still produce.
+
+    Property asserted now (rewrite 2026-08-18): no crash, and the short top
+    yields the same number of slides as a full 40-entry set (the PPCC set
+    keeps its structure; only territorial degrades by omission), every one
+    a story-sized JPEG. The ==7 pin is gone."""
+    full = renderer.render_stories_ppcc(
+        WK, _entries(40), novetats_items=[], hero_headline=""
+    )
     paths = renderer.render_stories_ppcc(
         WK, _entries(5), novetats_items=[], hero_headline=""
     )
-    assert len(paths) == 7
+    assert paths and len(paths) == len(full), [p.name for p in paths]
     for p in paths:
         with Image.open(p) as im:
             assert im.format == "JPEG"
+            assert im.size == (renderer.STORY_W, renderer.STORY_H)
 
 
 # ── #1 hero headline wiring ─────────────────────────────────────────
@@ -126,22 +145,67 @@ def test_ppcc_story_set_handles_short_top():
     ],
 )
 def test_hero_slide_receives_scenario_synthesis(code, data):
+    """Property asserted now (rewrite 2026-08-18): the synthesised headline
+    reaches the slide — below the cover the slide carries the full stack of
+    bright text bands (scenario kicker + title + artist, counted by a
+    luminance oracle, region located from the story tokens), and a
+    different headline changes what is painted there. No palette pin."""
     import random
 
     headline = synthesize_hero(_Scn(code, data), random.Random(0))
     assert headline and headline == headline.upper()
     img = renderer._story_hero(_entries(1)[0], headline)
     assert img.size == (renderer.STORY_W, renderer.STORY_H)
-    # The slide carries appreciable yellow (Playfair title + kickers) on ink.
-    assert _count_yellow(img) > 1000, _count_yellow(img)
+    _assert_pintada(img, "hero")
+    assert len(_hero_text_bands(img)) >= 3, _hero_text_bands(img)
+    other = renderer._story_hero(_entries(1)[0], headline + " I MÉS")
+    assert _hero_below_cover(other).tobytes() != _hero_below_cover(img).tobytes()
+
+
+def _hero_below_cover(img: Image.Image) -> Image.Image:
+    """Crop from the cover's bottom edge to the footer band (from tokens)."""
+    t = renderer._ST["hero"]
+    y0 = t["cover"]["y"] + t["cover"]["size"]
+    y1 = renderer.STORY_H - renderer._ST["common"]["footer_url"]["y_from_bottom"] - 10
+    return img.convert("L").crop((0, y0, renderer.STORY_W, y1))
+
+
+def _hero_text_bands(img: Image.Image) -> list[tuple[int, int]]:
+    """Contiguous runs of rows carrying bright ink below the cover — one
+    run per line of text (kicker line(s), title line(s), artist)."""
+    L = _hero_below_cover(img)
+    w = L.size[0]
+    px = L.load()
+    rows = [y for y in range(L.size[1]) if sum(px[x, y] > 150 for x in range(w)) > 3]
+    bands: list[list[int]] = []
+    prev = -100
+    for r in rows:
+        if r - prev > 10:
+            bands.append([r, r])
+        else:
+            bands[-1][1] = r
+        prev = r
+    return [(a, b) for a, b in bands]
 
 
 @pytest.mark.django_db
 def test_hero_slide_empty_headline_falls_back():
     """An empty headline must not crash and must still paint a headline
-    (the generic fallback line)."""
+    (the generic fallback line).
+
+    Property asserted now (rewrite 2026-08-18): with "" the slide carries
+    as many bright text bands below the cover as with a real one-line
+    headline (the fallback line is painted, not skipped), and "" and None
+    fall back identically — luminance oracle, no palette pin."""
     img = renderer._story_hero(_entries(1)[0], "")
-    assert _count_yellow(img) > 1000, _count_yellow(img)
+    _assert_pintada(img, "hero-empty")
+    bands = _hero_text_bands(img)
+    ref = _hero_text_bands(renderer._story_hero(_entries(1)[0], "DEBUT AL CIM"))
+    assert len(bands) == len(ref) >= 3, (bands, ref)
+    assert (
+        _hero_below_cover(img).tobytes()
+        == _hero_below_cover(renderer._story_hero(_entries(1)[0], None)).tobytes()
+    )
 
 
 # ── Top 21-40 mosaic ────────────────────────────────────────────────

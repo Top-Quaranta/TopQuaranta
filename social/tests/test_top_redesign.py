@@ -95,23 +95,67 @@ def test_poster_under_1mb_bluesky(fake_cover):
     assert buf.tell() < 1_000_000, buf.tell()
 
 
+def _row_bands():
+    """Row bands of the list slide, derived from the design tokens (the
+    source of truth for the geometry) — not from pinned pixel coordinates."""
+    rw = top_redesign.tokens()["top_list"]["rows"]
+    return [
+        (int(rw["y0"] + i * rw["pitch"]), int(rw["y0"] + i * rw["pitch"] + rw["h"]))
+        for i in range(rw["count"])
+    ], (int(rw["x"]), int(rw["x"] + rw["w"]))
+
+
 def test_top_list_one_highlighted_and_rows(fake_cover):
-    rows = list(reversed(_entries(10)))
+    """The #1 row is visually highlighted (accent-coloured treatment) and no
+    other row is; every row is painted.
+
+    Property asserted now (rewrite 2026-08-18): the row holding posició 1
+    carries far more accent-coloured ink than any other row band — wherever
+    that row sits on the slide — and every row band carries some ink. Row
+    geometry comes from `tokens()`, the accent from `_list_palette`, so a
+    re-layout that keeps the promise keeps the test green."""
+    rows = list(reversed(_entries(10)))  # countdown order, #1 last (as prod)
     img = top_redesign.build_top_list(rows, 4, 4, SET, "ppcc")
     assert img.size == (1080, 1350)
-    # the #1 row carries a yellow inset border (accent pixels in the last card)
-    R, G, B = _chan(img)
-    last = slice(1180, 1280)
-    yellow = ((R[last] > 190) & (G[last] > 140) & (B[last] < 110)).sum()
-    assert yellow > 200, yellow
+    acc = top_redesign._list_palette("ppcc")[0][:3]
+    a = np.asarray(img.convert("RGB"), np.int16)
+    bands, (x0, x1) = _row_bands()
+    dist = np.abs(a[:, x0:x1, :] - np.array(acc, np.int16)).sum(2)
+    accent_per_row = [int((dist[y0:y1] < 90).sum()) for y0, y1 in bands]
+    lit_per_row = [int((a[y0:y1, x0:x1].max(2) > 60).sum()) for y0, y1 in bands]
+    idx1 = next(i for i, e in enumerate(rows) if e["posicio"] == 1)
+
+    assert all(n > 0 for n in lit_per_row), lit_per_row  # every row painted
+    others = [n for i, n in enumerate(accent_per_row) if i != idx1]
+    assert accent_per_row[idx1] > 5 * max(others), accent_per_row
 
 
-def test_mosaic_footer_clear(fake_cover):
+def _rule_row(a, x0, x1, y_from):
+    """First image row (≥ y_from) that is a near-full-width yellow rule."""
+    R, G, B = a[:, :, 0], a[:, :, 1], a[:, :, 2]
+    yel = _yellow(R, G, B)[:, x0:x1].mean(1)
+    return next((r for r in range(y_from, a.shape[0]) if yel[r] > 0.8), None)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Àlbum {i} de títol llarg",
+        "Àlbum {i} de títol llarguíssim que no cap de cap manera",
+    ],
+)
+def test_mosaic_footer_clear(fake_cover, title):
     """The mosaic's 3rd row must not collide with the footer rule (the fix):
-    a clear band of background just above the footer rule."""
+    a clear band of background just above the footer rule.
+
+    Property asserted now (rewrite 2026-08-18): the footer rule exists (a
+    near-full-width yellow row in the lower part of the board, located by
+    scanning — not pinned at y≈1240) and, with a full 9-album grid whose
+    titles wrap to the max line count, no grid ink touches it: at least one
+    ink-free row separates the last content row from the rule."""
     albums = [
         {
-            "nom": f"Àlbum {i} de títol llarg",
+            "nom": title.format(i=i),
             "artista_nom": f"Art {i}",
             "artista_territori": "VAL",
             "cover_url": None,
@@ -120,10 +164,18 @@ def test_mosaic_footer_clear(fake_cover):
     ]
     img = top_redesign.build_albums_mosaic(albums, SET)
     assert img.size == (1080, 1350)
-    R, G, B = _chan(img)
-    # footer rule (yellow) present near y≈1240
-    yellow = ((R[1235:1245] > 190) & (G[1235:1245] > 140) & (B[1235:1245] < 110)).sum()
-    assert yellow > 300, yellow
+    a = np.asarray(img.convert("RGB"), np.int16)
+    M = top_redesign.tokens()["mosaic"]
+    px0, px1 = int(M["pad"]["l"]), 1080 - int(M["pad"]["r"])
+    rule_y = _rule_row(a, px0, px1, 1350 // 2)
+    assert rule_y is not None, "footer rule not painted"
+    # grid ink = anything lit in the columns' x-range above the rule
+    gx0 = int(min(M["grid"]["cols_x"]))
+    gx1 = int(max(M["grid"]["cols_x"]) + M["grid"]["cover"])
+    lit = a[:rule_y, gx0:gx1].max(2) > 60
+    content_rows = [r for r in range(rule_y) if lit[r].any()]
+    assert content_rows, "grid not painted"
+    assert content_rows[-1] < rule_y - 1, (content_rows[-1], rule_y)
 
 
 # ── fix pins (2026-06-12): ink-anchored, ±8 px against the artboard ──

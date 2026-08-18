@@ -40,8 +40,32 @@ Additions that DON'T require a bump:
 
 Every API response carries `X-API-Version: 1` (or `2`) so client bugs that ignore the URL prefix still leave a traceable fingerprint. See `web/api/views.py` middleware / decorator.
 
+## Rate limiting — `429` és part del contracte
+
+Qualsevol endpoint de `/api/v1/` pot respondre **429 Too Many Requests**.
+Els límits per defecte (`anon` 60/min, `user` 300/min) i els per endpoint
+(`auth_login`, `registre`, `data_export`, `newsletter_unsubscribe`,
+`feedback_crear`, `account_delete`, `dm_send`) viuen a
+`DEFAULT_THROTTLE_RATES` de `topquaranta/settings/base.py`.
+
+Els límits per endpoint hereten `web.api.utils.ScopedThrottle`, **mai** el
+`ScopedRateThrottle` de DRF: aquell llig el scope de la vista
+(`view.throttle_scope`) i deixa passar la petició quan no hi és, cosa que
+els va mantindre inerts des de maig del 2026 fins al 2026-08-15. El
+detall i el guardià són a [`comptes.md`](comptes.md); ací només importa
+que **un client ha d'estar preparat per a un 429**, també en endpoints
+que històricament no n'havien tornat mai.
+
+Ajustar un límit no obliga a pujar de versió: no canvia cap forma de
+resposta. Afegir-ne un a un endpoint que abans no en tenia tampoc, però
+val la pena anunciar-ho al changelog d'ací baix.
+
 ## Changelog
 
+- **2026-08-15:** els set límits per endpoint passen a aplicar-se de
+  veres (abans eren inerts). Els endpoints d'accés, registre, exportació
+  de dades, baixa de newsletter, feedback, esborrat de compte i enviament
+  de DM poden tornar `429` a partir d'ara.
 - **v1** — 2026. Initial public surface (map + location reference).
 - **2026-06 (redisseny):** additive fields on `/api/v1/top/` — each
   entry's `artista.territori` (primary territori code for the row chip)

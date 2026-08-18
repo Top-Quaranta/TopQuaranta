@@ -37,6 +37,16 @@ Migrations live at `comptes/migrations/`. Most recent significant:
   per minute via `ScopedRateThrottle` mirror on `auth_login`).
 - Session cookies shared with the React SPA (same origin), so
   CSRF token + sessionid carry over without extra config.
+- Every Django-rendered auth page extends `comptes/_base_auth.html`.
+  Since 2026-08-12 the shell mirrors the **rd redisseny** (page-bg
+  `#060608` + brand glows, liquid-glass card, Anton titles, Instrument
+  Serif kickers, Bricolage body, pill buttons) and replicates the SPA
+  header (`rd/Header.jsx`): real mono brand logo — `{% include %}`d
+  inline from `web-react/src/assets/logo-topquaranta-rect-mono.svg`
+  via a TEMPLATES dir added in `settings/base.py` (single source, no
+  copy; see `docs/architecture/brand-logo.md`) — plus static nav
+  pills and the account icon. Mobile (<900px) hides the nav (no
+  burger: auth pages are single-purpose).
 
 ## Workflow Sol·licituds de Revisió
 
@@ -111,222 +121,27 @@ business write isn't blocked.
 - `/compte/exportar-dades/` — JSON export of everything tied to
   the user (Feedback, UserArtista, Publicacio, Comentari,
   Missatge, StaffAuditLog rows where they're the target, axes
-  login history). Throttled 3/h.
+  login history). Throttled 3/h. **El contingut és el contracte**, no
+  només que arribe un adjunt: fins al 2026-08-15 l'única prova
+  comprovava que el correu portava un fitxer acabat en `.json` i prou,
+  així que un export podia eixir amb `audit_log_sobre_meu` buit —
+  `rgpd.py` s'empassa l'`ImportError` d'axes i emet `[]`— i tot verd.
+  Això és una mala resposta a una petició legal: sembla «no tenim res»
+  quan de fet és «no ho hem mirat». Fixat a
+  `web/tests/test_export_rgpd_contingut.py`, que a més comprova el
+  revés: el filtre per `target_id` no pot donar-li a algú l'historial de
+  moderació d'una altra persona.
 - `/compte/baixa-newsletter/` — token-signed unsubscribe (token
   expires after 1 year, May-2026 audit fix). Throttled 10/min.
 - `/compte/esborrar-sollicitud/` — self-delete confirmation
   email flow. Throttled per `_AccountDeleteThrottle`.
 
-## Weekly newsletter (Step 2 rework, 2026-06-01)
+## Weekly newsletter — see `comptes-newsletter.md`
 
-`comptes/newsletter.py::send_top_newsletter` builds **one Global
-newsletter per week** (no territorial editions). `_build_top_context`
-assembles a recipient-independent context once per run:
-
-1. **Header** — raster logo (`logo_email.png`) + "Setmana N · Top
-   Global" + "Veure al navegador".
-2. **Podi** — #1 hero (500 px cover) + #2-3 sub-cards.
-3. **Editorial** — narrative paragraphs (Step 1β composer).
-4. **Top 4-10** — uniform full-width list rows.
-5. **CTA** · 6. **Territorials** (CAT/VAL/BAL #1 mini-cards) ·
-   7. **Novetats** (2-3 releases) · 8. **Share** buttons ·
-   9. **Footer** (unsubscribe + browser link).
-
-Template `comptes/templates/comptes/email_newsletter_top.html` is
-self-contained (dark `#060608` surface, no `email_base.html`) and
-follows the **Gmail-compatibility pattern** (2026-07-05): fluid-hybrid
-640 px container (`width="100%"` + inline `max-width:640px` + MSO ghost
-table), inline styles on every element (the `<style>` block is
-enhancement only — Gmail can drop it), redundant `bgcolor` on every
-cell + `meta color-scheme: dark` so Gmail never inverts the dark
-surfaces, solid-hex borders (no `rgba()`), `table-layout:fixed` +
-explicit widths for uniform column groups, and no `<a>` wrapping a
-`<table>`. The `_trend_badge.html` partial renders the per-entry
-movement.
-
-**Name links (Slice 1 2026-06-08; Slice 2 2026-06-09).** Song titles
-render in italic and link to `/canco/{slug}`; artist names render in bold,
-and **every artist with a known slug — principal AND collaborators —**
-links to `/artista/{slug}`. Slice 1 linked only the principal;
-Slice 2 added a parallel `artistes_slugs` list to the shared payload
-(`social/payload.py::build_top`, ADDITIVE — the social engine ignores it)
-so collaborators link too. In the cards/list this is data-driven:
-`_enrich_entry` reads `artistes_slugs` (back-compat fallback to
-`[artista_slug]`) and emits `artistes_render` (`[{nom, url}]`, one URL per
-artist with a slug) + `artistes_truncated` (mirrors the legacy 80-char
-ellipsis budget so a 39-collaborator row stays bounded), rendered by the
-`_nl_artistes.html` partial. In the **editorial prose** a
-deterministic post-processor `newsletter_linkify.linkify_narrative(html,
-name_map)` (NEVER an LLM) wraps the FIRST occurrence of each canonical
-name: songs `<em><a>`, artists `<strong><a>`/`<strong>`. Rules:
-case-sensitive exact match, longest-match-first with consumed spans,
-Unicode word boundaries, offset-preserving apostrophe normalisation, walks
-text nodes only and skips the interior of existing `<a>/<strong>/<em>`
-(idempotent), escapes the matched display + href. The `name_map` is built
-in `_build_top_context` from the entries (which carry the slugs) and
-applied to BOTH the engine narrative and the injected/override narrative
-(preview + send paths).
-
-Helpers:
-- **`newsletter_utm.build_newsletter_url(base, content, setmana)`** —
-  every body link gets `utm_source=newsletter`, `utm_medium=email`,
-  `utm_campaign=top_<setmana>_global`, `utm_content=<block>` (`podi_1`,
-  `top_4`, `cta_top`, `territorial_cat`, `novetat_1`, …).
-- **`newsletter_covers.album_cover_url(deezer_id, mida)`** — local JPG
-  at `/portades/album/<id>-{250,500}.jpg` (filesystem check via
-  `ingesta.portades.manager`, no network) else the committed
-  placeholder.
-- **`newsletter_covers.ensure_cover_downloaded(deezer_id, source_url)`**
-  — called from `_build_top_context` for every cover slot BEFORE
-  composing: a missing local JPG is pulled synchronously via the SAME
-  portades pipeline (`manager.download_and_convert`) — self-hosting
-  only, no Deezer hotlink in the email. Best-effort: never raises; no
-  `source_url` → placeholder. Closes the 2026-06-07 gap (Rosalía's #1
-  showed the logo: the nightly cron had never generated its cover).
-- **`newsletter_meta.trend_indicator(pos, pos_anterior, is_return)`** —
-  ↑N / ↓N / → / DEBUT / TORNA (a13) with mm-design colours; deltas from
-  `payload.build_top`'s `posicio_anterior` (no extra query).
-- **`newsletter_meta.derive_subject(hero, week)`** — short editorial
-  subject (≤60 chars) from a per-scenario_code phrase bank.
-
-Raster assets (email clients don't render SVG) are committed PNGs
-under `web/static/web/img/newsletter/` (`cover_placeholder.png` 500×500
-ink + white logo; `logo_email.png` header mark), regenerable run-once
-via `manage.py generar_assets_newsletter` (via `social.svg_assets`).
-
-### Opt-out review flow (2026-06-07)
-
-The subscriber newsletter is sent through a **review draft**. The text
-is produced by a **cloud routine** (set up separately, in the UI) with
-the narrative engine as fallback (`font` = `llm` vs `motor`). Model
-`comptes.NewsletterDraft` — `unique(tipus, territori, setmana)`,
-`estat` ∈ `pendent`/`enviat`/`cancellat` (NO "approved": `pendent` =
-will send), `font`, `editat`.
-
-0. **Cloud routine (token-authed, `web/api/newsletter_routine.py`)** —
-   two narrow endpoints, authed by a static bearer
-   `settings.NEWSLETTER_ROUTINE_TOKEN` (from the server env, NOT a staff
-   session; `HasNewsletterRoutineToken` permission, blank token denies
-   all):
-   - `GET /api/v1/newsletter-routine/brief/` — grounded weekly brief
-     (`comptes.newsletter_brief.build_brief`): context (week, Global, real
-     top age); the **full top-40** in `top40` (movement, `can_call_new`
-     via the freshness gate `is_verified_recent_release`, first-appearance
-     with the week-1-birth vs genuine-debut distinction, per-artist top
-     history); **group facts for all 40** in `fets_grup` (origin
-     municipi/comarca/territori, collaborators + their origin only when
-     known, release date, plus a `compromis_llengua` advisory flag —
-     `te_obra_no_catala` / `n_cancons_desvinculades` from
-     `desvincular_canco` rejections, a name-joined proxy for "has
-     non-Catalan work"; see `brief.notes`); `fets_destacats`, up to
-     `FETS_DESTACATS_K` (8) distinct-subject detector scenarios from
-     `detect_all` + `select_slots` (each `{code, severity, data,
-     freshness_blocked}`); `actualitat` (the 6-8 most recent VilaWeb RSS
-     headlines so the voice picks by weight, best-effort), and a separate
-     LOW-CONFIDENCE section with Last.fm tags for the top-5. The expansion
-     (2026-06-08) is strictly **additive**: `top10` is an alias of
-     `top40[:10]`, `fets_grup_top5` of `fets_grup[:5]`, and `fet_lider` of
-     `fets_destacats[0]` (`detect_all[0]`), all byte-identical to their
-     pre-expansion shape, so the token contract never breaks. Origin +
-     collaborators are prefetched/batched (constant query budget, no N+1
-     across the 40 rows). Returns `{"status": "not_ready"}` when the
-     week's top isn't consolidated (same anti-stale guard). Accepts an
-     optional `?setmana=<iso Monday>` (2026-06-08) for a specific week;
-     absent → this week (production path unchanged). Also carries
-     **`editorial_veu`** (2026-06): the staff-editable editorial-voice
-     prompt, read from `ConfiguracioGlobal.editorial_veu` (a `TextField`,
-     editable from the Configuració panel via reflection — no bespoke UI).
-     Blank by default, so the routine falls back to its own default voice;
-     the repo never imposes a voice. Top-level key, after `context`.
-   - `POST /api/v1/newsletter-routine/esborrany/` — upsert THIS week's
-     draft (`subject` + `narrative_html`, `font=llm`, `estat=pendent`).
-     Idempotent; **can never** set approved/sent (any non-`pendent`
-     `estat` rejected; an already `enviat`/`cancellat` week is terminal →
-     409). It reads/leaves only; it never sends. On a successful upsert it
-     emails `settings.ADMINS` — plus, when set, the render-testing
-     address `ConfiguracioGlobal.newsletter_desti_prova` (blank default =
-     ADMINS only, byte-identical; NEVER used for the subscriber send) —
-     the **full newsletter preview** (`notify_admins_draft_preview`,
-     best-effort, shared `render_newsletter_preview`), plus an admin-only
-     management block (link to `/staff/social/esborrany` to edit or
-     cancel; added only when `gestio_url` is set, so the subscriber copy
-     never carries it). Deliverability headers (`List-Id`,
-     `List-Unsubscribe`, `Auto-Submitted`) keep the automated mail out of
-     spam. Every parada/error (not_ready, 400, 409) returns before the
-     notify, so no mail fires on those paths.
-1. **Saturday 16:00 — `generar_esborrany_newsletter` (engine fallback)**:
-   composes `subject` + `narrative_html` via `newsletter.build_draft_text`
-   (wraps `_build_top_context`, side-effect-free — no `mark_used`),
-   persists a `pendent` draft **only if none exists for the week**
-   (idempotent), emails staff a link to `/staff/social/esborrany`; when
-   `newsletter_desti_prova` is set it ALSO sends the full rendered
-   preview to that address only. Runs
-   LATE (16:00) so the routine has had its turn first; if the routine
-   failed, the engine still leaves a draft. An **anti-stale guard**
-   refuses to generate unless the TopSetmanal for THIS week
-   (`date.today() − weekday`) already exists.
-   **On-demand generation** (2026-06-08, staff): `POST
-   /staff/newsletter/esborrany/generar/?setmana=` runs this same engine
-   seam for any chosen consolidated week (guards: consolidated-only;
-   never clobbers a terminal/edited draft → 409; never sends), and `GET
-   /staff/newsletter/setmanes/` lists the consolidated weeks + a live
-   can-generate indicator. Surfaced in the SPA at the first-class
-   Newsletter channel view (`/staff/social/newsletter`).
-2. **Review** — staff endpoints (`web/api/staff/newsletter.py`, IsStaff):
-   `GET /staff/newsletter/esborrany/` (draft + the live top it will ship
-   with, to spot mismatches + the Sunday send date), `PATCH` (edit
-   subject/narrative → `editat=True`, only while `pendent`), `POST
-   …/cancellar/` (→ `cancellat`), `POST …/preview/` (full email HTML via
-   `newsletter.render_newsletter_preview` — same `_build_top_context` +
-   template as the send, honouring live editor overrides; render-only, no
-   side effects). SPA page `NewsletterDraftPage` shows a faithful
-   full-newsletter preview in a sandboxed iframe (no scripts), debounced
-   on edits, with the list + real covers (logo fallback) as the
-   subscriber sees.
-3. **Sunday 10:00 — `enviar_newsletter`**: gated by
-   `ConfiguracioGlobal.pot_publicar_tipus("newsletter", "top_ppcc")` —
-   the three distribution gates (master + per-channel + the
-   `MatriuPublicacio` cell; see `docs/architecture/social.md`), so an
-   off matrix cell stops the send too; reads the week's
-   draft — `cancellat` → skip; else sends the (possibly edited)
-   `subject`+`narrative_html` via `send_top_newsletter(...,
-   subject_override=, narrative_html_override=)`, **rebuilding the list
-   (podi/entries/covers) from the FINAL top at send time**; writes the
-   `newsletter` `SocialPost` + `newsletter_publicat` audit; marks the
-   draft `enviat`. Idempotent (already-`enviat` skipped unless
-   `--force`).
-
-The other channels stay on Saturday (`publicar_canal`); only the
-newsletter moved to the Sunday draft path. `publicar_canal --channel
-newsletter` remains as the manual immediate-send fallback (no draft).
-
-### Newsletter → Comunitat bridge (additive, gated)
-
-A staff action can mirror a `NewsletterDraft` into a PUBLIC community
-`Publicacio`, authored by the `admin` pseudo-user. It is **additive and
-off by default**, gated by `ConfiguracioGlobal.newsletter_publicacio_pont_actiu`.
-
-- Model link: `NewsletterDraft.publicacio` (nullable `OneToOneField` →
-  `Publicacio`, `SET_NULL`, `related_name="newsletter_origen"`). Records
-  the mirror so the action is **idempotent** (a draft maps to ≤1 post).
-- Service: `comptes/community_bridge.py::publicar_draft_a_comunitat(draft)`.
-  Raises `PontDesactivat` while the gate is off. Creates ONLY a `Publicacio`
-  row (`visibilitat=publica`, `estat=publicat`) — **no email, no social
-  distribution, no newsletter send**.
-- Endpoint: `POST /api/v1/staff/newsletter/esborrany/publicar-comunitat/`
-  (`web/api/staff/newsletter.py::esborrany_publicar_comunitat`) — 409 while
-  the gate is off; staff button in `NewsletterDraftEditor.jsx`.
-- Body: the draft's `narrative_html` is converted to **markdown**
-  (`community_bridge._html_to_markdown`, via the `markdownify` dependency) and
-  stored in `Publicacio.cos`. The feed renders `cos` with `react-markdown` +
-  `remark-gfm` (never raw HTML) and previews via `stripMarkdown`, so markdown
-  is the right shape. The service PRESERVES images (`![alt](url)`) and links
-  (`[text](url)`), absolutises relative URLs (links AND images) to
-  `PUBLIC_SITE_BASE`, and collapses blank-line runs; the result contains no
-  raw HTML. The shared render (`web-react/src/components/Markdown.jsx`)
-  sanitizes URL schemes (`safeUrl`: http/https/mailto only, never
-  javascript:/data:) + lazy-loads images, so this widened render is safe for
-  EVERY `Publicacio` (non-staff public posts still pass the moderation queue).
+The newsletter pipeline (draft generation, covers, UTM, send command,
+Gmail-safe hybrid columns) lives in
+**`docs/architecture/comptes-newsletter.md`** (split 2026-08-12 for
+the docs-size ceiling).
 
 ## "Has entrat al top" manager alert (Fase 2 D1, 2026-06)
 
@@ -398,3 +213,52 @@ busquen grup". Tokens are stored comma-joined and matched with
   `comptes/notifications.py`, `comptes/management/`,
   `comptes/newsletter.py`, `comptes/newsletter_{utm,covers,meta}.py`,
   `web/api/compte_views/`, `web/api/staff/sollicituds_revisio.py`
+
+## Limitadors de ritme: el scope va a la classe, no a la vista
+
+Els sis limitadors (`auth_login`, `data_export`, `newsletter_unsubscribe`,
+`feedback_crear`, `account_delete`, `dm_send`) i el de registre hereten
+`web.api.utils.ScopedThrottle`, **no** el `ScopedRateThrottle` de DRF.
+
+El motiu és que aquell llig el scope de la *vista*
+(`view.throttle_scope`) i, si no hi és, **deixa passar la petició sense
+comptar-la**:
+
+```python
+self.scope = getattr(view, self.scope_attr, None)
+if not self.scope:
+    return True
+```
+
+Declarar `scope = "..."` a la subclasse no serveix de res: eixe mètode
+el sobreescriu a cada crida. Com que cap vista definia `throttle_scope`,
+els sis limitadors van estar inerts des que es van afegir (auditoria de
+maig del 2026) fins al 2026-08-15: connectats, invocats a cada petició, i
+sense limitar res. El scope `registre` ni tan sols tenia classe.
+
+`ScopedThrottle` llig el scope de la classe i fa la clau de cache igual
+que DRF (per usuari si està autenticat, per IP si no). El guardià és
+`web/tests/test_throttles.py`, que a més falla si algun limitador torna a
+heretar de `ScopedRateThrottle`.
+
+### El repte de 2FA no és de DRF
+
+`dos_fa_verificar` és una vista de Django plana, així que cap limitador
+de DRF hi arriba: el scope `auth_2fa` estava configurat des del maig del
+2026 i **no s'aplicava enlloc**. Era, precisament, l'única pantalla del
+projecte que accepta codis de recuperació d'un sol ús en bucle.
+
+Des del 2026-08-16 el limitador és `comptes/ratelimit.py::excedeix_limit`,
+una finestra fixa comptada al cache compartit que llig el ritme del mateix
+`DEFAULT_THROTTLE_RATES`, de manera que els números viuen en un sol lloc.
+Superar-lo torna **429** amb la mateixa pantalla i un missatge clar.
+
+Dues decisions que val la pena conéixer:
+
+- **La identitat és l'usuari, no la IP.** Qui arriba a esta pantalla ja ha
+  passat la contrasenya, així que algú amb una galeta robada és *un*
+  usuari per moltes IPs que rote.
+- **Falla obert.** Si el cache peta, es deixa passar. La contrasenya
+  continua sent necessària per a arribar ací, i una caiguda del cache no
+  pot convertir-se en un bloqueig del compte — però implica que el
+  limitador és tan disponible com el cache.

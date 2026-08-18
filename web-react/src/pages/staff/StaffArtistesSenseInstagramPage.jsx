@@ -54,17 +54,30 @@ function Row({ a, onSaved }) {
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Local: dismissing a suggestion keeps the row (still pending), so it
+  // can't go through onSaved, which removes it.
+  const [sugg, setSugg] = useState(a.instagram_suggerit || '')
+
+  async function descartaSuggeriment() {
+    setBusy(true)
+    try {
+      await api.patch(`/staff/artistes/${a.pk}/`, { instagram_suggerit: '' })
+      setSugg('')
+    } catch (e) {
+      setErr(e.message || 'Error desant.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const valid = isPlausibleInstagramUrl(url)
   const canSave = !busy && valid
 
-  async function desa() {
+  async function desa(payload) {
     setBusy(true)
     setErr('')
     try {
-      await api.patch(`/staff/artistes/${a.pk}/`, {
-        instagram_url: url.trim(),
-      })
+      await api.patch(`/staff/artistes/${a.pk}/`, payload)
       onSaved(a.pk)
     } catch (e) {
       setErr(e.message || 'Error desant.')
@@ -85,6 +98,14 @@ function Row({ a, onSaved }) {
         >
           {a.nom}
         </Link>
+        {/* Context, not decoration: this artist is here because Meta
+            refused their old handle, so the answer is probably a NEW
+            account — not "no en té". */}
+        {a.instagram_rebutjat_url && (
+          <p className="text-[11px] text-red-400">
+            Instagram va refusar {a.instagram_rebutjat_url.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')} — busca'n el compte nou
+          </p>
+        )}
       </Td>
       <Td>
         {nTop > 0 ? (
@@ -99,6 +120,38 @@ function Row({ a, onSaved }) {
       <Td>
         {nVives > 0 ? (
           <Pill tone="gray">{nVives}</Pill>
+        ) : (
+          <span className="text-white/40">—</span>
+        )}
+      </Td>
+      <Td>
+        {/* PROVISIONAL: candidate from the sweeps (Viasona, own site).
+            Not evidence — the ↗ link is there precisely so a human looks
+            at the profile before accepting. */}
+        {sugg ? (
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <a
+              href={`https://www.instagram.com/${sugg}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-tq-yellow underline hover:text-tq-yellow-deep"
+            >
+              @{sugg} ↗
+            </a>
+            <Btn
+              onClick={() =>
+                desa({
+                  instagram_url: `https://www.instagram.com/${sugg}/`,
+                })
+              }
+              disabled={busy}
+            >
+              Accepta
+            </Btn>
+            <Btn variant="ghost" onClick={descartaSuggeriment} disabled={busy}>
+              ✕
+            </Btn>
+          </div>
         ) : (
           <span className="text-white/40">—</span>
         )}
@@ -129,9 +182,24 @@ function Row({ a, onSaved }) {
         </a>
       </Td>
       <Td className="text-right">
-        <Btn onClick={desa} disabled={!canSave}>
-          Desa
-        </Btn>
+        <div className="flex justify-end gap-2">
+          {/* Third state, same as the YouTube queue: plenty of small
+              artists simply have no Instagram, and without this they'd
+              come back every single pass. */}
+          <Btn
+            variant="ghost"
+            onClick={() => desa({ instagram_revisat: true })}
+            disabled={busy}
+          >
+            No en té
+          </Btn>
+          <Btn
+            onClick={() => desa({ instagram_url: url.trim() })}
+            disabled={!canSave}
+          >
+            Desa
+          </Btn>
+        </div>
       </Td>
     </Tr>
   )
@@ -148,7 +216,7 @@ export default function StaffArtistesSenseInstagramPage() {
     setData(null)
     const params = new URLSearchParams({
       aprovat: '1',
-      instagram: 'no',
+      instagram: 'pendent',
       include_n_top: '1',
       sort: '-n_top',
       page: String(p),
@@ -189,7 +257,9 @@ export default function StaffArtistesSenseInstagramPage() {
   const total = data?.total
   const subtitle = (() => {
     if (total === undefined) return 'Carregant…'
-    return `${total} artistes aprovats sense URL d'Instagram. Ordenats per cançons al top i, a igualtat, per cançons actives.`
+    return `${total} artistes amb cançó viva i sense revisar. «No en té» també ` +
+      `és una resposta. Ordenats per tops, cançons actives i, a igualtat, ` +
+      `per la cançó més nova — els que acaben de traure single van primer.`
   })()
 
   return (
@@ -220,6 +290,7 @@ export default function StaffArtistesSenseInstagramPage() {
               <Th>Artista</Th>
               <Th title="Cançons d'aquest artista que han aparegut al top alguna vegada (distinct TopSetmanal)">Top</Th>
               <Th title="Cançons vives (verificades i actives) on l'artista és principal o col·laborador">Cançons actives</Th>
+              <Th title="Candidat trobat pels escombratges; comprova'l abans d'acceptar">Suggeriment</Th>
               <Th>Instagram URL</Th>
               <Th>Cerca</Th>
               <Th></Th>

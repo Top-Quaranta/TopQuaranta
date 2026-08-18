@@ -154,13 +154,19 @@ def test_gmail_meta_color_scheme_dark():
 
 
 def test_gmail_redundant_bgcolor_attributes():
-    """Every surface cell carries `bgcolor` redundant with the inline
-    style, so Gmail keeps the dark surfaces even when it strips or
-    ignores CSS (dark-mode inversion, clipped <style>)."""
+    """Every surface element pins its dark background explicitly, so
+    Gmail keeps the dark surfaces even when it strips or ignores CSS
+    (dark-mode inversion, clipped <style>). Structural cells use the
+    `bgcolor` attribute; the card surfaces are <div>s (2026-08-01), where
+    `bgcolor` does not exist, so they carry the inline background-color."""
     html = _render()
     assert html.count('bgcolor="#060608"') >= 8  # body/sections
-    assert html.count('bgcolor="#141319"') >= 10  # cards
+    assert html.count('bgcolor="#141319"') >= 5  # cards that kept a table
     assert 'bgcolor="#1c1a10"' not in html  # gestio block absent by default
+    cards = re.findall(r'<div class="card"[^>]*>', html)
+    assert cards
+    for div in cards:
+        assert "background-color:#141319" in div, div
 
 
 def test_gmail_no_rgba_and_no_anchor_wrapped_tables():
@@ -182,13 +188,89 @@ def test_gmail_hybrid_container():
     )  # only the MSO ghost keeps a fixed 640
 
 
-def test_gmail_uniform_column_groups():
-    """Podi #2-3 and the 3-up territorial/novetats groups use
-    table-layout:fixed + explicit percentage widths so Gmail renders
-    uniform columns regardless of content length."""
+# ── Gmail mobile: hybrid columns (2026-08-01) ────────────────────────
+#
+# The 2026-07-05 pass stacked the multi-column groups with
+# `.gridcell { display:block; width:100% }` from the <style> block over
+# <td>s that carried an inline percentage width. Gmail applied the
+# `display:block` but not the matching `width:100%`, so every card fell
+# back to its content width: ragged top 4-10 rows, half-width podi cards,
+# territorial cards shrunk to the 64 px cover. Replaced by the fluid
+# hybrid pattern: a column is a <div> that is full-width by DEFAULT, and
+# the <style> block only adds the max-width caps that turn the stack into
+# a row on wide viewports.
+
+_COL_CLASSES = ("hcol-a", "hcol-b", "hero-img", "hero-txt", "col2", "col3")
+
+
+def _col_divs(html):
+    return re.findall(
+        r'<div class="(%s)"[^>]*style="([^"]*)"' % "|".join(_COL_CLASSES), html
+    )
+
+
+def test_gmail_columns_are_full_width_divs_by_default():
+    """Layout must survive the <style> block being dropped entirely: no
+    <td> is stacked via CSS, and every column div is width:100% inline so
+    the no-CSS fallback is a clean single column."""
     html = _render()
-    assert html.count("table-layout:fixed") >= 3
-    assert html.count('width="33%"') >= 2  # territorial + novetats cells
+    assert "gridcell" not in html
+    assert "display:block !important" not in html  # no CSS-stacked <td>s
+    cols = _col_divs(html)
+    assert len(cols) >= 8  # header 2 + hero 2 + podi 2 + territorial + novetat
+    for _cls, style in cols:
+        assert "display:inline-block" in style, style
+        assert "width:100%" in style, style
+        assert "max-width" not in style, style  # the cap is class-only
+
+
+def test_gmail_column_caps_live_in_the_style_block_and_reset_on_mobile():
+    """The max-width caps are class rules, and the @media block resets
+    them to 100% — class-on-class, so it wins on source order even if a
+    client strips `!important`."""
+    html = _render()
+    for cls, cap in (
+        ("hero-img", "330px"),
+        ("hero-txt", "250px"),
+        ("col2", "290px"),
+        ("col3", "192px"),
+    ):
+        assert ".%s { max-width:%s; }" % (cls, cap) in html
+    start = html.index("@media (max-width:640px)")
+    reset = html[start : html.index("@media (prefers-color-scheme", start)]
+    for cls in _COL_CLASSES:
+        assert ".%s" % cls in reset
+
+
+def test_gmail_columns_never_add_padding_to_a_100pc_box():
+    """Measured 2026-08-01: `width:100%` plus inline padding on the same
+    element made the email 410 px wide in a 393 px viewport. Padding goes
+    on an inner div, never on the element that carries width:100%."""
+    html = _render()
+    for _cls, style in _col_divs(html):
+        assert "padding" not in style, style
+
+
+def test_gmail_cards_own_their_width_not_a_nested_table():
+    """Nested tables are shrink-to-fit in Gmail, so the card surface
+    (background + border + radius) sits on a block-level <div>; any table
+    inside it is layout-only."""
+    html = _render()
+    # Top 4-10 rows: one card div per entry, each with the full surface.
+    rows = re.findall(r'<div class="card" style="([^"]*border-radius:12px[^"]*)"', html)
+    assert len(rows) == 7
+    for style in rows:
+        assert "background-color:#141319" in style
+        assert "border:1px solid" in style
+
+
+def test_gmail_mso_ghost_columns_for_outlook():
+    """Outlook ignores inline-block widths, so each column group is
+    bracketed by an MSO ghost table with pixel widths."""
+    html = _render()
+    for w in ('width="330"', 'width="250"', 'width="290"', 'width="192"'):
+        assert "<!--[if mso]><td %s" % w in html or "<td %s valign" % w in html
+    assert html.count("<!--[if mso]>") == html.count("<![endif]-->")
 
 
 # ── no top 1-40 section + management block ───────────────────────────

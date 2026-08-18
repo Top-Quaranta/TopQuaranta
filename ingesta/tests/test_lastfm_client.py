@@ -204,3 +204,83 @@ class TestGetTrackInfoRateLimit:
 
         # First call to sleep should be the rate limit
         assert mock_sleep.call_args_list[0] == call(RATE_LIMIT_SLEEP)
+
+
+class TestMbidFallback:
+    """Last.fm resolves `mbid` INSTEAD of artist+track: an MBID it hasn't
+    indexed answers error 6 and the names sent alongside are never
+    consulted. A successful MusicBrainz match therefore used to delete the
+    track's Last.fm signal permanently (caught 2026-08-10: Auxili's
+    "Tarrinetes al Sol", 316 plays by name, error 6 by MBID, every day
+    since MB matched it on 10 July)."""
+
+    @staticmethod
+    def _responses(mock_get, sequence):
+        it = iter(sequence)
+
+        def fake_get(*args, **kwargs):
+            resp = mock_get.return_value
+            resp.raise_for_status.return_value = None
+            resp.json.return_value = next(it)
+            return resp
+
+        mock_get.side_effect = fake_get
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
+    def test_retries_without_mbid_and_recovers(self, mock_get, mock_sleep):
+        self._responses(
+            mock_get,
+            [
+                {"error": 6, "message": "Track not found"},  # with mbid
+                {  # same call without the mbid
+                    "track": {
+                        "name": "Tarrinetes al sol",
+                        "artist": {"name": "Auxili"},
+                        "playcount": "316",
+                        "listeners": "98",
+                    }
+                },
+            ],
+        )
+
+        result = get_track_info(
+            "Auxili", "Tarrinetes al Sol", track_mbid="1e36075e-ff6c-4159-9cd2-a"
+        )
+
+        assert result["playcount"] == 316
+        assert mock_get.call_count == 2
+        assert "mbid" in mock_get.call_args_list[0][1]["params"]
+        assert "mbid" not in mock_get.call_args_list[1][1]["params"]
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
+    def test_no_extra_call_when_there_was_no_mbid(self, mock_get, mock_sleep):
+        """Without an MBID there is nothing to drop: the ladder must not
+        gain a redundant call for every genuinely-missing track."""
+        self._responses(mock_get, [{"error": 6}] * 4)
+
+        assert get_track_info("Auxili", "Tu Contra el Món") is None
+        # Unchanged ladder: literal → normalised autocorrect retry →
+        # top-tracks fallback.
+        assert mock_get.call_count == 3
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
+    def test_mbid_is_dropped_from_the_normalisation_retry_too(
+        self, mock_get, mock_sleep
+    ):
+        """Once we know Last.fm doesn't have the MBID, no later call in the
+        ladder should carry it either — otherwise the retry inherits the
+        same dead end."""
+        self._responses(mock_get, [{"error": 6}] * 5)
+
+        get_track_info("X", "Y (Remaster 2015)", track_mbid="dead-beef")
+
+        carried = [
+            "mbid" in c[1]["params"]
+            for c in mock_get.call_args_list
+            if c[1]["params"].get("method") == "track.getInfo"
+        ]
+        assert carried[0] is True
+        assert not any(carried[1:])

@@ -8,37 +8,45 @@
 
 # Spec: docs/architecture/social.md
 
-## PPCC story set — 7 editorial slides (Step 3b)
+## PPCC story set — 8 editorial slides (Step 3b; re-tiered 2026-08-12)
 
 `renderer.render_stories_ppcc(setmana, entries, *, novetats_items,
 hero_headline)` replaces the legacy PPCC sequence (intro + up to 40
-cançó slides + CTA) with a fixed seven-slide set ordered toward the #1
+cançó slides + CTA) with a fixed eight-slide set ordered toward the #1
 climax (structure + a **2026-06-02 redesign** porting the validated
-Claude Design canvas, pixel-measured from the 1080×1920 references).
-Both are Step 3b; the territorial port is Step 3c (section below):
+Claude Design canvas; **2026-08-12 re-tiering**: the crowded 40→11
+mosaic split into 40→21 + 20→11, aligning stories with the feed
+carousel's blocks of 10). Both are Step 3b; the territorial port is
+Step 3c (section below):
 
 1. **intro** — green radial field, white logo, "presenta" serif accent,
    the big **EL TOP / 40 / D'AQUESTA SETMANA** stack, star-separated
    SETMANA pill row.
-2. **top 40→11** — 5×6 cover mosaic, yellow Anton number badge pinned to
-   each cover's top-left corner (`width:auto`, so double digits stay
-   left-aligned), Bricolage titles + Roboto artist subtitles.
-3. **top 10→4** — 2-column cover grid (#10/#9, #8/#7, #6/#5) with #4
+2. **top 40→21** — 4×5 cover mosaic (175 px covers), yellow Anton number
+   badge pinned to each cover's top-left corner (`width:auto`, so double
+   digits stay left-aligned), Bricolage titles + Roboto artist
+   subtitles. (Until 2026-08-12 this was a 5×6/30-item 40→11 mosaic
+   with 150 px covers — dense enough that it motivated the split.)
+3. **top 20→11** — 3+3+3+1 cover grid (240 px covers), #11 centred on
+   its own last row (mirrors slide 4's centred-#4 grammar), section
+   title "CAMÍ DEL TOP 10". Rendered by the same builder as slide 2
+   (`_story_top_mosaic`, tier `pairs` — wrapper `_story_top_pairs`).
+4. **top 10→4** — 2-column cover grid (#10/#9, #8/#7, #6/#5) with #4
    centred below (mirrors the newsletter D1a block).
-4. **podi #3-2** — two centred 300 px covers stacked, big Anton badge +
+5. **podi #3-2** — two centred 300 px covers stacked, big Anton badge +
    Bricolage title + Roboto artist.
-5. **#1 hero** — inverted hierarchy: a ghost "1" clipped at the right, a
+6. **#1 hero** — inverted hierarchy: a ghost "1" clipped at the right, a
    subordinate yellow scenario kicker, and the SONG TITLE in **Playfair
    Display 800** as the primary element (the only Playfair on the set).
-6. **novetats** — 2-3 most recent releases (albums + singles merged,
-   newest first); **skipped** when nothing is recent → 6 or 7 slides.
-7. **outro** — yellow field, ink logo, "EL TOP 40" (Anton), star
+7. **novetats** — 2-3 most recent releases (albums + singles merged,
+   newest first); **skipped** when nothing is recent → 7 or 8 slides.
+8. **outro** — yellow field, ink logo, "EL TOP 40" (Anton), star
    separator, an informative (non-clickable) underlined `topquaranta.cat`
    CTA, SETMANA footer. No slate `COLOR_CARD` card.
 
 **Typography** (vendored OFL TTFs under `social/fonts/`): **Anton**
 (display/numbers/pills/footers), **Bricolage Grotesque 800** (song
-titles on 2/3/4/6), **Playfair Display 800** (slide-5 title only),
+titles on 2/3/4/5/7), **Playfair Display 800** (hero title only),
 **Instrument Serif italic** (the two serif accents); the sans role
 (kickers, artist subtitles, hero scenario, CTA) reuses bundled
 **Roboto**. Playfair/Bricolage are static instances cut from the upstream
@@ -52,11 +60,11 @@ trend cues anywhere.
 Covers resolve **local self-hosted portada first** (`ingesta.portades`,
 250 px for small slots / 500 px for large) then the live Deezer CDN URL
 then a placeholder tile — the newsletter placeholder does NOT apply here.
-The PPCC story set is a fixed 7-slide editorial sequence (the
+The PPCC story set is a fixed 8-slide editorial sequence (the
 `story_max_cancons_ppcc` field + its `/staff/social/story-cap/` endpoint were
 removed 2026-06-11 — they governed nothing). The `#1` headline comes from
 `_story_hero_headline(setmana, territori)`. Output stays JPEG q90; a
-full set is ~1 MB (7 JPG) vs the legacy ~42 PNG.
+full set is ~1 MB (8 JPG) vs the legacy ~42 PNG.
 
 Operational note: the link-sticker on the outro story must still be
 added manually each week through the Instagram app — the Graph API
@@ -96,10 +104,12 @@ publishes, not just the novetats pages. `publicar_social._story_tags`
 builds one `user_tags` list per rendered story, mirroring
 `render_stories_ppcc` / `render_stories_territorial` emission EXACTLY
 (same slices, same conditional territorial tiers, same draw-order
-reversal): intro/outro carry nothing; the mosaic tags entries 40→11
-(capped at Meta's 20/image, principal-first round-robin so one
-hyper-collaborative entry can't starve the rest); the grid 10→4; the
-podi #3/#2; the hero #1; the PPCC novetats slide its ≤3 releases.
+reversal): intro/outro carry nothing; the mosaic tags entries 40→21
+(exactly 20 — the tier now fits Meta's 20/image cap, which the old
+40→11 mosaic saturated; principal-first round-robin so one
+hyper-collaborative entry can't starve the rest); the pairs tier
+20→11; the grid 10→4; the podi #3/#2; the hero #1; the PPCC novetats
+slide its ≤3 releases.
 Anchors are approximate normalized centres of each drawn item
 (`_pos_story_*` — same discipline as the feed tagger's row anchors,
 not pixel-exact). `instagram_client.upload_story` gained an additive
@@ -129,9 +139,9 @@ fix while the novetats path did not.
 a vivid orange, others = accent). Slides add a `TERRITORI_SHORT` pill, an
 intro territory-icon watermark (`_STORY_ICON_CODI` maps CAT → senyera)
 and a `TERRITORI_DE` subtitle (step-down past 680 px); hero/outro stay
-brand. Tiers degrade by omission (mosaic N>10, grid N>3, podi N>1; warn
-below 11); only `calendari.TERRITORIS_ROTATORI` publish, others fail
-loud. PPCC byte-identical.
+brand. Tiers degrade by omission (mosaic N>20, pairs N>10, grid N>3,
+podi N>1; warn below 11); only `calendari.TERRITORIS_ROTATORI` publish,
+others fail loud. PPCC byte-identical.
 
 ## Publish robustness — standard (2026-07-20 story-3 post-mortem)
 
@@ -163,3 +173,40 @@ were retired once prod ran on them):
   semantics), so it never half-skips. No dedicated status and no data
   migration: `STATUS_ERROR` is the natural resume marker.
 
+
+## Sondes «la cançó del dia» (2026-08-13)
+
+Story d'una sola slide, els 4 dies sense story del calendari
+(dt/dj/dv/dg) × 2 franges (matí 07:00 UTC, vesprada 16:00 UTC), amb
+UNA cançó mai apareguda a cap `TopSetmanal` i UN artista mencionat
+(`user_tags`) que mai ha col·laborat amb nosaltres. Objectiu: sondejar
+receptivitat per a omplir el registre de col·laboradors — vegeu la
+investigació completa (nota local `investigacio-canco-del-dia-…`).
+
+- **Selector** (`social/sonda.py`): elegibilitat + escala de 3 esglaons
+  (mai contactat → re-sonda 12 mesos → invitació caducada 90 dies) +
+  diversitat (quota suau 1-de-6 no-CAT, round-robin de `genere`,
+  prioritat a llançament <90d, tiebreak md5 determinista per
+  data+franja). La cançó: la més escoltada del catàleg viu mai-top
+  (últim `SenyalDiari.lastfm_playcount`; als esglaons 2-3, la nova des
+  de l'últim contacte primer). Mai es repeteix artista ni cançó.
+- **Registre** `SondaStoryIG`: una fila per (data, franja) amb artista,
+  cançó, socialpost i l'avaluació.
+- **Detector de reacció REACH-ONLY** (`avaluar_sondes_pendents`,
+  piggyback als runs de franja): a T+2d llig el reach de
+  `MetricaSocialPost` i marca `reaccio_auto=True` si reach > mediana +
+  3·MAD de les últimes 30 sondes (mínim 5 prèvies; mai flag en fred).
+  Per què reach-only: `replies` retorna sempre 0 per a comptes UE
+  (regulació Meta des de 2020-12) i shares/impressions no existeixen
+  per a stories. Els receptius queden exclosos de futures sondes i
+  formen la cua prioritària d'invitació feed.
+- **Idempotència**: `SocialPost.slot_key = "<data>-<franja>"` (camp nou
+  al unique_together; els tipus setmanals mantenen `""` i la seua clau
+  intacta). Slide: `_story_canco_dia` (gramàtica podi d'una entrada,
+  kicker «FORA DEL TOP», paleta PPCC), tokens `canco_dia`.
+- **Gates**: només els genèrics — kill-switch d'Instagram + matriu de
+  distribució (fail-open; permet apagar el tipus si mai cal). Sense
+  toggle dedicat: la funció és activa des del deploy (decisió
+  2026-08-13). Una menció refusada per Meta estampa el handle com a
+  rebutjat (mateix bookkeeping que el feed) i la sonda es publica
+  sense menció.

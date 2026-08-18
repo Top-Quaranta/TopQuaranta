@@ -468,3 +468,43 @@ def test_print_signature_cli(tmp_path):
     sig = out.stdout.strip()
     assert out.returncode == 1  # one FAILing cron → overall anomaly
     assert len(sig) == 64 and all(ch in "0123456789abcdef" for ch in sig)
+
+
+# ── TLS certificate expiry block (2026-07-27) ─────────────────────────
+
+
+def test_render_without_tls_block_is_unchanged():
+    """No-regression guard. With no `tls` key — dev/CI, or prod with an
+    empty endpoint list — the report keeps its previous shape and exit
+    code, so shipping the check alerts exactly as before."""
+    text, overall = hr.render([_c(name="x")], _all_ok_extras(), NOW)
+    assert overall == 0
+    assert "CERTIFICATS TLS" not in text
+
+
+def test_render_tls_ok_does_not_escalate():
+    extras = _all_ok_extras()
+    extras["tls"] = {"certs": {"severity": "OK", "message": "cap endpoint", "ok": True}}
+    text, overall = hr.render([_c(name="x")], extras, NOW)
+    assert overall == 0
+    assert "CERTIFICATS TLS" in text
+
+
+def test_render_tls_failure_escalates_and_is_listed():
+    extras = _all_ok_extras()
+    extras["tls"] = {
+        "certs": {"severity": "CRIT", "message": "caducat: mail:993", "ok": False}
+    }
+    text, overall = hr.render([_c(name="x")], extras, NOW)
+    assert overall == 1
+    assert "caducat: mail:993" in text
+
+
+def test_signature_changes_only_when_tls_fails():
+    base = hr.anomaly_signature([], _all_ok_extras())
+    ok_extras = _all_ok_extras()
+    ok_extras["tls"] = {"certs": {"ok": True}}
+    assert hr.anomaly_signature([], ok_extras) == base
+    bad_extras = _all_ok_extras()
+    bad_extras["tls"] = {"certs": {"ok": False}}
+    assert hr.anomaly_signature([], bad_extras) != base

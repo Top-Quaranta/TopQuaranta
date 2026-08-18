@@ -227,6 +227,28 @@ thumbnails (their endpoints don't all expose `deezer_id` yet) and the
 source `deezer_id` isn't exposed) — these keep using `deezerImg` and
 will move to `Cover` when the payloads carry the id.
 
+## Retenció (2026-08-12)
+
+The disk-90% alert exposed that the nightly cron had iterated the
+ENTIRE catalogue — including ~2.5k **descartat** albums — with no
+prune (~60k files, 1.7G, +700 MB/mes). Two-sided fix:
+
+- **Bounded candidates** — `_iter_candidates` now yields only the
+  public catalogue: albums `descartat=False`, cançons
+  `verificada=True` on a non-descartat album, artistes `aprovat=True`.
+- **`netejar_portades`** (weekly cron, Monday 03:00 UTC, `--dry-run`
+  supported) deletes every on-disk cover whose deezer_id is outside
+  the KEEP-set: the public catalogue **plus everything that has ever
+  appeared in a `TopSetmanal`**. The ranking union is load-bearing:
+  newsletter emails embed absolute `/portades/album/<id>-<mida>.jpg`
+  URLs, so pruning an ever-ranked album cover would break images in
+  already-delivered emails. Artista covers carry no ranking union (no
+  email embeds them; the SPA falls back to Deezer).
+
+Pruning is safe by construction: a pruned page degrades to the Deezer
+CDN fallback (`Cover.jsx` stepped chain), and a wrongly-pruned cover
+is re-downloaded the moment its entity re-enters the candidate set.
+
 ## Not in this phase
 
 SSR head/`og:image` (Fase 4), the `has_local_cover` API flag (to avoid

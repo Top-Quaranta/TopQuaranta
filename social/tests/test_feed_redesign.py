@@ -107,9 +107,34 @@ def test_build_singles_grid_and_pages(fake_cover):
 
 
 def test_singles_respects_10_row_cap(fake_cover):
-    big = SINGLES * 4  # 20 rows passed; builder draws at most 10
-    img = feed_redesign.build_singles(big, 1, 2)
-    assert img.size == (1080, 1350)
+    """Comparing renders, not measuring the canvas: if the cap holds,
+    what the 11th item onwards SAY cannot reach the image. The old
+    assertion was `img.size == (1080, 1350)`, true of any canvas
+    including a blank one — deleting the cap left it green (audit
+    2026-08-15)."""
+    # No PPCC rows here on purpose: the builder drops them first, which
+    # compacts the list and promotes later items into the drawn set — so
+    # a fixture with PPCC in it cannot express "the 11th is never drawn".
+    vint = [
+        {
+            "nom": f"Cançó {i}",
+            "artista_nom": f"Banda {i}",
+            "artista_territori": "CAT",
+            "cover_url": "x",
+        }
+        for i in range(20)
+    ]
+    # Change what the 11th onwards SAY. If the cap holds they are never
+    # drawn, so the render cannot move. (Comparing 10 items against 20
+    # would not work: an overflow cue legitimately differs.)
+    canviats = vint[:10] + [dict(e, nom="ZZZ", artista_nom="ZZZ") for e in vint[10:]]
+
+    original = feed_redesign.build_singles(vint, 1, 2).tobytes()
+    assert feed_redesign.build_singles(canviats, 1, 2).tobytes() == original
+
+    # …and rows do get drawn, or the comparison above would hold on a
+    # blank canvas too.
+    assert feed_redesign.build_singles(vint[:9], 1, 2).tobytes() != original
 
 
 def test_singles_blinds_ppcc(fake_cover):
@@ -119,10 +144,18 @@ def test_singles_blinds_ppcc(fake_cover):
         {"nom": "B", "artista_nom": "y", "artista_territori": "CAT", "cover_url": "x"},
     ]
     only_ppcc = [items[0]]
-    # All-PPCC chunk → still a valid canvas, just no rows.
-    assert feed_redesign.build_singles(only_ppcc, 1, 1).size == (1080, 1350)
-    # Mixed → renders (the CAT row), PPCC silently dropped.
-    assert feed_redesign.build_singles(items, 1, 1).size == (1080, 1350)
+    nomes_cat = [items[1]]
+
+    buit = feed_redesign.build_singles([], 1, 1).tobytes()
+    # All-PPCC chunk → the PPCC row is dropped, so nothing is drawn: the
+    # result must equal the empty render, not merely be canvas-sized.
+    assert feed_redesign.build_singles(only_ppcc, 1, 1).tobytes() == buit
+    # Mixed → identical to passing the CAT row alone: PPCC contributes
+    # nothing. And it must NOT equal the empty render, or "drops
+    # everything" would pass as "drops PPCC".
+    barrejat = feed_redesign.build_singles(items, 1, 1).tobytes()
+    assert barrejat == feed_redesign.build_singles(nomes_cat, 1, 1).tobytes()
+    assert barrejat != buit
 
 
 def test_territori_full_name_present():

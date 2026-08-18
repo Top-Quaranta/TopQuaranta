@@ -37,12 +37,14 @@ class SocialPost(models.Model):
     TIPUS_NOUS_ALBUMS = "nous_albums"
     TIPUS_NOUS_SINGLES = "nous_singles"
     TIPUS_MOVIMENT = "moviment"
+    TIPUS_CANCO_DIA = "canco_dia"
     TIPUS_CHOICES = [
         (TIPUS_TOP_PPCC, "Top global"),
         (TIPUS_TOP_TERRITORIAL, "Top territorial"),
         (TIPUS_NOUS_ALBUMS, "Nous àlbums"),
         (TIPUS_NOUS_SINGLES, "Nous singles"),
         (TIPUS_MOVIMENT, "Moviment de la setmana"),
+        (TIPUS_CANCO_DIA, "La cançó del dia"),
     ]
 
     STATUS_PENDENT = "pendent"
@@ -66,6 +68,12 @@ class SocialPost(models.Model):
     # Empty for non-territorial types (top_ppcc, nous_*).
     territori = models.CharField(max_length=4, blank=True, default="")
     setmana = models.DateField(db_index=True, help_text="Monday of the ISO week.")
+    # Intra-week slot discriminator (2026-08-13). The weekly types keep
+    # the default "" (their idempotence key is unchanged); types that
+    # publish more than once per (tipus, territori, setmana) — the
+    # cançó-del-dia sondes, 2/day × 4 days — set "<data>-<franja>" so
+    # each publication gets its own row.
+    slot_key = models.CharField(max_length=24, blank=True, default="")
 
     status = models.CharField(
         max_length=20,
@@ -87,7 +95,7 @@ class SocialPost(models.Model):
     class Meta:
         verbose_name = "Publicació social"
         verbose_name_plural = "Publicacions socials"
-        unique_together = [("platform", "tipus", "territori", "setmana")]
+        unique_together = [("platform", "tipus", "territori", "setmana", "slot_key")]
         ordering = ["-setmana", "platform", "tipus"]
 
     def __str__(self) -> str:
@@ -364,3 +372,57 @@ class InvitacioColaboracioIG(models.Model):
 
     def __str__(self) -> str:
         return f"{self.username_snapshot}@{self.ig_media_id} · {self.estat}"
+
+
+class SondaStoryIG(models.Model):
+    """One «cançó del dia» story probe sent to a never-collaborating
+    artist (2026-08-13 strategy; see docs/architecture/social-stories.md
+    §Sondes).
+
+    A probe = a single-slide story featuring one never-topped song with
+    ONE mentioned artist. The reaction signal is fully automatic and
+    reach-only (EU accounts get `replies` zeroed by Meta since 2020-12,
+    and shares/impressions don't exist for stories): once the story's
+    insight window closes, `avaluar_sondes_pendents` snapshots reach
+    from `MetricaSocialPost` and flags `reaccio_auto=True` when it is
+    an outlier over the rolling probe baseline (mediana + 3·MAD).
+    Flagged artists form the priority queue for feed collab invites.
+    """
+
+    REACCIO_FINESTRA_DIES = 2  # evaluate at T+2d (insights collected)
+
+    artista = models.ForeignKey(
+        "music.Artista", on_delete=models.CASCADE, related_name="sondes_ig"
+    )
+    # SET_NULL: the probe is history even if the song is later deleted.
+    canco = models.ForeignKey(
+        "music.Canco", on_delete=models.SET_NULL, null=True, related_name="sondes_ig"
+    )
+    socialpost = models.ForeignKey(
+        SocialPost, on_delete=models.SET_NULL, null=True, related_name="sondes"
+    )
+    data = models.DateField(db_index=True)
+    franja = models.CharField(max_length=10)  # "mati" | "vesprada"
+    story_media_id = models.CharField(max_length=64, blank=True, default="")
+
+    # Evaluation snapshot (null until avaluar_sondes_pendents runs).
+    reach = models.PositiveIntegerField(null=True, blank=True)
+    baseline_mediana = models.FloatField(null=True, blank=True)
+    baseline_mad = models.FloatField(null=True, blank=True)
+    # None = not evaluated yet; True = reach outlier (probable reaction).
+    reaccio_auto = models.BooleanField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Sonda de story IG"
+        verbose_name_plural = "Sondes de story IG"
+        unique_together = [("data", "franja")]
+        indexes = [
+            models.Index(fields=["artista", "-data"]),
+            models.Index(fields=["reaccio_auto", "-data"]),
+        ]
+        ordering = ["-data", "franja"]
+
+    def __str__(self) -> str:
+        return f"{self.data} {self.franja} · {self.artista} · auto={self.reaccio_auto}"

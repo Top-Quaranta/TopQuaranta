@@ -1,117 +1,88 @@
-# Correu electrònic — topquaranta.cat + cercol.team
+# Correu — arquitectura
 
-## Resum d'arquitectura (estat 2026-04-27)
+> Estat 2026-08-18. **Stalwart s'ha retirat**; les bústies viuen a
+> Purelymail. Els blocs de DNS, relays d'enviament, BIMI i newsletter
+> continuen vigents i no han canviat.
 
-Mailbox + IMAP servits per **Stalwart Mail Server** v0.16.1 al servidor
-Hetzner. Outbound delivery va per dos relays externs perquè Hetzner bloca
-port 25 outbound:
+## Resum
 
-```
-            ┌─────────── Hetzner Cloud Firewall ──────────┐
-inbound  →  │ port 25 (SMTP) ─→ Stalwart receives        │
-            │ port 993 (IMAPS) ←─ clients (Spark, Mail…) │
-            │ port 465 (SMTPS) ←─ clients submission     │
-            └─────────────────────────────────────────────┘
-                                   │
-                  Stalwart accepts authenticated submission
-                  for either domain, queues it, then routes:
-                                   │
-              ┌────────────────────┼────────────────────┐
-              ↓                    ↓                    ↓
-       sender ends in        sender ends in       (no match)
-       @topquaranta.cat     @cercol.team
-              │                    │                    │
-              ↓                    ↓                    ↓
-       smtp-relay.brevo.com  smtp.resend.com         dropped
-       (Brevo, port 587)     (Resend, port 587)
-              │                    │
-              └────────────────────┴──→ Gmail / Outlook / etc.
-```
+| | topquaranta.cat | cercol.team |
+|---|---|---|
+| Bústies (rebre) | Purelymail | Purelymail |
+| MX | `mailserver.purelymail.com` | `mailserver.purelymail.com` |
+| Enviament automàtic | Brevo | Resend |
+| SPF | `purelymail + brevo` | `purelymail + resend` |
 
-## Per què aquest setup
+**Els comptes**: IMAP `imap.purelymail.com:993` (SSL) i SMTP
+`smtp.purelymail.com:465` (SSL), tots dos amb la **contrasenya de la
+bústia**. Una sola contrasenya per a rebre i per a enviar.
 
-Hetzner Cloud bloqueja el port 25 outbound a totes les VMs durant els
-primers ~30 dies (i sovint també després — política anti-spam). Sense 25
-outbound, Stalwart no pot entregar directament als MX dels destinataris.
-Tres opcions:
+**L'enviament automàtic va a part**: la newsletter i els correus
+transaccionals surten de Django per Brevo, i els de Cercol per Resend.
+No passen per Purelymail — són volums i necessitats distintes (plantilles,
+mètriques d'obertura, llistes de baixa), i per això els SPF inclouen les
+dues fonts.
 
-1. Demanar el desbloqueig + arreglar reputació IP (4-8 setmanes de
-   warm-up + risc de blacklist).
-2. Usar un relay extern. ← **adoptat**
-3. Allotjar Stalwart en un altre proveïdor sense bloqueig.
+## Per què les bústies ja no són nostres
 
-Brevo + Resend són gratis fins a 300/dia (Brevo) i 3.000/mes (Resend),
-suficient per a la mida actual.
+Van estar a **Stalwart Mail Server**, a la mateixa caixa de Hetzner, des
+de l'abril del 2026 fins al 18 d'agost. El motiu de retirar-ho és el de
+sempre amb els serveis autoallotjats: el cost d'operar-lo no era el
+disc ni la CPU, sinó **estar-hi a sobre**. Dos exemples reals del temps
+que va durar:
 
-## Infraestructura
+- El certificat TLS. Caddy el renovava i una unitat `systemd path` el
+  copiava a `/etc/stalwart/certs/`, però Stalwart no el rellegia: el 26
+  de juliol servia encara el d'abril, caducat, amb el bo al disc des de
+  feia un mes. Post-mortem a
+  [`post-mortems/2026-07-26-stalwart-cert-expirat.md`](post-mortems/2026-07-26-stalwart-cert-expirat.md).
+- L'enviament. Hetzner bloqueja el port 25 d'eixida, així que Stalwart
+  no podia entregar res pel seu compte i calia encaminar-ho tot per un
+  smarthost. Eixa restricció **continua sent certa**, i és la raó per la
+  qual no es tornarà a allotjar correu en eixa màquina.
 
-| Component | Detall |
-|-----------|--------|
-| Servidor | Hetzner CX22 — `188.245.60.20` |
-| Software | Stalwart Mail Server v0.16.1 |
-| Binari | `/usr/local/bin/stalwart` |
-| Config | `/etc/stalwart/config.json` (RocksDB a `/var/lib/stalwart/`) |
-| Env vars | `/etc/stalwart/stalwart.env` |
-| Cert TLS | Let's Encrypt copiat de Caddy via systemd `path-watch` |
-| Servei | `systemctl {start,restart,status} stalwart` |
-| Reverse proxy | Caddy — `mail.topquaranta.cat` (admin UI + autoconfig) |
+Res d'això és culpa de Stalwart. És el preu d'allotjar correu, i el
+projecte no en treia cap avantatge que compensara.
 
-## Ports oberts
+## Què queda a la nostra màquina
 
-A la VM (i autoritzats al **Hetzner Cloud Firewall** `firewall-1`):
+Del correu, **res**: ni servei, ni bústies, ni el subdomini
+`mail.topquaranta.cat` — el registre A es va esborrar el 2026-08-19
+perquè, mentre el nom resolia, els clients es quedaven amb la
+configuració antiga: cap servei viu els contestava, però el nom hi era.
 
-| Port | Protocol | Funció |
-|------|----------|--------|
-| 25 | SMTP | Recepció de correu (inbound) |
-| 465 | SMTPS | Submission per a clients (Spark, Apple Mail) |
-| 587 | SMTP submission | (deshabilitat — Stalwart 0.16 no l'aixeca per defecte) |
-| 993 | IMAPS | Lectura via clients |
-| 995 | POP3S | Lectura via POP3 (rarament usat) |
-| 8080 | HTTP | Admin web UI (només `localhost`, exposat via Caddy a 443) |
+L'única cosa que publiquem és el **fitxer d'autoconfiguració** a
+`topquaranta.cat/.well-known/autoconfig/mail/config-v1.1.xml`
+([`deploy/autoconfig-topquaranta.xml`](../deploy/autoconfig-topquaranta.xml),
+instal·lat per `bin/tq-sync-infra`).
 
-Si en el futur cal port 587, configurar al panell Stalwart → Network →
-Listeners.
+**És una còpia del que Purelymail ja serveix**, i això és una decisió
+presa amb els ulls oberts. En teoria no caldria: Purelymail en publica un
+de comodí a `autoconfig.purelymail.com` i un client hauria d'arribar-hi
+deduint-lo des de l'MX. A la pràctica **Spark Desktop llig el del
+domini** i, si no el troba, es queda amb el que tenia — i després no
+deixa editar els servidors, de manera que l'única eixida és esborrar el
+compte i perdre'n la configuració local. A `cercol.team`, publicar-lo va
+fer que Spark es reconfigurara sol.
 
-## Comptes de correu
+El preu és el de qualsevol còpia: pot desincronitzar-se. Ja ho va fer una
+vegada, quan va quedar-se dient que s'enviava per un relay de Brevo amb
+una clau compartida mesos després que això deixara de ser cert, i qui es
+configurava la bústia podia rebre i no enviar. Per això ara viu a
+`deploy/` (no només al servidor) i hi ha
+[`web/tests/test_autoconfig_correu.py`](../web/tests/test_autoconfig_correu.py),
+que fixa el que va fallar: que els dos servidors siguen de Purelymail i
+que la credencial siga la bústia i no una clau compartida.
 
-Definits a Stalwart com a "principals". Contrasenyes guardades al
-gestor de passwords del Miquel.
+## Comptes
 
-| Compte | Funció | Avatar a Gmail (Google Acc.) |
-|--------|--------|------------------------------|
-| `admin@topquaranta.cat` | Administrador | pendent |
-| `noreply@topquaranta.cat` | App Django (no humà) | n/a |
-| `info@topquaranta.cat` | Contacte públic | pendent |
-| `miquel@topquaranta.cat` | Personal Miquel | ✓ |
-| `hello@cercol.team` | Bústia Cèrcol | n/a |
+Les altes, baixes i contrasenyes es gestionen al panell de Purelymail.
+No hi ha cap comanda ni script nostre que les toque.
 
-## Smarthost routing (Stalwart)
-
-Configurat al panell Stalwart → MTA → Routing.
-
-**Rutes** (`/admin/` → MTA → Routing → Routes):
-
-| ID | Type | Address | Port | Auth |
-|----|------|---------|------|------|
-| `local` | Local Delivery | — | — | — |
-| `default` | Remote Delivery (MX) | — | — | — |
-| `brevo-relay` | Relay Host | `smtp-relay.brevo.com` | 587 | `a97491001@smtp-brevo.com` + Brevo SMTP key |
-| `resend-relay` | Relay Host | `smtp.resend.com` | 587 | `resend` + Resend API key |
-
-**Outbound Delivery Strategy → Routing**:
-
-```
-IF  is_local_domain(rcpt_domain)        →  'local'
-IF  sender_domain == 'cercol.team'      →  'resend-relay'
-ELSE                                    →  'brevo-relay'
-```
-
-Avaluació top-down. Domini local cau a 'local'; cercol.team va per
-Resend; tot el demés (incloent topquaranta.cat) per Brevo.
-
-⚠️ **Després de qualsevol canvi al panell** Stalwart → cal `sudo
-systemctl restart stalwart`. Reload SIGHUP no està suportat (`Job type
-reload is not applicable`).
+L'única adreça amb significat dins del codi és `admin@topquaranta.cat`:
+és on arriben les alertes de `tq-health`, els avisos de moderació i el
+correu de l'usuari pseudònim `admin` de la comunitat (vegeu
+[`architecture/comptes.md`](architecture/comptes.md)).
 
 ## DNS (CDMON, gestionat via API)
 
@@ -120,13 +91,13 @@ Estat actual de `topquaranta.cat`:
 ```
 A     @          188.245.60.20            apex (web)
 A     www        188.245.60.20            web SPA
-A     mail       188.245.60.20            Stalwart
+A     mail       188.245.60.20            només l'autoconfig; la resta respon 410
 A     legacy     188.245.60.20            redirects legacy
-MX    @          mail.topquaranta.cat     inbound
+MX    @          mailserver.purelymail.com  bústies a Purelymail
 TXT   @          brevo-code:…             Brevo domain verification
-TXT   @          v=spf1 mx include:spf.brevo.com -all  SPF amb Brevo
+TXT   @          v=spf1 include:_spf.purelymail.com include:spf.brevo.com -all
 TXT   _dmarc     v=DMARC1; p=reject; rua=mailto:postmaster@topquaranta.cat
-TXT   v1-ed25519-20260427._domainkey  v=DKIM1; …  Stalwart DKIM (no usat actualment)
+TXT   v1-ed25519-20260427._domainkey  v=DKIM1; …  DKIM de Stalwart, mort (es pot llevar)
 TXT   default._bimi  v=BIMI1; l=https://www.topquaranta.cat/static/brand/bimi.svg
 CNAME brevo1._domainkey  b1.topquaranta-cat.dkim.brevo.com  DKIM Brevo
 CNAME brevo2._domainkey  b2.topquaranta-cat.dkim.brevo.com  DKIM Brevo
@@ -135,8 +106,14 @@ CAA   @          0 issue "letsencrypt.org"
 
 DKIM Brevo via CNAME → Brevo signa amb les seves claus, manteniment
 zero. Si en algun moment migrem fora de Brevo, els CNAMEs es poden
-treure. El DKIM ed25519 propi de Stalwart és backup per si en algun
-moment passem a delivery directe (Hetzner desbloca 25).
+treure.
+
+El registre `v1-ed25519-20260427._domainkey` era el DKIM propi de
+Stalwart i **ja no signa res**. Es conserva perquè llevar un DKIM és
+gratis d'ajornar i arriscat de fer amb presses (si alguna cosa encara
+signara amb ell, els correus passarien a fallar la verificació); quan es
+lleve, que siga a consciència i comprovant abans que cap capçalera
+`DKIM-Signature` el referencie.
 
 ### CDMON API
 
@@ -161,7 +138,7 @@ resta d'operacions van bé via API.
 | SMTP host | `smtp-relay.brevo.com` |
 | Port | 587 (STARTTLS) |
 | Login | `a97491001@smtp-brevo.com` (compte SMTP, no email humà) |
-| Password | SMTP key generada al panell Brevo, guardada a Stalwart `resend-relay` route |
+| Password | SMTP key del panell Brevo, a `.env` (`EMAIL_HOST_PASSWORD`) |
 | Quota gratuïta | 300 emails/dia (per recipient) |
 
 ## Resend (relay outbound per `@cercol.team`)
@@ -179,39 +156,6 @@ resta d'operacions van bé via API.
 Add Domain) abans que els correus surtin. Sense verificació, Resend
 respon `550 The cercol.team domain is not verified`.
 
-## TLS de Stalwart (cert Let's Encrypt via Caddy)
-
-Caddy gestiona el cert per a `mail.topquaranta.cat`. Stalwart no parla
-ACME directament.
-
-⚠️ **Stalwart NO llegeix el cert de cap fitxer.** Des de la 0.16 la
-configuració viu dins de RocksDB i el certificat és una propietat
-inline de l'objecte `x:Certificate`. Les variables
-`STALWART_CERTIFICATE_*` de `/etc/stalwart/stalwart.env` apunten a
-`/etc/stalwart/certs/…` amb la macro `%{file:…}%`, estan carregades al
-procés i **no s'avaluen mai**: eixa sintaxi és anterior a la 0.16.
-Escriure PEM en eixe directori no té cap efecte.
-
-**Sync automàtic**: una systemd `path` unit vigila el cert de Caddy i,
-quan canvia, empeny el cert nou a la config viva per JMAP i reinicia
-Stalwart (el reinici cal: escriure la config no intercanvia el context
-TLS ja carregat en memòria):
-
-* `/etc/systemd/system/stalwart-cert-sync.path`
-* `/etc/systemd/system/stalwart-cert-sync.service`
-* `/usr/local/sbin/stalwart-cert-sync.sh` — versionat a
-  [`deploy/stalwart-cert-sync.sh`](../deploy/stalwart-cert-sync.sh)
-
-El script és idempotent: compara el serial del cert de Caddy al disc
-amb el que realment se serveix al 993 i, si coincideixen, no fa res i
-no reinicia. Té `--dry-run`. El mecanisme complet, i per què el camí
-de fitxer no funciona, a [`docs/ops/infra.md`](ops/infra.md).
-
-Quan cal fer-ho a mà, no toques fitxers: `sudo
-/usr/local/sbin/stalwart-cert-sync.sh`. El panell web de Stalwart
-(→ TLS → Certificates) fa el mateix, però ara mateix el bundle del
-webadmin no està desplegat en este servidor i `/` respon 404.
-
 ## BIMI (avatar a clients de correu)
 
 | Camp | Valor |
@@ -228,33 +172,9 @@ Gmail, l'avatar es pot aconseguir registrant un Google Account amb
 l'adreça (verificació via codi al correu) i posant foto de perfil al
 Google Account — mètode oficial sense pagar VMC.
 
-## Configuració de clients de correu
-
-Tots els clients (Apple Mail, Spark, K-9, Thunderbird) amb la
-**mateixa estructura per a tots els 4 + 1 comptes**:
-
-| Camp | Valor |
-|------|-------|
-| IMAP server | `mail.topquaranta.cat` |
-| IMAP port | 993 SSL/TLS |
-| SMTP server | `mail.topquaranta.cat` |
-| SMTP port | 465 SSL/TLS |
-| Username (per a tots dos) | el correu sencer |
-| Password (per a tots dos) | la del compte (mateixa per IMAP i SMTP) |
-
-⚠️ Cal **configuració manual** a cada client. L'autoconfig Mozilla
-està servit a `https://mail.topquaranta.cat/.well-known/autoconfig/mail/config-v1.1.xml`
-(Caddy bloc `mail.topquaranta.cat`) però alguns clients fan autoconfig
-heurístic que pot agafar `imap.<domain>` (no existent) primer i errar.
-
-Ports/credencials Brevo i Resend no s'introdueixen mai al client —
-Stalwart els usa internament.
-
 ## Newsletter (Django + Brevo)
 
-L'app Django envia la newsletter setmanal via Brevo directament (no via
-Stalwart smarthost) perquè la quantitat justifica anar pel relay
-directament. Configuració a `topquaranta/settings/production.py`:
+L'app Django envia la newsletter setmanal per Brevo directament. Configuració a `topquaranta/settings/production.py`:
 
 ```python
 EMAIL_HOST = "smtp-relay.brevo.com"
@@ -282,34 +202,10 @@ Codi sender: `comptes/newsletter.py`. Unsub URL signada amb
 
 ## Còpies de seguretat
 
-Dades Stalwart a `/var/lib/stalwart/` (RocksDB). Backup amb el binari:
+**Res a copiar.** Les bústies viuen a Purelymail i les còpia ell; nosaltres
+no en tenim cap dada. `tq-backup` fa la base de dades i prou.
 
-```bash
-systemctl stop stalwart
-/usr/local/bin/stalwart --config /etc/stalwart/config.json --export /path/backup/
-systemctl start stalwart
-```
-
-A automatitzar al cron amb el patró del `tq-backup` script.
-
-## Manteniment
-
-| Tasca | Comanda | Freqüència |
-|-------|---------|------------|
-| Reiniciar Stalwart després d'editar al panell | `sudo systemctl restart stalwart` | Després de cada canvi |
-| Logs de Stalwart | `tail -f /var/log/stalwart/stalwart.log.YYYY-MM-DD` o `journalctl -u stalwart` | Quan investiguis |
-| Estat dels relays | `tail /var/log/stalwart/*.log \| grep delivery.delivered` | Setmanal |
-| Renovació DKIM Stalwart (si es passa a directe) | Stalwart ho fa cada 90 dies, cal actualitzar DNS via API CDMON | Trimestral |
-| Verificar BIMI | https://bimigroup.org/bimi-generator/ | Quan canvies SVG |
-
-## Pendents documentats
-
-* Verificar `cercol.team` a Resend (panell Resend → Domains).
-* Crear bústia (o alias) `postmaster@topquaranta.cat` per rebre informes
-  DMARC. Ara mateix els reports queden en cua sense destinació real;
-  no és greu però és la pràctica recomanada.
-* Habilitar port 587 STARTTLS a Stalwart per si algun client mòbil futur
-  ho necessita (Spark/Apple Mail funcionen amb 465, no és urgent).
-* Google Accounts addicionals per a `info@`, `admin@` (limitació de
-  verificació telefònica de Google: cal esperar 30-60 dies o usar un
-  altre número).
+Fins al 2026-08-18 ací hi havia el procediment d'exportar la base RocksDB
+de Stalwart, que mai es va arribar a automatitzar. Al retirar-lo, la
+tasca desapareix en lloc de quedar pendent — que és l'única cosa bona de
+deixar d'allotjar un servei.

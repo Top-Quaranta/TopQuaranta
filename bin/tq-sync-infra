@@ -46,6 +46,10 @@ declare -A FILES=(
     ["$APP_DIR/deploy/cron.topquaranta"]="/etc/cron.d/topquaranta"
     ["$APP_DIR/deploy/logrotate.topquaranta"]="/etc/logrotate.d/topquaranta"
     ["$APP_DIR/deploy/topquaranta-web.service"]="/etc/systemd/system/topquaranta-web.service"
+    # Autoconfiguració de correu, servida al domini principal. Va viure
+    # només al servidor una temporada i es va desincronitzar; ara entra
+    # per ací com la resta.
+    ["$APP_DIR/deploy/autoconfig-topquaranta.xml"]="/var/www/autoconfig/config-v1.1.xml"
 )
 
 caddy_changed=0
@@ -85,6 +89,21 @@ for src in "${!FILES[@]}"; do
         /etc/logrotate.d/topquaranta)
             echo "  logrotate config changed, installing"
             sudo install -o root -g root -m 644 "$src" "$dst"
+            ;;
+        *)
+            # Qualsevol destinació sense tracte especial: instal·lar i
+            # prou. Sense aquesta branca, afegir una entrada a FILES no
+            # feia res —el `case` no la casava— i l'script eixia amb 0
+            # com si l'haguera instal·lada. Va passar el 2026-08-18 amb
+            # l'autoconfig de correu: el desplegament va dir que tot
+            # anava bé i el fitxer no hi era, així que Caddy va passar de
+            # servir-lo desfasat a no servir-lo.
+            #
+            # Ara FILES és l'única font de veritat: afegir-hi una línia
+            # basta, i les branques de dalt només existeixen per als
+            # fitxers que a més necessiten validació o un reload.
+            echo "  ${dst} changed, installing"
+            sudo install -D -o root -g root -m 644 "$src" "$dst"
             ;;
     esac
 done

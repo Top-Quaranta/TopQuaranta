@@ -12,6 +12,7 @@ they do not depend on the real repo's current state.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -132,6 +133,30 @@ def test_excluded_dir_is_not_flagged(script, tmp_path):
     exclude = [{"prefix": "newapp/", "reason": "vendored"}]
     found = script.find_uncovered_code_dirs(tmp_path, [], exclude)
     assert found == []
+
+
+def test_gitignored_dir_is_not_flagged(script, tmp_path):
+    """A gitignored tree is a local artefact, not a subsystem.
+
+    Caught 2026-08-10: a downloaded Instagram DYI export sitting at the
+    repo root (gitignored, invisible to CI) failed this gate on the
+    operator's laptop only — the fastest way to teach everyone that a
+    red hard gate means nothing.
+    """
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    _mkapp(tmp_path, "instagram-export-2026-06-15")
+    _mkapp(tmp_path, "realapp")
+    (tmp_path / ".gitignore").write_text("instagram-*/\n")
+
+    found = script.find_uncovered_code_dirs(tmp_path, [], [])
+
+    assert found == ["realapp"]
+
+
+def test_uncovered_dir_still_flagged_without_git(script, tmp_path):
+    """No git (tarball, sandbox) → we can't tell, so we stay strict."""
+    _mkapp(tmp_path, "newapp")
+    assert script.find_uncovered_code_dirs(tmp_path, [], []) == ["newapp"]
 
 
 def test_dir_without_py_is_not_flagged(script, tmp_path):

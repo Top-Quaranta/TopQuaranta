@@ -46,26 +46,29 @@ projecte no en treia cap avantatge que compensara.
 
 ## Què queda a la nostra màquina
 
-Només l'**autoconfig** per als clients de correu. `mail.topquaranta.cat`
-continua apuntant a la caixa perquè el registre DNS serveix eixe fitxer,
-i qualsevol altra petició respon **410** amb els paràmetres de Purelymail.
+**Res.** Ni servei de correu, ni fitxer de configuració, ni el subdomini
+`mail.topquaranta.cat` — el registre A es va esborrar el 2026-08-19
+perquè, mentre el nom resolia, els clients com Spark es quedaven amb la
+configuració antiga: cap servei viu els contestava, però el nom hi era.
 
-El fitxer és [`deploy/autoconfig-topquaranta.xml`](../deploy/autoconfig-topquaranta.xml),
-i l'instal·la `bin/tq-sync-infra` com qualsevol altre fitxer que viu fora
-de l'arbre de treball. Es publica **només** al camí `.well-known` de
-`mail.topquaranta.cat`: Thunderbird prova abans
-`autoconfig.<domini>`, però eixe subdomini mai no va apuntar ací —resol a
-CDMON— i durant quatre mesos els clients ja el trobaven per aquesta via.
-El bloc que l'esperava es va llevar el 2026-08-18.
+**Els clients es configuren sols des de Purelymail.** Publica el seu propi
+fitxer a `autoconfig.purelymail.com/mail/config-v1.1.xml` amb
+`%EMAILDOMAIN%` de comodí, així que val per a qualsevol domini que
+allotge. Un client que no troba res al nostre domini dedueix la
+configuració des de l'MX i hi arriba.
 
-**Va viure només al servidor fins al 2026-08-18, i es va desincronitzar
-exactament per això**: en retirar Stalwart es va corregir a mà el servidor
-d'entrada i el de d'eixida es va quedar apuntant al relay de Brevo, amb
-una clau d'API compartida com a contrasenya —publicada en obert dins de
-l'XML—, de manera que qui es configurara la bústia podia rebre i no
-enviar. Ara hi ha **una sola còpia** a disc i Caddy reescriu els dos
-camins que prova Thunderbird cap a ella; abans n'hi havia dues, que és
-com es van poder separar.
+Vam arribar a publicar-ne una còpia nostra. Va ser un error de disseny i
+val la pena deixar-lo escrit: era el **mateix contingut en dos llocs**, i
+es va desincronitzar exactament com se solen desincronitzar les còpies
+—deia d'enviar per Brevo amb una clau d'API compartida mesos després que
+això deixara de ser cert, de manera que qui es configurava la bústia
+podia rebre i no enviar. Qui allotja el correu és qui ha de dir com s'hi
+connecta.
+
+Si algun dia calguera publicar-ne un (per exemple si es canvia de
+proveïdor a un que no en publique), el lloc és el domini principal
+(`/.well-known/autoconfig/mail/config-v1.1.xml`) i el fitxer ha d'anar a
+`deploy/`, mai només al servidor.
 
 ## Comptes
 

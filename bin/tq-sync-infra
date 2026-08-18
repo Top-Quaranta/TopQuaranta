@@ -46,15 +46,6 @@ declare -A FILES=(
     ["$APP_DIR/deploy/cron.topquaranta"]="/etc/cron.d/topquaranta"
     ["$APP_DIR/deploy/logrotate.topquaranta"]="/etc/logrotate.d/topquaranta"
     ["$APP_DIR/deploy/topquaranta-web.service"]="/etc/systemd/system/topquaranta-web.service"
-    # Mail-client autoconfig. Lived only on the server until 2026-08-18
-    # and drifted: the Stalwart retirement updated the incoming host by
-    # hand and left the outgoing one pointing at the Brevo relay, so a
-    # new mailbox could receive and not send. Anything outside the
-    # working tree belongs here.
-    # Una sola còpia: els dos camins que Thunderbird prova els reescriu
-    # Caddy cap a aquest fitxer. Dues còpies del mateix XML és com es
-    # desincronitzen (i ho van fer).
-    ["$APP_DIR/deploy/autoconfig-topquaranta.xml"]="/var/www/autoconfig/config-v1.1.xml"
 )
 
 caddy_changed=0

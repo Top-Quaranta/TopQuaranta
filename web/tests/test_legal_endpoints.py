@@ -155,3 +155,50 @@ def test_baixa_newsletter_rejects_token_for_other_salt(db, django_user_model):
     c = APIClient()
     r = c.get(f"/api/v1/compte/baixa-newsletter/?token={bad}")
     assert r.status_code == 400
+
+
+# ── "Has entrat al top" alert unsubscribe: token lifetime ─────────────
+
+
+def test_baixa_avis_top_token_older_than_a_year_is_refused(db, django_user_model):
+    """RGPD promise (May-2026 audit): unsubscribe tokens expire after one
+    year — a leaked archived email must not be a forever-unsubscribe
+    primitive. Same 1-year contract as the newsletter twin, salt
+    `avis-top-baixa`.
+
+    Asserts the property "older than a year is refused, younger is
+    accepted" — the age is controlled by patching the signer's clock at
+    `dumps` time; no copy string is pinned."""
+    from unittest.mock import patch
+
+    u = django_user_model.objects.create_user(
+        username="avt", email="avt@example.com", password="x"
+    )
+    perfil = u.perfil
+    perfil.vol_avis_top = True
+    perfil.save(update_fields=["vol_avis_top"])
+    c = APIClient()
+
+    # A token signed a bit MORE than a year ago.
+    un_any_i_un_dia = 60 * 60 * 24 * 366
+    with patch(
+        "django.core.signing.time.time",
+        return_value=timezone.now().timestamp() - un_any_i_un_dia,
+    ):
+        vell = signing.dumps({"u": u.pk}, salt="avis-top-baixa")
+    r = c.get(f"/api/v1/compte/baixa-avis-top/?token={vell}")
+    assert r.status_code == 400
+    perfil.refresh_from_db()
+    assert perfil.vol_avis_top is True  # still subscribed
+
+    # A token signed a bit LESS than a year ago still works.
+    quasi_un_any = 60 * 60 * 24 * 364
+    with patch(
+        "django.core.signing.time.time",
+        return_value=timezone.now().timestamp() - quasi_un_any,
+    ):
+        recent = signing.dumps({"u": u.pk}, salt="avis-top-baixa")
+    r = c.get(f"/api/v1/compte/baixa-avis-top/?token={recent}")
+    assert r.status_code == 200
+    perfil.refresh_from_db()
+    assert perfil.vol_avis_top is False

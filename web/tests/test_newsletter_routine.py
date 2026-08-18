@@ -203,18 +203,24 @@ def test_brief_exposes_top40_with_intact_old_keys(client_with_token):
 @pytest.mark.django_db
 def test_brief_aliases_are_identical_slices(client_with_token):
     """top10 == top40[:10]; fets_grup_top5 == fets_grup[:5]; fet_lider is
-    the first highlighted fact (same shape + content as before)."""
+    the first highlighted fact (same shape + content as before).
+
+    Asserts the slice identities and "fet_lider is the first highlighted
+    fact" — not an exact key-set of fet_lider (adding a field must not
+    break this)."""
     _seed_topN(12, with_collab=True, prev=True)
     with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
         r = client_with_token.get(BRIEF_URL, **_auth())
     d = r.data
+    assert len(d["top40"]) > 10
     assert d["top10"] == d["top40"][:10]
     assert d["fets_grup_top5"] == d["fets_grup"][:5]
-    # fet_lider keeps its exact shape.
-    if d["fet_lider"] is not None:
-        assert set(d["fet_lider"]) == {"code", "severity", "data", "freshness_blocked"}
-        # ...and equals the first highlighted fact.
-        assert d["fets_destacats"][0] == d["fet_lider"]
+    # fet_lider is the first highlighted fact (or None when there is none).
+    if d["fets_destacats"]:
+        assert d["fet_lider"] == d["fets_destacats"][0]
+        assert {"code", "severity", "data"} <= set(d["fet_lider"])
+    else:
+        assert d["fet_lider"] is None
 
 
 @pytest.mark.django_db
@@ -316,7 +322,14 @@ def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
     """A successful LLM upsert fires exactly one admin mail whose HTML body
     is the FULL preview (shared render) + the management block + the staff
     editor link, with deliverability headers. There is no separate full
-    1-40 ranking section."""
+    1-40 ranking section.
+
+    Asserts the property (one mail, to ADMINS, HTML == the shared preview
+    render for that draft incl. the staff editor link, deliverability
+    headers) — not the template's copy strings."""
+    from comptes.newsletter import render_newsletter_preview, staff_draft_url
+    from social import payload
+
     _seed_topN(12, prev=True)
     r = client_with_token.post(
         DRAFT_URL,
@@ -328,15 +341,29 @@ def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
     assert len(mailoutbox) == 1
     m = mailoutbox[0]
     assert "Subj LLM" in m.body
-    gestio = f"/staff/social/esborrany?setmana={_monday().isoformat()}"
+    draft = NewsletterDraft.objects.get(setmana=_monday())
+    gestio = staff_draft_url(draft.setmana)
     assert gestio in m.body
     html = m.alternatives[0][0]
-    # Full preview body: management block + staff link, highlighted top 10.
-    assert "Còpia de gestió" in html
+    # The HTML is the shared preview render (what subscribers get) plus the
+    # management block: same renderer, same draft, same editor link.
     assert gestio in html
-    assert "Del 4 al 10" in html
-    # No separate full 1-40 ranking section.
-    assert "El Top 40 complet" not in html
+    assert "<p>n</p>" in html
+    entries = (payload.build_top(draft.territori, draft.setmana) or {}).get(
+        "entries"
+    ) or []
+    assert entries
+    expected = render_newsletter_preview(
+        draft.tipus,
+        draft.territori,
+        draft.setmana,
+        draft.setmana + datetime.timedelta(days=5),
+        entries,
+        subject_override=draft.subject,
+        narrative_html_override=draft.narrative_html,
+        gestio_url=gestio,
+    )
+    assert html == expected
     # Deliverability headers present.
     assert m.extra_headers.get("List-Unsubscribe")
     assert m.extra_headers.get("Auto-Submitted") == "auto-generated"

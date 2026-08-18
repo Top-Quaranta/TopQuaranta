@@ -244,7 +244,11 @@ def test_the_queue_hides_artists_with_no_live_song(staff_client):
 def test_ties_break_by_newest_song(staff_client):
     """Same tops (0), same live-song count (1): the artist who released
     THIS WEEK goes first — they are about to appear in the "nous singles"
-    post, and that publication is the one chance to tag them."""
+    post, and that publication is the one chance to tag them.
+
+    The fixture names are chosen so alphabetical order would put the
+    veteran FIRST — only the newest-song key can produce the asserted
+    order, so this cannot pass by the alphabetical stabiliser alone."""
     from datetime import date, timedelta
 
     from music.models import Album, Canco
@@ -264,14 +268,14 @@ def test_ties_break_by_newest_song(staff_client):
         )
         return a
 
-    _mk("Veterania", 300)
-    _mk("Acabat de Traure", 2)
+    _mk("Alfa Veterania", 300)  # alphabetically first, released long ago
+    _mk("Zeta Acabat de Traure", 2)  # alphabetically last, released this week
 
     res = staff_client.get(
         "/api/v1/staff/artistes/?aprovat=1&instagram=pendent&include_n_top=1&sort=-n_top"
     )
     noms = _noms(res)
-    assert noms.index("Acabat de Traure") < noms.index("Veterania")
+    assert noms.index("Zeta Acabat de Traure") < noms.index("Alfa Veterania")
 
 
 @pytest.mark.django_db

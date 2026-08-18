@@ -58,3 +58,25 @@ updates:
       - "ci"
     commit-message:
       prefix: "ci"
+
+  # React SPA — web-react/package.json. Without this block Dependabot
+  # only opens *security* PRs for npm, one per package and ungrouped:
+  # that is how six loose web-react PRs piled up in July-August 2026.
+  - package-ecosystem: "npm"
+    directory: "/web-react"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"

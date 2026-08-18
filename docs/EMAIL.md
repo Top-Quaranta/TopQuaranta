@@ -46,29 +46,33 @@ projecte no en treia cap avantatge que compensara.
 
 ## Què queda a la nostra màquina
 
-**Res.** Ni servei de correu, ni fitxer de configuració, ni el subdomini
+Del correu, **res**: ni servei, ni bústies, ni el subdomini
 `mail.topquaranta.cat` — el registre A es va esborrar el 2026-08-19
-perquè, mentre el nom resolia, els clients com Spark es quedaven amb la
+perquè, mentre el nom resolia, els clients es quedaven amb la
 configuració antiga: cap servei viu els contestava, però el nom hi era.
 
-**Els clients es configuren sols des de Purelymail.** Publica el seu propi
-fitxer a `autoconfig.purelymail.com/mail/config-v1.1.xml` amb
-`%EMAILDOMAIN%` de comodí, així que val per a qualsevol domini que
-allotge. Un client que no troba res al nostre domini dedueix la
-configuració des de l'MX i hi arriba.
+L'única cosa que publiquem és el **fitxer d'autoconfiguració** a
+`topquaranta.cat/.well-known/autoconfig/mail/config-v1.1.xml`
+([`deploy/autoconfig-topquaranta.xml`](../deploy/autoconfig-topquaranta.xml),
+instal·lat per `bin/tq-sync-infra`).
 
-Vam arribar a publicar-ne una còpia nostra. Va ser un error de disseny i
-val la pena deixar-lo escrit: era el **mateix contingut en dos llocs**, i
-es va desincronitzar exactament com se solen desincronitzar les còpies
-—deia d'enviar per Brevo amb una clau d'API compartida mesos després que
-això deixara de ser cert, de manera que qui es configurava la bústia
-podia rebre i no enviar. Qui allotja el correu és qui ha de dir com s'hi
-connecta.
+**És una còpia del que Purelymail ja serveix**, i això és una decisió
+presa amb els ulls oberts. En teoria no caldria: Purelymail en publica un
+de comodí a `autoconfig.purelymail.com` i un client hauria d'arribar-hi
+deduint-lo des de l'MX. A la pràctica **Spark Desktop llig el del
+domini** i, si no el troba, es queda amb el que tenia — i després no
+deixa editar els servidors, de manera que l'única eixida és esborrar el
+compte i perdre'n la configuració local. A `cercol.team`, publicar-lo va
+fer que Spark es reconfigurara sol.
 
-Si algun dia calguera publicar-ne un (per exemple si es canvia de
-proveïdor a un que no en publique), el lloc és el domini principal
-(`/.well-known/autoconfig/mail/config-v1.1.xml`) i el fitxer ha d'anar a
-`deploy/`, mai només al servidor.
+El preu és el de qualsevol còpia: pot desincronitzar-se. Ja ho va fer una
+vegada, quan va quedar-se dient que s'enviava per un relay de Brevo amb
+una clau compartida mesos després que això deixara de ser cert, i qui es
+configurava la bústia podia rebre i no enviar. Per això ara viu a
+`deploy/` (no només al servidor) i hi ha
+[`web/tests/test_autoconfig_correu.py`](../web/tests/test_autoconfig_correu.py),
+que fixa el que va fallar: que els dos servidors siguen de Purelymail i
+que la credencial siga la bústia i no una clau compartida.
 
 ## Comptes
 

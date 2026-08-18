@@ -36,12 +36,38 @@ mapping:
   # stays with the generic `social/` entry.
   - prefix: social/collaboradors.py
     doc: docs/architecture/social-collaboradors.md
+  # L'etiquetatge d'IG i els handles caducats: doc propi perquè social.md
+  # ja estava al llindar de mida (mateix patró que narrative i
+  # collaboradors).
+  - prefix: social/instagram_client.py
+    doc: docs/architecture/social-etiquetatge.md
+  # El renderer d'imatges, partit de social.md per mida el 2026-08-12
+  # (Rule 3: split by sub-area). La distribució es queda a social.md.
+  - prefix: social/render_core.py
+    doc: docs/architecture/social-renderer.md
+  - prefix: social/top_redesign.py
+    doc: docs/architecture/social-renderer.md
+  - prefix: social/feed_redesign.py
+    doc: docs/architecture/social-renderer.md
+  - prefix: social/renderer.py
+    doc: docs/architecture/social-renderer.md
   - prefix: social/management/commands/pollar_colaboracions_ig.py
     doc: docs/architecture/social-collaboradors.md
   - prefix: social/management/commands/simular_colaboradors_ig.py
     doc: docs/architecture/social-collaboradors.md
   - prefix: social/
     doc: docs/architecture/social.md
+  # Newsletter split out of comptes.md (2026-08-12, docs-size Rule 3):
+  # the pipeline modules + commands resolve to the narrower doc; the
+  # subscriber model and the rest of comptes stay with the generic entry.
+  - prefix: comptes/newsletter
+    doc: docs/architecture/comptes-newsletter.md
+  - prefix: comptes/management/commands/enviar_newsletter.py
+    doc: docs/architecture/comptes-newsletter.md
+  - prefix: comptes/management/commands/generar_esborrany_newsletter.py
+    doc: docs/architecture/comptes-newsletter.md
+  - prefix: comptes/management/commands/generar_assets_newsletter.py
+    doc: docs/architecture/comptes-newsletter.md
   - prefix: comptes/
     doc: docs/architecture/comptes.md
   - prefix: music/
@@ -54,6 +80,22 @@ mapping:
   # middleware and metrics collectors stay with the generic entry.
   - prefix: analytics/management/commands/generar_goaccess.py
     doc: docs/architecture/analytics-goaccess.md
+  # Informe temporal de la connexió amb YouTube (2026-08). Doc propi pel
+  # mateix motiu que GoAccess: analytics.md ja frega el llindar de mida.
+  - prefix: analytics/management/commands/enviar_informe_youtube.py
+    doc: docs/architecture/analytics-youtube.md
+  - prefix: analytics/templates/analytics/informe_youtube.html
+    doc: docs/architecture/analytics-youtube.md
+  # Els dos escriptors de MetricaEsdeveniment (middleware + beacon) es
+  # van separar el 2026-08-17, quan analytics.md va passar de 400 línies
+  # (docs-maintenance.md regla 3). Qui toque la classificació bot/humà
+  # actualitza el doc d'ingesta, no l'índex.
+  - prefix: analytics/middleware.py
+    doc: docs/architecture/analytics-ingest.md
+  - prefix: analytics/bots.py
+    doc: docs/architecture/analytics-ingest.md
+  - prefix: web/api/analytics_ingest.py
+    doc: docs/architecture/analytics-ingest.md
   - prefix: analytics/
     doc: docs/architecture/analytics.md
 
@@ -63,8 +105,12 @@ mapping:
   # (error handlers, RSS feeds, sitemaps, legal versions).
   # `web/seo` (no trailing slash) matches both `web/seo/<file>` and
   # a hypothetical future `web/seo.py`.
+  # La taula d'endpoints es va separar el 2026-08-17, quan staff.md va
+  # passar de 400 línies (docs-maintenance.md regla 3). Qui toque un
+  # endpoint del panell actualitza staff-api.md; qui toque el control
+  # d'accés o els invariants, staff.md.
   - prefix: web/api/staff/
-    doc: docs/architecture/staff.md
+    doc: docs/architecture/staff-api.md
   - prefix: web/seo
     doc: docs/architecture/seo.md
   - prefix: web/api/
@@ -97,6 +143,8 @@ mapping:
   - prefix: ingesta/portades
     doc: docs/architecture/portades.md
   - prefix: ingesta/management/commands/descarregar_portades.py
+    doc: docs/architecture/portades.md
+  - prefix: ingesta/management/commands/netejar_portades.py
     doc: docs/architecture/portades.md
   - prefix: ingesta/
     doc: docs/architecture/pipeline.md

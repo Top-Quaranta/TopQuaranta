@@ -24,6 +24,7 @@ from functools import wraps
 from django.core.cache import caches
 from django.core.paginator import Paginator
 from django.http import HttpResponse
+from rest_framework.throttling import SimpleRateThrottle
 
 
 def paginate(qs, request, *, default: int = 20, cap: int = 100):
@@ -125,3 +126,36 @@ def cache_for_anon(timeout: int, *, key_prefix: str = "anon"):
         return wrapped
 
     return deco
+
+
+class ScopedThrottle(SimpleRateThrottle):
+    """A rate limit that reads its scope from the CLASS, not the view.
+
+    DRF's own `ScopedRateThrottle` looks the scope up on the *view*
+    (`view.throttle_scope`) and **allows the request unconditionally when
+    it is missing**:
+
+        self.scope = getattr(view, self.scope_attr, None)
+        if not self.scope:
+            return True
+
+    Every throttle in this project was declared as a `ScopedRateThrottle`
+    subclass setting `scope = "..."`, which that method overwrites on each
+    call. No view ever set `throttle_scope`, so all six limits — login,
+    data export, newsletter unsubscribe, feedback, account deletion, DM
+    sending — returned True and rate-limited nothing at all from the day
+    they were added (May-2026 audit; found 2026-08-15). They were wired
+    up, invoked on every request, and inert.
+
+    Attaching `throttle_scope` to a function-based `@api_view` is awkward
+    (the decorator wraps it in a generated class), so the scope stays on
+    the throttle, where the declaration already lived. Cache key mirrors
+    DRF's: per user when authenticated, per IP otherwise.
+    """
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            ident = request.user.pk
+        else:
+            ident = self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}

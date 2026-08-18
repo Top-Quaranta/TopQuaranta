@@ -60,7 +60,7 @@ A token without a runbook row is an outage waiting to happen.
 | Bluesky | `topquaranta.bsky.social` app password | `social.BlueskyAuth` row | App password rotated at bsky.social settings |
 | Telegram Bot | `@topquaranta_bot` | `social.TelegramAuth` row | Token regenerated via @BotFather |
 | Brevo SMTP | `admin@topquaranta.cat` | `.env::EMAIL_HOST_PASSWORD` | Brevo dashboard |
-| Resend (cercol.team) | Resend account | (Stalwart MTA strategy) | Resend dashboard |
+| Resend (cercol.team) | Resend account | `.env` de Cercol | Resend dashboard |
 | Hetzner Cloud API | `HETZNER_API_TOKEN` | `.env` | Hetzner console |
 | CDMON DNS | `CDMON_API_KEY` | `.env` | CDMON web panel |
 

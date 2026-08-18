@@ -173,7 +173,7 @@ def test_command_skips_already_present_without_force(
 @patch("ingesta.management.commands.descarregar_portades.time.sleep")
 def test_command_artista_uses_principal_deezer_id(mock_sleep, mock_dl, portades_root):
     mock_dl.return_value = True
-    a = Artista.objects.create(nom="Z", imatge_url=_DZ_URL)
+    a = Artista.objects.create(nom="Z", imatge_url=_DZ_URL, aprovat=True)
     ArtistaDeezer.objects.create(artista=a, deezer_id=8888, principal=True)
 
     call_command("descarregar_portades", entitat="artista", limit=10)
@@ -199,10 +199,14 @@ def _seed_entities(n_album, n_canco, n_artista):
             artista=struct, nom=f"calb{i}", imatge_url=_DZ_URL  # deezer_id=None
         )
         Canco.objects.create(
-            artista=struct, album=alb, nom=f"c{i}", deezer_id=20000 + i
+            artista=struct,
+            album=alb,
+            nom=f"c{i}",
+            deezer_id=20000 + i,
+            verificada=True,
         )
     for i in range(n_artista):
-        a = Artista.objects.create(nom=f"art{i}", imatge_url=_DZ_URL)
+        a = Artista.objects.create(nom=f"art{i}", imatge_url=_DZ_URL, aprovat=True)
         ArtistaDeezer.objects.create(artista=a, deezer_id=30000 + i, principal=True)
 
 
@@ -307,3 +311,99 @@ def test_no_ranking_keeps_insertion_order(mock_sleep, mock_dl, portades_root):
     mock_dl.return_value = True
     call_command("descarregar_portades", entitat="album", limit=1)
     mock_dl.assert_called_once_with("album", 11111, first.imatge_url)
+
+
+# ── retention (2026-08-12): bounded candidates + netejar_portades ────
+
+
+def _fake_cover(entitat, deezer_id):
+    """Write every variant of a cover as a stub file."""
+    from django.conf import settings as dj_settings
+
+    for mida in dj_settings.PORTADES_VARIANTS:
+        for fmt in dj_settings.PORTADES_FORMATS:
+            p = manager.path_for(entitat, deezer_id, mida, fmt)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"x")
+
+
+@pytest.mark.django_db
+@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
+@patch("ingesta.management.commands.descarregar_portades.time.sleep")
+def test_candidates_exclude_non_public_catalogue(mock_sleep, mock_dl, portades_root):
+    """Descartat albums, unverified cançons and unapproved artistes are
+    NOT download candidates (the disk-90% root cause)."""
+    mock_dl.return_value = True
+    struct = Artista.objects.create(nom="struct-ret")
+    Album.objects.create(
+        artista=struct, nom="mort", deezer_id=911, imatge_url=_DZ_URL, descartat=True
+    )
+    alb = Album.objects.create(artista=struct, nom="viu-sense-dz", imatge_url=_DZ_URL)
+    Canco.objects.create(
+        artista=struct, album=alb, nom="no-verif", deezer_id=912, verificada=False
+    )
+    a = Artista.objects.create(nom="pendent", imatge_url=_DZ_URL, aprovat=False)
+    ArtistaDeezer.objects.create(artista=a, deezer_id=913, principal=True)
+
+    call_command("descarregar_portades", entitat="all", limit=30)
+
+    mock_dl.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_netejar_prunes_stale_keeps_public_and_ranked(portades_root):
+    """netejar_portades deletes covers of descartat albums and orphan
+    ids, but keeps the public catalogue AND ever-ranked albums (old
+    newsletter emails embed their /portades/ URLs)."""
+    import datetime
+
+    from ranking.models import TopSetmanal
+
+    struct = Artista.objects.create(nom="struct-net")
+    Album.objects.create(
+        artista=struct, nom="public", deezer_id=100, imatge_url=_DZ_URL
+    )
+    ranked = Album.objects.create(
+        artista=struct,
+        nom="ranked-mort",
+        deezer_id=200,
+        imatge_url=_DZ_URL,
+        descartat=True,
+    )
+    c = Canco.objects.create(
+        artista=struct, album=ranked, nom="hit", deezer_id=300, verificada=True
+    )
+    TopSetmanal.objects.create(
+        canco=c,
+        territori="PPCC",
+        setmana=datetime.date(2026, 6, 1),
+        posicio=1,
+        score_setmanal=9.0,
+    )
+    Album.objects.create(
+        artista=struct, nom="mort", deezer_id=400, imatge_url=_DZ_URL, descartat=True
+    )
+    for dz in (100, 200, 400, 999):  # 999 = orphan, no DB row
+        _fake_cover("album", dz)
+
+    call_command("netejar_portades")
+
+    assert manager.exists("album", 100) is True  # public
+    assert manager.exists("album", 200) is True  # descartat but ever-ranked
+    assert manager.exists("album", 400) is False  # descartat, never ranked
+    assert manager.exists("album", 999) is False  # orphan
+
+
+@pytest.mark.django_db
+def test_netejar_dry_run_deletes_nothing(portades_root):
+    struct = Artista.objects.create(nom="struct-dry")
+    Album.objects.create(
+        artista=struct, nom="mort", deezer_id=500, imatge_url=_DZ_URL, descartat=True
+    )
+    _fake_cover("album", 500)
+
+    out = io.StringIO()
+    call_command("netejar_portades", dry_run=True, stdout=out)
+
+    assert manager.exists("album", 500) is True
+    assert "WORK_DONE=1" in out.getvalue()

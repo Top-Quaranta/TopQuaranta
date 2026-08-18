@@ -55,14 +55,36 @@ def test_parse_move_three_cases():
 
 def test_poster_renders_all_rows(fake_cover):
     """Every entry received must produce a numeral — no dropped rows (the gaps
-    seen in review were a test-data artifact, not the builder)."""
+    seen in review were a test-data artifact, not the builder).
+
+    Checked by comparison: dropping the last entry has to change the
+    image. `img.size == (1080, 1350)` proved only that a canvas came
+    back, blank or not (audit 2026-08-15)."""
     img = top_redesign.build_poster(_entries(40), SET, "ppcc")
-    assert img.size == (1080, 1350)
+    complet = img.tobytes()
+
+    # Change what the LAST entry says. If row 40 is drawn, the image has
+    # to move. Comparing 40 entries against 39 is not enough — it only
+    # shows the 40th exists; a builder that silently drops its last row
+    # passes that comparison, because both renders lose one.
+    altra_ultima = _entries(40)
+    altra_ultima[-1] = dict(altra_ultima[-1], nom="ZZZZZZZZ", artista_nom="ZZZZZZZZ")
+    assert top_redesign.build_poster(altra_ultima, SET, "ppcc").tobytes() != complet
+
+    # …and the same input twice is stable, so the check above can only
+    # be tripped by that row.
+    assert complet == top_redesign.build_poster(_entries(40), SET, "ppcc").tobytes()
+
     R, G, B = _chan(img)
     # bright yellow "40" headline ink near the top
     sl = slice(56, 480)
     yellow = ((R[:, sl] > 190) & (G[:, sl] > 140) & (B[:, sl] < 110)).sum(1)
-    assert next(r for r in range(120, 320) if yellow[r] > 60) < 320  # title present
+    # Presence, stated as presence. The old form —
+    # `assert next(r for r in range(120, 320) if ...) < 320` — is true of
+    # anything the generator can yield, and a MISSING headline raised
+    # StopIteration: an error, not a failure (audit 2026-08-15).
+    files_grogues = [r for r in range(120, 320) if yellow[r] > 60]
+    assert files_grogues, "no s'ha pintat el titular groc"
 
 
 def test_poster_pins(fake_cover):

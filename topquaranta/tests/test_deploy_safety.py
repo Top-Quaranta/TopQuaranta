@@ -626,3 +626,37 @@ def test_tq_deploy_documents_every_exit_code_it_uses():
     assert (
         not undocumented
     ), f"exit codes used but not documented: {sorted(undocumented)}"
+
+
+def test_sync_infra_installs_every_file_it_declares():
+    """Adding a line to `FILES` must be enough to get the file installed.
+
+    The `case "$dst"` had a branch per known destination and no default,
+    so a new entry matched nothing, installed nothing, and the script
+    still exited 0. That happened on 2026-08-18 with the mail autoconfig:
+    the deploy reported success, the file was never written, and Caddy —
+    already rewritten to point at it — went from serving a stale config
+    to serving a 404.
+
+    The branches that remain exist only for files that ALSO need
+    validation or a reload; the map is the source of truth.
+    """
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    body = (repo_root / "bin" / "tq-sync-infra").read_text()
+
+    inici = body.index('case "$dst" in')
+    fi = body.index("esac", inici)
+    case = body[inici:fi]
+    assert "*)" in case, (
+        "tq-sync-infra: el `case` no té branca per defecte, així que una "
+        "entrada nova a FILES s'instal·laria en silenci... o no."
+    )
+
+    # …and every destination declared must be reachable: either it has
+    # its own branch or the default catches it. With `*)` present the
+    # second half is automatic, so this only guards the ordering — a
+    # default placed before a specific branch would swallow it.
+    assert case.rindex("*)") > case.index("/etc/caddy/Caddyfile"), (
+        "la branca per defecte ha d'anar l'última, o s'empassa les "
+        "específiques (i el Caddyfile deixaria de validar-se)"
+    )

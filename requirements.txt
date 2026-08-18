@@ -2,7 +2,7 @@
 #   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 # (torch is pinned to the CPU-only build; PyPI doesn't host +cpu wheels.)
 
-django==6.0.6
+django==6.0.8
 psycopg2-binary==2.9.12
 python-decouple==3.8
 dj-database-url==3.1.2
@@ -15,7 +15,7 @@ joblib>=1.5.3
 # Already present transitively (google-auth), declared explicitly
 # because music/health.py imports it directly to parse the DER of
 # the certificate a TLS endpoint actually serves.
-cryptography==48.0.0
+cryptography==50.0.0
 argon2-cffi==25.1.0          # S10: stronger password hashing
 django-axes==8.3.1           # S4: brute-force login protection
 django-otp==1.7.0            # S11: TOTP 2FA for staff
@@ -38,7 +38,7 @@ soundfile==0.14.0            # WAV loader (no torchcodec dependency)
 
 # SEO monitoring (Sprint S Bloc D, 2026-05-06).
 google-api-python-client>=2.198.0
-google-auth>=2.56.0
+google-auth>=2.56.2
 google-auth-httplib2>=0.4.0
 
 # Newsletter → Community bridge (2026-06-10): convert NewsletterDraft

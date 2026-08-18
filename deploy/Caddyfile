@@ -250,7 +250,7 @@ mail.topquaranta.cat {
 	# autoconfig/... → MX-derived guess. We publish here AND on
 	# the dedicated `autoconfig.<domain>` site below to cover both.
 	handle /.well-known/autoconfig/mail/config-v1.1.xml {
-		root * /var/www/autoconfig/.well-known/autoconfig/mail
+		root * /var/www/autoconfig
 		rewrite * /config-v1.1.xml
 		file_server
 		header Content-Type "application/xml; charset=utf-8"
@@ -267,7 +267,10 @@ mail.topquaranta.cat {
 # soon as the A record at CDMON points here. Pair with:
 #     A autoconfig → 188.245.60.20
 autoconfig.topquaranta.cat {
+	# Mateix fitxer que el camí `.well-known` de dalt: n'hi havia dues
+	# còpies a disc i es van desincronitzar quan es va retirar Stalwart.
 	root * /var/www/autoconfig
+	rewrite * /config-v1.1.xml
 	file_server
 	header Content-Type "application/xml; charset=utf-8"
 }

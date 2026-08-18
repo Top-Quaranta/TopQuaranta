@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mozilla autoconfig for topquaranta.cat mailboxes.
+
+  Served by Caddy at both `mail.topquaranta.cat/.well-known/autoconfig/
+  mail/config-v1.1.xml` and `autoconfig.topquaranta.cat/mail/
+  config-v1.1.xml`, because Thunderbird probes the subdomain first and
+  falls back to the well-known path.
+
+  Lived only on the server until 2026-08-18 and drifted there: when
+  Stalwart was retired the incoming host was updated by hand while the
+  outgoing block kept pointing at the Brevo relay, so anybody setting up
+  their mailbox was handed credentials that could not send. It is in
+  `deploy/` now, installed by `bin/tq-sync-infra` like every other file
+  that lives outside the working tree.
+-->
+<clientConfig version="1.1">
+  <emailProvider id="topquaranta.cat">
+    <domain>topquaranta.cat</domain>
+    <displayName>TopQuaranta Mail</displayName>
+    <displayShortName>TopQuaranta</displayShortName>
+
+    <incomingServer type="imap">
+      <hostname>imap.purelymail.com</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+
+    <!-- Purelymail delivers on its own; the Brevo relay that used to sit
+         here was a workaround for Hetzner blocking outbound port 25 for
+         Stalwart, and it required a shared API key as the SMTP password —
+         which this file published in the open. Both are gone. -->
+    <outgoingServer type="smtp">
+      <hostname>smtp.purelymail.com</hostname>
+      <port>465</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+      <addThisServer>true</addThisServer>
+      <useGlobalPreferredServer>false</useGlobalPreferredServer>
+    </outgoingServer>
+
+    <documentation url="https://www.topquaranta.cat/">
+      <descr lang="ca">Compte de correu de TopQuaranta, allotjat a Purelymail. La contrasenya és la de la teua bústia, la mateixa per a rebre i per a enviar.</descr>
+      <descr lang="en">TopQuaranta mail account, hosted at Purelymail. The password is your mailbox password, the same for receiving and sending.</descr>
+    </documentation>
+  </emailProvider>
+</clientConfig>

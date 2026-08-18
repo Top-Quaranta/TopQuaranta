@@ -99,6 +99,30 @@
   </td></tr></table>
 </td></tr>
 
+{% if comparativa.per_carril %}
+{% comment %} A ter. D ON VENEN LES VISUALITZACIONS {% endcomment %}
+<tr><td class="px" style="padding:18px 28px 0;background:#060608;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
+    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:13px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;">D'on venen les visualitzacions</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#b7b7be;">
+      <tr>
+        <td style="padding:2px 0;">Només Art Track (automàtic)</td>
+        <td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:#ffffff;">{{ comparativa.per_carril.art_track.mediana|milers }}</td>
+        <td align="right" width="70" class="muted" style="font-size:12px;color:#9aa0a6;">{{ comparativa.per_carril.art_track.n }} cançons</td>
+      </tr>
+      <tr>
+        <td style="padding:2px 0;">Amb videoclip del canal propi</td>
+        <td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:#facc15;">{{ comparativa.per_carril.videoclip.mediana|milers }}</td>
+        <td align="right" class="muted" style="font-size:12px;color:#9aa0a6;">{{ comparativa.per_carril.videoclip.n }} cançons</td>
+      </tr>
+    </table>
+    <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;line-height:1.7;">
+      Un videoclip té molt més públic que una caràtula amb àudio, així que la mateixa cançó dona proporcions molt distintes segons el carril. Barrejar-los infla la xifra de dalt: mira cada línia per separat abans de comparar res.
+    </div>
+  </td></tr></table>
+</td></tr>
+{% endif %}
+
 {% if comparativa.per_artista %}
 {% comment %} A bis. UN FACTOR O UN PER ARTISTA {% endcomment %}
 <tr><td class="px" style="padding:18px 28px 0;background:#060608;">

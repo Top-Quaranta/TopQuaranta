@@ -216,3 +216,30 @@ def test_a_ratio_that_belongs_to_the_artist_is_reported_as_such():
     assert pa["n_artistes"] == 2
     assert pa["cv_artista"] < pa["cv_global"]
     assert pa["millor_per_artista"] is True
+
+
+@pytest.mark.django_db
+def test_the_report_separates_the_two_youtube_lanes():
+    """Asked by Miquel on 2026-08-18: "does this take into account
+    whether we have an official channel?". It did not, and the lane is a
+    first-order variable — a videoclip has an order of magnitude more
+    audience than a cover-art track (median 3.392 views against 92 on
+    17/08), so mixing the lanes into one ratio inflates its dispersion.
+
+    Measured the same day: median 4 with Art Track alone against 36 with
+    a videoclip. Nine times.
+    """
+    from music.models import CancoYouTubeVideo
+
+    for i in range(6):
+        _senyal(_canco(f"Sols art track {i}"), lfm=10, yt=40)
+    for i in range(6):
+        c = _canco(f"Amb clip {i}")
+        CancoYouTubeVideo.objects.create(canco=c, video_id=f"v{i}", titol="Clip")
+        _senyal(c, lfm=10, yt=3600)
+
+    pc = _ctx()["per_carril"]
+    assert pc is not None
+    assert pc["art_track"]["mediana"] == 4
+    assert pc["videoclip"]["mediana"] == 360
+    assert pc["art_track"]["n"] == 6 and pc["videoclip"]["n"] == 6

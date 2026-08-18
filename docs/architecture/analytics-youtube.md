@@ -105,3 +105,37 @@ factor global de 9 seria fals per a quasi tots.
 
 El correu ho compara cada dia i ho diu explícitament. El llindar per a
 afirmar-ho és que la dispersió interna siga menys del 70 % de la global.
+
+### El carril importa, i no és el mateix que l'artista (2026-08-18)
+
+Ho va assenyalar el Miquel: «això té en compte si tenim canal oficial?».
+No ho tenia, i és una variable de primer ordre. Un videoclip del canal
+propi té un ordre de magnitud més de públic que una Art Track (mediana
+de 3.392 visualitzacions contra 92), així que la mateixa cançó dona
+proporcions molt distintes segons d'on vinguen les visites:
+
+| | Mediana | Meitat central | Dispersió |
+|---|---|---|---|
+| Només Art Track | 4 | 2–9 | 2,19 |
+| Amb videoclip propi | 36 | 9–148 | 1,84 |
+| Barrejades | 9 | 3–54 | **2,57** |
+
+**Nou vegades de diferència**, i barrejar-los infla la dispersió del
+conjunt. El correu les separa des d'ara.
+
+El que això NO és: una explicació alternativa de l'efecte per artista.
+Controlant per carril, la dispersió interna de l'artista baixa **encara
+més** — 0,48 amb Art Track sol i 0,40 amb videoclip, contra 0,64
+barrejat. L'artista continua sent la variable forta.
+
+Altres variables comprovades el mateix dia, per a tancar-les:
+
+- **Volum**: no explica res. Amb 5–20 escoltes la dispersió és 2,51 i
+  amb 20–100 és 2,71. No és soroll de números menuts.
+- **Edat de la cançó**: mou el nivell, no la dispersió. Les d'1 a 6
+  mesos tenen mediana 13 i les de més de 6 mesos, 3 — quatre vegades
+  menys. La dispersió es queda al voltant de 2,3 en tots dos casos.
+
+O siga que el carril i l'edat desplacen el nivell, i l'artista és el que
+estreny. Com que les cançons d'un mateix artista solen compartir carril i
+edat, una conversió per artista ja absorbeix les tres coses.

@@ -152,6 +152,36 @@ def _historial(en_finestra_ids, today):
     return files, estable
 
 
+def _per_carril(ratios, en_finestra):
+    """La proporció separada segons d'on venen les visualitzacions.
+
+    Un videoclip del canal propi té un ordre de magnitud més de públic
+    que una Art Track (mediana de 3.392 visualitzacions contra 92,
+    mesurat el 17/08), així que barrejar els dos carrils en una sola
+    proporció n'infla la dispersió. Mesurat el 18/08: 4 de mediana amb
+    Art Track sol i 36 amb videoclip — nou vegades.
+
+    Ho va assenyalar el Miquel: «té en compte si tenim canal oficial?».
+    No ho tenia, i era una variable de primer ordre.
+    """
+    if len(ratios) < 10:
+        return None
+    amb_clip = set(
+        en_finestra.filter(
+            id__in=ratios,
+            youtube_videos__isnull=False,
+        ).values_list("id", flat=True)
+    )
+    fora = [r for c, r in ratios.items() if c not in amb_clip]
+    dins = [r for c, r in ratios.items() if c in amb_clip]
+    if not fora or not dins:
+        return None
+    return {
+        "art_track": {"n": len(fora), "mediana": round(statistics.median(fora))},
+        "videoclip": {"n": len(dins), "mediana": round(statistics.median(dins))},
+    }
+
+
 def _per_artista(ratios, en_finestra):
     """Compara la dispersió global amb la de dins de cada artista.
 
@@ -273,6 +303,7 @@ def _comparativa(en_finestra, today):
         "moviment_min": _MOVIMENT_MIN,
         "historial": historial,
         "per_artista": _per_artista(ratios_avui, en_finestra),
+        "per_carril": _per_carril(ratios_avui, en_finestra),
     }
 
 

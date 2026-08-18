@@ -243,3 +243,64 @@ def test_the_report_separates_the_two_youtube_lanes():
     assert pc["art_track"]["mediana"] == 4
     assert pc["videoclip"]["mediana"] == 360
     assert pc["art_track"]["n"] == 6 and pc["videoclip"]["n"] == 6
+
+
+@pytest.mark.django_db
+def test_a_song_that_gained_a_video_is_not_counted_as_a_week_of_views():
+    """The Andreu Valor case, 2026-08-18.
+
+    `SenyalYouTube.views` is the SUM of every lane. When a song gains one
+    — the videoclip on the artist's own channel finally gets matched —
+    that sum jumps by the new video's lifetime count. Reading the jump as
+    a week's viewing put him at the head of the Valencian chart with
+    103.048 "views this week" when the real movement was 17.
+
+    `n_videos` is stored for exactly this: a delta is only honest when
+    the lane set is the same at both ends. Same family as
+    `_robust_weekly_from_series` for Last.fm — a step in a cumulative
+    counter is not an audience.
+
+    Caught because Miquel said it did not add up that he was that famous.
+    """
+    canco = _canco("Tornarem a Caure")
+    SenyalDiari.objects.create(
+        canco=canco, data=FA_UNA_SETMANA, lastfm_playcount=100, error=False
+    )
+    SenyalDiari.objects.create(
+        canco=canco, data=AVUI, lastfm_playcount=110, error=False
+    )
+    # One lane a week ago, four today: the counter leaps, the audience
+    # does not.
+    SenyalYouTube.objects.create(
+        canco=canco, data=FA_UNA_SETMANA, views=140, n_videos=1, error=False
+    )
+    SenyalYouTube.objects.create(
+        canco=canco, data=AVUI, views=88467, n_videos=4, error=False
+    )
+
+    c = _ctx()
+    assert c["comparables"] == 0, "el salt de carril no pot comptar com a setmana"
+    assert c["mou_yt"] == 0
+
+
+@pytest.mark.django_db
+def test_a_stable_lane_set_is_still_measured():
+    """The guard must not throw away the honest majority: 1.761 of the
+    1.937 songs with a measurable increment had a stable lane set."""
+    canco = _canco("Estable")
+    SenyalYouTube.objects.create(
+        canco=canco, data=FA_UNA_SETMANA, views=1000, n_videos=2, error=False
+    )
+    SenyalYouTube.objects.create(
+        canco=canco, data=AVUI, views=9000, n_videos=2, error=False
+    )
+    SenyalDiari.objects.create(
+        canco=canco, data=FA_UNA_SETMANA, lastfm_playcount=100, error=False
+    )
+    SenyalDiari.objects.create(
+        canco=canco, data=AVUI, lastfm_playcount=110, error=False
+    )
+
+    c = _ctx()
+    assert c["comparables"] == 1
+    assert c["factor"]["mediana"] == 800  # 8000 visual. / 10 escoltes

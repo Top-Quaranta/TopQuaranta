@@ -77,13 +77,31 @@ def _increments(model, camp, fi, *, dies=7):
     des_de = objectiu - datetime.timedelta(days=_MARGE_DIES)
     fins_a = objectiu + datetime.timedelta(days=_MARGE_DIES)
 
+    # `n_videos` viatja amb cada foto perquè el delta només és honest si
+    # el conjunt de carrils no ha canviat. Quan una cançó guanya un vídeo
+    # —perquè s'aparella el videoclip del canal propi— la suma acumulada
+    # fa un bot amb el comptador de tota la vida del vídeo nou, i llegir
+    # eixe bot com a setmana infla la xifra per ordres de magnitud.
+    #
+    # Andreu Valor, 2026-08-18: 140 visualitzacions el dia 12 amb 1
+    # vídeo, 88.450 el dia 13 amb 4. El moviment real de la setmana eren
+    # 17 visualitzacions; l'informe li'n comptava 103.048 i el posava al
+    # capdamunt del top valencià. Ho va detectar el Miquel dient que no
+    # li quadrava que fos tan famós.
+    #
+    # És la mateixa família que el `_robust_weekly_from_series` de
+    # `ranking.algorisme` per a Last.fm: un esglaó d'acumulat no és
+    # audiència.
     per = defaultdict(dict)
+    camps = ["canco_id", "data", camp]
+    if model is SenyalYouTube:
+        camps.append("n_videos")
     for s in model.objects.filter(error=False, data__gte=des_de, data__lte=fi).only(
-        "canco_id", "data", camp
+        *camps
     ):
         v = getattr(s, camp)
         if v is not None:
-            per[s.canco_id][s.data] = v
+            per[s.canco_id][s.data] = (v, getattr(s, "n_videos", None))
 
     out = {}
     for canco_id, fotos in per.items():
@@ -93,10 +111,14 @@ def _increments(model, camp, fi, *, dies=7):
         if not candidates:
             continue
         base = min(candidates, key=lambda d: abs((d - objectiu).days))
+        valor_fi, carrils_fi = fotos[fi]
+        valor_base, carrils_base = fotos[base]
+        if carrils_fi != carrils_base:
+            continue  # el conjunt de carrils ha canviat: no és comparable
         span = (fi - base).days
-        if span <= 0 or fotos[fi] < fotos[base]:
+        if span <= 0 or valor_fi < valor_base:
             continue
-        out[canco_id] = (fotos[fi] - fotos[base]) * dies / span
+        out[canco_id] = (valor_fi - valor_base) * dies / span
     return out
 
 

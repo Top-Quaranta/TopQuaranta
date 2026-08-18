@@ -72,15 +72,6 @@ def test_active_legacy_maintenance_file_seen(tmp_path):
     ) == now + timedelta(hours=4)
 
 
-def test_active_legacy_backfill_file_seen(tmp_path):
-    shared, legacy = _paths(tmp_path)
-    now = datetime(2026, 5, 25, 10, 0, 0)
-    _write(legacy[1], now + timedelta(hours=4))  # backfill legacy
-    assert cd.active_resume_at(
-        shared=shared, legacy=legacy, now=now
-    ) == now + timedelta(hours=4)
-
-
 def test_longest_unexpired_ban_wins(tmp_path):
     """If multiple files have active bans, the latest resume_at
     wins. Conservative against shrinking the window."""

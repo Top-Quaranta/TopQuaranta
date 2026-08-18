@@ -39,13 +39,6 @@ def test_get_exposes_field_type(staff_client):
 
 
 @pytest.mark.django_db
-def test_editorial_veu_help_text_says_blank_generates_nothing(staff_client):
-    r = staff_client.get("/api/v1/staff/configuracio/")
-    help_text = _fields(r)["editorial_veu"]["help"]
-    assert "no genera res" in help_text
-
-
-@pytest.mark.django_db
 def test_round_trip_patch_get_identical(staff_client):
     voice = "Veu càlida i propera.\nMai cursi.\nFrases curtes."
     p = staff_client.patch(

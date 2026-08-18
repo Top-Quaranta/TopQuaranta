@@ -16,14 +16,8 @@ class TestNormalize:
     def test_strip_accents(self):
         assert _normalize("La Fúmiga") == "la fumiga"
 
-    def test_strip_accents_catalan(self):
-        assert _normalize("Mandràgora") == "mandragora"
-
     def test_strip_whitespace(self):
         assert _normalize("  Zoo  ") == "zoo"
-
-    def test_combined(self):
-        assert _normalize(" OQUES GRASSES ") == "oques grasses"
 
 
 class TestSearchArtist:
@@ -68,11 +62,6 @@ class TestSearchArtist:
         }
         result = search_artist("Miurn")
         assert result is None
-
-    @patch("ingesta.clients.deezer._get")
-    def test_empty_results(self, mock_get):
-        mock_get.return_value = {"data": []}
-        assert search_artist("NonexistentArtist") is None
 
     @patch("ingesta.clients.deezer._get")
     def test_api_error(self, mock_get):

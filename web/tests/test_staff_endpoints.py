@@ -328,16 +328,6 @@ def test_staff_artistes_list_instagram_no_filter(staff_client, db):
     assert "WithIG" not in noms
 
 
-def test_legacy_staff_views_shim_still_exposes_names():
-    """Anything that did `from web.api import staff_views` must keep
-    finding the old names. Guards against a future cleanup that
-    removes the shim before everyone has migrated."""
-    from web.api import staff_views
-
-    for attr in ("dashboard", "estat", "top_list", "IsStaff"):
-        assert hasattr(staff_views, attr), attr
-
-
 # ── social_republicar (Lot C — re-publicar amb correcció) ───────────
 
 

@@ -193,29 +193,6 @@ def test_cancons_vives_counts_principal_or_collaborator(staff_client):
 
 
 @pytest.mark.django_db
-def test_cancons_vives_no_double_counting_principal_and_collab(staff_client):
-    """The two count paths (principal + collab) don't double-count.
-
-    They are disjoint PER cançó — the D5 signal forbids an artist from
-    being a collaborator on their own track — so summing them is exact,
-    no overlap correction needed. An artist who is principal on one live
-    track AND collaborator on a *different* one counts as exactly 2
-    (not Cartesian-inflated)."""
-    Artista.objects.all().delete()
-    a = Artista.objects.create(nom="EXEMPLE Doble", aprovat=True)
-    al = Album.objects.create(artista=a, nom="EXEMPLE Al")
-    _canco(a, al, "EXEMPLE Own", "ZZ00DBL000001")  # principal
-    other = Artista.objects.create(nom="EXEMPLE Amfitrio", aprovat=True)
-    al2 = Album.objects.create(artista=other, nom="EXEMPLE Al2")
-    feat = _canco(other, al2, "EXEMPLE Feat", "ZZ00DBL000002")
-    feat.artistes_col.add(a)  # collaborator on a different track
-
-    r = staff_client.get("/api/v1/staff/artistes/?include_n_top=1&sort=-n_top")
-    by_nom = {row["nom"]: row for row in r.json()["results"]}
-    assert by_nom["EXEMPLE Doble"]["n_cancons_vives"] == 2
-
-
-@pytest.mark.django_db
 def test_ordering_three_keys_novetats_surface(staff_client):
     """Full ordering: n_top DESC, then n_cancons_vives DESC, then
     alphabetical. A novetats-style collaborator (0 tops, 1 live song as

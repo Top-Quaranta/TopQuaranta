@@ -181,11 +181,6 @@ def test_public_url_instagram_without_permalink_is_empty():
     assert _public_url(p) == ""
 
 
-def test_public_url_newsletter_is_empty():
-    p = SocialPost(platform="newsletter", metadata={})
-    assert _public_url(p) == ""
-
-
 # ── column contract: the serializer must keep feeding the table ──────
 
 

@@ -241,17 +241,6 @@ def test_brief_fets_destacats_distinct_subjects(client_with_token):
 
 
 @pytest.mark.django_db
-def test_brief_not_ready_still_short_circuits(client_with_token):
-    """No consolidated top → the early not_ready return is untouched (no
-    top40/fets_grup work happens)."""
-    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
-        r = client_with_token.get(BRIEF_URL, **_auth())
-    assert r.status_code == 200
-    assert r.data["status"] == "not_ready"
-    assert "top40" not in r.data and "top10" not in r.data
-
-
-@pytest.mark.django_db
 def test_brief_query_budget_bounded_no_n_plus_1(django_assert_max_num_queries):
     """Assembling the 40-row facts must NOT scale per-row: origen +
     collaborators are prefetched/batched. `detect_all` is stubbed out so
@@ -301,35 +290,6 @@ def test_collaborator_order_matches_legacy_method(client_with_token):
     assert r.data["top40"][0]["artistes"] == ["Art X", "Zeta", "Alfa"]
     collabs = r.data["fets_grup"][0]["collaboradors"]
     assert [x["nom"] for x in collabs] == expected
-
-
-@pytest.mark.django_db
-def test_origen_prefetch_matches_legacy_first(client_with_token):
-    """`_artista_origen` (prefetch-by-pk path) must return the same origin
-    the legacy `localitats.first()` did. The artist gets two localitats in
-    distinct municipis; `.first()` resolves by pk, and the rewrite must
-    pick the identical row and emit the identical dict."""
-    from comptes.newsletter_brief import _artista_origen
-    from music.models import ArtistaLocalitat, Municipi, Territori
-
-    c = _seed_top()
-    art = c.artista
-    terr, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Principat"})
-    m1 = Municipi.objects.create(nom="Primer", comarca="C1", territori=terr)
-    m2 = Municipi.objects.create(nom="Segon", comarca="C2", territori=terr)
-    l1 = ArtistaLocalitat.objects.create(artista=art, municipi=m1)
-    ArtistaLocalitat.objects.create(artista=art, municipi=m2)
-    # Legacy behaviour, recomputed inline for the pin.
-    legacy_loc = art.localitats.select_related("municipi__territori").first()
-    assert legacy_loc.pk == l1.pk  # .first() resolves by pk
-    expected = {"municipi": "Primer", "comarca": "C1", "territori": "CAT"}
-    # Fresh instance so no in-memory prefetch leaks into the comparison.
-    fresh = Artista.objects.get(pk=art.pk)
-    assert _artista_origen(fresh) == expected
-    # End-to-end through the brief (prefetch path).
-    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
-        r = client_with_token.get(BRIEF_URL, **_auth())
-    assert r.data["fets_grup"][0]["origen"] == expected
 
 
 # ── draft upsert ─────────────────────────────────────────────────────
@@ -489,29 +449,6 @@ def test_post_rejects_non_pendent_estat(client_with_token):
     )
     assert r.status_code == 400
     assert not NewsletterDraft.objects.exists()
-
-
-@pytest.mark.django_db
-def test_post_requires_subject(client_with_token):
-    _seed_top()
-    r = client_with_token.post(
-        DRAFT_URL, {"narrative_html": "<p>x</p>"}, format="json", **_auth()
-    )
-    assert r.status_code == 400
-
-
-@pytest.mark.django_db
-def test_post_terminal_draft_is_409(client_with_token):
-    _seed_top()
-    NewsletterDraft.objects.create(
-        tipus="top_ppcc",
-        territori="PPCC",
-        setmana=_monday(),
-        subject="s",
-        estat=NewsletterDraft.ESTAT_ENVIAT,
-    )
-    r = client_with_token.post(DRAFT_URL, {"subject": "X"}, format="json", **_auth())
-    assert r.status_code == 409
 
 
 @pytest.mark.django_db

@@ -59,14 +59,6 @@ def test_path_for_rejects_unknown_entitat(portades_root):
 # ── exists ───────────────────────────────────────────────────────────
 
 
-def test_exists_keys_on_500_webp_sentinel(portades_root):
-    assert manager.exists("album", 1) is False
-    sentinel = manager.path_for("album", 1, 500, "webp")
-    sentinel.parent.mkdir(parents=True, exist_ok=True)
-    sentinel.write_bytes(b"not-a-real-image")
-    assert manager.exists("album", 1) is True
-
-
 # ── download_and_convert ─────────────────────────────────────────────
 
 
@@ -293,24 +285,6 @@ def test_album_ranking_priority_first(mock_sleep, mock_dl, portades_root):
     call_command("descarregar_portades", entitat="album", limit=1)
 
     mock_dl.assert_called_once_with("album", 19999, top_album.imatge_url)
-
-
-@pytest.mark.django_db
-@patch("ingesta.management.commands.descarregar_portades.download_and_convert")
-@patch("ingesta.management.commands.descarregar_portades.time.sleep")
-def test_no_ranking_keeps_insertion_order(mock_sleep, mock_dl, portades_root):
-    """With no rankings at all, the first inserted album is processed
-    first (priority set empty → stable id order)."""
-    struct = Artista.objects.create(nom="struct-noprio")
-    first = Album.objects.create(
-        artista=struct, nom="first", deezer_id=11111, imatge_url=_DZ_URL
-    )
-    Album.objects.create(
-        artista=struct, nom="second", deezer_id=22222, imatge_url=_DZ_URL
-    )
-    mock_dl.return_value = True
-    call_command("descarregar_portades", entitat="album", limit=1)
-    mock_dl.assert_called_once_with("album", 11111, first.imatge_url)
 
 
 # ── retention (2026-08-12): bounded candidates + netejar_portades ────

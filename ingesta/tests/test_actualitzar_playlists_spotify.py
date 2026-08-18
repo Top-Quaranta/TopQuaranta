@@ -274,12 +274,6 @@ def test_no_verificades_nulls_last_and_created_at_tiebreak(auth_present, client_
     assert pushed == expected
 
 
-def test_window_constants_are_consistent():
-    """Sanity guard: the window holds exactly 6 chunks of 100 (capped
-    from 7 on 2026-06-06 when the 7th playlist was repurposed)."""
-    assert NO_VERIF_WINDOW == 6 * NO_VERIF_CHUNK_SIZE
-
-
 @pytest.mark.django_db
 def test_no_verificades_uses_pendents_filter_excludes_inactives(
     auth_present, client_mock

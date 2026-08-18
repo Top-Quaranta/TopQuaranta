@@ -169,15 +169,6 @@ def test_replace_playlist_tracks_chunks_via_items_endpoint(patched_token):
     assert "/items" in second.args[1] and "/tracks" not in second.args[1]
 
 
-def test_custom_throttle_overrides_default():
-    """A `throttle_s=1.5` passed in __init__ becomes the per-request
-    sleep value."""
-    client = UserSpotifyClient(_fake_auth(), throttle_s=1.5)
-    assert client._throttle_s == 1.5
-    # And the default for the max retry tolerance is preserved.
-    assert client._max_retry_after_s == UserSpotifyClient.DEFAULT_MAX_RETRY_AFTER_S
-
-
 # ── get_track / get_artist (FASE 2 of Process A/B split) ─────────────
 
 

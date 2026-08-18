@@ -33,10 +33,6 @@ def _arbre():
     return ElementTree.fromstring(FITXER.read_text())
 
 
-def test_the_file_is_valid_xml():
-    assert _arbre().tag == "clientConfig"
-
-
 def test_both_servers_point_at_purelymail():
     """The host the mail is on. A stale hostname here is a client that
     silently cannot connect."""

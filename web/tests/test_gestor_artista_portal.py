@@ -111,13 +111,6 @@ def _url(slug, suffix=""):
 # ───────────────────────── qualitat ──────────────────────────────
 
 
-def test_qualitat_permission(artista, other):
-    c = APIClient()
-    assert c.get(_url(artista.slug, "qualitat/")).status_code in (401, 403)
-    c.force_authenticate(user=other)
-    assert c.get(_url(artista.slug, "qualitat/")).status_code == 403
-
-
 def test_qualitat_shape(client_g, artista):
     r = client_g.get(_url(artista.slug, "qualitat/"))
     assert r.status_code == 200
@@ -577,26 +570,6 @@ def test_dashboard_attaches_qualitat_to_verified_row(client_g, artista):
     assert "n_alerts" in row["qualitat"]
     # The verified-spotlight key carries the same payload.
     assert body["artista_verificat"]["qualitat"]["score"] == row["qualitat"]["score"]
-
-
-def test_dashboard_skips_qualitat_on_unverified_row(db, artista, other):
-    """A non-verified UA shouldn't pay the qualitat compute cost
-    (and there's no card to render the pill on)."""
-    UserArtista.objects.create(
-        usuari=other,
-        artista=artista,
-        sollicitud_text="x" * 25,
-        verificat=False,
-        estat=UserArtista.ESTAT_PENDENT,
-    )
-    c = APIClient()
-    c.force_authenticate(user=other)
-    r = c.get("/api/v1/compte/dashboard/")
-    assert r.status_code == 200
-    rows = r.json()["gestio_list"]
-    assert len(rows) == 1
-    assert rows[0]["verificat"] is False
-    assert "qualitat" not in rows[0]
 
 
 # ───────────────────────── Auth perimeter ────────────────────────

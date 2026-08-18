@@ -207,7 +207,12 @@ ROOT_URLCONF = "topquaranta.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [
+            BASE_DIR / "templates",
+            # Brand SVGs {% include %}d inline by the auth shell — single
+            # source of truth with the SPA (docs/architecture/brand-logo.md).
+            BASE_DIR / "web-react" / "src" / "assets",
+        ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

@@ -16,6 +16,7 @@ ALLOWED_HOSTS = ["*"]
 SPOTIFY_CLIENT_ID = "test-spotify-id"
 SPOTIFY_CLIENT_SECRET = "test-spotify-secret"
 SPOTIFY_REDIRECT_URI = "http://testserver/staff/social/spotify/callback"
+YOUTUBE_API_KEY = "test-youtube-key"
 LASTFM_API_KEY = "test-lastfm-key"
 LASTFM_API_SECRET = "test-lastfm-secret"
 

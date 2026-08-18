@@ -49,6 +49,7 @@ from music.constants import TERRITORIS_AGREGATS as _TERRITORIS_AGREGATS_TUPLE
 from music.constants import TERRITORIS_FIXOS as _TERRITORIS_FIXOS_TUPLE
 from music.constants import TERRITORIS_OPCIONALS as _TERRITORIS_OPCIONALS_TUPLE
 from music.models import Canco
+from ranking import senyal_youtube
 from ranking.models import ConfiguracioGlobal, SenyalDiari, TopSetmanal
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,20 @@ _MERGE_DOUBLING_FRAC = 0.4
 # median query is empty and the configurable floor takes over.
 _SOFT_CAP_WINDOW_WEEKS = 10
 _SOFT_CAP_TOP_N = 10
+
+
+def _setmana_en_curs(today: date) -> date:
+    """Monday of the week being computed — mirrors `calcular_top`.
+
+    Every TopSetmanal read in the algorithm must exclude it. `calcular_top`
+    saves each territori before PPCC aggregates, and PPCC re-runs each
+    source territori: without this filter that second run reads the rows
+    the first one just wrote, so a song is penalised for the very position
+    it is being awarded and the soft-cap knee shifts mid-run. The result
+    was a non-idempotent ranking whose published CAT order could invert
+    inside PPCC (2026-08-15: Bocc #1 CAT / Rosalía #1 PPCC, both CAT-only).
+    """
+    return today - timedelta(days=today.weekday())
 
 
 def _robust_weekly_from_series(series: list[tuple[date, int]]) -> float | None:
@@ -177,7 +192,9 @@ def territoris_amb_top_propi() -> list[str]:
 # ── Per-territori computation ─────────────────────────────────────────
 
 
-def calcular_top_territori(territori: str) -> list[dict]:
+def calcular_top_territori(
+    territori: str, resultats_previs: dict[str, list[dict]] | None = None
+) -> list[dict]:
     """Run the v2.0 ranking for a single territori.
 
     Returns a list of dicts sorted by posicio ascending:
@@ -186,7 +203,7 @@ def calcular_top_territori(territori: str) -> list[dict]:
     Limit: top 100.
     """
     if territori == "PPCC":
-        return _calcular_top_ppcc()
+        return _calcular_top_ppcc(resultats_previs)
 
     # ALT collects literal-ALT artists + any optional territori below
     # its own-top threshold.
@@ -248,11 +265,40 @@ def _top_for_territoris(
     for lst in senyals_by_canco.values():
         lst.sort(key=lambda s: s.data)
 
+    # Re-issue guard (2026-08-15): earliest release date per (artista,
+    # normalised title). A single re-issued inside a later EP/album is a
+    # second Canco (own ISRC) that Last.fm answers with the same lifetime
+    # playcount as the original — the "fresh release" branch would then
+    # bank a year of plays as one week's. Bocc «Ànima D'Acer» did exactly
+    # that: 966 plays flat for 3 days, #1 CAT / #2 PPCC on zero movement.
+    #
+    # Queried over the artists' WHOLE catalogue, not just the candidate
+    # pool: the original is typically older than DIES_CADUCITAT and so
+    # absent from the pool — which is precisely why the re-issue looks
+    # new. (First cut of this guard read the pool and caught nothing.)
+    frescos = [
+        c
+        for c in cancons.values()
+        if c.data_llancament and c.data_llancament > today - timedelta(days=7)
+    ]
+    primer_llancament: dict[tuple[int, str], date] = {}
+    if frescos:
+        for aid, nom, data in Canco.objects.filter(
+            artista_id__in={c.artista_id for c in frescos},
+            data_llancament__isnull=False,
+        ).values_list("artista_id", "nom", "data_llancament"):
+            k = (aid, _track_identity(nom))
+            if k not in primer_llancament or data < primer_llancament[k]:
+                primer_llancament[k] = data
+
     # Prior TopSetmanal entries per canço (for the past-top penalty).
     prior_positions_by_canco: dict[int, list[int]] = defaultdict(list)
     for rs_canco_id, rs_pos in TopSetmanal.objects.filter(
         canco_id__in=cancons.keys(),
         territori=territori,
+        # PAST tops only — a song must not be penalised for the position
+        # it is being given right now (see `_setmana_en_curs`).
+        setmana__lt=_setmana_en_curs(today),
         posicio__lte=40,
     ).values_list("canco_id", "posicio"):
         prior_positions_by_canco[rs_canco_id].append(rs_pos)
@@ -261,6 +307,12 @@ def _top_for_territoris(
     prev_week_positions: dict[int, int] = {}
     prev_setmana = (
         TopSetmanal.objects.filter(territori=territori)
+        # Not the week being computed: once `calcular_top` has saved it,
+        # "the most recent setmana" IS this one, and the movement column
+        # compares the week against itself (every row "="). Console-only
+        # today — the API derives movement from its own query — but wrong
+        # is wrong.
+        .filter(setmana__lt=_setmana_en_curs(today))
         .order_by("-setmana")
         .values_list("setmana", flat=True)
         .first()
@@ -281,6 +333,27 @@ def _top_for_territoris(
     # entries. If this leaves a territori with <40 candidates the
     # top is shorter — no padding with noise.
     min_plays = int(cfg.min_escoltes_top or 0)
+
+    # ── YouTube com a segona font ───────────────────────────────────
+    # S'activa sola quan hi ha prou història (vegeu `senyal_youtube.actiu`).
+    # Activa, el senyal passa a ser
+    #     escoltes × pes + visualitzacions
+    # i el terra passa a `min_senyal_combinat`, perquè els dos números
+    # deixen d'estar en unitats d'escoltes.
+    #
+    # Es multipliquen les escoltes en lloc de dividir les
+    # visualitzacions: `min_escoltes_top` és absolut, i dividint, una
+    # cançó amb 400 visualitzacions i cap escolta cauria a 2 i quedaria
+    # fora — precisament la gent que la segona font existeix per a no
+    # perdre.
+    yt_actiu = senyal_youtube.actiu(
+        today, int(getattr(cfg, "youtube_dies_minims", 7) or 0)
+    )
+    yt_pes = int(getattr(cfg, "youtube_pes_escolta", 1000) or 1000)
+    yt_views: dict[int, float] = {}
+    if yt_actiu:
+        yt_views = senyal_youtube.visualitzacions_setmanals(list(cancons.keys()), today)
+        min_plays = int(getattr(cfg, "min_senyal_combinat", 200) or 0)
     # Adaptive outlier knee for this territori (None when the cap is off).
     # Computed once: it depends on the territori's history, not the song.
     soft_cap_knee = _soft_cap_knee(territori, cfg, today)
@@ -288,10 +361,20 @@ def _top_for_territoris(
     rows: list[dict] = []
     for canco in cancons.values():
         plays = _compute_weekly_plays(
-            canco=canco, signals=senyals_by_canco.get(canco.pk, []), today=today
+            canco=canco,
+            signals=senyals_by_canco.get(canco.pk, []),
+            today=today,
+            primer_llancament=primer_llancament,
         )
-        # Eligibility (min_escoltes_top) is judged on RAW plays; the soft
-        # cap only reshapes how a song's plays translate into score.
+        if yt_actiu:
+            # Les escoltes pugen a les unitats del senyal combinat i
+            # s'hi sumen les visualitzacions de la setmana. Una cançó
+            # sense parella de fotos comparables simplement no aporta
+            # res per YouTube — mai un zero, que seria una afirmació.
+            plays = plays * yt_pes + yt_views.get(canco.pk, 0.0)
+
+        # Eligibility is judged on RAW plays; the soft cap only reshapes
+        # how a song's plays translate into score.
         if plays < min_plays:
             continue
 
@@ -372,8 +455,27 @@ def _top_for_territoris(
 # ── Weekly-plays estimator (with gap + fresh-release handling) ────────
 
 
+def _track_identity(s: str) -> str:
+    """Case + accents + punctuation collapsed — a *recording* identity.
+
+    Deliberately NOT `_normalize_track` from the Last.fm client, which
+    strips `(Live)` / `(Remaster)` / `(feat. X)`: here we WANT to tell
+    live from studio apart.
+    """
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.lower()
+    s = "".join(c if c.isalnum() or c.isspace() else " " for c in s)
+    return " ".join(s.split())
+
+
 def _compute_weekly_plays(
-    canco: Canco, signals: list[SenyalDiari], today: date
+    canco: Canco,
+    signals: list[SenyalDiari],
+    today: date,
+    primer_llancament: dict[tuple[int, str], date] | None = None,
 ) -> float:
     """Estimate plays gained in the last 7 days for `canco`.
 
@@ -425,7 +527,16 @@ def _compute_weekly_plays(
     # 1) Fresh release branch — we know the baseline (zero) without
     # needing any historical SenyalDiari row, because the canço
     # literally didn't exist 7 days ago.
-    if canco.data_llancament and canco.data_llancament > today - timedelta(days=7):
+    # …unless an older homonym by the same artist exists: then this row
+    # is a re-issue, Last.fm's playcount is the ORIGINAL's lifetime, and
+    # the zero baseline is a lie. Inherit the age; fall through to the
+    # baseline branches (→ 0 until SenyalDiari accumulates one).
+    data_ref = canco.data_llancament
+    if data_ref and primer_llancament:
+        primera = primer_llancament.get((canco.artista_id, _track_identity(canco.nom)))
+        if primera and primera < data_ref:
+            data_ref = primera
+    if data_ref and data_ref > today - timedelta(days=7):
         return max(0.0, float(playcount_today))
 
     # Track-switch guard (2026-05-08): a baseline is only valid if it
@@ -451,15 +562,6 @@ def _compute_weekly_plays(
     # `(Live)` / `(Remaster)` / `(feat. X)` parentheticals. That
     # stripping is the wrong semantics here — we WANT to distinguish
     # live from studio recordings, the whole point of the guard.
-
-    def _track_identity(s: str) -> str:
-        if not s:
-            return ""
-        s = unicodedata.normalize("NFD", s)
-        s = "".join(c for c in s if not unicodedata.combining(c))
-        s = s.lower()
-        s = "".join(c if c.isalnum() or c.isspace() else " " for c in s)
-        return " ".join(s.split())
 
     ref_track_n = _track_identity(latest.lastfm_returned_track or "")
 
@@ -585,6 +687,10 @@ def _soft_cap_knee(
         TopSetmanal.objects.filter(
             territori=territori,
             setmana__gte=window_start,
+            # …and strictly BEFORE the week being computed: see
+            # `_setmana_en_curs`. Reading our own just-saved rows made the
+            # knee move under us mid-run.
+            setmana__lt=_setmana_en_curs(today),
             posicio__lte=top_n,
             weekly_plays__isnull=False,
         ).values_list("weekly_plays", flat=True)
@@ -610,19 +716,31 @@ def _apply_soft_cap(plays: float, knee: float | None) -> float:
 # ── PPCC aggregation ──────────────────────────────────────────────────
 
 
-def _calcular_top_ppcc() -> list[dict]:
+def _calcular_top_ppcc(
+    resultats_previs: dict[str, list[dict]] | None = None,
+) -> list[dict]:
     """Aggregate all non-PPCC rankings, penalise by source position, dedupe.
 
     The per-position penalty (`ppcc_penalitzacio_per_posicio`, default
     0.04) lives on `ConfiguracioGlobal` since 2026-04-25 (Sprint A);
     editing it from staff config now reaches the ranking without code.
+
+    PPCC **aggregates, it does not compute** (CLAUDE.md §6). `calcular_top`
+    passes the territorial results it has just produced via
+    `resultats_previs`, so the global top is a re-scoring of exactly the
+    numbers we published per territori. Recomputing them here instead is
+    what let the two disagree on 2026-08-15: the command saves each
+    territori before this runs, and the second pass read those fresh rows
+    (see `_setmana_en_curs`). The recompute stays as the fallback for a
+    standalone `--territori PPCC`, where nothing has been computed yet.
     """
     cfg = ConfiguracioGlobal.load()
     pos_penalty = float(cfg.ppcc_penalitzacio_per_posicio)
     source_territoris = [t for t in territoris_amb_top_propi() if t != "PPCC"]
     all_results: list[dict] = []
     for t in source_territoris:
-        for r in calcular_top_territori(t):
+        previs = (resultats_previs or {}).get(t)
+        for r in previs if previs is not None else calcular_top_territori(t):
             r = dict(r)
             r["territori_original"] = t
             all_results.append(r)

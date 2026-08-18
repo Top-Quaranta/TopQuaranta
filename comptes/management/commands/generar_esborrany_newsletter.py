@@ -9,7 +9,7 @@ cancelled — review is opt-out (no approval step).
 Idempotent: if a draft for the week already exists it is left untouched
 (a re-run never overwrites staff edits).
 
-# Spec: docs/architecture/comptes.md
+# Spec: docs/architecture/comptes-newsletter.md
 """
 
 from __future__ import annotations

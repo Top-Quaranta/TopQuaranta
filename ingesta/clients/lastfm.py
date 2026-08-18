@@ -341,7 +341,10 @@ def get_track_info(
         a name typo that returns None is recoverable via the err=6
         normalisation + top-tracks fallback below.
       * Pass `track_mbid` (from `Canco.mb_recording_id`) when known —
-        Last.fm uses MBID over name, immune to homonym redirects.
+        Last.fm uses MBID over name, immune to homonym redirects. When
+        Last.fm doesn't know that MBID it answers error 6 WITHOUT
+        falling back to the names, so we retry once without it before
+        treating the track as missing (see the body).
       * Pass `artist_mbid` (from `Artista.musicbrainz_id`) for forward
         compat; the server tolerates unknown params.
 
@@ -368,6 +371,29 @@ def get_track_info(
         track_mbid=track_mbid,
         artist_mbid=artist_mbid,
     )
+
+    # Last.fm resolves `mbid` INSTEAD of artist+track — an MBID it hasn't
+    # indexed answers "not found" and the names we sent alongside are never
+    # consulted. So a *successful* MusicBrainz match silently deleted the
+    # track's signal for good: the better the MB cron got, the more songs
+    # went dark. Caught 2026-08-10 on Auxili's "Tarrinetes al Sol", which
+    # scored 316 plays by name and error 6 with its recording MBID, every
+    # day since MB matched it on 10 July. Clearing `track_mbid` here also
+    # keeps it out of the normalisation retry below.
+    if track is None and err == 6 and track_mbid:
+        track_mbid = None
+        track, err = _api_call(
+            artist_name,
+            track_name,
+            artist_mbid=artist_mbid,
+        )
+        if track is not None:
+            logger.info(
+                "Last.fm recovered '%s'/'%s' by dropping the recording MBID",
+                artist_name,
+                track_name,
+            )
+
     if track is not None:
         rt, ra = _extract_returned_names(track)
         return {

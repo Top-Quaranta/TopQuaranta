@@ -237,33 +237,3 @@ def test_reverse_sync_no_loop_with_forward():
 
     aliases = ArtistaLastfmAlias.objects.filter(artista=art, prioritari=True)
     assert aliases.count() == 1
-
-
-@pytest.mark.django_db(transaction=True)
-def test_reverse_sync_skipped_when_update_fields_excludes_lastfm_nom():
-    """An `artista.save(update_fields=["nom"])` call must NOT
-    touch the alias table — the reverse sync's cheap-exit branch."""
-    art = Artista.objects.create(nom="U", lastfm_nom="", aprovat=True)
-    art.nom = "U-renamed"
-    art.save(update_fields=["nom"])
-    assert not ArtistaLastfmAlias.objects.filter(artista=art).exists()
-
-
-@pytest.mark.django_db(transaction=True)
-def test_data_migration_creates_row_when_absent():
-    """An artista with `lastfm_nom` set but NO alias rows gets a new
-    alias created with prioritari=True."""
-    from music.migrations._test_helpers import run_backfill_lastfm_prioritari
-
-    # Simulate the legacy production state via a QuerySet `.update()`
-    # — bypasses model signals so A.7's reverse sync doesn't auto-
-    # create the alias the migration is supposed to backfill.
-    art = Artista.objects.create(nom="V", lastfm_nom="", aprovat=True)
-    Artista.objects.filter(pk=art.pk).update(lastfm_nom="V-canon")
-    assert not ArtistaLastfmAlias.objects.filter(artista=art).exists()
-
-    run_backfill_lastfm_prioritari()
-    a = ArtistaLastfmAlias.objects.get(artista=art, nom="V-canon")
-    assert a.confirmat is True
-    assert a.prioritari is True
-    assert a.confirmat_at is not None

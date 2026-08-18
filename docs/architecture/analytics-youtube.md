@@ -139,3 +139,40 @@ Altres variables comprovades el mateix dia, per a tancar-les:
 O siga que el carril i l'edat desplacen el nivell, i l'artista és el que
 estreny. Com que les cançons d'un mateix artista solen compartir carril i
 edat, una conversió per artista ja absorbeix les tres coses.
+
+### Un carril nou no és una setmana de públic (2026-08-18)
+
+`SenyalYouTube.views` és la **suma de tots els carrils** d'una cançó. Quan
+se n'hi afegeix un —perquè per fi s'aparella el videoclip del canal
+propi— la suma fa un bot amb el comptador de tota la vida del vídeo nou.
+Llegir eixe bot com a increment setmanal infla la xifra per ordres de
+magnitud.
+
+Andreu Valor: 140 visualitzacions el 12/08 amb 1 vídeo, 88.450 el 13/08
+amb 4. El moviment real de la setmana eren **17**; l'informe li'n
+comptava **103.048** i el posava al capdamunt del top valencià. Ho va
+detectar el Miquel dient que no li quadrava que fos tan famós.
+
+`n_videos` es guarda a cada foto justament per a això: **un increment
+només és honest si el conjunt de carrils és el mateix als dos extrems**.
+És la mateixa família que `_robust_weekly_from_series` de
+`ranking.algorisme` per a Last.fm — un esglaó d'un acumulat no és
+audiència.
+
+Abast de la contaminació el dia que es va trobar: 176 de 1.937 cançons
+(9 %), però eren les més grosses, així que dominaven el cap del rànquing.
+Efecte de la guarda sobre les conclusions:
+
+| | Contaminat | Net |
+|---|---|---|
+| Parelles comparables | 179 | 156 |
+| Mediana del factor | 9 | 6 |
+| Candidates VAL (M=200, llindar=200) | 92 | **74** |
+| Cap del top VAL | Andreu Valor | **La Fúmiga** |
+
+La conclusió de fons aguanta —sumar ompli els tops— però els números
+estaven un 20 % inflats i l'ordre del cap era fals.
+
+**Açò val també per a la integració al rànquing**: si algun dia
+`SenyalYouTube` entra al càlcul del top, la mateixa guarda ha d'anar al
+lector del senyal, no només a l'informe.

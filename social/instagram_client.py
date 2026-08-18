@@ -27,7 +27,9 @@ staff can preview.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -70,6 +72,52 @@ def is_dry_run() -> bool:
     return token in ("", "test")
 
 
+class IGError(RuntimeError):
+    """A Graph API failure with its payload kept, not just stringified.
+
+    Subclasses `RuntimeError` so every existing `except RuntimeError`
+    keeps working; the parsed fields are what lets a caller decide that
+    a failure is recoverable instead of fatal.
+    """
+
+    def __init__(self, status: int, text: str):
+        super().__init__(f"IG API {status}: {text[:300]}")
+        self.status = status
+        self.text = text
+        self.code = None
+        self.subcode = None
+        self.user_msg = ""
+        try:
+            err = json.loads(text).get("error") or {}
+        except (ValueError, AttributeError):
+            return
+        self.code = err.get("code")
+        self.subcode = err.get("error_subcode")
+        self.user_msg = err.get("error_user_msg") or ""
+
+
+# Meta names the offending accounts in `error_user_msg`:
+#   "The following user(s) cannot be accessed: tontaca13"
+# It is the only place the handle appears, so this is how we learn which
+# tag to drop. Caught 2026-08-03: Suu's stored handle had gone stale and
+# took the whole Catalan weekly top down with it.
+_USUARIS_INACCESSIBLES = re.compile(r"cannot be accessed:\s*(.+?)\s*$", re.I | re.S)
+
+
+def handles_rebutjats(exc: IGError) -> set[str]:
+    """The usernames Meta refused, lowercased. Empty when it didn't say."""
+    if exc.code != 110:
+        return set()
+    m = _USUARIS_INACCESSIBLES.search(exc.user_msg or "")
+    if not m:
+        return set()
+    return {
+        u.strip().lstrip("@").lower()
+        for u in m.group(1).replace(";", ",").split(",")
+        if u.strip()
+    }
+
+
 def _post(path: str, params: dict) -> dict:
     """Live POST; raises on non-200."""
     import requests
@@ -77,7 +125,7 @@ def _post(path: str, params: dict) -> dict:
     params = {**params, "access_token": _token()}
     r = requests.post(f"{GRAPH_BASE}/{path}", data=params, timeout=30)
     if not r.ok:
-        raise RuntimeError(f"IG API {r.status_code}: {r.text[:300]}")
+        raise IGError(r.status_code, r.text)
     return r.json()
 
 
@@ -88,7 +136,7 @@ def _get(path: str, params: dict | None = None) -> dict:
     p = {**(params or {}), "access_token": _token()}
     r = requests.get(f"{GRAPH_BASE}/{path}", params=p, timeout=30)
     if not r.ok:
-        raise RuntimeError(f"IG API {r.status_code}: {r.text[:300]}")
+        raise IGError(r.status_code, r.text)
     return r.json()
 
 
@@ -136,13 +184,25 @@ def upload_carousel_item(
     *,
     user_tags: list[dict] | None = None,
     alt_text: str | None = None,
+    dropped: list[str] | None = None,
 ) -> str:
     """Upload one image as a carousel child. Returns container ID.
 
     `user_tags` is the Meta `user_tags` payload — a list of
     `{"username": str, "x": float, "y": float}` (coordinates 0..1).
-    Capped at 20 per image by Meta. We don't validate locally; the
-    API will reject invalid handles silently (untagged) or raise.
+    Capped at 20 per image by Meta.
+
+    **A stale handle must not cost us the post.** We can't validate
+    handles up front — this app flavour has no `business_discovery` —
+    and Meta does NOT skip a bad tag silently: it raises code 110 and
+    the whole upload dies. On 2026-08-03 one artist's renamed account
+    (`tontaca13`, a *collaborator* on one track, not even a chart
+    entry) took down the entire Catalan weekly top, which was never
+    published. So on that error we drop exactly the handles Meta named
+    and retry once; an untagged artist beats a missing post. The
+    dropped handles are appended to `dropped` so the caller can flag
+    them for a human — that is also the only way we ever learn a handle
+    has gone bad.
 
     `alt_text` is the per-image accessibility label (Meta's
     `alt_text` field, capped at 1 000 chars). Surfaced to screen
@@ -163,13 +223,31 @@ def upload_carousel_item(
         "image_url": image_url,
         "is_carousel_item": "true",
     }
-    if user_tags:
-        import json
-
-        body["user_tags"] = json.dumps(user_tags[:20])
     if alt_text:
         body["alt_text"] = alt_text[:1000]
-    return _post(f"{_user_id()}/media", body)["id"]
+    tags = list(user_tags or [])[:20]
+    if tags:
+        body["user_tags"] = json.dumps(tags)
+    try:
+        return _post(f"{_user_id()}/media", body)["id"]
+    except IGError as exc:
+        dolents = handles_rebutjats(exc)
+        if not dolents or not tags:
+            raise
+        restants = [t for t in tags if (t.get("username") or "").lower() not in dolents]
+        if len(restants) == len(tags):
+            raise
+        logger.warning(
+            "IG ha rebutjat %s; reintente la pujada sense eixes etiquetes",
+            ", ".join(sorted(dolents)),
+        )
+        if dropped is not None:
+            dropped.extend(sorted(dolents))
+        if restants:
+            body["user_tags"] = json.dumps(restants)
+        else:
+            body.pop("user_tags", None)
+        return _post(f"{_user_id()}/media", body)["id"]
 
 
 def create_carousel(

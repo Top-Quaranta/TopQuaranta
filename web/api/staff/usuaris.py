@@ -227,13 +227,17 @@ def usuari_reset_2fa(request: Request, pk: int) -> Response:
 def usuari_esborrar(request: Request, pk: int) -> Response:
     """Hard-delete a user account. Staff-only, refuses to delete other staff."""
     u = get_object_or_404(Usuari, pk=pk)
-    if u.is_staff:
-        return Response(
-            {"error": "No pots esborrar un altre staff des d'aquí."}, status=400
-        )
+    # Self first, then staff — the other order made this branch
+    # unreachable (whoever reaches the view is staff, so a self-target is
+    # always staff too) and answered "No pots esborrar un altre staff" to
+    # someone deleting themselves. Same order as `usuari_toggle_actiu`.
     if u.pk == request.user.pk:
         return Response(
             {"error": "Usa el flux de compte per auto-esborrar-te."}, status=400
+        )
+    if u.is_staff:
+        return Response(
+            {"error": "No pots esborrar un altre staff des d'aquí."}, status=400
         )
     email = u.email
     label = str(u)

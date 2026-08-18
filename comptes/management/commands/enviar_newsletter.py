@@ -14,7 +14,7 @@ per-channel "last send" traceability stays consistent with the other
 channels. Idempotent: an already-`enviat` week is skipped unless
 `--force`.
 
-# Spec: docs/architecture/comptes.md
+# Spec: docs/architecture/comptes-newsletter.md
 """
 
 from __future__ import annotations

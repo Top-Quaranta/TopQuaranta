@@ -390,6 +390,22 @@ def dos_fa_verificar(request: HttpRequest) -> HttpResponse:
 
     error = None
     if request.method == "POST":
+        # The `auth_2fa` rate could never apply here: it was a DRF
+        # throttle and this is a plain Django view, so the one screen
+        # that accepts single-use backup codes in a loop had no limit on
+        # guessing at all (found 2026-08-15).
+        from comptes.ratelimit import excedeix_limit
+
+        if excedeix_limit(request, "auth_2fa"):
+            return render(
+                request,
+                "comptes/dos_fa_verificar.html",
+                {
+                    "error": ("Massa intents. Espera un minut i torna-ho a provar."),
+                    "next": next_url,
+                },
+                status=429,
+            )
         token = (request.POST.get("token") or "").strip().replace(" ", "")
         verified_device = None
         for d in TOTPDevice.objects.filter(user=user, confirmed=True):

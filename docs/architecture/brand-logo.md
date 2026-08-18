@@ -15,7 +15,13 @@ colours `#0047ba`, `#cf3339`, `#f1c22f` substituted by `currentColor`
 **and** the root `style="color:#cf3339"` stripped).
 
 The Python social renderer (`social/svg_assets.py`) reads the vendor
-file directly and rasterises it with `cairosvg`.
+file directly and rasterises it with `cairosvg`. The Django auth
+shell (`comptes/_base_auth.html`) inlines the SPA **mono** copy via
+`{% include "logo-topquaranta-rect-mono.svg" %}` (the SPA assets dir
+is a template DIR in `settings/base.py`), so regenerating the mono
+per §"When you next change anything" updates it too — no extra copy.
+Server-side inclusion is immune to trap 2 (that quirk is specific to
+`innerHTML` injection).
 
 ## Three traps we've fallen into
 

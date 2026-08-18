@@ -46,6 +46,10 @@ declare -A FILES=(
     ["$APP_DIR/deploy/cron.topquaranta"]="/etc/cron.d/topquaranta"
     ["$APP_DIR/deploy/logrotate.topquaranta"]="/etc/logrotate.d/topquaranta"
     ["$APP_DIR/deploy/topquaranta-web.service"]="/etc/systemd/system/topquaranta-web.service"
+    # Autoconfiguració de correu, servida al domini principal. Va viure
+    # només al servidor una temporada i es va desincronitzar; ara entra
+    # per ací com la resta.
+    ["$APP_DIR/deploy/autoconfig-topquaranta.xml"]="/var/www/autoconfig/config-v1.1.xml"
 )
 
 caddy_changed=0

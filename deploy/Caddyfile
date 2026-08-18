@@ -29,6 +29,21 @@ topquaranta.cat {
 www.topquaranta.cat {
 	encode zstd gzip
 
+	# Autoconfiguració de correu.
+	#
+	# Purelymail ja en publica un de comodí i en teoria un client hi
+	# arriba des de l'MX; a la pràctica Spark Desktop llig el del domini
+	# i, si no el troba, es queda amb el que tenia — i després no deixa
+	# editar els servidors, de manera que l'única eixida és esborrar el
+	# compte i perdre'n la configuració. A cercol.team, publicar-lo va
+	# fer que es reconfigurara sol.
+	handle /.well-known/autoconfig/mail/config-v1.1.xml {
+		root * /var/www/autoconfig
+		rewrite * /config-v1.1.xml
+		file_server
+		header Content-Type "application/xml; charset=utf-8"
+	}
+
 	# Django staticfiles (admin/OTP assets, legacy template CSS/JS).
 	handle_path /static/* {
 		root * /home/topquaranta/app/staticfiles

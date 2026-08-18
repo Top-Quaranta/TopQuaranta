@@ -244,12 +244,12 @@ Es conserven dues coses, a posta:
   en va eixir és genèrica i continua activa per a qualsevol endpoint que
   es configure a `tls_endpoints_vigilats`.
 
-**No publiquem cap autoconfig.** Purelymail ja en serveix un amb
-`%EMAILDOMAIN%` de comodí, i un client que no troba res al nostre domini
-el dedueix des de l'MX. La còpia pròpia que vam tindre uns dies era el
-mateix contingut en dos llocs i es va desincronitzar; els dos site blocks
-que la servien (`mail.` i `autoconfig.`) ja no hi són, i els seus
-registres DNS tampoc.
+**L'autoconfig de correu es publica al domini principal**
+(`/.well-known/autoconfig/mail/config-v1.1.xml`, des de `deploy/`). És
+una còpia del que Purelymail ja serveix: en teoria un client hi arribaria
+des de l'MX, però Spark Desktop llig el del domini i sense ell no es
+reconfigura. Els subdominis `mail.` i `autoconfig.` que abans el servien
+ja no existeixen, ni els seus registres DNS.
 
 Arquitectura de correu actual a [`../EMAIL.md`](../EMAIL.md).
 

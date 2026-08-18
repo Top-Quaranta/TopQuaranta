@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mozilla autoconfig per a les bústies de topquaranta.cat.
+
+  Servit per Caddy a
+  `topquaranta.cat/.well-known/autoconfig/mail/config-v1.1.xml`.
+
+  Purelymail ja en publica un de comodí a `autoconfig.purelymail.com`,
+  i en teoria un client hi arriba deduint-lo des de l'MX. A la pràctica
+  no sempre: Spark Desktop llig el del domini, i sense ell es queda amb
+  la configuració que ja tenia — que després no deixa editar, així que
+  l'única eixida és esborrar el compte i tornar-lo a crear, perdent la
+  configuració local. A cercol.team, publicar-lo va fer que Spark es
+  reconfigurara sol.
+
+  Els valors han de coincidir amb els de Purelymail
+  (`autoconfig.purelymail.com/mail/config-v1.1.xml`). Si algun dia els
+  canvien, aquest fitxer és una còpia que cal moure a mà: ja ens va
+  passar amb el relay de Brevo, que va quedar-se ací mesos després de
+  deixar de ser cert.
+-->
+<clientConfig version="1.1">
+  <emailProvider id="topquaranta.cat">
+    <domain>topquaranta.cat</domain>
+    <displayName>TopQuaranta (Purelymail)</displayName>
+    <displayShortName>TopQuaranta</displayShortName>
+
+    <incomingServer type="imap">
+      <hostname>imap.purelymail.com</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+    </incomingServer>
+
+    <outgoingServer type="smtp">
+      <hostname>smtp.purelymail.com</hostname>
+      <port>465</port>
+      <socketType>SSL</socketType>
+      <username>%EMAILADDRESS%</username>
+      <authentication>password-cleartext</authentication>
+      <addThisServer>true</addThisServer>
+      <useGlobalPreferredServer>false</useGlobalPreferredServer>
+    </outgoingServer>
+
+    <documentation url="https://www.topquaranta.cat/">
+      <descr lang="ca">Bústia de TopQuaranta, allotjada a Purelymail. La contrasenya és la de la bústia, la mateixa per a rebre i per a enviar.</descr>
+      <descr lang="en">TopQuaranta mailbox, hosted at Purelymail. The password is your mailbox password, the same for receiving and sending.</descr>
+    </documentation>
+  </emailProvider>
+</clientConfig>

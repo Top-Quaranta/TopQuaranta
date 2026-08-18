@@ -797,13 +797,19 @@ de systemd. **Si edites un fitxer d'infraestructura directament a la
 màquina, el següent desplegament no el toca i ningú se n'assabenta fins
 que falla.**
 
-Això ho vam aprendre amb l'autoconfig de correu, que va viure només al
-servidor i es va desincronitzar en retirar Stalwart. La conclusió, però,
-no va ser posar-lo ací sinó **deixar de publicar-lo**: Purelymail ja en
-serveix un de comodí i la nostra còpia era el mateix contingut en dos
-llocs. La regla que en queda és més general que el fitxer — si una cosa
-ha d'existir fora de l'arbre, va a `deploy/` i entra per ací; si no ha
-d'existir, millor encara.
+L'autoconfig de correu (`deploy/autoconfig-topquaranta.xml` →
+`/var/www/autoconfig/`) és el cas que ho va ensenyar: va viure només al
+servidor, es va desincronitzar en retirar Stalwart, i durant dies va
+dir als clients que enviaren per un relay que ja no els servia. Ara entra
+per ací com la resta.
+
+De pas va deixar una regla més general que el fitxer: **si una cosa ha
+d'existir fora de l'arbre de treball, va a `deploy/` i entra per ací; i
+abans d'afegir-la, val la pena preguntar-se si ha d'existir.** En aquest
+cas la resposta va ser que sí —Spark Desktop llig l'autoconfig del
+domini i sense ell no es reconfigura— però la pregunta va estalviar-ne
+dos: els site blocks de `mail.` i `autoconfig.`, que servien el mateix
+per camins que ja no resolen.
 
 Afegir-hi un fitxer és **només** posar una línia al mapa `FILES` de
 l'script. Les branques del `case` que hi ha a sota existeixen únicament

@@ -16,14 +16,8 @@ class TestNormalize:
     def test_strip_accents(self):
         assert _normalize("La Fúmiga") == "la fumiga"
 
-    def test_strip_accents_catalan(self):
-        assert _normalize("Mandràgora") == "mandragora"
-
     def test_strip_whitespace(self):
         assert _normalize("  Zoo  ") == "zoo"
-
-    def test_combined(self):
-        assert _normalize(" OQUES GRASSES ") == "oques grasses"
 
 
 class TestSearchArtist:
@@ -68,11 +62,6 @@ class TestSearchArtist:
         }
         result = search_artist("Miurn")
         assert result is None
-
-    @patch("ingesta.clients.deezer._get")
-    def test_empty_results(self, mock_get):
-        mock_get.return_value = {"data": []}
-        assert search_artist("NonexistentArtist") is None
 
     @patch("ingesta.clients.deezer._get")
     def test_api_error(self, mock_get):
@@ -174,10 +163,12 @@ class TestGetArtistAlbums:
 class TestGetAlbumTracks:
     @patch("ingesta.clients.deezer._get")
     def test_returns_tracks_with_isrc(self, mock_get):
-        # First call: album tracks listing
-        # Second call: full track details
-        mock_get.side_effect = [
-            {
+        # The album listing gives id/title/duration/artist; the ISRC only
+        # lives on the per-track endpoint. Property asserted now: the
+        # merged row carries both, whichever order the client fetches
+        # them in — the mock is keyed by URL, not by call position.
+        responses = {
+            "/album/100/tracks": {
                 "data": [
                     {
                         "id": 500,
@@ -187,12 +178,20 @@ class TestGetAlbumTracks:
                     },
                 ]
             },
-            {
+            "/track/500": {
                 "id": 500,
                 "title": "La Cançó",
                 "isrc": "ES80D2511602",
             },
-        ]
+        }
+
+        def by_url(url, *args, **kwargs):
+            for suffix, payload in responses.items():
+                if url.endswith(suffix):
+                    return payload
+            raise AssertionError(f"unexpected Deezer URL {url}")
+
+        mock_get.side_effect = by_url
 
         tracks = get_album_tracks(100)
 

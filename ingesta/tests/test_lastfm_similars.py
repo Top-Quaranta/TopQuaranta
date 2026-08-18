@@ -139,10 +139,12 @@ def test_replace_similars_dedup_by_target(cmd, manel, delen):
     response, only ONE row is written — dedup happens at call site
     (`seen_target_pks` set in `_process`). Here we exercise the
     underlying `_replace_similars` invariant: bulk_create with
-    duplicate targets becomes a single row."""
-    # Simulate `_process` having already deduped: pass each unique
-    # target only once.
-    cmd._replace_similars(source=manel, targets=[(delen, 0.9)])
+    duplicate targets becomes a single row.
+
+    Property asserted now: the SAME target passed twice (two spellings
+    resolved to one Artista) yields exactly one edge and a cached count
+    of 1 — no IntegrityError, no double-count."""
+    cmd._replace_similars(source=manel, targets=[(delen, 0.9), (delen, 0.8)])
     rows = ArtistaLastfmSimilar.objects.filter(source=manel)
     assert rows.count() == 1
     assert rows.first().target_id == delen.pk

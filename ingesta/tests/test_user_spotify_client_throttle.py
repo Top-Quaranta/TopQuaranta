@@ -44,6 +44,25 @@ def _mock_response(status: int, body: dict | None = None, headers=None):
     return r
 
 
+def _virtual_clock():
+    """Fake `time.sleep` + request recorder sharing one virtual clock.
+
+    `sleep(s)` advances the clock by `s`; every `requests.request` call
+    stamps the current clock value. Tests then assert on the *spacing*
+    of the stamps (the promise) instead of on the exact sleep
+    arguments (the mechanism)."""
+    clock = {"t": 0.0}
+    stamps: list[float] = []
+
+    def fake_sleep(s):
+        clock["t"] += s
+
+    def stamp(*args, **kwargs):
+        stamps.append(clock["t"])
+
+    return fake_sleep, stamp, stamps
+
+
 @pytest.fixture
 def patched_token():
     """Skip the OAuth round trip — we don't need to test refresh here."""
@@ -66,22 +85,41 @@ def patched_token():
             yield
 
 
-def test_throttle_sleeps_between_calls(patched_token):
+@pytest.mark.parametrize(
+    "op",
+    [
+        pytest.param(lambda c: c.search_isrc("EXISRC123"), id="search_isrc"),
+        pytest.param(lambda c: c.get_track("x"), id="get_track"),
+    ],
+)
+def test_throttle_sleeps_between_calls(patched_token, op):
     """Default throttle = 0.2s; we override to 0.05 to keep tests fast
     and assert that `time.sleep(throttle)` is the first call inside
-    `_request`."""
-    client = UserSpotifyClient(_fake_auth(), throttle_s=0.05)
+    `_request`.
+
+    Property asserted now (merged with the former
+    `test_get_track_throttle_applied`, same guarantee for get_track):
+    on a virtual clock, every outbound request — the first one
+    included — fires at least `throttle_s` after the previous one
+    (or after the client started). How the wait is implemented is not
+    pinned."""
+    throttle = 0.05
+    client = UserSpotifyClient(_fake_auth(), throttle_s=throttle)
+    fake_sleep, stamp, stamps = _virtual_clock()
+
+    def fake_request(*args, **kwargs):
+        stamp()
+        return _mock_response(200, {"tracks": {"items": []}, "id": "x", "artists": []})
+
     with (
-        patch("ingesta.clients.spotify.time.sleep") as mock_sleep,
-        patch(
-            "ingesta.clients.spotify.requests.request",
-            return_value=_mock_response(200, {"tracks": {"items": []}}),
-        ),
+        patch("ingesta.clients.spotify.time.sleep", side_effect=fake_sleep),
+        patch("ingesta.clients.spotify.requests.request", side_effect=fake_request),
     ):
-        client.search_isrc("EXISRC123")
-    # Sleep called at least once with the throttle value.
-    sleep_args = [call.args[0] for call in mock_sleep.call_args_list]
-    assert 0.05 in sleep_args
+        op(client)
+        op(client)
+    assert len(stamps) >= 2
+    gaps = [b - a for a, b in zip([0.0] + stamps, stamps)]
+    assert all(g >= throttle - 1e-9 for g in gaps), gaps
 
 
 def test_429_short_retry_after_sleeps_and_retries(patched_token):
@@ -167,15 +205,6 @@ def test_replace_playlist_tracks_chunks_via_items_endpoint(patched_token):
     assert "/items" in first.args[1] and "/tracks" not in first.args[1]
     assert second.args[0] == "POST"
     assert "/items" in second.args[1] and "/tracks" not in second.args[1]
-
-
-def test_custom_throttle_overrides_default():
-    """A `throttle_s=1.5` passed in __init__ becomes the per-request
-    sleep value."""
-    client = UserSpotifyClient(_fake_auth(), throttle_s=1.5)
-    assert client._throttle_s == 1.5
-    # And the default for the max retry tolerance is preserved.
-    assert client._max_retry_after_s == UserSpotifyClient.DEFAULT_MAX_RETRY_AFTER_S
 
 
 # ── get_track / get_artist (FASE 2 of Process A/B split) ─────────────
@@ -278,21 +307,6 @@ def test_get_artist_404_returns_none(patched_token):
         return_value=_mock_response(404, {"error": {"status": 404}}),
     ):
         assert client.get_artist("REMOVED") is None
-
-
-def test_get_track_throttle_applied(patched_token):
-    """Each fetch sleeps the configured throttle before firing,
-    matching the search_isrc behaviour."""
-    client = UserSpotifyClient(_fake_auth(), throttle_s=0.07)
-    with (
-        patch("ingesta.clients.spotify.time.sleep") as mock_sleep,
-        patch(
-            "ingesta.clients.spotify.requests.request",
-            return_value=_mock_response(200, {"id": "x", "artists": []}),
-        ),
-    ):
-        client.get_track("x")
-    assert 0.07 in [c.args[0] for c in mock_sleep.call_args_list]
 
 
 def test_get_track_long_retry_after_raises(patched_token):

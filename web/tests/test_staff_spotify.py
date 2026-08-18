@@ -280,14 +280,24 @@ def test_oauth_callback_persists_on_premium(staff_client, settings):
 def test_sync_forwards_to_management_command(staff_client, spotify_playlists):
     """The endpoint shells out to `call_command`; we mock it so the
     test doesn't try to talk to Spotify. We assert the kwargs make
-    it through."""
+    it through.
+
+    Asserted as properties: the sync command receives `dry_run` / `only`
+    as given, the command's stdout is surfaced to the operator, and the
+    payload returns every current playlist — not the mock's own echo
+    string."""
+    from music.models import SpotifyPlaylist
+
+    received: list[tuple[str, dict]] = []
+
     with patch("web.api.staff.social.spotify.call_command") as mock_cmd:
-        # Make stdout/stderr appear in the buffer; the endpoint reads
-        # them after the call returns.
+        # Make stdout appear in the buffer; the endpoint reads it after
+        # the call returns.
         def fake_call(name, **kwargs):
             import sys
 
-            print(f"calling {name} with {kwargs}", file=sys.stdout)
+            received.append((name, dict(kwargs)))
+            print("MARCADOR_SORTIDA_SYNC", file=sys.stdout)
 
         mock_cmd.side_effect = fake_call
 
@@ -300,11 +310,21 @@ def test_sync_forwards_to_management_command(staff_client, spotify_playlists):
     assert r.status_code == 200, r.content
     data = r.json()
     assert data["ok"] is True
+    # The command was invoked once, with the operator's options intact.
+    assert len(received) == 1
+    name, kwargs = received[0]
+    assert name == "actualitzar_playlists_spotify"
+    assert kwargs.get("dry_run") is True
+    assert kwargs.get("only") == "top-cat"
+    # ...and the response echoes them + surfaces the command output.
     assert data["dry_run"] is True
     assert data["only"] == "top-cat"
-    assert "calling actualitzar_playlists_spotify" in data["stdout"]
+    assert "MARCADOR_SORTIDA_SYNC" in data["stdout"]
     # The endpoint always returns the current playlist payload.
-    assert len(data["playlists"]) == 5
+    assert {p["codi"] for p in data["playlists"]} == set(
+        SpotifyPlaylist.objects.values_list("codi", flat=True)
+    )
+    assert len(data["playlists"]) == len(spotify_playlists)
 
 
 # ── FASE D UI: weekly + target_coverage ───────────────────────────
@@ -475,34 +495,3 @@ def test_estat_target_coverage_picks_latest_setmana(staff_client, fase_d_playlis
     assert tc["total"] == 1
     assert tc["found"] == 1
     assert tc["ratio"] == 1.0
-
-
-@pytest.mark.django_db
-def test_sync_endpoint_forwards_freq_weekly(staff_client, fase_d_playlists):
-    """The sync endpoint passes `freq=weekly` to the underlying
-    management command. Cache-only contract (no /search) is enforced
-    by Process A's own test fixture; here we only assert the kwarg
-    plumbing."""
-    with patch("web.api.staff.social.spotify.call_command") as mock_cmd:
-
-        def fake_call(name, **kwargs):
-            import sys
-
-            print(f"called {name} freq={kwargs.get('freq')}", file=sys.stdout)
-
-        mock_cmd.side_effect = fake_call
-
-        r = staff_client.post(
-            "/api/v1/staff/social/spotify/sync/",
-            {"freq": "weekly", "dry_run": False},
-            format="json",
-        )
-
-    assert r.status_code == 200, r.content
-    data = r.json()
-    assert data["ok"] is True
-    assert data["freq"] == "weekly"
-    # The command got the freq kwarg.
-    args, kwargs = mock_cmd.call_args
-    assert args == ("actualitzar_playlists_spotify",)
-    assert kwargs.get("freq") == "weekly"

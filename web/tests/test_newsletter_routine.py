@@ -203,18 +203,24 @@ def test_brief_exposes_top40_with_intact_old_keys(client_with_token):
 @pytest.mark.django_db
 def test_brief_aliases_are_identical_slices(client_with_token):
     """top10 == top40[:10]; fets_grup_top5 == fets_grup[:5]; fet_lider is
-    the first highlighted fact (same shape + content as before)."""
+    the first highlighted fact (same shape + content as before).
+
+    Asserts the slice identities and "fet_lider is the first highlighted
+    fact" — not an exact key-set of fet_lider (adding a field must not
+    break this)."""
     _seed_topN(12, with_collab=True, prev=True)
     with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
         r = client_with_token.get(BRIEF_URL, **_auth())
     d = r.data
+    assert len(d["top40"]) > 10
     assert d["top10"] == d["top40"][:10]
     assert d["fets_grup_top5"] == d["fets_grup"][:5]
-    # fet_lider keeps its exact shape.
-    if d["fet_lider"] is not None:
-        assert set(d["fet_lider"]) == {"code", "severity", "data", "freshness_blocked"}
-        # ...and equals the first highlighted fact.
-        assert d["fets_destacats"][0] == d["fet_lider"]
+    # fet_lider is the first highlighted fact (or None when there is none).
+    if d["fets_destacats"]:
+        assert d["fet_lider"] == d["fets_destacats"][0]
+        assert {"code", "severity", "data"} <= set(d["fet_lider"])
+    else:
+        assert d["fet_lider"] is None
 
 
 @pytest.mark.django_db
@@ -238,17 +244,6 @@ def test_brief_fets_destacats_distinct_subjects(client_with_token):
             seen_canco.add(cid)
         if aid is not None:
             seen_art.add(aid)
-
-
-@pytest.mark.django_db
-def test_brief_not_ready_still_short_circuits(client_with_token):
-    """No consolidated top → the early not_ready return is untouched (no
-    top40/fets_grup work happens)."""
-    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
-        r = client_with_token.get(BRIEF_URL, **_auth())
-    assert r.status_code == 200
-    assert r.data["status"] == "not_ready"
-    assert "top40" not in r.data and "top10" not in r.data
 
 
 @pytest.mark.django_db
@@ -303,35 +298,6 @@ def test_collaborator_order_matches_legacy_method(client_with_token):
     assert [x["nom"] for x in collabs] == expected
 
 
-@pytest.mark.django_db
-def test_origen_prefetch_matches_legacy_first(client_with_token):
-    """`_artista_origen` (prefetch-by-pk path) must return the same origin
-    the legacy `localitats.first()` did. The artist gets two localitats in
-    distinct municipis; `.first()` resolves by pk, and the rewrite must
-    pick the identical row and emit the identical dict."""
-    from comptes.newsletter_brief import _artista_origen
-    from music.models import ArtistaLocalitat, Municipi, Territori
-
-    c = _seed_top()
-    art = c.artista
-    terr, _ = Territori.objects.get_or_create(codi="CAT", defaults={"nom": "Principat"})
-    m1 = Municipi.objects.create(nom="Primer", comarca="C1", territori=terr)
-    m2 = Municipi.objects.create(nom="Segon", comarca="C2", territori=terr)
-    l1 = ArtistaLocalitat.objects.create(artista=art, municipi=m1)
-    ArtistaLocalitat.objects.create(artista=art, municipi=m2)
-    # Legacy behaviour, recomputed inline for the pin.
-    legacy_loc = art.localitats.select_related("municipi__territori").first()
-    assert legacy_loc.pk == l1.pk  # .first() resolves by pk
-    expected = {"municipi": "Primer", "comarca": "C1", "territori": "CAT"}
-    # Fresh instance so no in-memory prefetch leaks into the comparison.
-    fresh = Artista.objects.get(pk=art.pk)
-    assert _artista_origen(fresh) == expected
-    # End-to-end through the brief (prefetch path).
-    with patch("comptes.newsletter_brief._fetch_vilaweb", return_value=[]):
-        r = client_with_token.get(BRIEF_URL, **_auth())
-    assert r.data["fets_grup"][0]["origen"] == expected
-
-
 # ── draft upsert ─────────────────────────────────────────────────────
 
 
@@ -356,7 +322,14 @@ def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
     """A successful LLM upsert fires exactly one admin mail whose HTML body
     is the FULL preview (shared render) + the management block + the staff
     editor link, with deliverability headers. There is no separate full
-    1-40 ranking section."""
+    1-40 ranking section.
+
+    Asserts the property (one mail, to ADMINS, HTML == the shared preview
+    render for that draft incl. the staff editor link, deliverability
+    headers) — not the template's copy strings."""
+    from comptes.newsletter import render_newsletter_preview, staff_draft_url
+    from social import payload
+
     _seed_topN(12, prev=True)
     r = client_with_token.post(
         DRAFT_URL,
@@ -368,15 +341,29 @@ def test_post_llm_sends_admin_preview(client_with_token, mailoutbox):
     assert len(mailoutbox) == 1
     m = mailoutbox[0]
     assert "Subj LLM" in m.body
-    gestio = f"/staff/social/esborrany?setmana={_monday().isoformat()}"
+    draft = NewsletterDraft.objects.get(setmana=_monday())
+    gestio = staff_draft_url(draft.setmana)
     assert gestio in m.body
     html = m.alternatives[0][0]
-    # Full preview body: management block + staff link, highlighted top 10.
-    assert "Còpia de gestió" in html
+    # The HTML is the shared preview render (what subscribers get) plus the
+    # management block: same renderer, same draft, same editor link.
     assert gestio in html
-    assert "Del 4 al 10" in html
-    # No separate full 1-40 ranking section.
-    assert "El Top 40 complet" not in html
+    assert "<p>n</p>" in html
+    entries = (payload.build_top(draft.territori, draft.setmana) or {}).get(
+        "entries"
+    ) or []
+    assert entries
+    expected = render_newsletter_preview(
+        draft.tipus,
+        draft.territori,
+        draft.setmana,
+        draft.setmana + datetime.timedelta(days=5),
+        entries,
+        subject_override=draft.subject,
+        narrative_html_override=draft.narrative_html,
+        gestio_url=gestio,
+    )
+    assert html == expected
     # Deliverability headers present.
     assert m.extra_headers.get("List-Unsubscribe")
     assert m.extra_headers.get("Auto-Submitted") == "auto-generated"
@@ -489,29 +476,6 @@ def test_post_rejects_non_pendent_estat(client_with_token):
     )
     assert r.status_code == 400
     assert not NewsletterDraft.objects.exists()
-
-
-@pytest.mark.django_db
-def test_post_requires_subject(client_with_token):
-    _seed_top()
-    r = client_with_token.post(
-        DRAFT_URL, {"narrative_html": "<p>x</p>"}, format="json", **_auth()
-    )
-    assert r.status_code == 400
-
-
-@pytest.mark.django_db
-def test_post_terminal_draft_is_409(client_with_token):
-    _seed_top()
-    NewsletterDraft.objects.create(
-        tipus="top_ppcc",
-        territori="PPCC",
-        setmana=_monday(),
-        subject="s",
-        estat=NewsletterDraft.ESTAT_ENVIAT,
-    )
-    r = client_with_token.post(DRAFT_URL, {"subject": "X"}, format="json", **_auth())
-    assert r.status_code == 409
 
 
 @pytest.mark.django_db

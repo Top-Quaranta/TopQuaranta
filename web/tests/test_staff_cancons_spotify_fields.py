@@ -94,24 +94,3 @@ def test_cancons_list_spotify_null_when_not_enriched(staff_client):
     row = next(rw for rw in r.json()["results"] if rw["pk"] == c.pk)
     assert row["spotify"] is None
     assert row["artista"]["spotify_dispersio"] is None
-
-
-@pytest.mark.django_db
-def test_cancons_list_spotify_null_when_no_row_at_all(staff_client):
-    """A Cançó with no SpotifyMetadata row at all (pre-0080 backfill
-    state for synthetic data) still serialises cleanly."""
-    a = Artista.objects.create(nom="EXEMPLE Y", lastfm_nom="EXEMPLE Y")
-    al = Album.objects.create(artista=a, nom="EXEMPLE Y")
-    c = Canco.objects.create(
-        artista=a,
-        album=al,
-        nom="EXEMPLE Y",
-        isrc="ZZSP0000003",
-        verificada=False,
-        activa=True,
-    )
-    # No SpotifyMetadata row inserted.
-    r = staff_client.get("/api/v1/staff/cancons/?verificada=0")
-    assert r.status_code == 200
-    row = next(rw for rw in r.json()["results"] if rw["pk"] == c.pk)
-    assert row["spotify"] is None

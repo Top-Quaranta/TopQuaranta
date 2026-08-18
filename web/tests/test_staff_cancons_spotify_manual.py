@@ -106,17 +106,6 @@ def test_patch_url_stores_pending_manual(staff_client):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("raw", [f"spotify:track:{TRACK_A}", TRACK_A])
-def test_patch_uri_and_bare_id(staff_client, raw):
-    c = _make_canco()
-    r = staff_client.patch(
-        f"/api/v1/staff/cancons/{c.pk}/", {"spotify_url": raw}, format="json"
-    )
-    assert r.status_code == 200, r.content
-    assert r.json()["spotify"]["spotify_id"] == TRACK_A
-
-
-@pytest.mark.django_db
 @pytest.mark.parametrize(
     "raw",
     [

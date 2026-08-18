@@ -101,20 +101,31 @@ def test_estat_canals_shapes_and_states(staff_client):
     r = staff_client.get("/api/v1/staff/social/estat-canals/")
     assert r.status_code == 200, r.content
     canals = r.data["canals"]
-    assert set(canals) == {
-        "instagram",
-        "mastodon",
-        "bluesky",
-        "telegram",
-        "newsletter",
-        "rss",
-    }
+    # Property: every known channel is reported (a superset is fine — a
+    # new channel must not break this), each entry carries the honest
+    # state fields, and the master/channel switches resolve as promised.
+    assert {"instagram", "mastodon", "bluesky", "telegram", "newsletter", "rss"} <= set(
+        canals
+    )
+    for entry in canals.values():
+        assert {
+            "efectiu",
+            "mestre_actiu",
+            "canal_actiu",
+            "ultim_enviament",
+            "font",
+        } <= set(entry)
+        assert entry["efectiu"] in {"actiu", "pausat_global", "pausat_canal"}
+        assert entry["mestre_actiu"] is True
     assert canals["mastodon"]["efectiu"] == "actiu"
+    assert canals["mastodon"]["canal_actiu"] is True
     assert canals["mastodon"]["ultim_enviament"].startswith("2026-06-06")
     assert canals["mastodon"]["font"] == "socialpost"
     assert canals["newsletter"]["efectiu"] == "pausat_canal"
-    # The legacy Instagram rollout phase was removed (2026-06).
-    assert "fase_distribucio" not in canals["instagram"]
+    assert canals["newsletter"]["canal_actiu"] is False
+    # RSS is pull-based: no send timestamp can exist.
+    assert canals["rss"]["ultim_enviament"] is None
+    assert canals["rss"]["font"] == "none"
 
 
 def test_estat_canals_master_off_marks_all_global(staff_client):

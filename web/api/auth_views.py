@@ -27,7 +27,8 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+
+from web.api.utils import ScopedThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ def me(request: Request) -> Response:
     return Response(_profile(request))
 
 
-class _AuthLoginThrottle(ScopedRateThrottle):
+class _AuthLoginThrottle(ScopedThrottle):
     scope = "auth_login"
 
 
@@ -180,8 +181,17 @@ def _send_verification_email(request, user) -> None:
         logger.exception("Failed to send verification email to user pk=%s", user.pk)
 
 
+class _RegisterThrottle(ScopedThrottle):
+    """The `registre` rate existed in settings with a comment explaining
+    it guards the Brevo free tier (300 mails/day) against a registration
+    mail-bomb — but no view ever used it (found 2026-08-15)."""
+
+    scope = "registre"
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([_RegisterThrottle])
 def register_view(request: Request) -> Response:
     """Create an inactive user and send an activation email.
 

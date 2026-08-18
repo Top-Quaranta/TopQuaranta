@@ -58,9 +58,17 @@ def test_is_caducat_pure():
 
 def test_caducitat_cutoff_uses_today():
     """`caducitat_cutoff()` defaults to today; the override is for
-    deterministic tests."""
-    explicit = caducitat_cutoff(date(2026, 6, 2))
-    assert explicit == date(2026, 6, 2) - timedelta(days=DIES_CADUCITAT)
+    deterministic tests.
+
+    The default is the half that runs in production, and the old version
+    of this test never exercised it: it passed an explicit date and then
+    recomputed the one-line body with the same constant, which only
+    proves subtraction works (audit 2026-08-15)."""
+    assert caducitat_cutoff() == date.today() - timedelta(days=DIES_CADUCITAT)
+    # …and an explicit date overrides it, which is what the tests rely on.
+    assert caducitat_cutoff(date(2026, 6, 2)) == date(2026, 6, 2) - timedelta(
+        days=DIES_CADUCITAT
+    )
 
 
 @pytest.mark.django_db

@@ -440,13 +440,15 @@ Configuration lives in `ConfiguracioGlobal`, editable from
 operator opts in. Recommended entries when you do:
 
 ```
-mail.topquaranta.cat:993
-mail.topquaranta.cat:465
-mail.topquaranta.cat:25
 topquaranta.cat:443
 api.cercol.team:443
-autoconfig.topquaranta.cat:443
 ```
+
+L'exemple portava els ports de correu de `mail.topquaranta.cat` i el
+subdomini `autoconfig`. Els primers van morir amb Stalwart i el segon mai
+no va apuntar ací, així que vigilar-los hauria estat una alarma horària
+sobre res. En producció `tls_endpoints_vigilats` només ha de portar el
+que existeix.
 
 A failing endpoint escalates `overall`, so the hourly
 `tq-health --email-on-fail` cron mails admin@ within the hour, and it
@@ -788,6 +790,34 @@ Backup del unit file anterior (amb `--reload`):
 Font de veritat del unit: `deploy/topquaranta-web.service` al repo.
 `bin/tq-sync-infra` el sincronitza a `/etc/systemd/system/` quan
 detecta drift, i fa `systemctl daemon-reload`.
+
+`tq-sync-infra` és, en general, **l'única via** per a qualsevol fitxer
+que viu fora de l'arbre de treball: Caddyfile, cron, logrotate i el unit
+de systemd. **Si edites un fitxer d'infraestructura directament a la
+màquina, el següent desplegament no el toca i ningú se n'assabenta fins
+que falla.**
+
+L'autoconfig de correu (`deploy/autoconfig-topquaranta.xml` →
+`/var/www/autoconfig/`) és el cas que ho va ensenyar: va viure només al
+servidor, es va desincronitzar en retirar Stalwart, i durant dies va
+dir als clients que enviaren per un relay que ja no els servia. Ara entra
+per ací com la resta.
+
+De pas va deixar una regla més general que el fitxer: **si una cosa ha
+d'existir fora de l'arbre de treball, va a `deploy/` i entra per ací; i
+abans d'afegir-la, val la pena preguntar-se si ha d'existir.** En aquest
+cas la resposta va ser que sí —Spark Desktop llig l'autoconfig del
+domini i sense ell no es reconfigura— però la pregunta va estalviar-ne
+dos: els site blocks de `mail.` i `autoconfig.`, que servien el mateix
+per camins que ja no resolen.
+
+Afegir-hi un fitxer és **només** posar una línia al mapa `FILES` de
+l'script. Les branques del `case` que hi ha a sota existeixen únicament
+per als fitxers que a més necessiten validar-se (Caddyfile) o provocar un
+reload (unit de systemd); la resta cau a la branca per defecte. Eixa
+branca no hi era fins al 2026-08-18, i sense ella una entrada nova no
+s'instal·lava **i l'script eixia igualment amb èxit** — el pitjor mode de
+fallada possible en un desplegament.
 
 Vegeu `docs/decisions/0001-gunicorn-no-reload.md` i
 `docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.

@@ -17,6 +17,7 @@ DATABASES = {
 ALLOWED_HOSTS = ["*"]
 
 # Last.fm (for tests)
+YOUTUBE_API_KEY = "test-key"
 LASTFM_API_KEY = "test-key"
 LASTFM_API_SECRET = ""
 

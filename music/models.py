@@ -272,6 +272,35 @@ class Artista(models.Model):
     tiktok_url = models.URLField(blank=True)
     facebook_url = models.URLField(blank=True)
     instagram_url = models.URLField(blank=True)
+    # Stamped when Meta refuses this handle while publishing (code 110,
+    # "cannot be accessed"). We cannot validate handles up front — this
+    # app flavour has no `business_discovery` — so a publish rejection is
+    # the ONLY evidence we ever get that an account was renamed, closed
+    # or made private. Cleared when the URL is edited.
+    instagram_rebutjat_at = models.DateTimeField(null=True, blank=True)
+    # The refused value, kept after `instagram_url` is emptied. Meta's own
+    # error covers two very different cases — "private profile OR invalid
+    # username" — and we can't tell them apart. A renamed account is a
+    # dead link we're right to drop (it is public: the artist page and the
+    # JSON-LD `sameAs` both carry it). A merely private one still works
+    # for humans, so the old value has to survive for staff to restore.
+    instagram_rebutjat_url = models.CharField(max_length=200, blank=True)
+    # Same third state as `youtube_canal_revisat`, for the same reason:
+    # without it, an artist who genuinely has no Instagram sits in the
+    # staff queue forever and gets re-checked by hand every pass.
+    instagram_revisat = models.BooleanField(default=False, db_index=True)
+    # PROVISIONAL — candidate handle found by a sweep (Viasona, the
+    # artist's own site…), surfaced in the staff queue for one-click
+    # accept. A suggestion is NOT evidence: Instagram handles can't be
+    # validated by API, so a human eyeballs the profile and decides.
+    # Cleared whenever `instagram_url` is set. Drop the field once the
+    # backlog is worked through.
+    instagram_suggerit = models.CharField(max_length=64, blank=True)
+    # Handles the operator dismissed with ✕. Clearing the field alone
+    # left no trace of WHAT was refused, so the next nightly run found
+    # the same handle at the same source and put it straight back —
+    # caught by the operator the morning after day one (2026-08-13).
+    instagram_suggerits_descartats = models.JSONField(default=list, blank=True)
     # X (formerly Twitter). Both x.com and twitter.com URLs land here;
     # mb_sync routes them by host.
     twitter_url = models.URLField(blank=True)
@@ -280,6 +309,57 @@ class Artista(models.Model):
         null=True,
         blank=True,
         help_text="Last time Deezer was queried for new albums.",
+    )
+
+    # ── YouTube "Topic" channel ─────────────────────────────────────────
+    # Auto-generated channel YouTube creates for anything a distributor
+    # delivers, holding the "Art Tracks" (cover art + audio). That is the
+    # YouTube Music catalogue, and it exists even for acts nobody has ever
+    # scrobbled — 30/30 sampled VAL/BAL artists had one. Distinct from
+    # `youtube_url`, which is the band's own human channel (videoclips,
+    # decorated titles) and is NOT usable for track matching.
+    youtube_channel_id = models.CharField(
+        max_length=32,
+        blank=True,
+        db_index=True,
+        help_text="UC… id of the '<nom> - Topic' channel. Costs 100 quota "
+        "units to discover, so it is resolved once and cached here.",
+    )
+    youtube_uploads_playlist = models.CharField(max_length=34, blank=True)
+    youtube_checked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last discovery attempt. Set even when nothing was found, "
+        "so the quota budget doesn't re-spend 100 units on the same miss.",
+    )
+
+    # ── Canal oficial (decisió humana) ──────────────────────────────────
+    # The artist's OWN channel: videoclips, live sessions. Distinct lane
+    # from the Topic channel above, and for many artists the bigger one —
+    # Maria del Mar Bonet has 97 views on the "S'aigo No" Art Track and
+    # 55.091 on her channel.
+    #
+    # Chosen by a HUMAN, never guessed. Automatic identification is what
+    # creates the "Guerra"/"Montenegro" exploit surface: a generic name
+    # resolves to a padel channel or an events company (both real hits
+    # while probing "Malalts"). Same reasoning as the project's founding
+    # rule that every auto-discovered artist needs human approval.
+    #
+    # THREE states, not two — `youtube_canal_revisat` is what separates
+    # "nobody has looked yet" from "looked, this act has no own channel".
+    # Malalts genuinely has none, and an artist with one lane measured
+    # fully is NOT under-measured; an artist with a pending decision is.
+    # Only the first kind may feed a territory-level average.
+    youtube_canal_oficial = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="UC… id del canal propi de l'artista. El tria una persona.",
+    )
+    youtube_canal_revisat = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Algú ho ha mirat. Amb `youtube_canal_oficial` buit vol "
+        "dir «revisat: no en té», que és un estat vàlid i final.",
     )
 
     # ── MusicBrainz metadata ────────────────────────────────────────────
@@ -1086,6 +1166,29 @@ class Canco(models.Model):
     )
     mbrainz_confirmed = models.BooleanField(null=True, blank=True)
 
+    # ── YouTube cross-reference ─────────────────────────────────────────
+    # The Art Track on the artist's Topic channel. `youtube_match` records
+    # HOW we got there, because a blind match is worse than no match: the
+    # same title can be a cover, a live take or a different act entirely.
+    MATCH_EXACTE = "exacte"
+    MATCH_DURADA = "durada"
+    MATCH_MANUAL = "manual"
+    MATCH_CHOICES = [
+        (MATCH_EXACTE, "Títol normalitzat exacte"),
+        (MATCH_DURADA, "Títol aproximat + durada"),
+        (MATCH_MANUAL, "Revisat per staff"),
+    ]
+    # Kept as the Art Track pointer (one per song by construction). The
+    # official-channel lane can hold several videos for the same song
+    # (videoclip + live + lyric), so it lives in `CancoYouTubeVideo`.
+    youtube_video_id = models.CharField(max_length=16, blank=True, db_index=True)
+    youtube_match = models.CharField(max_length=10, blank=True, choices=MATCH_CHOICES)
+    # When the link was made. Without it the daily bootstrap report has no
+    # honest way to say "connected today" and would have to approximate —
+    # which is precisely the class of guess this whole exercise exists to
+    # stop shipping.
+    youtube_matched_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     # SEO Sprint S (2026-05-06). See Artista.updated_at note. No
     # better proxy than created_at on Canco — `auto_now=True` from
@@ -1668,3 +1771,35 @@ class SpotifyMetadata(models.Model):
 
     def __str__(self) -> str:
         return f"SpotifyMetadata({self.canco_id}, {self.enrichment_status})"
+
+
+class CancoYouTubeVideo(models.Model):
+    """A video on the artist's OFFICIAL channel matched to a cançó.
+
+    The Art Track lane is one video per song and lives on `Canco`
+    directly. This lane isn't: a band can post a videoclip, a live take
+    and a lyric video of the same song, and under a "ressò" reading all
+    three count. Hence a child table.
+
+    **Invariant that matters more than it looks:** an artist's whole
+    YouTube signal must always be summed over the SAME set of lanes.
+    Mixing an artist measured on one lane with one measured on two makes
+    any cross-artist conversion meaningless — see
+    `docs/architecture/pipeline.md` §3.1 bis.
+    """
+
+    canco = models.ForeignKey(
+        "Canco", on_delete=models.CASCADE, related_name="youtube_videos"
+    )
+    video_id = models.CharField(max_length=16)
+    titol = models.CharField(max_length=300, blank=True)
+    matched_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Vídeo de YouTube d'una cançó"
+        verbose_name_plural = "Vídeos de YouTube de cançons"
+        unique_together = [("canco", "video_id")]
+        indexes = [models.Index(fields=["canco"])]
+
+    def __str__(self) -> str:
+        return f"{self.canco} — {self.video_id}"

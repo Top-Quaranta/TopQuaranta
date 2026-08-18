@@ -90,6 +90,12 @@ INSTAGRAM_TOKEN_EXPIRES_AT = config("INSTAGRAM_TOKEN_EXPIRES_AT", default="")
 GSC_SERVICE_ACCOUNT_FILE = config("GSC_SERVICE_ACCOUNT_FILE", default="")
 GSC_SITE_URL = config("GSC_SITE_URL", default="sc-domain:topquaranta.cat")
 PSI_API_KEY = config("PSI_API_KEY", default="")
+
+# ── YouTube Data API v3 (segona font de senyal, 2026-08) ────────────────
+# Same Google Cloud project as PSI; the two quotas are independent.
+# Empty = the discovery/poll crons log a warning and exit 0, so a missing
+# key never turns into a red cron.
+YOUTUBE_API_KEY = config("YOUTUBE_API_KEY", default="")
 # OAuth fallback (workaround for the SA-on-sc-domain GSC UI bug):
 # mint a refresh_token via the OAuth Playground once and pin here.
 GSC_OAUTH_CLIENT_ID = config("GSC_OAUTH_CLIENT_ID", default="")

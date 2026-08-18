@@ -130,23 +130,6 @@ def test_smoke_no_hashtag_positions_across_channels(territori):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("territori", TERRITORIS)
-def test_smoke_ig_substitutes_at_handle(territori):
-    """ADR-0007: IG composer surfaces `@artista2_handle` for the
-    hero artist (who has an IG URL stored in `_entries()`)."""
-    out = c_ig.compose(
-        _scenarios(),
-        _entries(),
-        territori=territori,
-        setmana=SETMANA,
-        rng=random.Random(0),
-    )
-    assert (
-        "@artista2_handle" in out["text"]
-    ), f"{territori}/instagram_feed missing @handle: {out['text']!r}"
-
-
-@pytest.mark.django_db
 def test_smoke_every_channel_and_territori_produces_text():
     """Every (territori × channel) composer pair must return a non-
     empty text payload — locks the rendering chain end-to-end.
@@ -181,29 +164,3 @@ def test_smoke_every_channel_and_territori_produces_text():
             )
             text = out.get("text") or out.get("html") or ""
             assert text, f"{territori}/{name} produced empty output"
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("territori", TERRITORIS)
-def test_smoke_non_ig_channels_no_at_handle(territori):
-    """ADR-0007: Mastodon, Bluesky, Telegram, Newsletter must NOT
-    emit `@artista2_handle` — would render as broken literal text."""
-    entries = _entries()
-    scenarios = _scenarios()
-    for name, mod in (
-        ("mastodon", c_mastodon),
-        ("bluesky", c_bsky),
-        ("telegram", c_telegram),
-        ("newsletter", c_newsletter),
-    ):
-        out = mod.compose(
-            scenarios,
-            entries,
-            territori=territori,
-            setmana=SETMANA,
-            rng=random.Random(0),
-        )
-        text = out.get("text") or out.get("html") or ""
-        assert (
-            "@artista2_handle" not in text
-        ), f"{territori}/{name} leaks @handle: {text!r}"

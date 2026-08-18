@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TopQuaranta · Preview portades IG amb artwork</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Playfair+Display:ital,wght@1,500&family=Archivo:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page-bg:#17191b; --page-ink:#e8e6e0; --page-mut:#9a9890;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--page-bg);color:var(--page-ink);font-family:'Archivo',sans-serif;padding:48px 40px 96px}
+  h1{font-family:'Anton',sans-serif;font-weight:400;font-size:44px;letter-spacing:.01em;margin:0 0 8px}
+  h2{font-family:'Anton',sans-serif;font-weight:400;font-size:26px;letter-spacing:.02em;margin:72px 0 6px;color:#f0eee6}
+  .lead{max-width:820px;color:var(--page-mut);line-height:1.55;font-size:15px;margin:0 0 8px}
+  .row{display:flex;flex-wrap:wrap;gap:28px;margin-top:26px;align-items:flex-start}
+  .cel{width:300px}
+  .cel .cap{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--page-mut);margin:10px 2px 0;line-height:1.5}
+  .cel .cap b{color:var(--page-ink);font-weight:600}
+
+  /* ============ targeta de post (1080x1350, 4:5) ============ */
+  .post{
+    aspect-ratio:4/5;width:100%;position:relative;overflow:hidden;
+    background:var(--bg);color:#fff;container-type:inline-size;
+    border-radius:2px;
+  }
+  /* paletes (a ull des de la graella actual) */
+  .pal-global{--bg:#3a5233;--accent:#ecc23a;--dark:#20301b}
+  .pal-cat   {--bg:#37502f;--accent:#9dc37b;--dark:#1e2d19}
+  .pal-bal   {--bg:#3b5560;--accent:#92c3d5;--dark:#20323a}
+  .pal-val   {--bg:#7a4b28;--accent:#dd9c4f;--dark:#402511}
+  .pal-nov   {--bg:#3a5a34;--accent:#ecc23a;--dark:#1f331b}
+
+  /* fons amb artwork */
+  .bg{position:absolute;inset:0;z-index:0;isolation:isolate}
+  .bg .ph{position:absolute;inset:0;background-size:cover;background-position:center;filter:grayscale(1) contrast(1.06) brightness(1.02)}
+  .bg .tint{position:absolute;inset:0;background:var(--accent);mix-blend-mode:multiply}
+  .bg .hue{position:absolute;inset:0;background:var(--bg);opacity:.30}
+  .bg .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,10,6,.66) 0%,rgba(8,10,6,.16) 30%,rgba(8,10,6,.16) 56%,rgba(8,10,6,.72) 100%)}
+
+  /* mosaic de portades */
+  .mosaic{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .mosaic .t{background-size:cover;background-position:center;filter:grayscale(1) contrast(1.06)}
+  .m6{grid-template-rows:1fr 1fr 1fr}
+
+  /* capes de contingut */
+  .inner{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6.5cqw 7cqw 6cqw;text-align:center}
+  .brand{display:flex;align-items:center;gap:1.8cqw;font-weight:700;font-size:4.4cqw;letter-spacing:.01em}
+  .brand svg{width:5.2cqw;height:5.2cqw;display:block}
+  .sub{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:4.5cqw;margin-top:2.2cqw;opacity:.95}
+  .cap-zone{display:flex;flex-direction:column;align-items:center}
+  .mid{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1}
+  .l1{font-family:'Anton',sans-serif;font-size:13cqw;line-height:1;letter-spacing:.02em;position:relative;z-index:1;text-shadow:0 .4cqw 1.6cqw rgba(0,0,0,.25)}
+  .l2{font-family:'Anton',sans-serif;font-size:47cqw;line-height:.82;margin-top:-3.5cqw;color:var(--accent);text-shadow:0 .6cqw 2.4cqw rgba(0,0,0,.3)}
+  .nv .l1{font-size:10.5cqw}
+  .nv .l2{font-size:17.5cqw;line-height:1;margin-top:-1cqw;letter-spacing:.01em}
+  .peu{width:100%;display:flex;flex-direction:column;align-items:center;gap:2.6cqw}
+  .credit{font-size:3.5cqw;font-weight:600;letter-spacing:.03em;opacity:.95;text-shadow:0 .3cqw 1.2cqw rgba(0,0,0,.4)}
+  .rule{width:100%;position:relative;border-top:1px solid rgba(255,255,255,.35)}
+  .rule .star{position:absolute;left:50%;top:0;transform:translate(-50%,-58%);background:transparent;color:var(--accent);font-size:3.2cqw;line-height:1;padding:0 1.6cqw}
+  .meta{display:flex;align-items:baseline;gap:2.6cqw}
+  .badge{background:var(--accent);color:var(--dark);font-family:'Anton',sans-serif;font-size:3.9cqw;letter-spacing:.06em;padding:1cqw 2.4cqw}
+  .lbl{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:4.1cqw}
+
+  /* estrela sota la ratlla per a variants amb foto: mateixa estructura */
+  .note{max-width:900px;color:var(--page-mut);font-size:13.5px;line-height:1.6;margin-top:28px;border-left:2px solid #3a3d40;padding-left:14px}
+
+  /* ============ simulacio de graella ============ */
+  .grids{display:flex;flex-wrap:wrap;gap:44px;margin-top:30px}
+  .gwrap{width:440px}
+  .gtitle{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--page-ink);font-weight:600;margin-bottom:10px}
+  .gsub{font-size:12.5px;color:var(--page-mut);margin:-6px 0 10px;line-height:1.45}
+  .igrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:#0d0e0f;padding:3px;border-radius:3px}
+  .igrid .post{border-radius:0}
+</style>
+</head>
+<body>
+
+<h1>Portades IG amb artwork · preview amb dades reals</h1>
+<p class="lead">Comparació entre les portades tipogràfiques ja publicades (setmanes 42 a 44, tal com van eixir o haurien d'haver eixit) i la proposta amb l'artwork del número 1 duotonat en la paleta de cada edició, més el mosaic per a les novetats. Totes les portades són les reals que resol el pipeline (locals de topquaranta.cat o Deezer CDN). Tipografies i colors aproximats a ull des de la graella actual; la setmana 45 no existix encara (rànquing sense calcular) i per això no apareix.</p>
+
+<!-- ====================== COSTAT A COSTAT: TOPS ====================== -->
+<h2>Tops, costat a costat</h2>
+<p class="lead">El número 1 real de cada edició com a fons. La tercera columna del Top Global és una alternativa amb el mosaic del top 6, per si el fons únic es fa repetitiu.</p>
+
+<div class="row">
+  <!-- Global wk43 actual -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dissabte</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Actual</b> · Top Global (PPCC) · publicat 04-07</div>
+  </div>
+
+  <!-- Global wk43 proposta artwork -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="credit">Nº1 · Rosalía · Divinize</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dissabte</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Proposta</b> · fons: portada de Lux, duotò de marca</div>
+  </div>
+
+  <!-- Global wk43 alternativa mosaic top6 -->
+  <div class="cel">
+    <div class="post pal-global">
+      <div class="bg">
+        <div class="mosaic m6">
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1011458081-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/915795751-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/920618031-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/938470471-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/951216731-500.jpg')"></div>
+        </div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dissabte</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Alternativa</b> · mosaic del top 6 de la setmana</div>
+  </div>
+</div>
+
+<div class="row">
+  <!-- BAL wk43 actual -->
+  <div class="cel">
+    <div class="post pal-bal">
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">Illes Balears</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Actual</b> · Illes Balears · publicat 06-07</div>
+  </div>
+
+  <!-- BAL wk43 proposta -->
+  <div class="cel">
+    <div class="post pal-bal">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/996473461-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="credit">Nº1 · Fades, Triquell · Sant Joan</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">Illes Balears</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Proposta</b> · fons: portada de Sant Joan</div>
+  </div>
+
+  <!-- VAL wk42 actual -->
+  <div class="cel">
+    <div class="post pal-val">
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">País Valencià</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Actual</b> · País Valencià · publicat 29-06</div>
+  </div>
+
+  <!-- VAL wk42 proposta -->
+  <div class="cel">
+    <div class="post pal-val">
+      <div class="bg">
+        <div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/935826731-500.jpg')"></div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">el top sencer de la setmana</div>
+        </div>
+        <div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div>
+        <div class="peu">
+          <div class="credit">Nº1 · La Gent de la Mediterrània</div>
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">País Valencià</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Proposta</b> · fons: La Gent de la Mediterrània</div>
+  </div>
+</div>
+
+<!-- ====================== NOVETATS ====================== -->
+<h2>Novetats amb mosaic</h2>
+<p class="lead">Les portades reals de les novetats publicades, en mosaic duotonat sota la tipografia actual.</p>
+
+<div class="row">
+  <!-- Novetats albums wk42 actual -->
+  <div class="cel">
+    <div class="post pal-nov">
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">aquesta setmana presenta</div>
+        </div>
+        <div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada dimarts</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Actual</b> · Novetats àlbums · publicat 30-06</div>
+  </div>
+
+  <!-- Novetats albums wk42 proposta -->
+  <div class="cel">
+    <div class="post pal-nov">
+      <div class="bg">
+        <div class="mosaic">
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/afb90f6e2d65670bd79f1760a96c5cc4/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/2fb1be91c4fbe8f0b26884b079d89021/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1010414691-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1010007951-500.jpg')"></div>
+        </div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">aquesta setmana presenta</div>
+        </div>
+        <div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada dimarts</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Proposta</b> · mosaic: Incendi, Lowis, Accident, Nil Boladeras</div>
+  </div>
+
+  <!-- Novetats singles wk42 proposta -->
+  <div class="cel">
+    <div class="post pal-nov">
+      <div class="bg">
+        <div class="mosaic m6">
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0d07ad2b7ca89a67a301cdc6ea58bdf1/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fb845ef54d20de36809e123be6f3130c/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0f608de70d31be9e76d75513ae56e855/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1015271581-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/13900ff079fd7b8e5f9ff26ce38c5431/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/923bfff6175616ed86693cb10873915d/1000x1000-000000-80-0-0.jpg')"></div>
+        </div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">aquesta setmana presenta</div>
+        </div>
+        <div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">SINGLES</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada divendres</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Proposta</b> · Novetats singles · mosaic de 6 (de 19 novetats reals)</div>
+  </div>
+
+  <!-- Novetats albums wk44 proposta -->
+  <div class="cel">
+    <div class="post pal-nov">
+      <div class="bg">
+        <div class="mosaic">
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/34e371583ff1cc78fcfd123a4e95e168/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1027843302-500.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/abafc78e06cc8d8a82b63ce32037226c/1000x1000-000000-80-0-0.jpg')"></div>
+          <div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fe5fb6438102da57b56ea92e34bedf41/1000x1000-000000-80-0-0.jpg')"></div>
+        </div>
+        <div class="tint"></div><div class="hue"></div><div class="veil"></div>
+      </div>
+      <div class="inner">
+        <div class="cap-zone">
+          <div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div>
+          <div class="sub">aquesta setmana presenta</div>
+        </div>
+        <div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div>
+        <div class="peu">
+          <div class="rule"><span class="star">★</span></div>
+          <div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dimarts</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Proposta</b> · setmana 44 · Benitozz, Fetitxe 13, Mercè Subirachs, Caïm Riba</div>
+  </div>
+</div>
+
+<!-- ====================== GRAELLA SENCERA ====================== -->
+<h2>La graella sencera, simulada</h2>
+<p class="lead">Les 9 últimes publicacions reals del feed (del 15-07 cap arrere), en tres versions: com és ara, la proposta conservadora (artwork només al Top Global i mosaic a les novetats, territorials tipogràfics) i la completa (tots els tops amb artwork).</p>
+
+<div class="grids">
+
+  <!-- ======== GRAELLA ACTUAL ======== -->
+  <div class="gwrap">
+    <div class="gtitle">Com és ara</div>
+    <div class="gsub">Tot tipogràfic. Coherent, però pla des del perfil.</div>
+    <div class="igrid">
+      <!-- 1 BAL 44 -->
+      <div class="post pal-bal"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Illes Balears</span></div></div></div></div>
+      <!-- 2 Nov albums 44 -->
+      <div class="post pal-nov"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dimarts</span></div></div></div></div>
+      <!-- 3 CAT 44 -->
+      <div class="post pal-cat"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Principal</span></div></div></div></div>
+      <!-- 4 BAL 43 -->
+      <div class="post pal-bal"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">Illes Balears</span></div></div></div></div>
+      <!-- 5 Global 43 -->
+      <div class="post pal-global"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dissabte</span></div></div></div></div>
+      <!-- 6 Nov singles 42 -->
+      <div class="post pal-nov"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">SINGLES</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada divendres</span></div></div></div></div>
+      <!-- 7 CAT 42 -->
+      <div class="post pal-cat"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">Principal</span></div></div></div></div>
+      <!-- 8 Nov albums 42 -->
+      <div class="post pal-nov"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada dimarts</span></div></div></div></div>
+      <!-- 9 VAL 42 -->
+      <div class="post pal-val"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">País Valencià</span></div></div></div></div>
+    </div>
+  </div>
+
+  <!-- ======== PROPOSTA CONSERVADORA ======== -->
+  <div class="gwrap">
+    <div class="gtitle">Proposta conservadora</div>
+    <div class="gsub">Artwork al Top Global, mosaic a les novetats, territorials tipogràfics.</div>
+    <div class="igrid">
+      <!-- 1 BAL 44 typo -->
+      <div class="post pal-bal"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Illes Balears</span></div></div></div></div>
+      <!-- 2 Nov albums 44 mosaic -->
+      <div class="post pal-nov"><div class="bg"><div class="mosaic"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/34e371583ff1cc78fcfd123a4e95e168/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1027843302-500.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/abafc78e06cc8d8a82b63ce32037226c/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fe5fb6438102da57b56ea92e34bedf41/1000x1000-000000-80-0-0.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dimarts</span></div></div></div></div>
+      <!-- 3 CAT 44 typo -->
+      <div class="post pal-cat"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Principal</span></div></div></div></div>
+      <!-- 4 BAL 43 typo -->
+      <div class="post pal-bal"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">Illes Balears</span></div></div></div></div>
+      <!-- 5 Global 43 ARTWORK -->
+      <div class="post pal-global"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Rosalía · Divinize</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dissabte</span></div></div></div></div>
+      <!-- 6 Nov singles 42 mosaic -->
+      <div class="post pal-nov"><div class="bg"><div class="mosaic m6"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0d07ad2b7ca89a67a301cdc6ea58bdf1/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fb845ef54d20de36809e123be6f3130c/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0f608de70d31be9e76d75513ae56e855/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1015271581-500.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/13900ff079fd7b8e5f9ff26ce38c5431/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/923bfff6175616ed86693cb10873915d/1000x1000-000000-80-0-0.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">SINGLES</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada divendres</span></div></div></div></div>
+      <!-- 7 CAT 42 typo -->
+      <div class="post pal-cat"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">Principal</span></div></div></div></div>
+      <!-- 8 Nov albums 42 mosaic -->
+      <div class="post pal-nov"><div class="bg"><div class="mosaic"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/afb90f6e2d65670bd79f1760a96c5cc4/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/2fb1be91c4fbe8f0b26884b079d89021/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1010414691-500.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1010007951-500.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada dimarts</span></div></div></div></div>
+      <!-- 9 VAL 42 typo -->
+      <div class="post pal-val"><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">País Valencià</span></div></div></div></div>
+    </div>
+  </div>
+
+  <!-- ======== PROPOSTA COMPLETA ======== -->
+  <div class="gwrap">
+    <div class="gtitle">Proposta completa</div>
+    <div class="gsub">Tots els tops amb l'artwork del seu número 1. Atenció: quan el nº1 es repetix, la graella també.</div>
+    <div class="igrid">
+      <!-- 1 BAL 44 artwork Sant Joan -->
+      <div class="post pal-bal"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/996473461-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Fades, Triquell · Sant Joan</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Illes Balears</span></div></div></div></div>
+      <!-- 2 Nov albums 44 mosaic -->
+      <div class="post pal-nov"><div class="bg"><div class="mosaic"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/34e371583ff1cc78fcfd123a4e95e168/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1027843302-500.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/abafc78e06cc8d8a82b63ce32037226c/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fe5fb6438102da57b56ea92e34bedf41/1000x1000-000000-80-0-0.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">cada dimarts</span></div></div></div></div>
+      <!-- 3 CAT 44 artwork Lux -->
+      <div class="post pal-cat"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Rosalía · Divinize</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 44</span><span class="lbl">Principal</span></div></div></div></div>
+      <!-- 4 BAL 43 artwork Sant Joan -->
+      <div class="post pal-bal"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/996473461-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Fades, Triquell · Sant Joan</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">Illes Balears</span></div></div></div></div>
+      <!-- 5 Global 43 artwork Lux -->
+      <div class="post pal-global"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Rosalía · Divinize</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 43</span><span class="lbl">cada dissabte</span></div></div></div></div>
+      <!-- 6 Nov singles 42 mosaic -->
+      <div class="post pal-nov"><div class="bg"><div class="mosaic m6"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0d07ad2b7ca89a67a301cdc6ea58bdf1/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/fb845ef54d20de36809e123be6f3130c/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/0f608de70d31be9e76d75513ae56e855/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1015271581-500.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/13900ff079fd7b8e5f9ff26ce38c5431/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/923bfff6175616ed86693cb10873915d/1000x1000-000000-80-0-0.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">SINGLES</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada divendres</span></div></div></div></div>
+      <!-- 7 CAT 42 artwork Lux -->
+      <div class="post pal-cat"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/851013072-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · Rosalía · Divinize</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">Principal</span></div></div></div></div>
+      <!-- 8 Nov albums 42 mosaic -->
+      <div class="post pal-nov"><div class="bg"><div class="mosaic"><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/afb90f6e2d65670bd79f1760a96c5cc4/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://cdn-images.dzcdn.net/images/cover/2fb1be91c4fbe8f0b26884b079d89021/1000x1000-000000-80-0-0.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1010414691-500.jpg')"></div><div class="t" style="background-image:url('https://www.topquaranta.cat/portades/album/1010007951-500.jpg')"></div></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">aquesta setmana presenta</div></div><div class="mid nv"><div class="l1">NOVETATS</div><div class="l2">ÀLBUMS</div></div><div class="peu"><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">cada dimarts</span></div></div></div></div>
+      <!-- 9 VAL 42 artwork Mediterrania -->
+      <div class="post pal-val"><div class="bg"><div class="ph" style="background-image:url('https://www.topquaranta.cat/portades/album/935826731-500.jpg')"></div><div class="tint"></div><div class="hue"></div><div class="veil"></div></div><div class="inner"><div class="cap-zone"><div class="brand"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10.5" stroke="#fff" stroke-width="1.6"/><path d="M10 8.2l6 3.8-6 3.8V8.2z" fill="#fff"/></svg>TopQuaranta</div><div class="sub">el top sencer de la setmana</div></div><div class="mid"><div class="l1">EL TOP</div><div class="l2">40</div></div><div class="peu"><div class="credit">Nº1 · La Gent de la Mediterrània</div><div class="rule"><span class="star">★</span></div><div class="meta"><span class="badge">SETMANA 42</span><span class="lbl">País Valencià</span></div></div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<p class="note">
+Observacions honestes del preview amb dades reals: (1) Divinize és el nº1 del Global, del Principat i de moltes setmanes seguides, així que en la proposta completa la portada de Lux apareix tres vegades en nou posts; quan el nº1 no canvia, la graella amb artwork es repetix tant com la tipogràfica. El mosaic del top 6 (tercera targeta del primer bloc) canvia més sovint i mitiga això. (2) Els duotons són CSS aproximat; el pipeline real (Pillow) pot calibrar-los millor. (3) Les tipografies són aproximacions de Google Fonts (Anton i Playfair Display), no les fonts reals de la marca. (4) La setmana 45 no té rànquing calculat i no hi ha res a previsualitzar.
+</p>
+
+</body>
+</html>

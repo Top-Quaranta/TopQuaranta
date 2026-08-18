@@ -1,6 +1,6 @@
 """TOP family — single-image renders (poster + albums mosaic) + carousel pieces.
 
-# Spec: docs/architecture/social.md
+# Spec: docs/architecture/social-renderer.md
 
 Composes over `render_core` (primitives) + `feed_redesign` (territory palette,
 fonts, cover/tile, finish) — no new primitive lives here. Geometry is data in

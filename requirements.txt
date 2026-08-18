@@ -15,7 +15,7 @@ joblib>=1.5.3
 # Already present transitively (google-auth), declared explicitly
 # because music/health.py imports it directly to parse the DER of
 # the certificate a TLS endpoint actually serves.
-cryptography==48.0.0
+cryptography==50.0.0
 argon2-cffi==25.1.0          # S10: stronger password hashing
 django-axes==8.3.1           # S4: brute-force login protection
 django-otp==1.7.0            # S11: TOTP 2FA for staff

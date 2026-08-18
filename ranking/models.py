@@ -571,6 +571,24 @@ class SenyalYouTube(models.Model):
     # audience. Recording the count is what lets a reader tell a real
     # spike from a lane being added.
     n_videos = models.PositiveSmallIntegerField(default=1)
+    # `{video_id: views}` d'aquell dia. Comptar els carrils no basta:
+    # si avui en marxa un de menut i n'entra un de gran, `n_videos` no
+    # es mou i el bot es cola igual (ho va vore el Miquel el 18/08).
+    #
+    # Amb el detall per vídeo l'increment setmanal es calcula sumant
+    # restes per vídeo en lloc de restar sumes, i llavors:
+    #
+    #   · un vídeo nou no aporta res el dia que apareix — no en tenim
+    #     base— i sí a partir de l'endemà;
+    #   · un vídeo que desapareix deixa d'aportar sense restar el que
+    #     havia acumulat;
+    #   · substituir-ne un per un altre ja no es pot confondre amb
+    #     públic.
+    #
+    # Un mapa a la mateixa fila i no una taula nova: sempre es llig una
+    # foto sencera d'una cançó, mai vídeos solts, i estalvia ~3.800
+    # files al dia.
+    views_per_video = models.JSONField(default=dict, blank=True)
 
     error = models.BooleanField(default=False)
     error_msg = models.TextField(blank=True)

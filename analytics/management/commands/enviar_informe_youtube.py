@@ -77,31 +77,37 @@ def _increments(model, camp, fi, *, dies=7):
     des_de = objectiu - datetime.timedelta(days=_MARGE_DIES)
     fins_a = objectiu + datetime.timedelta(days=_MARGE_DIES)
 
-    # `n_videos` viatja amb cada foto perquè el delta només és honest si
-    # el conjunt de carrils no ha canviat. Quan una cançó guanya un vídeo
-    # —perquè s'aparella el videoclip del canal propi— la suma acumulada
-    # fa un bot amb el comptador de tota la vida del vídeo nou, i llegir
-    # eixe bot com a setmana infla la xifra per ordres de magnitud.
+    # L'increment de YouTube se suma **per vídeo**, no restant les sumes.
     #
-    # Andreu Valor, 2026-08-18: 140 visualitzacions el dia 12 amb 1
-    # vídeo, 88.450 el dia 13 amb 4. El moviment real de la setmana eren
-    # 17 visualitzacions; l'informe li'n comptava 103.048 i el posava al
-    # capdamunt del top valencià. Ho va detectar el Miquel dient que no
-    # li quadrava que fos tan famós.
+    # `views` és la suma de tots els carrils d'una cançó, i un carril nou
+    # entra amb el seu comptador de tota la vida: Andreu Valor va passar
+    # de 140 visualitzacions amb 1 vídeo a 88.450 amb 4 en una nit, i
+    # l'informe li'n comptava 103.048 com a setmana (17 de reals).
     #
-    # És la mateixa família que el `_robust_weekly_from_series` de
-    # `ranking.algorisme` per a Last.fm: un esglaó d'acumulat no és
-    # audiència.
+    # La primera guarda comparava `n_videos` als dos extrems, però és un
+    # substitut: si un dia en marxa un de menut i n'entra un de gran, el
+    # compte no es mou i el bot es cola igual. Ho va assenyalar el Miquel
+    # el 2026-08-18, i té raó — el que cal saber no és quants n'hi ha
+    # sinó quins.
+    #
+    # Amb `views_per_video` es fa el que toca: sumar la diferència dels
+    # vídeos que hi ha **a les dues fotos**. Un vídeo nou no aporta res
+    # el dia que apareix (no en tenim base) i sí a partir de l'endemà;
+    # un que desapareix deixa d'aportar sense restar el que havia
+    # acumulat.
+    #
+    # Les files anteriors al 2026-08-19 no porten detall: es tracten amb
+    # el criteri antic, que per a una cançó d'un sol carril és equivalent.
     per = defaultdict(dict)
-    camps = ["canco_id", "data", camp]
-    if model is SenyalYouTube:
-        camps.append("n_videos")
-    for s in model.objects.filter(error=False, data__gte=des_de, data__lte=fi).only(
-        *camps
-    ):
+    per_video = defaultdict(dict)
+    for s in model.objects.filter(error=False, data__gte=des_de, data__lte=fi):
         v = getattr(s, camp)
-        if v is not None:
-            per[s.canco_id][s.data] = (v, getattr(s, "n_videos", None))
+        if v is None:
+            continue
+        per[s.canco_id][s.data] = (v, getattr(s, "n_videos", None))
+        detall = getattr(s, "views_per_video", None)
+        if detall:
+            per_video[s.canco_id][s.data] = detall
 
     out = {}
     for canco_id, fotos in per.items():
@@ -111,14 +117,29 @@ def _increments(model, camp, fi, *, dies=7):
         if not candidates:
             continue
         base = min(candidates, key=lambda d: abs((d - objectiu).days))
-        valor_fi, carrils_fi = fotos[fi]
-        valor_base, carrils_base = fotos[base]
-        if carrils_fi != carrils_base:
-            continue  # el conjunt de carrils ha canviat: no és comparable
         span = (fi - base).days
-        if span <= 0 or valor_fi < valor_base:
+        if span <= 0:
             continue
-        out[canco_id] = (valor_fi - valor_base) * dies / span
+
+        detalls = per_video.get(canco_id, {})
+        if fi in detalls and base in detalls:
+            avui, abans = detalls[fi], detalls[base]
+            comuns = set(avui) & set(abans)
+            if not comuns:
+                continue  # cap vídeo en comú: no hi ha res de comparable
+            delta = sum(avui[v] - abans[v] for v in comuns if avui[v] >= abans[v])
+        else:
+            # Sense detall: el criteri antic. Cobreix les files escrites
+            # abans del 2026-08-19 i la sèrie de Last.fm, que no té
+            # carrils. Encara exigeix que el nombre de vídeos siga el
+            # mateix als dos extrems — més fluix que comparar quins, però
+            # és el que hi ha per a la història ja escrita.
+            valor_fi, carrils_fi = fotos[fi]
+            valor_base, carrils_base = fotos[base]
+            if carrils_fi != carrils_base or valor_fi < valor_base:
+                continue
+            delta = valor_fi - valor_base
+        out[canco_id] = delta * dies / span
     return out
 
 

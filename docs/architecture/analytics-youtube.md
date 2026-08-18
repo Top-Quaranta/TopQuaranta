@@ -176,3 +176,36 @@ estaven un 20 % inflats i l'ordre del cap era fals.
 **Açò val també per a la integració al rànquing**: si algun dia
 `SenyalYouTube` entra al càlcul del top, la mateixa guarda ha d'anar al
 lector del senyal, no només a l'informe.
+
+### Comptar carrils no basta: cal saber quins (2026-08-19)
+
+La guarda anterior comparava `n_videos` als dos extrems de la finestra.
+És un **substitut**, i el Miquel va trobar per on falla: si un dia
+desapareix un vídeo menut i n'entra un de gran, el compte es queda igual
+i el bot es cola sencer.
+
+Des del 2026-08-19, `SenyalYouTube.views_per_video` guarda
+`{video_id: views}` de cada dia, i l'increment setmanal es calcula
+**sumant restes per vídeo** en lloc de restar sumes:
+
+```python
+comuns = set(avui) & set(abans)
+delta = sum(avui[v] - abans[v] for v in comuns if avui[v] >= abans[v])
+```
+
+Amb això, per construcció:
+
+- un **vídeo nou** no aporta res el dia que apareix —no en tenim base— i
+  aporta tot el que guanye a partir de l'endemà;
+- un **vídeo que desapareix** deixa d'aportar sense restar el que havia
+  acumulat;
+- una **substitució** d'un vídeo per un altre ja no es pot confondre amb
+  públic, que és el forat que quedava.
+
+És un mapa a la mateixa fila i no una taula nova: sempre es llig la foto
+sencera d'una cançó, mai vídeos solts, i estalvia unes 3.800 files al
+dia.
+
+Les files escrites abans d'eixa data no porten detall i cauen al criteri
+antic (mateix `n_videos` als dos extrems), que per a una cançó d'un sol
+carril és equivalent. La sèrie de Last.fm hi cau sempre: no té carrils.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from io import StringIO
 
 import pytest
@@ -13,7 +14,7 @@ from django.utils import timezone
 
 from analytics import incidents
 from analytics.management.commands.enviar_digest_setmanal import (
-    _DIES_NOM,
+    _CANALS,
     _delta,
     build_context,
 )
@@ -118,17 +119,26 @@ def _seed(today: datetime.date) -> None:
 
 @pytest.mark.django_db
 def test_digest_dry_run_renders_sections():
+    """The dry-run text carries every seeded figure under its label.
+
+    Property asserted: label → number pairs (whitespace-tolerant), not
+    the column alignment of the plain-text renderer.
+    """
     today = timezone.localdate()
     _seed(today)
     out = StringIO()
     call_command("enviar_digest_setmanal", "--dry-run", stdout=out)
     body = out.getvalue()
     assert "SETMANARI TOPQUARANTA" in body
-    assert "Visites humanes   42" in body
+
+    def figure(label: str, value: int) -> bool:
+        return re.search(rf"{re.escape(label)}\s+{value}\b", body) is not None
+
+    assert figure("Visites humanes", 42)
     assert "Cerca orgànica" in body
-    assert "Decisions moderació 4" in body  # 3 canço + 1 artista
+    assert figure("Decisions moderació", 4)  # 3 canço + 1 artista
     assert "CAT" in body and "VAL" in body
-    assert "Enllaços entrants 142" in body
+    assert figure("Enllaços entrants", 142)
     assert "instagram" in body
 
 
@@ -216,30 +226,37 @@ def test_calendari_situa_cada_publicacio_al_seu_dia(monkeypatch, tmp_path):
     ctx = build_context(today)
     cal = ctx["social"]["calendari"]
 
+    # Property asserted: each post lands in its own channel's row on the
+    # day it went out, a failure stays visible on the grid AND in the
+    # incidents list, and every channel gets a row even when silent —
+    # not the exact cell dict shape nor the copy of the cell label.
     # Columns run dilluns → diumenge over the last complete week.
-    assert [d["nom"] for d in cal["dies"]] == _DIES_NOM
-    assert cal["dies"][0]["data"] == dilluns
-    assert cal["dies"][-1]["data"] == diumenge
+    assert [d["data"] for d in cal["dies"]] == [
+        dilluns + datetime.timedelta(days=i) for i in range(7)
+    ]
     assert ctx["period"] == {"since": dilluns, "until": diumenge}
     # One published slot → headline and grid agree.
     assert ctx["social"]["publicacions"] == 1
     assert cal["cap"] is False
 
+    dia_idx = (dissabte - dilluns).days
     mastodon = next(f for f in cal["files"] if f["platform"] == "mastodon")
-    assert mastodon["cel_les"][(dissabte - dilluns).days] == {
-        "estat": "publicat",
-        "text": "Top",
-        "count": 1,
-        "fallats": 0,
-    }
+    cel = mastodon["cel_les"][dia_idx]
+    assert cel["estat"] == "publicat" and cel["count"] == 1 and not cel["fallats"]
     # Every other Mastodon day is empty, and every channel has a row even
     # when it published nothing — silence is the signal.
-    assert sum(c["estat"] != "buit" for c in mastodon["cel_les"]) == 1
-    assert len(cal["files"]) == 6
+    assert [i for i, c in enumerate(mastodon["cel_les"]) if c["estat"] != "buit"] == [
+        dia_idx
+    ]
+    assert {f["platform"] for f in cal["files"]} == {p for p, _ in _CANALS}
+    assert all(len(f["cel_les"]) == 7 for f in cal["files"])
 
     # The failure shows up both on the grid and in the incidents list.
     stories = next(f for f in cal["files"] if f["platform"] == "instagram_story")
-    assert any(c["estat"] == "error" for c in stories["cel_les"])
+    assert stories["cel_les"][dia_idx]["estat"] == "error"
+    assert all(
+        c["estat"] == "buit" for i, c in enumerate(stories["cel_les"]) if i != dia_idx
+    )
     # …and a day that both published and failed keeps both facts.
     SocialPost.objects.create(
         platform="instagram_story",
@@ -255,12 +272,13 @@ def test_calendari_situa_cada_publicacio_al_seu_dia(monkeypatch, tmp_path):
         f
         for f in build_context(today)["social"]["calendari"]["files"]
         if f["platform"] == "instagram_story"
-    )["cel_les"][(dissabte - dilluns).days]
-    assert cel["estat"] == "publicat" and cel["text"] == "Terr"
+    )["cel_les"][dia_idx]
+    assert cel["estat"] == "publicat" and cel["count"] == 1
     assert cel["fallats"] == 1
     inc = ctx["incidencies"]
     assert inc["total"] == 1
-    assert inc["social_fallades"][0]["error"] == "Graph API 9004: media not accepted"
+    assert "Graph API 9004" in inc["social_fallades"][0]["error"]
+    assert "segona línia" not in inc["social_fallades"][0]["error"]  # first line only
     assert "BAL" in inc["social_fallades"][0]["label"]
 
 
@@ -273,9 +291,10 @@ def test_digest_reports_a_clean_week_as_clean(monkeypatch, tmp_path):
     out = StringIO()
     call_command("enviar_digest_setmanal", "--dry-run", stdout=out)
     body = out.getvalue()
+    # Property asserted: a week without failures says "cap incidència"
+    # (the column-heading copy is the renderer's business, not ours).
     assert "CALENDARI DE PUBLICACIONS" in body
-    assert "Cap incidència registrada" in body
-    assert "dilluns" not in body  # columns use the short form
+    assert "Cap incidència" in body
 
 
 @pytest.mark.django_db

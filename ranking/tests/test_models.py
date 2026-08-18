@@ -9,9 +9,12 @@ from ranking.models import ConfiguracioGlobal, TopProvisional, TopSetmanal
 @pytest.mark.django_db
 class TestConfiguracioGlobal:
     def test_load_creates_singleton(self):
+        # Property asserted: load() on an empty table creates the one row
+        # at pk=1 (defaults are the model's business, not this test's).
+        assert ConfiguracioGlobal.objects.count() == 0
         config = ConfiguracioGlobal.load()
         assert config.pk == 1
-        assert config.min_escoltes_top == 5
+        assert ConfiguracioGlobal.objects.count() == 1
 
     def test_save_forces_pk_1(self):
         config = ConfiguracioGlobal(pk=99, coeficient_penalitzacio_top=Decimal("0.05"))

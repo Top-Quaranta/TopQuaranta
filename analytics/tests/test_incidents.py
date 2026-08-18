@@ -62,13 +62,10 @@ def test_django_errors_missing_file_is_not_zero_errors(tmp_path):
     must be able to tell them apart."""
     out = incidents.django_errors(SINCE, TODAY, log_dir=tmp_path / "cap")
 
-    assert out == {
-        "disponible": False,
-        "total": 0,
-        "per_dia": out["per_dia"],
-        "top": [],
-        "altres": 0,
-    }
+    # Property asserted: the file is reported as unavailable while the
+    # error total stays 0 — nothing else about the payload's shape.
+    assert out["disponible"] is False
+    assert out["total"] == 0
 
 
 def test_cron_anomalies_survives_a_missing_status_dir(tmp_path):

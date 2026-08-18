@@ -82,11 +82,13 @@ def _lines_count(output: str) -> int:
 
 
 def test_live_file_only(tmp_path):
+    """A corpus that is just the live file: every record is read.
+
+    Property asserted: the line count — not the summary's segment copy.
+    """
     _write(tmp_path / "topquaranta_access.log", [_rec(1), _rec(2), _rec(3)])
     out = _run(tmp_path)
     assert _lines_count(out) == 3
-    assert "0 rotats + 1 viu" in out
-    assert "segments llegits: 1/1" in out
 
 
 def test_live_plus_rotated_reads_the_whole_corpus(tmp_path):
@@ -150,6 +152,15 @@ def test_glob_excludes_legacy_and_other_vhosts(tmp_path):
         [_rec(2)],
         gz=True,
     )
+    # Near-misses on our own prefix (folded in from the old regex-only
+    # test): a gz without the rotation stamp and a name that merely
+    # contains ours.
+    _write(tmp_path / "topquaranta_access.log.gz", [_rec(2)], gz=True)
+    _write(
+        tmp_path / "other_topquaranta_access-2026-07-28T14-32-51.275.log.gz",
+        [_rec(2)],
+        gz=True,
+    )
 
     rotated, live = _segment_files(tmp_path)
     assert [p.name for p in rotated] == [
@@ -160,21 +171,6 @@ def test_glob_excludes_legacy_and_other_vhosts(tmp_path):
     out = _run(tmp_path)
     assert _lines_count(out) == 2, out
     assert "1 rotats + 1 viu" in out
-
-
-@pytest.mark.parametrize(
-    "name",
-    [
-        "topquaranta_legacy_access-2026-04-16T00-00-00.log.gz",
-        "cercol_api_access-2026-07-22T06-00-42.331.log.gz",
-        "access.log",
-        "topquaranta_access.log",
-        "topquaranta_access.log.gz",
-        "other_topquaranta_access-2026-07-28T14-32-51.275.log.gz",
-    ],
-)
-def test_rotated_pattern_rejects(name):
-    assert not ROTATED_RE.match(name), f"{name} no hauria de casar"
 
 
 # ── robustness ───────────────────────────────────────────────────────

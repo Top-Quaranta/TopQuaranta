@@ -100,11 +100,19 @@ def test_utm_landing_works_on_skipped_paths():
 
 @pytest.mark.django_db
 def test_pageview_path_truncated_to_80_chars():
+    """A path longer than the column still records a pageview.
+
+    Property asserted: the stored path fits the field's `max_length`
+    (whatever it is) and is a prefix of the request path — no DB error,
+    no silent drop.
+    """
     rf = RequestFactory()
-    long_path = "/" + ("a" * 200)
+    max_len = MetricaEsdeveniment._meta.get_field("dimensio_1").max_length
+    long_path = "/" + ("a" * (max_len * 3))
     _mw()(rf.get(long_path))
     row = MetricaEsdeveniment.objects.get(clau="pageview")
-    assert len(row.dimensio_1) == 80
+    assert 0 < len(row.dimensio_1) <= max_len
+    assert long_path.startswith(row.dimensio_1)
 
 
 @pytest.mark.django_db

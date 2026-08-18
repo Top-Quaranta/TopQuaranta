@@ -392,6 +392,7 @@ def test_the_report_says_what_would_happen_to_the_chart():
     them". Computed with the live configuration, so moving the weight in
     the panel changes tomorrow's mail.
     """
+    from ranking import senyal_youtube
     from ranking.models import ConfiguracioGlobal
 
     cfg, _ = ConfiguracioGlobal.objects.get_or_create(pk=1)
@@ -402,7 +403,11 @@ def test_the_report_says_what_would_happen_to_the_chart():
     _senyal(muda, yt=50_000)
 
     e = _ctx()["efecte_top"]
-    assert e["actiu"] is False  # apagat mentre no es decidisca
+    # Property asserted: `actiu` and `pes` mirror the live sources of
+    # truth (history + `youtube_dies_minims`, `youtube_pes_escolta`) —
+    # not whatever today's default happens to be.
+    assert e["actiu"] == senyal_youtube.actiu(AVUI, cfg.youtube_dies_minims)
+    assert e["dies_minims"] == cfg.youtube_dies_minims
     assert e["pes"] == cfg.youtube_pes_escolta
 
     val = next(t for t in e["territoris"] if t["codi"] == "VAL")

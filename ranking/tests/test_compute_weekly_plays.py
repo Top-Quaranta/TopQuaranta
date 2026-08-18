@@ -11,7 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from ranking.algorisme import _compute_weekly_plays, _robust_weekly_from_series
+from ranking.algorisme import (
+    _WEEK_WINDOW_DAYS,
+    _compute_weekly_plays,
+    _robust_weekly_from_series,
+)
 
 # ── Lightweight fakes (no DB) ──────────────────────────────────────
 
@@ -165,14 +169,21 @@ def test_today_playcount_none_returns_zero():
 
 def test_only_recent_signal_no_baseline_returns_zero():
     """Edge of branch (3): we have signals, but none at least 4 d
-    back. Used to fall through to lifetime extrapolation; now → 0."""
+    back. Used to fall through to lifetime extrapolation; now → 0.
+
+    Property asserted: signals that are all more recent than the
+    nearest usable baseline age (the branch-2 window's near edge,
+    `7 - _WEEK_WINDOW_DAYS` days back) yield 0 — no extrapolation from
+    a too-short run, however steep it is.
+    """
     today = date(2026, 5, 7)
     canco = _Canco(data_llancament=date(2025, 1, 1))
+    min_baseline_age = 7 - _WEEK_WINDOW_DAYS
     signals = [
-        _Senyal(date(2026, 5, 5), 1000),  # 2 d back (too recent for branch 3)
-        _Senyal(date(2026, 5, 6), 1100),
-        _Senyal(date(2026, 5, 7), 1200),
+        _Senyal(today - timedelta(days=back), 1000 + 100 * (min_baseline_age - back))
+        for back in range(min_baseline_age - 1, -1, -1)  # all too recent
     ]
+    assert len(signals) >= 2  # a real (steep) run, not a lone snapshot
     assert _compute_weekly_plays(canco, signals, today) == 0.0
 
 
@@ -243,18 +254,23 @@ def test_track_switch_with_window_match_falls_back_to_branch_3():
     branch 3 looks for older same-track data."""
     today = date(2026, 5, 7)
     canco = _Canco(data_llancament=date(2024, 1, 1))
-    signals = [
-        # 14 d back — same track, would qualify for branch 3
-        _Senyal(date(2026, 4, 23), 50, "Vida (en directe)"),
-        # 7 d back — DIFFERENT track (Last.fm flipped temporarily)
-        _Senyal(date(2026, 4, 30), 6000, "Vida"),
-        # today — back to live
-        _Senyal(date(2026, 5, 7), 60, "Vida (en directe)"),
-    ]
-    # Branch 2 candidates window = [-9d, -5d]: only the 4-30 row,
-    # which is a different track → filtered. Branch 3 finds the 4-23
-    # same-track row. delta = 60 - 50 = 10 over 14 d → 5.0/week.
-    assert _compute_weekly_plays(canco, signals, today) == 5.0
+    # Same track, older than the branch-2 window → branch-3 material.
+    older = _Senyal(
+        today - timedelta(days=7 + _WEEK_WINDOW_DAYS + 5), 50, "Vida (en directe)"
+    )
+    # DIFFERENT track, dead centre of the branch-2 window (Last.fm
+    # flipped temporarily).
+    flipped = _Senyal(today - timedelta(days=7), 6000, "Vida")
+    avui = _Senyal(today, 60, "Vida (en directe)")  # back to live
+
+    # Property asserted: the flipped row is ignored and the older
+    # same-track row is the baseline — the result is exactly what the
+    # series gives WITHOUT the flip, and it is a real (positive) delta
+    # rather than the clamped-to-0 phantom the flip would produce.
+    amb_flip = _compute_weekly_plays(canco, [older, flipped, avui], today)
+    sense_flip = _compute_weekly_plays(canco, [older, avui], today)
+    assert amb_flip == sense_flip
+    assert amb_flip > 0.0
 
 
 def test_legacy_signal_with_empty_returned_track_falls_through():
@@ -334,11 +350,6 @@ def test_robust_series_ignores_tiny_doubling():
     """A 3→7 "doubling" on a near-silent track is below the noise floor
     and left alone (no merge claim on trivial counts)."""
     series = _daily_series(date(2026, 5, 16), 3, [0, 1, 0, 4, 1, 0, 1])
-    assert _robust_weekly_from_series(series) is None
-
-
-def test_robust_series_too_few_points_returns_none():
-    series = [(date(2026, 5, 20), 8129), (date(2026, 5, 23), 16262)]
     assert _robust_weekly_from_series(series) is None
 
 

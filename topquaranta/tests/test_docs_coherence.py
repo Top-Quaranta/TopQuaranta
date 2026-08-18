@@ -66,18 +66,34 @@ def test_all_mapped_docs_exist_on_disk(cfg):
 # ---------------------------------------------------------------------
 
 
-def test_longest_prefix_wins_for_spotify(script, cfg):
-    doc = script.resolve("ingesta/clients/spotify.py", cfg["mapping"], cfg["exclude"])
-    assert doc == "docs/architecture/playlists.md"
+# Synthetic mapping for the resolver-semantics tests below: what is
+# pinned is HOW `resolve()` picks (longest prefix, prefix-not-substring,
+# dir-or-file prefix), not which live doc a given path lands on today.
+_GENERIC = "docs/GENERIC.md"
+_SPECIFIC = "docs/SPECIFIC.md"
+_SYNTH_MAPPING = [
+    {"prefix": "ingesta/", "doc": _GENERIC},
+    {"prefix": "ingesta/clients/spotify.py", "doc": _SPECIFIC},
+    {"prefix": "spotify.py", "doc": "docs/NEVER.md"},  # substring bait
+]
 
 
-def test_enriquir_spotify_resolves_to_pipeline(script, cfg):
+def test_longest_prefix_wins_for_spotify(script):
+    # Property asserted: the most specific (longest) matching prefix wins
+    # regardless of the order entries appear in the mapping.
+    path = "ingesta/clients/spotify.py"
+    assert script.resolve(path, _SYNTH_MAPPING, []) == _SPECIFIC
+    assert script.resolve(path, list(reversed(_SYNTH_MAPPING)), []) == _SPECIFIC
+
+
+def test_enriquir_spotify_resolves_to_pipeline(script):
+    # Property asserted: matching is by PREFIX, not substring — a path
+    # that merely contains "spotify" falls back to its directory's doc,
+    # and a bare-filename entry never matches mid-path.
     doc = script.resolve(
-        "ingesta/management/commands/enriquir_spotify.py",
-        cfg["mapping"],
-        cfg["exclude"],
+        "ingesta/management/commands/enriquir_spotify.py", _SYNTH_MAPPING, []
     )
-    assert doc == "docs/architecture/pipeline.md"
+    assert doc == _GENERIC
 
 
 def test_excluded_prefix_returns_none(script, cfg):
@@ -90,15 +106,17 @@ def test_unmapped_path_returns_none(script, cfg):
     assert doc is None
 
 
-def test_web_seo_matches_both_dir_and_hypothetical_file(script, cfg):
-    assert (
-        script.resolve("web/seo/meta.py", cfg["mapping"], cfg["exclude"])
-        == "docs/architecture/seo.md"
-    )
-    assert (
-        script.resolve("web/seo.py", cfg["mapping"], cfg["exclude"])
-        == "docs/architecture/seo.md"
-    )
+def test_web_seo_matches_both_dir_and_hypothetical_file(script):
+    # Property asserted: a prefix without a trailing slash covers both the
+    # directory `web/seo/<file>` and a same-named module `web/seo.py`,
+    # and beats the generic `web/` entry for both.
+    mapping = [
+        {"prefix": "web/", "doc": _GENERIC},
+        {"prefix": "web/seo", "doc": _SPECIFIC},
+    ]
+    assert script.resolve("web/seo/meta.py", mapping, []) == _SPECIFIC
+    assert script.resolve("web/seo.py", mapping, []) == _SPECIFIC
+    assert script.resolve("web/feeds.py", mapping, []) == _GENERIC
 
 
 # ---------------------------------------------------------------------

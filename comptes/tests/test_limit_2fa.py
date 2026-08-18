@@ -51,11 +51,21 @@ def _usuari(client, username="amb2fa"):
 
 @pytest.mark.django_db
 def test_guessing_is_cut_off_after_the_configured_number_of_tries(client):
+    # Property asserted: the cutoff is derived from the configured
+    # `auth_2fa` rate (the single source of truth the DRF throttles use),
+    # not from a literal — exactly N attempts get through, the (N+1)-th
+    # and every later one are refused.
+    from comptes.ratelimit import _rate
+
+    conf = _rate("auth_2fa")
+    assert conf is not None, "auth_2fa must have a configured rate"
+    limit, _ = conf
     _usuari(client)
-    codis = [client.post(URL, {"token": f"00000{i}"}).status_code for i in range(12)]
-    assert 429 in codis, codis
-    # 10/min: the eleventh is the first refusal.
-    assert codis.index(429) == 10, codis
+    codis = [
+        client.post(URL, {"token": f"{i:06d}"}).status_code for i in range(limit + 3)
+    ]
+    assert all(c != 429 for c in codis[:limit]), codis
+    assert all(c == 429 for c in codis[limit:]), codis
 
 
 @pytest.mark.django_db

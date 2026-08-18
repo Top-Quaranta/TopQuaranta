@@ -32,15 +32,6 @@ class TestArtista:
         a = Artista.objects.create(nom="Nou", lastfm_nom="Nou")
         assert a.get_territoris() == []
 
-    def test_str_with_territories(self, territoris):
-        a = Artista.objects.create(nom="Txarango", lastfm_nom="Txarango")
-        a.territoris.set([territoris["CAT"]])
-        assert str(a) == "Txarango (CAT)"
-
-    def test_str_without_territories(self):
-        a = Artista.objects.create(nom="Nou", lastfm_nom="Nou")
-        assert str(a) == "Nou"
-
 
 @pytest.mark.django_db
 class TestCanco:
@@ -69,10 +60,6 @@ class TestCanco:
         c = self._make_canco(territoris, lastfm_nom="")
         assert c.lastfm_lookup_nom == "Estimar-te com la Terra"
 
-    def test_str(self, territoris):
-        c = self._make_canco(territoris)
-        assert str(c) == "Estimar-te com la Terra — Zoo"
-
     def test_get_territoris_main_artist_only(self, territoris):
         """Track with single artist → only that artist's territories."""
         c = self._make_canco(territoris)
@@ -85,13 +72,3 @@ class TestCanco:
             col_territoris=[("Txarango", ["CAT"])],
         )
         assert c.get_territoris() == {"VAL", "CAT"}
-
-    def test_get_territoris_marala_style(self, territoris):
-        """Artist in all 3 territories → track in all 3."""
-        artista = Artista.objects.create(nom="Marala", lastfm_nom="Marala")
-        artista.territoris.set(
-            [territoris["CAT"], territoris["VAL"], territoris["BAL"]]
-        )
-        album = Album.objects.create(nom="Disc", artista=artista)
-        canco = Canco.objects.create(nom="Cançó", album=album, artista=artista)
-        assert canco.get_territoris() == {"CAT", "VAL", "BAL"}

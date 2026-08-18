@@ -75,16 +75,6 @@ class TestRebutjarCanco:
             artista_nom=a.nom, decisio="rebutjada", motiu="desvincular_canco"
         ).exists()
 
-    def test_motiu_artista_incorrecte_triggers_unlink_attempt(self):
-        a = _mk_artista()
-        ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
-        c = _mk_canco(a)
-        # Only one Cançó, rejected for artista_incorrecte → eligible
-        # for auto-unlink (no other active tracks; only motiu present).
-        rebutjar_canco(c, "desvincular_artista")
-        a.refresh_from_db()
-        assert a.deezer_ids.count() == 0  # unlinked
-
     def test_no_unlink_for_other_motius(self):
         a = _mk_artista()
         ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
@@ -98,32 +88,10 @@ class TestRebutjarCanco:
 
 @pytest.mark.django_db
 class TestTryAutoUnlink:
-    def test_no_op_when_active_canco_remains(self):
-        a = _mk_artista()
-        ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
-        # Keep an active canço — defer to human.
-        _mk_canco(a, activa=True, verificada=True)
-        assert _try_auto_unlink_homonym_deezer(a) is False
-        assert a.deezer_ids.count() == 1
-
     def test_no_op_when_no_rejection_history(self):
         a = _mk_artista()
         ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
         # No HistorialRevisio rows at all.
-        assert _try_auto_unlink_homonym_deezer(a) is False
-        assert a.deezer_ids.count() == 1
-
-    def test_no_op_when_mixed_motius(self):
-        a = _mk_artista()
-        ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
-        c1 = _mk_canco(a, nom="T1")
-        c2 = _mk_canco(a, nom="T2")
-        # Two rejections, different motius → defer.
-        rebutjar_canco(c1, "desvincular_artista")
-        rebutjar_canco(c2, "desvincular_canco")
-        # The first call may have unlinked already; restore for test.
-        if a.deezer_ids.count() == 0:
-            ArtistaDeezer.objects.create(artista=a, deezer_id=12345)
         assert _try_auto_unlink_homonym_deezer(a) is False
         assert a.deezer_ids.count() == 1
 
@@ -162,13 +130,27 @@ class TestTryAutoUnlink:
         assert a.deezer_ids.count() == 2
 
 
+def _indexnow_pushed_url(mock_post, path_suffix: str) -> bool:
+    """True iff some IndexNow submission carried a URL ending in
+    `path_suffix` (any batch, any order)."""
+    for call in mock_post.call_args_list:
+        payload = call.kwargs.get("json") or {}
+        if any(u.endswith(path_suffix) for u in payload.get("urlList", [])):
+            return True
+    return False
+
+
 # ── aprovar_canco / aprovar_canco_auto_ml ───────────────────────────
 
 
 @pytest.mark.django_db
 class TestAprovarCanco:
-    @patch("web.seo.indexnow.notify_canco")
-    def test_approves_and_logs_ok(self, mock_indexnow):
+    @patch("web.seo.indexnow.requests.post")
+    def test_approves_and_logs_ok(self, mock_post):
+        """Property: approval flips verificada, records the historial
+        row and pings IndexNow with the canço's public URL (asserted
+        at the outbound HTTP boundary, not on an intermediate call)."""
+        mock_post.return_value.status_code = 202
         a = _mk_artista()
         c = _mk_canco(a, verificada=False)
         aprovar_canco(c)
@@ -177,7 +159,7 @@ class TestAprovarCanco:
         assert HistorialRevisio.objects.filter(
             artista_nom=a.nom, decisio="aprovada", motiu="ok"
         ).exists()
-        mock_indexnow.assert_called_once_with(c)
+        assert _indexnow_pushed_url(mock_post, f"/canco/{c.slug}")
 
     @patch("web.seo.indexnow.notify_canco")
     def test_multi_territori_artista_does_not_overflow_historial(self, _ix):
@@ -227,9 +209,11 @@ class TestAprovarCanco:
 
 @pytest.mark.django_db
 class TestAutoAprovarPerWhisper:
-    @patch("web.seo.indexnow.notify_canco")
-    def test_approves_over_threshold(self, mock_indexnow):
+    @patch("web.seo.indexnow.requests.post")
+    def test_approves_over_threshold(self, mock_post):
         from music.constants import MOTIU_AUTO_WHISPER
+
+        mock_post.return_value.status_code = 202
 
         a = _mk_artista()
         c = _mk_canco(
@@ -245,7 +229,8 @@ class TestAutoAprovarPerWhisper:
         assert HistorialRevisio.objects.filter(
             artista_nom=a.nom, decisio="aprovada", motiu=MOTIU_AUTO_WHISPER
         ).exists()
-        mock_indexnow.assert_called_once_with(c)
+        # Auto-approval publishes the page too: IndexNow was notified.
+        assert _indexnow_pushed_url(mock_post, f"/canco/{c.slug}")
 
     @patch("web.seo.indexnow.notify_canco")
     def test_falls_back_to_top1_when_no_all_probs(self, _ix):

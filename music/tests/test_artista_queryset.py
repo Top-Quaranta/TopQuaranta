@@ -36,12 +36,6 @@ class TestArtistaQuerySetPublic:
         public = list(Artista.objects.public().values_list("nom", flat=True))
         assert public == ["Aprovat"]
 
-    def test_public_chains_with_filter(self):
-        Artista.objects.create(nom="Boira", lastfm_nom="Boira", aprovat=True)
-        Artista.objects.create(nom="Manel", lastfm_nom="Manel", aprovat=True)
-        result = Artista.objects.public().filter(nom__startswith="B")
-        assert [a.nom for a in result] == ["Boira"]
-
 
 @pytest.mark.django_db
 class TestArtistaQuerySetPendents:

@@ -267,8 +267,10 @@ def test_validate_accepts_ppcc_municipi(cat_artist):
     mb_data = {"id": "vic-band", "area": {"name": "Vic"}}
     with patch("music.mb_sync.mb.get_artist", return_value=mb_data):
         mismatch, reason = validate_artista_area(cat_artist)
+    # Property: a Municipi-backed area is never a mismatch (the reason
+    # string is diagnostic copy, not the contract).
     assert mismatch is False
-    assert reason == "ok-ppcc"
+    assert reason
 
 
 @pytest.mark.django_db

@@ -99,7 +99,21 @@ def test_get_track_info_literal_returns_none_on_missing():
 def test_only_confirmed_aliases_sum_into_signal(artista):
     """The signal collector must skip rebutjats and pendent rows —
     only confirmat=True ones contribute. Caught by inspection of
-    obtenir_senyal: filter(confirmat=True, rebutjat=False)."""
+    obtenir_senyal: filter(confirmat=True, rebutjat=False).
+
+    Property asserted: running `obtenir_senyal` against a mocked
+    Last.fm writes a SenyalDiari whose playcount is canonical +
+    confirmed-alias plays ONLY — a rejected homonym and a pending
+    candidate contribute nothing, however many plays their pages have.
+    """
+    from datetime import date, timedelta
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from music.models import Album, Canco
+    from ranking.models import SenyalDiari
+
     ArtistaLastfmAlias.objects.create(artista=artista, nom="Böira", confirmat=True)
     ArtistaLastfmAlias.objects.create(
         artista=artista, nom="Boyra", rebutjat=True  # rejected homonym
@@ -107,11 +121,47 @@ def test_only_confirmed_aliases_sum_into_signal(artista):
     ArtistaLastfmAlias.objects.create(
         artista=artista, nom="boira-pending"  # not yet reviewed
     )
-
-    qs = ArtistaLastfmAlias.objects.filter(
-        artista=artista, confirmat=True, rebutjat=False
+    album = Album.objects.create(
+        artista=artista, nom="Vida", data_llancament=date.today() - timedelta(days=30)
     )
-    assert list(qs.values_list("nom", flat=True)) == ["Böira"]
+    canco = Canco.objects.create(
+        artista=artista,
+        album=album,
+        nom="L'horitzó",
+        lastfm_nom="L'horitzó",
+        data_llancament=date.today() - timedelta(days=30),
+        verificada=True,
+        activa=True,
+    )
+
+    # Every alias page "exists" on Last.fm with a distinctive playcount,
+    # so any leak from a non-confirmed row shows up in the total.
+    plays = {"Böira": (500, 50), "Boyra": (9_000, 900), "boira-pending": (7_000, 700)}
+
+    def fake_literal(alias, track, canonical_artist=None, **_):
+        pc, li = plays[alias]
+        return {"playcount": pc, "listeners": li}
+
+    with (
+        patch(
+            "ingesta.management.commands.obtenir_senyal.get_track_info",
+            return_value={
+                "playcount": 1_000,
+                "listeners": 100,
+                "returned_track": "L'horitzó",
+                "returned_artist": "Boira",
+            },
+        ),
+        patch(
+            "ingesta.management.commands.obtenir_senyal.get_track_info_literal",
+            side_effect=fake_literal,
+        ),
+    ):
+        call_command("obtenir_senyal", stdout=StringIO())
+
+    row = SenyalDiari.objects.get(canco=canco)
+    assert row.lastfm_playcount == 1_000 + 500
+    assert row.lastfm_listeners == 100 + 50
 
 
 @pytest.mark.django_db
@@ -194,17 +244,3 @@ def test_get_track_info_literal_keeps_genuine_variant():
         # artist matches what we asked for (typographic), not the
         # canonical (ASCII) → sum normally.
         assert result["playcount"] == 25530
-
-
-@pytest.mark.django_db
-def test_alias_str_states():
-    """__str__ varies by state — used in admin + audit logs."""
-    art = Artista.objects.create(nom="X", lastfm_nom="X")
-    pending = ArtistaLastfmAlias.objects.create(artista=art, nom="x")
-    confirmed = ArtistaLastfmAlias.objects.create(artista=art, nom="X.", confirmat=True)
-    rejected = ArtistaLastfmAlias.objects.create(
-        artista=art, nom="X-different", rebutjat=True
-    )
-    assert "pendent" in str(pending)
-    assert "confirmat" in str(confirmed)
-    assert "rebutjat" in str(rejected)

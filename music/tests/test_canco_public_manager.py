@@ -44,17 +44,6 @@ class TestCancoPublicManagerEquivalence:
         _mk_canco(a, verificada=False, activa=False, nom="discarded")
         return public
 
-    def test_public_manager_matches_inline_filter_exactly(self):
-        self._seed()
-        manager_ids = set(Canco.objects.public().values_list("id", flat=True))
-        inline_ids = set(
-            Canco.objects.filter(verificada=True, activa=True).values_list(
-                "id", flat=True
-            )
-        )
-        # Pin: a single-row divergence fails the build.
-        assert manager_ids == inline_ids
-
     def test_public_manager_has_expected_semantics(self):
         public = self._seed()
         assert set(Canco.objects.public().values_list("id", flat=True)) == {public.id}

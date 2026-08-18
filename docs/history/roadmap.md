@@ -3,9 +3,32 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-13.
+> Last updated: 2026-08-18.
 
 ---
+
+## Sprint 2026-08-18 — Auditoria de la suite de tests (promeses vs detectors)
+
+Diagnòstic del Miquel: massa tests ancorats a la implementació d'avui
+que només impedeixen millorar. Inventari de les 1.708 funcions de test
+en tres columnes (P promesa / D detector / M promesa mal ancorada):
+**P 1.416 · D 142 · M 150** (17 %, no la meitat: 421 P porten una
+referència d'incident/ADR/post-mortem). Executat en 5 PRs per àrea
+(#438 comptes, #439 music, #440 social, #441 web+ingesta, #442
+analytics+topquaranta+ranking): 142 D esborrats, 144 M reescrits a la
+propietat + 6 fusionats, 2 forats RGPD tancats (caducitat a 1 any dels
+tokens de baixa newsletter i avís-top, que cap test provava), 1
+contradicció latent resolta (desempat sense-IG vs instagram-revisat).
+**Verificació per mutació al 100 %** dels supervivents amb un arnés
+guiat per cobertura (`scripts/mutacio/`, vegeu
+`docs/audits/2026-08-18-auditoria-tests.md`): 3 tests falsos trobats
+(un a ranking, esborrat; dos reescrits: l'àncora d'edat de les frases
+a7 era buida perquè el placeholder conté «estrena»; la guarda
+`verificada` de l'auto-decisió ML era inobservable amb SUBTIERS buit).
+6 tests no verificables en local (3 `pg_only`, 2 només amb `tq-health`
+a la caixa, 1 tautològic sota pytest-django). Suite: 1.952 → 1.810
+casos (1.560 funcions), 1.805 passed / 5 skipped. També #437:
+`pytest-xdist -n 4` fix (163 s → ~75 s local, 61 s al runner; ADR-0017).
 
 ## Sprint 2026-08-13 — Sondes «la cançó del dia» (motor)
 

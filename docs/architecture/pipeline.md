@@ -187,6 +187,15 @@ artistes amb `youtube_channel_id` buit, així que desar el canal sense
 aparellar deixaria l'artista congelat amb canal i sense cap cançó — que
 és exactament l'estat en què estava Khimera.
 
+**Cada foto guarda les visualitzacions de cada vídeo**
+(`SenyalYouTube.views_per_video`, `{video_id: views}`, des del
+2026-08-19). L'increment setmanal se suma **per vídeo** en lloc de restar
+sumes, i això fa que un carril nou no puga passar per públic: entra sense
+base el primer dia i compta a partir de l'endemà. Comptar-ne només la
+quantitat (`n_videos`) no bastava — si un dia en marxa un de menut i
+n'entra un de gran, el compte no es mou i el bot es cola. Detall a
+[`analytics-youtube.md`](analytics-youtube.md).
+
 **Un carril sense dades no és un carril amb zero reproduccions.** Si un
 vídeo ha desaparegut, l'id és ranci, o l'autor amaga el comptador
 (`viewCount` absent), eixe carril no compta: no se suma i no puja

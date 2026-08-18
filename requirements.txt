@@ -29,7 +29,7 @@ cairosvg==2.9.0
 # pulled by qrcode[pil]/cairosvg; this adds the AVIF encoder plugin.
 # System dep: libavif (apt install libaom-dev libavif-dev) — see
 # docs/architecture/portades.md.
-pillow-avif-plugin==1.5.5
+pillow-avif-plugin==1.6.0
 # Language identification (Whisper LID as a staff signal on Canco)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.13.0+cpu            # CPU-only PyTorch for faster-whisper backbone
@@ -38,7 +38,7 @@ soundfile==0.14.0            # WAV loader (no torchcodec dependency)
 
 # SEO monitoring (Sprint S Bloc D, 2026-05-06).
 google-api-python-client>=2.198.0
-google-auth>=2.56.0
+google-auth>=2.56.2
 google-auth-httplib2>=0.4.0
 
 # Newsletter → Community bridge (2026-06-10): convert NewsletterDraft

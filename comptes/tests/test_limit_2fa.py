@@ -13,6 +13,8 @@ however many IPs they rotate through.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from django.core.cache.backends.locmem import LocMemCache
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -22,6 +24,11 @@ from comptes.models import Usuari
 URL = "/compte/2fa/verificar/"
 
 
+# `uuid4` i no `id(monkeypatch)`: CPython reutilitza els id dels objectes
+# alliberats, i dues instàncies de LocMemCache amb el MATEIX nom
+# comparteixen magatzem. Amb id() dues proves podien acabar compartint
+# comptador — en local no passava i a CI sí, perquè l'ordre de les proves
+# és aleatori (2026-08-19).
 @pytest.fixture(autouse=True)
 def _cache(monkeypatch):
     """The `default` cache is a PostgreSQL table created by
@@ -29,7 +36,7 @@ def _cache(monkeypatch):
     DB and every write there is a silent no-op. Give the limiter a real
     cache or it cannot be tested at all."""
     monkeypatch.setattr(
-        "comptes.ratelimit.cache", LocMemCache(f"rl-{id(monkeypatch)}", {})
+        "comptes.ratelimit.cache", LocMemCache(f"rl-{uuid.uuid4()}", {})
     )
 
 

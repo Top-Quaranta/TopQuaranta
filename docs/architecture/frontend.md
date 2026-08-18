@@ -48,11 +48,22 @@ revisa a mà per sempre.
 
 ### `/staff/artistes/sense-youtube` *(2026-08)*
 
+> **`<Pagination>` va amb `meta`, sempre.** El component fa
+> `if (!meta) return null`, així que una crida amb els noms equivocats no
+> dibuixa res: ni error ni avís. Aquesta vista deia 400 artistes i només
+> se'n podien tocar 50 (2026-08-17). Guardià estàtic a
+> `web/tests/test_paginacio_spa.py`, perquè el projecte no té Vitest.
+
 Decisió humana sobre **un** canal oficial de YouTube per artista, el
 segon carril de senyal. Clon de `sense-instagram` amb una diferència que
 importa: la resposta té **tres** sortides, no dues — un id de canal, «no
 en té» (final i vàlid: Malalts no en té), o pendent. Sense el botó de
 «no en té», els artistes sense canal es quedarien a la cua per sempre.
+
+Si el que enganxes és un canal «- Topic» i l'artista no en tenia cap,
+el backend l'adopta a l'altre carril i la fila **no desapareix**: es
+queda amb un avís groc explicant que el camp del videoclip continua
+buit. Sense això semblaria que la faena està feta quan no ho està.
 
 Per què una persona i no una heurística: sondejar «Malalts»
 automàticament retorna un canal de pàdel i una empresa d'esdeveniments.

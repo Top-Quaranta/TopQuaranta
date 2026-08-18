@@ -6,7 +6,7 @@ Documentation for TopQuaranta, organised by audience.
 docs/
 ├── platform-overview.md    — START HERE: cross-cutting onboarding map (stack,
 │                             data model, pipeline, territories, staff, social)
-├── EMAIL.md                — Stalwart + Brevo/Resend smarthost architecture
+├── EMAIL.md                — correu: Purelymail + Brevo/Resend
 │
 ├── architecture/           # how the codebase fits together
 │   ├── algorithm.md        — top algorithm v2.0

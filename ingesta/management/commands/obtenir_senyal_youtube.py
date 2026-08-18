@@ -108,11 +108,15 @@ class Command(BaseCommand):
                         morts.setdefault(pk, []).append(vid)
                         continue
                     acc = recollit.setdefault(
-                        pk, {"views": 0, "likes": 0, "n": 0, "primer": vid}
+                        pk,
+                        {"views": 0, "likes": 0, "n": 0, "primer": vid, "detall": {}},
                     )
                     acc["views"] += st["views"]
                     acc["likes"] += st["likes"] or 0
                     acc["n"] += 1
+                    # El detall per vídeo és el que permet calcular
+                    # l'increment sumant restes en lloc de restar sumes.
+                    acc["detall"][vid] = st["views"]
         except yt.QuotaExhausted as exc:
             self.stdout.write(self.style.WARNING(f"Quota exhaurida: {exc}"))
 
@@ -123,6 +127,7 @@ class Command(BaseCommand):
                     canco_id=pk,
                     data=target,
                     video_id=acc["primer"],
+                    views_per_video=acc["detall"],
                     views=acc["views"],
                     likes=acc["likes"],
                     n_videos=acc["n"],

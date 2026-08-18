@@ -27,6 +27,8 @@ What we deliberately don't capture:
     and in-site (`intern`) referrers are not recorded at all. See
     `analytics/referrers.py`.
   * `request.user.pk` (no per-user paths).
+
+# Spec: docs/architecture/analytics-ingest.md
 """
 
 from __future__ import annotations
@@ -44,7 +46,13 @@ _SKIP_PREFIXES = (
     "/media/",
     "/favicon",
     "/robots.txt",
-    "/sitemap.xml",
+    # "/sitemap" and not "/sitemap.xml": the index is at that exact path
+    # but the real ones are "/sitemap-artistes.xml", "/sitemap-cancons.xml"
+    # …, and a dot is not a dash. They were counted as pageviews, and
+    # because a crawler whose UA we don't know is classified "human",
+    # they became the entire "top human pages" list in the weekly digest
+    # (2026-08-17). A sitemap is a machine endpoint; it is never a visit.
+    "/sitemap",
     "/staff/",
     "/compte/2fa/",  # auth screens, low value, sensitive
     "/health",

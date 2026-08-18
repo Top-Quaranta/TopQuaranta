@@ -15,6 +15,8 @@ took counting responses to see it.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from django.core.cache.backends.locmem import LocMemCache
 from rest_framework.test import APIClient
@@ -23,6 +25,11 @@ from rest_framework.throttling import SimpleRateThrottle
 from web.api.utils import ScopedThrottle
 
 
+# `uuid4` i no `id(monkeypatch)`: CPython reutilitza els id dels objectes
+# alliberats, i dues instàncies de LocMemCache amb el MATEIX nom
+# comparteixen magatzem. Amb id() dues proves podien acabar compartint
+# comptador — en local no passava i a CI sí, perquè l'ordre de les proves
+# és aleatori (2026-08-19).
 @pytest.fixture(autouse=True)
 def _throttle_cache(monkeypatch):
     """DRF keeps throttle history in the `default` cache, which this
@@ -30,7 +37,7 @@ def _throttle_cache(monkeypatch):
     by a migration — so it is absent from the test DB and every write is
     a silent no-op. Give the throttles a real cache of their own."""
     monkeypatch.setattr(
-        SimpleRateThrottle, "cache", LocMemCache(f"throttle-{id(monkeypatch)}", {})
+        SimpleRateThrottle, "cache", LocMemCache(f"throttle-{uuid.uuid4()}", {})
     )
 
 

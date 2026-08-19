@@ -15,7 +15,7 @@ so a re-run after a partial failure costs only the missing ids.
 
     python manage.py obtenir_senyal_youtube [--data YYYY-MM-DD] [--dry-run]
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

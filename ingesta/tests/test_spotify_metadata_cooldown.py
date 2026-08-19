@@ -16,7 +16,7 @@ through this cooldown; tests assert it does not touch any of the
 metadata cooldown files.
 """
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 
 from __future__ import annotations
 

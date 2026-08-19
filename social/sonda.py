@@ -1,6 +1,6 @@
 """Selector + avaluador de les sondes «la cançó del dia».
 
-# Spec: docs/architecture/social-stories.md
+# Spec: docs/architecture/social.md
 
 Implements the §5ter spec of the 2026-08-13 investigation: an
 eligibility WHERE, a three-tier priority ladder (mai contactat →

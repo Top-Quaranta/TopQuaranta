@@ -26,7 +26,7 @@ videoclips titled "AUXILI - TARRINETES AL SOL ft DJ Trapella", which
 match nothing. Requiring the literal "- Topic" suffix took the sampled
 match rate from 63% to 76%. `find_topic_channel` enforces it.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

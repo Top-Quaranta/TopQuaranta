@@ -1,264 +1,44 @@
-# comptes — auth, profile, workflow sol·licituds
+# comptes — invariants
 
-The `comptes` app owns user identity, the verified-manager
-relationship to artists, the community surface (DMs, profiles,
-publications), and the new Workflow Sol·licituds de Revisió.
+<!-- User identity and everything hung off it: registration/activation,
+2FA, self-deletion, the verified-manager (gestor) relationship, the
+community (profiles, directori, DMs, moderation), transactional
+notifications and the weekly newsletter draft → send pipeline. -->
 
-## Models
+## Invariants
 
-| Model | Purpose |
-|---|---|
-| `Usuari` | Custom `AUTH_USER_MODEL` (extends `AbstractUser`, no extra fields yet). `db_table = "auth_user"`. |
-| `PerfilUsuari` | One-to-one community profile (visible_directori, nom_public, imatge_url, vol_newsletter, opt-outs). |
-| `UserArtista` | Gestor↔Artista relationship. `verificat=True` + `estat=aprovat` ⇒ gestor can self-edit the artist via `/compte/artista/<slug>/editar/`. |
-| `PropostaArtista` | A user proposes a new artist (with Deezer IDs + localitats). Staff approves → triggers `Artista` creation. |
-| `Feedback` | Anonymous correction reports (per-page URL). |
-| `Missatge` | DM between users; community inbox. |
-| `Publicacio` | Community feed post (moderated). |
-| `Comentari` | Flat comments on `Publicacio`. |
-| `SolicitudRevisio` | Gestor → staff review request (vegeu ADR-0004). |
+### Account lifecycle
+- **Registration creates an inactive account and always renders the same "check your email" page, whether or not the address exists.** Why: anti-enumeration. Activation token hashes `is_active`, so a link dies once used. Guarded by: `comptes/tests/test_auth_flow.py::RegisterEndpointTest::test_register_existing_email_does_not_leak`, `web/tests/test_legal_endpoints.py::test_register_records_consent`.
+- **Staff whose session is not OTP-verified are bounced full-page from `AdminRoute` to `/compte/2fa/verificar` (a plain Django view). Its rate limit is `comptes/ratelimit.py::excedeix_limit` — per *user*, not IP, reads `auth_2fa` from `DEFAULT_THROTTLE_RATES`, and fails OPEN on cache error by design.** Why: DRF throttles never reach a plain view, so this screen (the one accepting single-use backup codes in a loop) was unlimited until 2026-08-16; a cache outage must not lock accounts. Guarded by: `comptes/tests/test_limit_2fa.py` (`::test_the_limit_is_per_user_not_global`, `::test_a_broken_cache_does_not_lock_people_out`).
+- **Self-delete is a token-signed email link: GET only confirms, POST deletes; single-use; staff accounts are refused even with a valid token.** Guarded by: `comptes/tests/test_esborrar_compte.py`.
+- **`consent_newsletter_at` is stamped on the False→True transition of `vol_newsletter` (registration or profile PATCH), never overwritten.** Why: RGPD audit trail. Code: `web/api/compte_views/dashboard.py::perfil`.
 
-Migrations live at `comptes/migrations/`. Most recent significant:
-- `0016_admin_pseudouser` — seed the `admin` pseudo-user (community
-  fan-out target).
-- `0017_userartista_email_aprovacio_at` — stamp the "verified"
-  email at send-time so the retroactive notifier is idempotent.
-- `0018_solicitudrevisio` — Workflow Sol·licituds (ADR-0004).
+### Gestor (verified manager)
+- **A user is gestor of an artista iff `UserArtista.verificat=True AND estat=aprovat`. The predicate is duplicated in `web/api/auth_views.py::_profile` (for `verified_artist_pks`) and `web/api/compte_views/propostes.py::_gestor_check`; change both.** `solicitud_rebutjar` flips `verificat=False`. Guarded by: `web/tests/test_gestor_artista_portal.py::test_non_manager_forbidden`.
+- **All `comptes/notifications.py` senders are best-effort: mail failure logs and never blocks the business write; admin fan-outs go to every active `is_staff` user and skip silently when there is none.** Guarded by: `comptes/tests/test_notifications.py::test_admin_notify_skips_when_no_staff`.
+- **Retroactive/one-shot mailers are idempotent via a stamp (`UserArtista.email_aprovacio_at`, `AvisTopEnviat(artista, setmana)`) and dry-run by default.** Guarded by: `comptes/tests/test_notificar_gestors_retroactiu.py::test_already_notified_user_is_skipped`, `comptes/tests/test_avisos_top.py::test_send_emails_and_is_idempotent`.
 
-## Auth flow
+### Community
+- **The `admin` pseudo-user (`settings.ADMIN_INBOX_USERNAME`, seeded by `comptes.0016`) is always DM-reachable; a DM to it fans out by email to every active staff user plus the admin mailbox, ignoring the pseudo-user's own opt-out.** Guarded by: `comptes/tests/test_admin_inbox.py::test_dm_to_admin_fans_out_to_all_active_staff`, `::test_dm_to_admin_with_no_active_staff_still_hits_admin_mailbox`.
+- **DM is refused (403) on a block in either direction or `accepta_dm=False`; messages with `ocult=True` are never served to either party.** Guarded by: `comptes/tests/test_comunitat_seguretat.py::test_block_prevents_dm_both_directions`, `::test_hidden_dm_not_served`.
+- **Directori: non-staff see `visible_directori=True` only; staff see every active profile with the flag exposed per row; inactive users are excluded for everyone. Discoverability is the effective DM gate — `missatge_crear` accepts any user id.** Guarded by: `comptes/tests/test_directori_staff_visibility.py`.
+- **The newsletter→community bridge (`comptes/community_bridge.py`) is OFF by default (`ConfiguracioGlobal.newsletter_publicacio_pont_actiu`), idempotent via `NewsletterDraft.publicacio`, produces markdown with no raw HTML, and sends nothing.** Guarded by: `comptes/tests/test_community_bridge.py` (`::test_flag_defaults_off`, `::test_never_sends_email`, `::test_idempotent`).
 
-- Registration via Django form (`registre.html` template, the
-  only one not yet ported to the React SPA).
-- Email activation: `activar/<uidb64>/<token>/` route.
-- 2FA TOTP via `django-otp` + `django-otp-totp`. Staff users are
-  bounced to `/compte/2fa/verificar` if their session isn't
-  OTP-flagged.
-- Login throttled by `django-axes` (5 attempts per (username, ip)
-  per minute via `ScopedRateThrottle` mirror on `auth_login`).
-- Session cookies shared with the React SPA (same origin), so
-  CSRF token + sessionid carry over without extra config.
-- Every Django-rendered auth page extends `comptes/_base_auth.html`.
-  Since 2026-08-12 the shell mirrors the **rd redisseny** (page-bg
-  `#060608` + brand glows, liquid-glass card, Anton titles, Instrument
-  Serif kickers, Bricolage body, pill buttons) and replicates the SPA
-  header (`rd/Header.jsx`): real mono brand logo — `{% include %}`d
-  inline from `web-react/src/assets/logo-topquaranta-rect-mono.svg`
-  via a TEMPLATES dir added in `settings/base.py` (single source, no
-  copy; see `docs/architecture/brand-logo.md`) — plus static nav
-  pills and the account icon. Mobile (<900px) hides the nav (no
-  burger: auth pages are single-purpose).
+### Newsletter
+- **`comptes.newsletter.destinataris()` is the single definition of who is mailed: `vol_newsletter=True AND is_active=True AND email != ""`; the staff audience counter uses the same function.** Why: registration sets `vol_newsletter` before the address is confirmed — without `is_active` anyone could subscribe a third party. Guarded by: `comptes/tests/test_newsletter_destinataris.py` (both tests).
+- **Draft state machine `NewsletterDraft.estat ∈ {pendent, enviat, cancellat}` (`pendent` = will send; no "approved"). Only the Sunday `enviar_newsletter` sends, gated by `pot_publicar_tipus("newsletter","top_ppcc")` (master + channel + matrix). Terminal or `editat=True` drafts are never clobbered by the routine or the on-demand generator (409); the LLM routine can only upsert `pendent`.** Guarded by: `comptes/tests/test_newsletter_draft.py::test_send_cancelled_does_not_send`, `::test_send_blocked_by_master_switch`, `::test_send_already_sent_is_idempotent`; `web/tests/test_newsletter_ondemand.py::test_generar_does_not_clobber_edited_draft`, `::test_generar_creates_motor_draft_and_never_sends`; `web/tests/test_newsletter_routine.py::test_post_rejects_non_pendent_estat`.
+- **`newsletter_desti_prova` receives previews only; it never enters the subscriber send.** Guarded by: `test_newsletter_draft.py::test_desti_prova_never_reaches_subscriber_send`.
+- **Covers are pre-downloaded before compose (`newsletter_covers.ensure_cover_downloaded`, same portades pipeline, self-hosted, never raises); a missing cover falls back to the committed placeholder — no Deezer hotlink in the email.** Guarded by: `comptes/tests/test_newsletter_cover_predownload.py::test_never_raises_on_download_error`.
+- **Name links: every artist with a slug (principal AND collaborators) and every song title link into the site; prose linking is the deterministic `newsletter_linkify.linkify_narrative` (first occurrence, longest-match-first, idempotent, skips existing anchors, escapes href) — never an LLM.** Guarded by: `comptes/tests/test_newsletter_linkify.py::test_idempotent`, `comptes/tests/test_newsletter_namelinks.py::test_preview_links_collaborator_in_prose_and_cards`.
+- **The template is Gmail-safe hybrid: 640 px fluid container, every rule inline (`<style>` is enhancement only), `bgcolor` on structural cells, columns are full-width `<div>`s with `max-width` caps only in `<style>`, card surfaces on `<div>`s not nested tables, no padding on a `width:100%` box, MSO ghost columns balanced for Outlook.** Guarded by: `comptes/tests/test_newsletter_template.py::test_gmail_*` (nine tests).
 
-## Workflow Sol·licituds de Revisió
+## Traps
+- `test_gmail_*` pin the *technique*; a "small" template edit that adds inline padding to a full-width column breaks Gmail rendering silently in production — run the suite, don't eyeball.
+- The 2FA limiter shares the DB-backed `default` cache across gunicorn workers on purpose; a per-process cache multiplies every limit by the worker count.
+- `Missatge` notification fan-out relies on the pseudo-user being `is_staff=False`; if someone flags it staff it will also receive its own fan-out.
+- `enviar_newsletter` rebuilds the list/covers from the FINAL top at send time — the reviewed draft only fixes subject + narrative (`test_send_uses_edited_text_and_rebuilds_list`).
 
-Sprint 2026-05-20 (PR #54). Replaces the previous DM-ping
-pattern (see
-`docs/post-mortems/2026-05-19-workflow-sollicituds-redesigned.md`)
-with a structured workflow.
-
-```
-gestor                              staff
-  │                                  │
-  ├─ POST /compte/artista/<slug>/   │
-  │  cancons-pendents/ping-staff/   │
-  │                                  │
-  ↓                                  │
-SolicitudRevisio(estat=pendent)    │
-  │                                  │
-  ├─ email notify_admins ──────────→ inbox
-  │                                  │
-  │                                  ├─ open /staff/sollicituds-revisio/
-  │                                  ├─ POST .../marcar-en-revisio/
-  │                                  │   → estat=revisada
-  │                                  ├─ POST .../reconsiderar-rebutjada/
-  │                                  │   → HistorialRevisio.reconsiderada=True
-  │                                  │   → cron re-imports on next tick
-  │                                  └─ POST .../resoldre/
-  │                                      → estat=resolta + nota_resolucio
-  │                                      → email notify_gestor
-  ↓                                  ↓
-GET /compte/artista/<slug>/         (workflow complete)
-sollicituds/                         
-  → returns latest + count
-```
-
-State machine: `pendent → revisada → resolta`. No reverse
-transitions; a re-request is a new `SolicitudRevisio` row (with
-the 7-day per-artist cooldown on
-`Artista.ultim_ping_revisio_at`).
-
-## Identities
-
-The `admin` pseudo-user (seeded by migration 0016) is the
-community-inbox target. Any DM addressed to `admin` fans out via
-email to every active `is_staff=True` user; the
-pseudo-user's own opt-out preference is ignored on the fan-out
-branch (the staff alert is the whole point).
-
-Production auth tokens (Google OAuth, Brevo SMTP, etc.) belong to
-`admin@topquaranta.cat`, never a personal account. See
-`docs/policies/identities.md`.
-
-## Notifications
-
-Central transactional-email module at `comptes/notifications.py`.
-Six paired entry points:
-
-- `notify_admins_nova_solicitud_gestio` / `notify_user_solicitud_resolta`
-- `notify_admins_nova_proposta` / `notify_user_proposta_resolta`
-- `notify_admins_nou_feedback` / `notify_user_feedback_resolt`
-
-Plus the workflow sol·licituds pair:
-
-- `notify_admins_nova_sollicitud_revisio` — fires on gestor ping.
-- `notify_gestor_sollicitud_revisio_resolta` — fires on staff
-  resolution.
-
-All best-effort: a mail-server hiccup logs and swallows so the
-business write isn't blocked.
-
-## RGPD surfaces
-
-- `/compte/exportar-dades/` — JSON export of everything tied to
-  the user (Feedback, UserArtista, Publicacio, Comentari,
-  Missatge, StaffAuditLog rows where they're the target, axes
-  login history). Throttled 3/h. **El contingut és el contracte**, no
-  només que arribe un adjunt: fins al 2026-08-15 l'única prova
-  comprovava que el correu portava un fitxer acabat en `.json` i prou,
-  així que un export podia eixir amb `audit_log_sobre_meu` buit —
-  `rgpd.py` s'empassa l'`ImportError` d'axes i emet `[]`— i tot verd.
-  Això és una mala resposta a una petició legal: sembla «no tenim res»
-  quan de fet és «no ho hem mirat». Fixat a
-  `web/tests/test_export_rgpd_contingut.py`, que a més comprova el
-  revés: el filtre per `target_id` no pot donar-li a algú l'historial de
-  moderació d'una altra persona.
-- `/compte/baixa-newsletter/` — token-signed unsubscribe (token
-  expires after 1 year, May-2026 audit fix). Throttled 10/min.
-- `/compte/esborrar-sollicitud/` — self-delete confirmation
-  email flow. Throttled per `_AccountDeleteThrottle`.
-
-## Weekly newsletter — see `comptes-newsletter.md`
-
-The newsletter pipeline (draft generation, covers, UTM, send command,
-Gmail-safe hybrid columns) lives in
-**`docs/architecture/comptes-newsletter.md`** (split 2026-08-12 for
-the docs-size ceiling).
-
-## "Has entrat al top" manager alert (Fase 2 D1, 2026-06)
-
-A SEPARATE notification path from scoring: the `enviar_avisos_top`
-management command READS the already-computed weekly PPCC (`Global`)
-`TopSetmanal` and emails the verified managers of any artist that NEWLY
-enters the top. "New" = a cançó in this week's top whose `canco_id` was
-absent last week (reuses `web.api.top_views._prev_week_positions`; never
-touches ranking).
-
-- **Audience:** `UserArtista` rows with `verificat=True`, `estat=aprovat`,
-  an active user with an email, and `PerfilUsuari.vol_avis_top=True`
-  (default True, opt-OUT — it's a relevant service alert, not marketing).
-- **Idempotency:** one `AvisTopEnviat(artista, setmana)` row gates each
-  artist+week (unique constraint), so re-runs never double-send.
-- **Safety:** DRY-RUN BY DEFAULT; `--send` actually emails. `--setmana`
-  targets a specific Monday (defaults to the latest PPCC week).
-- **Opt-out:** signed-token unsubscribe at
-  `/api/v1/compte/baixa-avis-top/` (salt `avis-top-baixa`, 1-year token,
-  RFC 8058 one-click), mirroring the newsletter unsubscribe.
-- Make-or-break (investigation 2026-06): only ~3 artists have a reachable
-  verified-manager email today, so this reaches a tiny audience until
-  more managers verify.
-
-## Community safety (Slice A, 2026-06)
-
-Trust-and-safety prerequisites before opening the community to public
-traffic. All additive.
-
-- **Models** (`comptes/models.py`): `BloqueigUsuari` (blocker, blocked,
-  unique pair), `DenunciaUsuari` (reporter + one of four nullable target
-  FKs usuari/publicacio/comentari/missatge + `tipus` + `estat`
-  pendent/revisada/desestimada), and a new `Missatge.ocult` flag
-  (hidden-by-moderation messages are never served). `PerfilUsuari` gains
-  `accepta_dm` (True = anyone can DM, False = nobody; the admin support
-  inbox bypasses it).
-- **Member endpoints** (`web/api/comunitat_views/seguretat.py`):
-  `POST /comunitat/bloquejar/`, `/comunitat/desbloquejar/` (idempotent),
-  `POST /comunitat/denunciar/` ({tipus, target_pk, motiu}).
-- **DM gate** (`web/api/comunitat_views/missatgeria.py::_dm_block_reason`):
-  `missatge_crear` returns 403 when a block exists in EITHER direction or
-  the recipient has `accepta_dm=False`. The inbox + thread queries
-  filter `ocult=False`, so a hidden DM disappears for both parties.
-- **Staff moderation** (`web/api/comunitat_views/staff_moderacio.py`):
-  `GET /staff/denuncies/` (report queue) + `POST /staff/denuncies/<pk>/
-  resoldre/` ({action: revisar|desestimar, ocultar?}). With
-  `ocultar=true` a reported DM gets `ocult=True` and a reported
-  publication is unpublished.
-
-## Directory matching (Slice B, 2026-06)
-
-`PerfilUsuari` gains matching fields (additive): `busca` (comma-separated
-tokens from `BUSCA_CHOICES`: grup/colaboradors/cantant/instrumentista/
-productor), `generes` (comma-separated style tags) and `nivell`
-(`NIVELL_CHOICES` incl. `aspirant` = "vull ser músic"). The directory
-(`web/api/comunitat_views/perfil.py::directori`) filters by `q`, `rol`,
-`obert`, `territori`, `instrument`, `genere`, `busca`, `nivell` so staff
-and members can resolve queries like "guitarristes a València de rock que
-busquen grup". Tokens are stored comma-joined and matched with
-`__icontains`.
-
-## Related
-
-- ADR: `docs/decisions/0004-workflow-sollicituds-revisio.md`
-- Post-mortems: `2026-05-19-workflow-sollicituds-redesigned.md`,
-  `2026-05-20-smoke-side-effects.md`
-- Policy: `docs/policies/identities.md`
-- Modules: `comptes/models.py`, `comptes/views.py`,
-  `comptes/notifications.py`, `comptes/management/`,
-  `comptes/newsletter.py`, `comptes/newsletter_{utm,covers,meta}.py`,
-  `web/api/compte_views/`, `web/api/staff/sollicituds_revisio.py`
-
-## Limitadors de ritme: el scope va a la classe, no a la vista
-
-Els sis limitadors (`auth_login`, `data_export`, `newsletter_unsubscribe`,
-`feedback_crear`, `account_delete`, `dm_send`) i el de registre hereten
-`web.api.utils.ScopedThrottle`, **no** el `ScopedRateThrottle` de DRF.
-
-El motiu és que aquell llig el scope de la *vista*
-(`view.throttle_scope`) i, si no hi és, **deixa passar la petició sense
-comptar-la**:
-
-```python
-self.scope = getattr(view, self.scope_attr, None)
-if not self.scope:
-    return True
-```
-
-Declarar `scope = "..."` a la subclasse no serveix de res: eixe mètode
-el sobreescriu a cada crida. Com que cap vista definia `throttle_scope`,
-els sis limitadors van estar inerts des que es van afegir (auditoria de
-maig del 2026) fins al 2026-08-15: connectats, invocats a cada petició, i
-sense limitar res. El scope `registre` ni tan sols tenia classe.
-
-`ScopedThrottle` llig el scope de la classe i fa la clau de cache igual
-que DRF (per usuari si està autenticat, per IP si no). El guardià és
-`web/tests/test_throttles.py`, que a més falla si algun limitador torna a
-heretar de `ScopedRateThrottle`.
-
-### El repte de 2FA no és de DRF
-
-`dos_fa_verificar` és una vista de Django plana, així que cap limitador
-de DRF hi arriba: el scope `auth_2fa` estava configurat des del maig del
-2026 i **no s'aplicava enlloc**. Era, precisament, l'única pantalla del
-projecte que accepta codis de recuperació d'un sol ús en bucle.
-
-Des del 2026-08-16 el limitador és `comptes/ratelimit.py::excedeix_limit`,
-una finestra fixa comptada al cache compartit que llig el ritme del mateix
-`DEFAULT_THROTTLE_RATES`, de manera que els números viuen en un sol lloc.
-Superar-lo torna **429** amb la mateixa pantalla i un missatge clar.
-
-Dues decisions que val la pena conéixer:
-
-- **La identitat és l'usuari, no la IP.** Qui arriba a esta pantalla ja ha
-  passat la contrasenya, així que algú amb una galeta robada és *un*
-  usuari per moltes IPs que rote.
-- **Falla obert.** Si el cache peta, es deixa passar. La contrasenya
-  continua sent necessària per a arribar ací, i una caiguda del cache no
-  pot convertir-se en un bloqueig del compte — però implica que el
-  limitador és tan disponible com el cache.
+## Where the detail lives
+- code: `comptes/` (`views.py`, `tokens.py`, `ratelimit.py`, `notifications.py`, `newsletter*.py`, `community_bridge.py`, `management/commands/`), `web/api/auth_views.py`, `web/api/compte_views/`, `web/api/comunitat_views/`, `web/api/newsletter_routine.py`, `web/api/staff/{newsletter,solicituds,sollicituds_revisio,avisos_top}.py`
+- archived narrative: `docs/archive/architecture/{comptes,comptes-newsletter}.md`
+- ADRs: 0004 (workflow sol·licituds de revisió) · policy: `docs/policies/identities.md` · post-mortems: `2026-05-19-workflow-sollicituds-redesigned.md`

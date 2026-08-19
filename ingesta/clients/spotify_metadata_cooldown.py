@@ -31,7 +31,7 @@ path; the latest unexpired `resume_at` wins. New writes always
 land in the shared path, so the legacy files drain naturally as
 their bans expire.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

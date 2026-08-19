@@ -31,7 +31,7 @@ ever deleted.
 | `django_cache` | Managed by Django + TTL per entry. | — | S9 throttles + any future durable cache items. |
 | `comptes_propostaartista` | **Forever** | — | A proposal's lifecycle is review → approve or reject → link to the created Artista. Archive is part of the audit trail. |
 | `comptes_userartista` | **Forever** | — | Artist–user verification links. Rare and small volume. |
-| `/var/topquaranta/portades/*` (filesystem, no table) | Public catalogue ∪ ever-ranked | — | Weekly `netejar_portades` prune (Monday 03:00 UTC). Ever-ranked albums kept forever: newsletter emails embed their `/portades/` URLs. Details at `docs/architecture/portades.md` §Retenció. |
+| `/var/topquaranta/portades/*` (filesystem, no table) | Public catalogue ∪ ever-ranked | — | Weekly `netejar_portades` prune (Monday 03:00 UTC). Ever-ranked albums kept forever: newsletter emails embed their `/portades/` URLs. Details at `docs/architecture/ingesta.md` §Retenció. |
 
 ## The mechanics
 

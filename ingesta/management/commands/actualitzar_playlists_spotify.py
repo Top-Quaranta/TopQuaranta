@@ -30,7 +30,7 @@ this command deterministic and safe to run on any cadence.
 The Spotify playlist is rewritten in place via PUT /playlists/<id>/
 items so the public URL + follower count survive every run.
 
-# Spec: docs/architecture/playlists.md (Process A)
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

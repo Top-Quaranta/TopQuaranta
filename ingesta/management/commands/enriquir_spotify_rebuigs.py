@@ -48,7 +48,7 @@ from Spotify writes a cooldown file at
 `/var/log/topquaranta/status/enriquir_spotify_rebuigs.cooldown`
 and the next run skips until the resume timestamp passes.
 
-# Spec: docs/architecture/pipeline.md (Track verification ML)
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

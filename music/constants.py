@@ -243,7 +243,7 @@ SCORE_BATCH_SIZE = 500
 # operator reads the label, infers a meaning that does not match
 # what the action actually does, and we end up needing another doc
 # to undo the confusion. All cause / when-to-use prose lives in
-# `docs/architecture/staff.md` section 5; this list stays
+# `docs/architecture/web.md` (staff motius); this list stays
 # action-only.
 MOTIUS_REBUIG = [
     ("desvincular_canco", "Desvincular la cançó"),

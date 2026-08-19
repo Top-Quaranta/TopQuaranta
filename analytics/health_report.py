@@ -18,7 +18,7 @@ CLI:
         --extras-json '<json>' [--now EPOCH]
 Prints the report to stdout, exits with `overall`.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

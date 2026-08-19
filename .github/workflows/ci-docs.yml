@@ -67,6 +67,7 @@ jobs:
             --exclude-path .venv
             --exclude-path web-react/node_modules
             --exclude-path vendor
+            --exclude-path docs/archive
             './**/*.md'
           fail: true
 

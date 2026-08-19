@@ -132,7 +132,7 @@ def test_miss_flagged_when_code_changes_without_doc(script, cfg):
     )
     docs = {d for _, d in misses}
     assert "docs/architecture/social.md" in docs
-    assert "docs/architecture/models.md" in docs
+    assert "docs/architecture/music.md" in docs
 
 
 def test_no_miss_when_doc_is_also_in_diff(script, cfg):

@@ -915,7 +915,7 @@ patró 95%+ històric.
 
 Vegeu `docs/decisions/0009-spotify-identity-migration.md`,
 `docs/decisions/0011-spotify-cron-schedule.md` i
-`docs/architecture/playlists.md`.
+`docs/architecture/ingesta.md`.
 
 ## Lessons learned
 

@@ -12,7 +12,7 @@ analytics dashboard can attribute landings to a specific block
                              novetat_1, compartir_telegram, …)
 """
 
-# Spec: docs/architecture/comptes-newsletter.md
+# Spec: docs/architecture/comptes.md
 
 from __future__ import annotations
 

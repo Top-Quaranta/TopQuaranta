@@ -18,7 +18,7 @@ has no channel" stay distinct, and only a human writes the second.
 
     python manage.py sembrar_canals_youtube [--resolve] [--dry-run]
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

@@ -142,7 +142,7 @@ npm run build      # bundle estàtic a web-react/dist/
   [`docs/history/changelog.md`](./docs/history/changelog.md).
 - **Decisions arquitectòniques**: [`docs/decisions/`](./docs/decisions/).
 - **Post-mortems**: [`docs/post-mortems/`](./docs/post-mortems/).
-- **Política d'API**: [`docs/architecture/api-versioning.md`](./docs/architecture/api-versioning.md).
+- **Política d'API**: [`docs/architecture/web.md`](./docs/architecture/web.md).
 - **Política de claus SSH**: [`docs/ops/ssh-keys.md`](./docs/ops/ssh-keys.md).
 
 Cada commit ha de passar:

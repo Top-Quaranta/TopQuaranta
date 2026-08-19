@@ -1,4 +1,4 @@
-# Spec: docs/architecture/staff-api.md
+# Spec: docs/architecture/web.md
 """Parse and validate a manual Spotify *track* reference.
 
 Store-and-trust (see docs/architecture/playlists.md "Manual Spotify id"):

@@ -6,7 +6,7 @@
 > 2026-07-05: destí **Backblaze B2** amb key append-only; **retenció
 > dividida per PII** (90 dies el dump complet / 12 mesos el sanejat);
 > xifratge restic en origen. Mesures que fonamenten el disseny:
-> `docs/audits/2026-07-05-recon-backup-offsite.md`. Política de
+> `docs/archive/audits/2026-07-05-recon-backup-offsite.md`. Política de
 > retenció completa: `docs/ops/retention.md` §Backups.
 
 ## 1. Per què una capa 2

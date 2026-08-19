@@ -1,4 +1,4 @@
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """Minimal coverage for the destructive caducitat purge.
 
 `netejar_caducades` hard-deletes unverified, active tracks past

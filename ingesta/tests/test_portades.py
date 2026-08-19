@@ -5,7 +5,7 @@ real Pillow round-trip so the variant dimensions are actually
 verified. The command test mocks the manager so it exercises only
 candidate selection + wiring (no real download).
 
-# Spec: docs/architecture/portades.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

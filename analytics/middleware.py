@@ -28,7 +28,7 @@ What we deliberately don't capture:
     `analytics/referrers.py`.
   * `request.user.pk` (no per-user paths).
 
-# Spec: docs/architecture/analytics-ingest.md
+# Spec: docs/architecture/analytics.md
 """
 
 from __future__ import annotations

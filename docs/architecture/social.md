@@ -1,265 +1,81 @@
-# Social distribution
+# social — invariants
 
-Five-channel weekly publication system: Instagram (feed + stories),
-Mastodon, Bluesky, Telegram, Newsletter. Plus an RSS surface for
-syndication and a static-PNG hosting path for Meta's media-fetcher.
+<!-- `social/` owns everything that leaves the site as a publication: the weekly
+payload, the narrative captions, the rendered JPEG slides, the five channel
+clients (Instagram feed+stories, Mastodon, Bluesky, Telegram, newsletter),
+the IG collaborator/mention bookkeeping and the «cançó del dia» sondes.
+Two commands drive it from cron: `publicar_social` (Instagram) and
+`publicar_canal --channel <name>` (the other four). -->
 
-> **Note (May 2026):** the system was refactored during the
-> 2026-05-21 sprint. Post-mortem
-> `2026-05-20-narrative-engine-collapsed.md` is **Resolved** by
-> ADR-0006 (ordinals catalans), ADR-0007 (`@username` restituït a
-> IG) i ADR-0008 (detectors a9–a12 + slot terciari). Post-mortem
-> `2026-05-21-bluesky-silent-failures.md` és **Resolved** per
-> ADR-0005 (timeout 180 s + retry 3×).
+## Invariants
 
-## Flow
+### Publish contract
 
-```
-cron (publicar_social or publicar_canal)
-  ↓ social/payload.py             → {entries, hero_cover_url}  for top_*
-                                    (entries/items carry album_deezer_id
-                                     for the newsletter's local-cover lookup)
-                                     {items}                    for nous_*
-  ↓ social/captions.py
-      compose_for_channel(channel, tipus, territori, setmana, entries)
-        ↓ if tipus ∈ {top_ppcc, top_territorial}:
-            social/narrative/scenarios.detect_all → 13 detectors a1-a13
-            social/narrative/scenarios.select_slots → distinct-subject slots
-            social/narrative/composers/<channel>.compose
-              ↓ pick_phrase(hero, long, …)     via registry (anti-repeat)
-              ↓ pick_phrase(secondary, medium, …)  slot[1] if distinct subject
-              ↓ pick_phrase(tertiary, short, …)    IG-feed only, slot[2] if distinct
-              ↓ for IG: `@handle` rewrite per ADR-0007
-              ↓ top5_bank.pick_long / pick_short (ordinals per ADR-0006)
-              ↓ hashtags_bank.build_hashtags
-              ↓ cta_bank.pick_cta
-        ↓ elif tipus ∈ {nous_albums, nous_singles}:  ← narrative novetats
-            social/narrative/novetats.detect_novetats → n1-n4 + fallback
-            social/narrative/composers/{nous_albums,nous_singles}.compose
-          else: _legacy_for(channel, tipus, …)  ← IG-story / fallback
-  ↓ social/renderer.py            → JPEG slides (q=90)
-  ↓ social/<channel>_client.py    → publish
-  ↓ social.SocialPost row         status ∈ {publicat, error, omes}
-  ↓ StaffAuditLog                 audit trail
-```
+- **Any slot ending in `error` makes the command exit non-zero; slots that published stay `publicat`.** Why: `tq-run` only alerts on exit ≠ 0 — a dead IG token went unnoticed for days when partial failure returned 0. Partial failure is reported, never rolled back. Guarded by: `test_publicar_social_partial_failure_exits_nonzero`, `test_publicar_canal_channel_failure_exits_nonzero`, `test_resumable_partial_leaves_error_and_exits_nonzero`.
+- **A partially-sent story set is left in `STATUS_ERROR` with `metadata.published_slides`; the retry publishes only the gap; `PUBLICAT` only when whole.** Why: 2026-07-20 a 9007 race left set 3/6 marked `PUBLICAT`, so the retry skipped it and the missing page was never sent. `--force` ignores resume state and re-sends all. Guarded by: `test_resumable_reentry_backfills_only_the_gap`, `test_resumable_force_republishes_all_without_skipping`.
+- **Only Graph error 9007/2207027 is retried on `media_publish` (`ig_retry_9007_intents`, `_backoff_s`; 0 = single shot); every other error propagates.** Guarded by: `test_9007_*` and `test_non_9007_error_not_retried` in `test_ig_publish_robustness.py`.
+- **Three gates, all AND-ed: `distribucio_activa` (master) → `<canal>_actiu` → `MatriuPublicacio.actiu_per(canal, tipus)`; a missing matrix row is fail-open (True); an off cell records the slot as `omes`, never silently vanishes.** Why: staff must see an inactive slot in the publications table; the master must stop all six channels (a default-to-instagram toggle once let the newsletter ignore the global pause). Only the five push channels are in the matrix — the website is never gated, RSS has its own `rss_actiu` (503 when off). Guarded by: `test_pot_publicar_tipus_combines_three_gates`, `test_actiu_per_default_and_off`, `test_matrix_does_not_bypass_{channel,master}_gate`, `test_matrix_excludes_web_and_rss`, `test_master_switch_blocks_rss_feed`.
+- **A publication is one `SocialPost` row (unique on platform × tipus × territori × setmana × slot_key) and counts as 1 event, however many images/stories it carries.** Why: the story publisher once registered `n=len(story_ids)` and inflated the counter 42×; `SocialPost` is the canonical counter, `MetricaEsdeveniment` is append-only and best-effort. `slot_key` is `""` for the weekly types and `<data>-<franja>` for sondes. Guarded by: `test_publicar_social.py` (register capture asserts `n=1`), `test_sonda_publica_i_es_idempotent`, `test_franges_del_mateix_dia_no_col·lisionen`.
+- **The publish day is fixed by `social/calendari.py` + cron; the matrix only shows it (`publish_weekdays_for`) and only toggles `actiu`.** `NEWSLETTER_PUBLISH_WEEKDAY` (Sunday) MUST match the `enviar_newsletter` cron line. Guarded by: `test_push_channels_follow_calendar`, `test_newsletter_is_sunday_for_ppcc_only`, `test_toggle_flips_actiu_only`.
+- **URLs handed to Meta/Telegram fetchers come from `SOCIAL_PUBLIC_BASE` (Caddy static `/static/social/*`), defined in `settings/base.py`.** Why: the Django render view carries CSP/COOP headers that make Meta fail with 9004; the crons run under `production` settings, so a `web_server`-only value silently sends the Django URL (2026-06-03: IG/Telegram failed, byte-upload channels were fine). Guarded by: `test_public_url_for_uses_caddy_static_not_django_fallback`.
 
-Both publish commands (`publicar_social`, `publicar_canal`) exit
-**non-zero** (`CommandError`) when any slot ends in `error`, so `tq-run`
-records `status=FAIL` and the watchdog alerts. Slots that published stay
-`publicat` — partial failure is reported, not rolled back; `omes` skips
-don't count. (Before 2026-07 they returned 0 on partial failure, so a
-dead IG token went unnoticed for days — the invisible-outage incident.)
+### Per-channel limits (hard, from the platforms)
 
-## Channels
+- **Bluesky: text ≤ 300 chars, ≤ 4 images, each blob < 1 MB; upload retries 3× on timeout (180 s) but never on 4xx (ADR-0005).** Guarded by: `test_bluesky_never_exceeds_300_with_long_artist_names`, `test_caption_short_bluesky_respects_300_char_limit`, `test_top_redesign.py` (poster JPEG < 1 000 000 bytes), `test_bluesky_upload_retry.py`.
+- **Mastodon: 500 chars, ≤ 4 `media_ids[]`. Telegram: 1 024 chars, carousel via one media-group (≤ 10 photos; `extra_meta.message_ids` kept because there is no group-level delete). IG feed: 2 200 chars, ≤ 10 carousel items, ≤ 20 `user_tags`/image, ≤ 3 collaborators.** Guarded by: `test_composer_mastodon_respects_500_chars`, `test_composer_telegram_respects_1024_chars`, `test_slide_tags_top_respects_20_cap`, `test_clamp_never_more_than_three`.
 
-| Channel | Module | Max chars | Mentions | Hashtag density |
-|---|---|---|---|---|
-| Instagram feed | `social/instagram_client.py` + `narrative/composers/instagram_feed.py` | 2 200 | `@handle` at caption text (ADR-0007) + `user_tags` via Graph API | 8-12 |
-| Instagram story | same client, `composers/instagram_story.py` | short | plain | minimal |
-| Mastodon | `social/mastodon_client.py` + `composers/mastodon.py` | 500 | plain name | 3-5 |
-| Bluesky | `social/bluesky_client.py` + `composers/bluesky.py` | 300 | plain name | 2-3 |
-| Telegram | `social/telegram_client.py` + `composers/telegram.py` | 1 024 | plain name | 3-5 |
-| Newsletter | `composers/newsletter.py` | unbounded | plain name | — |
+### Captions and the narrative engine
 
-## Narrative engine
+- **`@handle` mentions exist ONLY on the Instagram feed path (ADR-0007); every other channel gets the plain artist name; an artist without a stored `instagram_url` is never mentioned; the rule holds when the engine falls back.** Why: mention syntax differs per network and we store no per-network handles — an IG-style `@x` is dead text elsewhere. Guarded by: `test_mencions.py` (all four), `test_handle_only_on_instagram_feed`.
+- **No positional `#N` anywhere (ordinals `1r`/`5è` via `utils.ordinal_ca`, ADR-0006), on any channel, including the ambassador share caption.** Why: IG/Telegram parse `#1` as a hashtag. Guarded by: `test_no_positional_hashtag_in_any_channel`, `test_smoke_no_hashtag_positions_across_channels`, `test_ordinal_ca.py`, `test_ambassador.py`.
+- **A narrative-engine exception never blocks a post: `caption_top` falls back to the legacy skeleton and logs.** Guarded by: `test_caption_top_fallback_on_engine_error`, `test_the_rule_holds_when_the_engine_is_down`.
+- **Detectors that read "absent last week" as news (`a1`, `a4`, `a9`, `a10`) return `None` on a territori's first ranking week.** Why: with no baseline every entry is trivially "new"; the cold-start week stamped "debuta" on four territoris at once. Guarded by: `test_cold_start_suppresses_freshness_detectors`.
+- **Hero/secondary/tertiary slots carry distinct subjects (`select_slots` conflicts on shared `canco_id` OR `artista_id`); the tertiary slot (IG feed only) is not forced.** Guarded by: `test_narrative_alpha.py::test_select_slots_*`, `test_ig_dedup_no_repeated_subject_in_slots`.
+- **Release-novelty wording ("estrena", "just publicada", "fa només N dies") is asserted only for a `freshness.is_verified_recent_release` song: `data_llancament` within 30 d, no version marker in the title, artist not deceased before the date.** Why: stored dates are often reissue dates (Pau Riba, 2026 reissue, died 2022). `a6` is pure freshness → suppressed; `a4/a9/a10/a12` keep a neutral chart-event variant in every tier, so `freshness_blocked` filters rather than suppresses; the marker lexicon is one list (`RELEASE_NOVELTY_MARKERS`) so new phrases are covered automatically. Guarded by: `test_freshness.py`, `test_gated_banks_have_neutral_variant_in_every_tier`, `test_pick_phrase_blocked_never_yields_release_novelty`, `test_detect_a6_suppressed_*`.
+- **`a7_long_runner` emits `mesos_estrena` — the song's AGE, never time in the chart; a phrase with the number must anchor it to the release.** Why: `TopSetmanal` starts 2026-04-13, so any "N mesos a la llista" > ~4 is impossible by construction (a BAL post claimed 9). Same suite pins that `posicio_anterior_de` carries the contracted preposition («del 15è», «de fora del top») so no phrase stacks «de al». Guarded by: `test_afirmacions_verificables.py`.
+- **`a5_artista_multiple` is suppressed when it becomes domination (≥ 5 cançons or ≥ 25 % of the top).** Why: only celebratory phrasing exists and a large share may be a fusion artefact. Guarded by: `test_detect_a5_domination_is_suppressed_by_{count,share}`.
+- **Anti-repeat: `registry.pick_phrase` skips phrase ids already used for the same (channel, territori) in the recent window (`NarrativePhraseUsage`), and falls back to the full bank when exhausted — a post must go out.** Guarded by: `test_registry_marks_and_filters`, `test_registry_isolation_across_channels_and_territoris`.
+- **Territory labels come from three maps in `narrative/utils` (`TERRITORI_DE` / `_SHORT` / `_ORDINAL`); `ALT` is deliberately absent and raises `KeyError`; PPCC is «Global» / «del top general» — "PPCC" and "Països Catalans" never appear as top labels or hashtags.** (The cultural term "Països Catalans" is allowed in homepage/legal prose — it names the territory, not the ranking.) Guarded by: `test_territori_labels.py` (`test_alt_raises_keyerror`, `test_no_ppcc_or_paisos_catalans_visible`, `test_no_paisos_catalans_hashtag`, `test_ppcc_ordinal_templates_say_top_general`).
+- **The word "rànquing" is vetoed in every user-facing render/caption ("el top de la setmana").** Guarded by: `social/top_redesign.py` docstring rules + repo grep (no dedicated test).
 
-13 detectors run over the `TopSetmanal` for a given week and
-territory (`social/narrative/scenarios.py`); `detect_all` returns
-the scenarios sorted by severity desc and the composer turns the
-headline beat into a caption. The full spec — distinct-subject slot
-selection, the novetats engine, caption density, account matching +
-top-5 dedup, territorial labels, the ADR-0006/0007/0008 behaviours
-and the anti-repeat registry — lives in its own doc:
+### Renderer
 
-See **[`social-narrative.md`](social-narrative.md)**.
+- **Every slide is JPEG q90; a full 8-slide story set ≈ 1 MB.** Guarded by: `test_feed_top_outputs_jpeg`, `test_ppcc_story_set_outputs_8_jpeg_slides`.
+- **Rendering is deterministic (fixed grain seed) and geometry lives in token JSON (`feed_design/feed-tokens.json`, `top_design/top-tokens.json`, `story_design/story-tokens.json`), never as literals in builders.** Why: byte-identical renders make idempotent re-runs and render-equality tests possible. Guarded by: `test_story_render_is_deterministic`, `test_render_is_deterministic`, `test_top_cover_default_never_calls_duotone` (byte-identical pin).
+- **Every rendered slide is actually painted: luminance stddev ≥ 10 (real slides 22–40, a bare background 1.6).** Why: a builder that early-returns yields a valid but empty JPEG that publishes fine. Guarded by: `test_every_{ppcc,territorial,novetats}_slide_is_actually_painted`.
+- **`user_tags` mirror the drawn items EXACTLY — same countdown blocks/reversal on the feed carousel (`_slide_tags`), same slices/conditional tiers on story sets (`_story_tags`); a tag/slide count mismatch publishes the whole set untagged.** Why: a mention must land on the visible song. Guarded by: `test_slide_tags_top_mirror_renderer_countdown_order`, `test_story_tags_match_renderer_visible_songs`, `test_territorial_alignment_against_real_renderer`, `test_tag_slide_mismatch_publishes_untagged`.
+- **The global (PPCC) poster/cover carries no name; territorial editions carry their palette + name. Feed rows credit principal + collaborators (`artistes_noms`), same as stories.** Guarded by: `test_artist_credit_joins_collaborators`, `test_build_novetats_carries_artistes_noms`.
+- **With `feed_artwork_actiu` / `moviment_actiu` off (default), covers never call `duotone` and are byte-identical; a Thursday `moviment` slot with the flag off creates NO row (unlike the matrix's `omes`) (ADR-0016).** Guarded by: `test_{top,novetats}_cover_default_never_calls_duotone`, `test_moviment_flag_off_no_invitation`.
 
-## Resolved regressions (2026-05-21 sprint)
+### Instagram tagging, handles, collaborators (ADR-0015)
 
-1. **IG `@handle` restituït.** ADR-0007: composer d'IG reescriu
-   `artista_nom` / `Scenario.data["artista"]` a `@handle` quan
-   està disponible. Altres canals mantenen nom pla.
-2. **`#N` → ordinals catalans.** ADR-0006: tots els bancs i
-   detectors emeten ordinals (`1r`, `5è`) en lloc de `#N`.
-3. **Bluesky timeout 60 s → 180 s + retry 3×.** ADR-0005: nou loop
-   de reintents amb back-off (5 s, 15 s) i timeout per upload de
-   blob ampliat a 180 s. `upload_blob` no retornarà silenciós; les
-   excepcions reals (4xx) propaguen immediatament.
+- **A bad handle never blocks a publication: `upload_carousel_item` reads the refused usernames out of Meta's `error_user_msg` (code 110), drops them and retries once, last resort untagged; the same substitution guard is reused for collaborators (`max_slots=3`) and per-story mentions (`max_slots=20`).** Why: 2026-08-03 one renamed collaborator's handle killed the whole CAT territorial top, which was never republished. Guarded by: `test_ig_handles_rebutjats.py`, `test_guard_substitutes_bad_handle`, `test_guard_drops_bad_mention_and_story_survives`, `test_collab_pool_exhausted_publishes_without_collaborators`.
+- **A refused handle is stamped (`instagram_rebutjat_at`, value moved to `instagram_rebutjat_url`), `instagram_url` is BLANKED and `instagram_revisat` reset so the artist reappears in the staff queue with «busca'n el compte nou».** Why: the field is public (artist page + JSON-LD `sameAs`); a dead handle is a dead link Google reads. Meta's error conflates "private" and "invalid", so the old value is kept for manual restore. Handles cannot be validated up front (`business_discovery` unavailable to this app type; test containers burn the 24 h publish quota) — discovery is reactive by design. Guarded by: `publicar_social._marca_handles_rebutjats` (best-effort — bookkeeping never fails a publication); `test_ig_handles_rebutjats.py`.
+- **Collaborator invitations: feed/carousel/moviment only (never stories); ≤ 3 (`GRAPH_MAX_COLLABORATORS` clamps config); category A (accepted) fills reserved slots backfilled from B (never invited), C (rejected/`caducada`) only fills otherwise-empty slots; cooldowns A/C; a `pendent` is never re-invited; registry rows are written only after a successful `media_publish` (no orphans); the whole path is byte-identical with `ig_collaboradors_actiu` off.** Guarded by: `test_collaboradors.py`, `test_publicar_social_collaboradors.py`.
+- **Acceptance cannot be read back from the Graph API (ADR-0015 §5.5); resolution is manual from staff ("Marcar acceptada" only — no manual reject); the hourly `pollar_colaboracions_ig` is a pure expiry pass: `pendent` > 14 d → `caducada`, treated as rejection (90 d cooldown).** Guarded by: `test_pollar_colaboracions_ig.py`, `test_C_caducada_treated_like_rejection_90_day_cooldown`.
+- **`InvitacioColaboracioIG.artista` is `PROTECT`.** Why: the acceptance rate is derived from registry history.
 
-## Auth & identities
+### Sondes «la cançó del dia» (`social/sonda.py`)
 
-Vegeu `docs/policies/identities.md` for the rules. Token storage
-per channel:
+- **One story per (data, franja) on the four story-less days × 2 franges: one never-charted song, one never-collaborating artist mentioned; artist and song never repeat; ladder never-contacted → re-sonda 12 m → `caducada` 90 d; soft quota 1-in-6 non-CAT; deterministic md5 tiebreak on data+franja; no candidate → `omes`; the weekly run never touches sonde rows.** Guarded by: `test_sonda_canco_dia.py`.
+- **Reaction detection is reach-only (`replies` is always 0 for EU accounts; stories have no shares/impressions): flag when reach > median + 3·MAD of the last 30 sondes, never with < 5 priors.** Guarded by: `test_avaluar_{flags_outlier,dins_de_base_no_flag,cold_start_mai_flag}`.
+- **No dedicated toggle: only the IG master/channel switch and the matrix gate it.**
 
-| Channel | Storage | Identity |
-|---|---|---|
-| Instagram | `.env::INSTAGRAM_ACCESS_TOKEN` + `social.InstagramAuth` row | TopQuaranta IG business account |
-| Mastodon | `social.MastodonAuth` row | TopQuaranta instance app |
-| Bluesky | `social.BlueskyAuth` row | `topquaranta.bsky.social` app password |
-| Telegram | `social.TelegramAuth` row | `@topquaranta_bot` |
-| Newsletter | `.env::EMAIL_HOST_PASSWORD` (Brevo SMTP) | `admin@topquaranta.cat` |
+## Traps
 
-## Distribution gate — master + per-channel (2026-06-07)
+- Meta media-fetch failure codes to recognise: **9004** = our URL served headers Meta rejects (see `SOCIAL_PUBLIC_BASE`); **9007/2207027** = readiness race (retried); **110** = bad tag/handle (substituted). Anything else: read the log, do not add a retry.
+- Byte-upload channels (Mastodon, Bluesky) keep working when URL-fetch channels (IG, Telegram) break — "some channels published" is not evidence the static hosting is fine.
+- Story link-stickers are not in the Graph API: the outro CTA sticker is added by hand each week.
+- `NEWSLETTER_PUBLISH_WEEKDAY` and the `enviar_newsletter` cron are two copies of one fact; change both.
+- Bluesky and Mastodon receive only the first 4 images (portada + 3 list slides); the poster is the single-image route for TOPs on the non-IG channels and must stay < 1 MB (JPEG q90; a denser design can cross it — the pin will tell you).
+- The renderer needs `cairosvg` (brand SVG rasterisation) — a missing dep silently pastes `None` (2026-05-07); see `frontend.md` §brand traps.
+- Meta counts test containers against the 24 h publish quota — never "probe" handles or collaborators by creating containers.
+- Cold-start guard covers `a1/a4/a9/a10` only; `a2/a3/a8/a11/a12/a13` need explicit previous-week rows and don't fire without one — do not add a guard there.
 
-Every publisher gates on the shared predicate
-`ConfiguracioGlobal.pot_publicar(canal)` =
-`distribucio_activa AND <canal>_actiu`:
+## Where the detail lives
 
-- **`distribucio_activa`** — the master switch. The REAL global pause:
-  False stops all six channels (IG, Mastodon, Bluesky, Telegram,
-  newsletter, RSS). Default True (deploying changes nothing).
-- **`<canal>_actiu`** — the per-channel switch (one each).
-
-Consumers: `publicar_social` (`pot_publicar("instagram")`),
-`publicar_canal` (`pot_publicar(channel)` for the four non-IG channels),
-and the RSS feeds (`web/feeds.py` → `pot_publicar("rss")`, 503 when off).
-
-The legacy Instagram-only per-slot rollout phase (`fase_distribucio` +
-calendar `min_fase`) was **removed 2026-06**: prod sat at the final phase
-(everything on), so removal was neutral. Per-slot day scheduling is fixed
-by the calendar/cron (the matrix only gates on/off; the day is a
-read-only indicator — see below).
-
-**Distribution matrix — third gate (`MatriuPublicacio`, 2026-06).** On
-top of the master switch and the per-channel switch sits a per-(canal ×
-tipus) toggle: `ConfiguracioGlobal.pot_publicar_tipus(canal, tipus)` =
-`pot_publicar(canal) AND MatriuPublicacio.actiu_per(canal, tipus)`. With
-`actiu=False`, that channel does NOT distribute that content type that
-week. The model lives in `ranking/models.py` next to
-`ConfiguracioGlobal`; migration `0020` SEEDS one active row per (canal ×
-tipus) actually published today (instagram/mastodon/bluesky/telegram ×
-the four feed tipus, plus newsletter × top_ppcc — 17 rows, all on), so
-the default is byte-identical to before. A MISSING row is fail-open
-(True) — the matrix only ever blocks via an explicit off row.
-Conceptual model: only the five PUSH channels are governed
-(instagram, mastodon, bluesky, telegram, newsletter); the website
-generates and shows the top regardless and is never gated, and RSS
-stays on its own `rss_actiu` switch. Consumers: `publicar_social` (per
-slot, `instagram × tipus`), `publicar_canal` (per slot,
-`channel × tipus`), and
-`enviar_newsletter` (`pot_publicar_tipus("newsletter", "top_ppcc")` —
-off ⇒ the Sunday send does not run). An off cell records the slot as
-`omès` so it shows inactive in the publications table rather than
-vanishing. Staff edit it via
-`/staff/social/matriu/` (GET) + `/staff/social/matriu/toggle/` (POST).
-
-**Per-cell day INDICATOR (item C, 2026-06).** The matrix shows the
-PUBLISH DAY per (canal, tipus) as a **read-only indicator**, NOT an
-editable field — the calendar/cron fixes the day, so an editable
-per-cell day would have been redundant. The earlier editable
-`MatriuPublicacio.dia_setmana` field + its `pot_distribuir_avui` gate
-(5a) were removed (migration `0025`); they were a no-op anyway (every
-cell was NULL), so publication is unchanged (`actiu_per` is the only
-gate again). The indicator is derived by
-`social.calendari.publish_weekdays_for(canal, tipus)` → a list of
-weekday ints (0=Mon … 6=Sun): IG + push channels from `CALENDARI`
-(top_ppcc→Sat, top_territorial→Mon+Wed, nous_singles→Fri,
-nous_albums→Tue); the **newsletter** is the exception — it only sends
-`top_ppcc`, on **Sunday**, via its own `enviar_newsletter` cron
-(`0 10 * * 0`), captured by the `NEWSLETTER_PUBLISH_WEEKDAY` constant
-(which MUST match that cron). A (canal, tipus) the channel never
-publishes returns `[]` (the UI renders an em-dash; no day is invented).
-The matrix GET exposes `dies` (weekday labels) + per-cell
-`dies_publicacio`; the toggle endpoint is `actiu`-only again. The shared
-`MatriuCanalToggles` renders one table per channel (rows = tipus,
-columns = day indicator + actiu checkbox).
-
-Staff controls (`web/api/staff/social/controls.py::social_toggle`):
-`channel=global` writes `distribucio_activa`; `channel=<name>` writes the
-per-channel switch. `channel` is required (no default — the old
-default-to-`instagram` silently toggled IG and was the reason the
-newsletter ignored the "global" pause before this fix). Honest
-per-channel state (effective state + last send) at
-`/staff/social/estat-canals/` (see `staff.md`).
-
-## Calendar
-
-Driven by `social/calendari.py`. Slots per weekday (the `min_fase`
-rollout gate was removed 2026-06 — see the matrix section). Sat 09:30
-UTC is the canonical `top_ppcc` cycle; territorials Mon (ROTATORI_B)
-and Wed (ROTATORI_A) 09:30 UTC; novetats Tue (`nous_albums`) and Fri
-(`nous_singles`) 10:00 UTC. **Thu** is the `moviment` slot (feed only,
-over the Global top) — INERT until `moviment_actiu` (see below). Sun
-is the newsletter's own cron, not `CALENDARI`.
-
-## Renderer — see `social-renderer.md`
-
-Primitives compartides, família TOP, redisseny del feed, portades i
-formats d'imatge. Partit de `social.md` el 2026-08-12 per mida
-(docs-maintenance.md, Rule 3).
-
-## Story sets — see `social-stories.md`
-
-The `canco_dia` sonda tipus (2026-08-13; 2/day on story-less days,
-active from deploy, `--franja` runs) is documented in
-`social-stories.md` §Sondes; its `SocialPost.slot_key` discriminator
-extends the weekly idempotence key without touching existing rows.
-The Instagram **story** renderers (PPCC 8-slide editorial set, the
-paginated novetats story set, the territorial port) plus the standard
-publish-robustness behaviour (resumable story sets + the 9007 readiness
-retry, 2026-07-20) live in **`docs/architecture/social-stories.md`**
-(split out per docs-maintenance Rule 3). Feed renderers stay below.
-
-## Static hosting
-
-Meta's IG media-fetcher rejects rendered images served through
-Django (CSP/COOP headers cause code 9004). Caddy serves
-`/static/social/*` directly from
-`/var/cache/topquaranta/social/renders/` as plain files.
-
-The URL handed to the fetchers comes from
-`SOCIAL_PUBLIC_BASE` via `_public_url_for`; if that setting is unset it
-falls back to the Django `/api/v1/social/render` view — the exact
-header-laden path that triggers 9004. The publish commands run under
-**`production`** settings, so `SOCIAL_PUBLIC_BASE` MUST live in
-`base.py` (not only `web_server.py`). Caught 2026-06-03: it was
-`web_server`-only, so every cron publish sent the Django URL and BAL's
-IG/Telegram slots failed with 9004 / `WEBPAGE_MEDIA_EMPTY` while the
-byte-upload channels (Mastodon, Bluesky) — which never fetch a URL —
-published fine. Guarded by `test_public_url_for_uses_caddy_static_not_django_fallback`.
-
-## Ambassador share caption (Fase 2 E)
-
-`social/ambassador.py::ambassador_top_caption(nom, slug, posicio=None)`
-returns a ready-to-share "has entrat al top" caption (artist + canonical
-URL + the position when known), cohesive with the press kit. It is
-DECOUPLED from publishing: no gating, never auto-posted — it's text for
-an artist/team to share, the move behind our best organic reach. No
-positional `#<digit>` (same audience-leak discipline as the weekly
-captions). The live post + campaign strategy stay manual (Miquel).
-
-## Collaborator invitations — feed (ADR-0015; live since 2026-07-06)
-
-Detail: [`social-collaboradors.md`](social-collaboradors.md).
-
-**Handles caducats (2026-08).** Etiquetem el principal i tots els
-col·laboradors de cada cançó, i Meta **no ignora** una etiqueta dolenta:
-llança `code 110` i s'endú la pujada sencera (el 03/08 va tombar el top
-territorial CAT, que no s'ha publicat mai). `publicar_social` ara reintenta
-sense els handles refusats i, per cada un, **buida `Artista.instagram_url`**
-— és un camp públic que viatja a la fitxa i al `sameAs` del JSON-LD, així
-que un compte renombrat hi deixava un enllaç mort. El valor va a
-`instagram_rebutjat_url` i `instagram_revisat` torna a `False`, de manera
-que l'artista **reapareix a la cua de staff** amb l'avís de buscar-ne el
-compte nou. Detall a
-[`social-etiquetatge.md`](social-etiquetatge.md).
-In one line: artists invited as IG **collaborators** on feed posts
-(never stories), gated on `ConfiguracioGlobal.ig_collaboradors_actiu`,
-policy in `social/collaboradors.py`, non-blocking substitution guard at
-publish. Acceptances are marked **manually from staff**
-(`/staff/social/instagram`); the hourly `pollar_colaboracions_ig` is a
-pure expiry cron (`caducada` at 14 days + registry-derived acceptance
-rate — no Graph reads; the read path is unviable, ADR-0015 §5.5).
-First real batch 2026-07-06; definitive cycle since 2026-07-13.
-
-## Related
-
-- Collaborator invitations detail: [`social-collaboradors.md`](social-collaboradors.md).
-- Narrative engine detail: [`social-narrative.md`](social-narrative.md).
-- Post-mortems: `2026-05-20-narrative-engine-collapsed.md`
-  (Resolved by ADR-0006/0007/0008),
-  `2026-05-21-bluesky-silent-failures.md` (Resolved by ADR-0005).
-- ADRs: 0005 (Bluesky retry), 0006 (ordinals), 0007 (`@handle`
-  IG), 0008 (detectors a9-a12 + tertiary slot).
-- Modules: `social/captions.py`, `social/payload.py`,
-  `social/narrative/`, `social/management/commands/publicar_*.py`
-- Calendar source of truth: `social/calendari.py`
+- code: `social/management/commands/publicar_social.py`, `publicar_canal.py`, `social/captions.py`, `social/payload.py`, `social/narrative/{scenarios,novetats,freshness,registry,utils}.py`, `social/narrative/composers/*`, `social/renderer.py`, `render_core.py`, `top_redesign.py`, `feed_redesign.py`, `duotone.py`, `social/{instagram,mastodon,bluesky,telegram}_client.py`, `social/collaboradors.py`, `social/sonda.py`, `social/calendari.py`, `ranking/models.py::{ConfiguracioGlobal.pot_publicar*, MatriuPublicacio}`
+- tests: `social/tests/` (the ids cited above)
+- archived narrative: `docs/archive/architecture/social.md`, `social-narrative.md`, `social-stories.md`, `social-renderer.md`, `social-etiquetatge.md`, `social-collaboradors.md`
+- ADRs: 0005 (Bluesky retry), 0006 (ordinals), 0007 (`@handle` IG only), 0008 (detectors a9–a12 + tertiary slot), 0015 (collaborator invitations), 0016 (feed artwork + moviment)
+- post-mortems: `2026-05-20-narrative-engine-collapsed.md`, `2026-05-21-bluesky-silent-failures.md`

@@ -1,6 +1,6 @@
 """Scenario detectors over `TopSetmanal` (Fase 4 reset, 2026-05-18).
 
-# Spec: docs/architecture/social-narrative.md
+# Spec: docs/architecture/social.md
 
 Thirteen detectors + a fallback (a1-a12 per ADR-0008; a13_top1_return
 added 2026-06-01). Each detector returns at most one

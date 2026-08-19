@@ -541,8 +541,6 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
     un artista amb canal o revisat tampoc. Mentre no es toquen,
     reapareixen — segueixen sent la prioritat.
     """
-    from django.db.models import Max
-
     accions: list[dict] = []
     sense_video = _sense_video(en_finestra).filter(youtube_revisat=False)
     cegues_ids = set(
@@ -566,8 +564,11 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
                 "tipus": "artista",
                 "titol": a.nom,
                 "sub": "cap canal de YouTube",
-                "motiu": f"{a.n_vives} {'cançó' if a.n_vives == 1 else 'cançons'} "
-                "que ara mateix no es poden mesurar",
+                "motiu": (
+                    f"{a.n_vives} cançó que ara mateix no es pot mesurar"
+                    if a.n_vives == 1
+                    else f"{a.n_vives} cançons que ara mateix no es poden mesurar"
+                ),
                 "cerca": _cerca_yt(a.nom),
                 "on": "/staff/artistes/sense-youtube",
             }
@@ -594,16 +595,23 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
             }
         )
 
-    # ── 3. Canal propi dels artistes que ja surten al top ───────────
+    # ── 3. Canal propi: primer els que ja surten al top ─────────────
+    # Ordenat per aparicions al top, **no filtrat** per elles. El
+    # 2026-08-19 els 172 artistes que han estat al top ja tenien el
+    # canal revisat —la cua de `/staff/artistes/sense-youtube` s'ordena
+    # per `-n_top` i s'havia treballat per dalt—, així que exigir
+    # `n_top > 0` deixava aquest calaix mort per sempre i el correu no
+    # tornava a demanar un canal propi mai més. Amb l'ordre sol, quan
+    # n'hi ha de destacats ixen davant, i quan no, ix el que més cançons
+    # vives té.
     canals = (
         Artista.objects.filter(youtube_canal_revisat=False, cancons__in=en_finestra)
         .exclude(youtube_channel_id="")
         .annotate(
             n_top=Count("cancons__rankings", distinct=True),
-            darrer_top=Max("cancons__rankings__setmana"),
+            n_vives=Count("cancons", distinct=True),
         )
-        .filter(n_top__gt=0)
-        .order_by("-n_top", "nom")
+        .order_by("-n_top", "-n_vives", "nom")
         .distinct()[:_QUOTA_CANALS]
     )
     for a in canals:
@@ -612,8 +620,13 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
                 "tipus": "artista",
                 "titol": a.nom,
                 "sub": "sense canal propi revisat",
-                "motiu": f"{a.n_top} aparicions al top · només el mesurem "
-                "per l'Art Track, i el videoclip té molt més públic",
+                "motiu": (
+                    f"{a.n_top} aparicions al top · només el mesurem per "
+                    "l'Art Track, i el videoclip té molt més públic"
+                    if a.n_top
+                    else f"{a.n_vives} cançons mesurades només per l'Art "
+                    "Track; el videoclip té molt més públic"
+                ),
                 "cerca": _cerca_yt(a.nom),
                 "on": "/staff/artistes/sense-youtube",
             }

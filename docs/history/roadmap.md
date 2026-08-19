@@ -3,9 +3,27 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-18.
+> Last updated: 2026-08-19.
 
 ---
+
+## Sprint 2026-08-19 — Docs: només el que importa
+
+Postura del Miquel: la documentació només diu el que és important; un
+canvi toca un doc només si canvia una invariant; l'override de la porta
+és el cas normal (75–90 % sa). Executat en 3 PRs (#446, #447, #448):
+`docs/architecture/` 24 → 8 docs d'invariants (6.416 → ~800 línies, cada
+invariant amb el test que la guarda); ADRs → `DECISIONS.md` (138) i
+post-mortems → `LESSONS.md` (129, 40 incidents amb guarda verificada);
+runbook fusionat amb infra/EMAIL/ssh-keys/retention/deprecation/
+backup-offsite/identities (1.013 → 336, 10 contradiccions resoltes cap
+al codi); CLAUDE.md 530 → 209; 65 notes de sessió de l'arrel + audits +
+recon + roadmap narratiu + tot el que s'ha absorbit → `docs/archive/`
+(140 fitxers, 26.400 línies, fora del mapa i del link-checker).
+**Docs vius: 84 fitxers / 17.100 línies (+65 notes / 10.000 a l'arrel)
+→ 25 fitxers / 3.100 línies.** Portes iguals (400 dur, sense
+grandfathered; mapa 42 → 12 entrades). Política a
+`conventions.md` §Documentation.
 
 > Sprints completats i narrats: `docs/archive/sprints/roadmap-sprints-2026-05-to-2026-08.md`.
 
@@ -297,7 +315,7 @@ Items petits per fer en sessions curtes:
       l'allowlist.
 - [ ] Valorar correu @topquaranta.cat: avui Sprint G va concloure
       "stay on cdmon"; revisitar si el volum d'enviaments puja.
-- [x] ~~**Stalwart polish**~~ — sense objecte des del 2026-08-18: Stalwart s'ha retirat i les bústies han passat a Purelymail. Vegeu `docs/EMAIL.md`.
+- [x] ~~**Stalwart polish**~~ — sense objecte des del 2026-08-18: Stalwart s'ha retirat i les bústies han passat a Purelymail. Vegeu `docs/ops/runbook.md (mail)`.
 - [ ] **Gmail avatar** per `info@`/`admin@` quan se reseti el límit
       del telèfon (ara només `miquel@` té Google Account associat).
 - [ ] (Quan Hetzner ens desbloca port 25 outbound) considerar treure

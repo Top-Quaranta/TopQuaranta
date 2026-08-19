@@ -143,7 +143,7 @@ npm run build      # bundle estàtic a web-react/dist/
 - **Decisions arquitectòniques**: [`docs/DECISIONS.md`](./docs/DECISIONS.md) (digest; ADRs sencers a `docs/archive/decisions/`).
 - **Post-mortems**: [`docs/LESSONS.md`](./docs/LESSONS.md) (digest; write-ups a `docs/archive/post-mortems/`).
 - **Política d'API**: [`docs/architecture/web.md`](./docs/architecture/web.md).
-- **Política de claus SSH**: [`docs/ops/ssh-keys.md`](./docs/ops/ssh-keys.md).
+- **Política de claus SSH**: [`docs/ops/runbook.md`](./docs/ops/runbook.md) (SSH keys section).
 
 Cada commit ha de passar:
 - **pytest** (sense xarxa: mocks per a Last.fm / Deezer).

@@ -262,15 +262,13 @@ www.topquaranta.cat {
 # demanara indefinidament un certificat per a un nom que ja no apunta
 # ací.
 #
-# Tampoc publiquem cap fitxer d'autoconfiguració. Purelymail ja en
-# serveix un a `autoconfig.purelymail.com/mail/config-v1.1.xml` amb
-# `%EMAILDOMAIN%` de comodí, així que val per als seus clients i per
-# tant per a nosaltres: un client que no troba res al nostre domini
-# dedueix la configuració des de l'MX i hi arriba. Vam arribar a
-# publicar-ne una còpia pròpia; era un duplicat del mateix contingut, i
-# el duplicat es va desincronitzar (deia d'enviar per Brevo amb una clau
-# compartida mesos després que això deixara de ser cert). Qui allotja el
-# correu és qui ha de dir com s'hi connecta.
+# L'autoconfig de Thunderbird sí que es publica, però al domini
+# principal (`/.well-known/autoconfig/mail/config-v1.1.xml`, bloc més
+# amunt, fitxer a `/var/www/autoconfig/`), i apunta a Purelymail. Es
+# manté sincronitzat amb `deploy/autoconfig-topquaranta.xml`
+# (`test_autoconfig_correu.py`). Qui allotja el correu és qui diu com
+# s'hi connecta; ací només ho repetim perquè Thunderbird ho busca al
+# nostre domini abans que enlloc.
 
 # Per-project Caddy snippets owned by other repos installed at
 # /etc/caddy/conf.d/. Each project ships and reloads its own

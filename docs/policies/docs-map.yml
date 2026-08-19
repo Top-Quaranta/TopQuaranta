@@ -44,9 +44,9 @@ mapping:
   - prefix: bin/
     doc: docs/ops/runbook.md
   - prefix: deploy/
-    doc: docs/ops/infra.md
+    doc: docs/ops/runbook.md
   - prefix: topquaranta/
-    doc: docs/ops/infra.md
+    doc: docs/ops/runbook.md
 
 # ---------------------------------------------------------------------
 # exclude: prefixes that never trip the docs-coherence check. A PR
@@ -88,12 +88,4 @@ size:
       reason: >-
         Historical sprint log. Grows by design; Rule 3 archives
         completed sprints quarterly, but the live file stays long.
-  grandfathered:
-    - path: docs/ops/runbook.md
-      current_lines: 793
-      reason: >-
-        Exceeds the local 400 threshold. Rule 3's split row in
-        docs-maintenance.md only covers docs/architecture/<X>.md,
-        so a runbook split is a discretionary cleanup, not an
-        automatic decay sweep. Candidates: deploy, ML, social,
-        ingest sub-runbooks.
+  grandfathered: []

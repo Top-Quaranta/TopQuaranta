@@ -381,7 +381,7 @@ def test_static_social_excluded_from_security_headers():
     security-headers block is therefore scoped with a matcher that
     excludes the path. Static tripwire: if a refactor drops the
     exclusion, this fails before it ships (runtime regression would only
-    surface as a failed social publish). See docs/ops/infra.md.
+    surface as a failed social publish). See docs/ops/runbook.md.
 
     Property asserted (structurally, not by matcher-syntax substring):
     the Caddyfile has a `handle_path /static/social/*` file-server block,
@@ -487,7 +487,7 @@ def test_caddyfile_imports_confd():
     assert "import /etc/caddy/conf.d/*.caddy" in body, (
         "deploy/Caddyfile must contain the line "
         "`import /etc/caddy/conf.d/*.caddy` so per-project snippets "
-        "are loaded. See docs/ops/infra.md."
+        "are loaded. See docs/ops/runbook.md."
     )
 
 
@@ -510,7 +510,7 @@ def test_sync_infra_does_not_touch_confd():
     assert "conf.d" not in code, (
         "bin/tq-sync-infra must not reference /etc/caddy/conf.d/ in "
         "executable code. That directory is reserved for snippets "
-        "owned by other repos. See docs/ops/infra.md."
+        "owned by other repos. See docs/ops/runbook.md."
     )
 
 

@@ -21,7 +21,7 @@ Three families:
    their original 365-day window (no retroactive deletion — Miquel's
    explicit constraint, 2026-07-05).
 
-# Spec: docs/ops/backup-offsite.md
+# Spec: docs/ops/runbook.md
 """
 
 from __future__ import annotations
@@ -229,7 +229,7 @@ def test_pii_exclude_list_covers_user_tables():
     assert uncovered == [], (
         f"Tables with personal data NOT excluded from the sanitized monthly "
         f"dump: {uncovered}. Add --exclude-table-data patterns to bin/tq-backup "
-        f"(and update docs/ops/retention.md §Backups)."
+        f"(and update docs/ops/runbook.md retention table)."
     )
 
 

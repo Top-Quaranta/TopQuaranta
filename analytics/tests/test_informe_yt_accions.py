@@ -142,6 +142,33 @@ def test_an_artist_with_no_channel_at_all_outranks_the_songs():
 
 
 @pytest.mark.django_db
+def test_the_own_channel_slot_never_dies_just_because_nobody_charted():
+    """Ordenat per aparicions al top, no filtrat per elles.
+
+    El 2026-08-19 els 172 artistes que havien estat al top ja tenien el
+    canal revisat: la cua de staff s'ordena per `-n_top` i s'havia
+    treballat per dalt. Exigir `n_top > 0` deixava aquest calaix mort
+    per sempre — el correu no tornava a demanar un canal propi mai més.
+    """
+    a = _artista("Mai al top", revisat=False)
+    _canco(a, "Una qualsevol")
+
+    files = _accions()["files"]
+    demanats = [f["titol"] for f in files if f["tipus"] == "artista"]
+    assert "Mai al top" in demanats
+
+
+@pytest.mark.django_db
+def test_a_single_song_is_asked_about_in_the_singular():
+    """«1 cançó que no es poden mesurar» delata que ningú llig el correu."""
+    fosc = _artista("Només una", canal_topic="")
+    _canco(fosc, "L'única")
+
+    fila = next(f for f in _accions()["files"] if f["titol"] == "Només una")
+    assert "1 cançó que ara mateix no es pot mesurar" in fila["motiu"]
+
+
+@pytest.mark.django_db
 def test_the_list_says_how_much_is_left_so_ten_rows_are_not_read_as_done():
     """Deu files sense el total es lligen com «ja estem»."""
     a = _artista("Molta faena")

@@ -67,6 +67,14 @@
   `min_senyal_combinat`. Multiply plays, never divide views (an absolute
   floor would drop YouTube-only songs). Guarded by:
   `ranking/tests/test_youtube_al_top.py`.
+- **The combined floor is deliberately low, and that is editorial, not an
+  oversight.** `min_senyal_combinat` (200) at weight 1000 is also "a
+  fifth of one play": with YouTube on, a song with a single scrobble and
+  zero views charts. Last.fm penetration among Catalan-music listeners is
+  tiny, so one play is real signal; a short chart is worse than a chart
+  with a modest tail. Do not "fix" this by raising the floor to play
+  units. Guarded by:
+  `test_youtube_al_top.py::test_una_sola_escolta_basta_quan_youtube_compta`.
 - **Weekly views = Σ per-video deltas over videos present in both
   snapshots.** A lane contributes from the day after it appears; a lane
   that vanishes subtracts nothing; a song without a comparable pair is

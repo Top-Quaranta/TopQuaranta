@@ -132,11 +132,21 @@ class ConfiguracioGlobal(models.Model):
     # El terra quan la font combinada està activa. En unitats del senyal
     # combinat, no d'escoltes: a pes 1000, 200 vol dir «200
     # visualitzacions o una cinquena part d'una escolta».
+    #
+    # Que això baixe el terra de Last.fm de 5 escoltes a 0,2 —o siga, que
+    # una cançó amb una sola escolta entre al top— NO és un efecte
+    # col·lateral a corregir: és el criteri editorial. Tindre oients que
+    # usen Last.fm és rarísim en música en català, i una escolta ja és
+    # senyal real. Un top curt és pitjor que un top amb cua modesta.
+    # Simulat el 2026-08-19 al PV: de 20 files passa a 40, i 23 de les 25
+    # noves entren per aquest terra, no per YouTube. Volgut.
     min_senyal_combinat = models.IntegerField(
         default=200,
         validators=_COUNT_RANGE,
         help_text="Terra per a entrar al top quan YouTube està actiu. "
-        "Substitueix min_escoltes_top, que és en unitats d'escoltes.",
+        "Substitueix min_escoltes_top, que és en unitats d'escoltes. "
+        "A pes 1000 també vol dir «una cinquena part d'una escolta»: "
+        "que una cançó entre amb una sola escolta és volgut.",
     )
 
     # PPCC aggregator weight per source position. Was a module-level

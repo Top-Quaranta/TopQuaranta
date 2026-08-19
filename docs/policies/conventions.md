@@ -67,7 +67,7 @@ migration has been applied is the failure mode of
 
 When testing a production-shaped flow E2E, **use the dedicated
 `qa_smoke` user + fixture artist** (slug `qa-smoke`). See
-`docs/policies/identities.md` Rule 2. Mutations against real
+`docs/ops/runbook.md` (identities). Mutations against real
 artists are off-limits.
 
 Until the fixture is created (open backlog item), the operator

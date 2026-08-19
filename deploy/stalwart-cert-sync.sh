@@ -37,7 +37,7 @@
 #   4  JMAP write failed, or live config did not take the new value
 #   5  post-restart verification failed (WRONG SERIAL STILL SERVED)
 #
-# Spec: docs/ops/infra.md
+# Spec: docs/ops/runbook.md
 
 set -euo pipefail
 

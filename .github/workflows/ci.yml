@@ -115,7 +115,7 @@ jobs:
 
   destructive-migrations:
     # Soft warning on PRs that introduce a destructive migration so the
-    # reviewer is reminded to follow docs/ops/runbook.md §10 (kill stale
+    # reviewer is reminded to follow docs/ops/runbook.md (destructive migrations) (kill stale
     # crons before applying). Caught 2026-05-07: dropping
     # Album.cancons_obtingudes while a 2 h 30 min MB cron held the old
     # model produced 15 'column does not exist' errors.
@@ -151,7 +151,7 @@ jobs:
             if grep -E "operations\\.($DESTRUCTIVE)|migrations\\.($DESTRUCTIVE)" "$f" > /dev/null; then
               flagged+="$f "
               {
-                echo "::warning file=$f::Destructive migration detected — see docs/ops/runbook.md §10 before deploying."
+                echo "::warning file=$f::Destructive migration detected — see docs/ops/runbook.md (destructive migrations) before deploying."
                 echo "### ⚠️ Destructive migration — \`$f\`"
                 echo
                 grep -nE "operations\\.($DESTRUCTIVE)|migrations\\.($DESTRUCTIVE)" "$f" | sed 's/^/    /'

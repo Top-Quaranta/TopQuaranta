@@ -199,5 +199,5 @@ class Command(BaseCommand):
                 f"{multiplier:g}",
             )
             self.stdout.write(f"  {updated} rows marked corregit=True.")
-        # WORK_DONE protocol — see docs/ops/runbook.md §9.4.
+        # WORK_DONE protocol — see docs/ops/runbook.md (WORK_DONE).
         self.stdout.write(f"WORK_DONE={n}")

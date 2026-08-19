@@ -41,4 +41,4 @@ notifications and the weekly newsletter draft → send pipeline. -->
 ## Where the detail lives
 - code: `comptes/` (`views.py`, `tokens.py`, `ratelimit.py`, `notifications.py`, `newsletter*.py`, `community_bridge.py`, `management/commands/`), `web/api/auth_views.py`, `web/api/compte_views/`, `web/api/comunitat_views/`, `web/api/newsletter_routine.py`, `web/api/staff/{newsletter,solicituds,sollicituds_revisio,avisos_top}.py`
 - archived narrative: `docs/archive/architecture/{comptes,comptes-newsletter}.md`
-- ADRs: 0004 (workflow sol·licituds de revisió) · policy: `docs/policies/identities.md` · post-mortems: `2026-05-19-workflow-sollicituds-redesigned.md`
+- ADRs: 0004 (workflow sol·licituds de revisió) · policy: `docs/ops/runbook.md` (identities/secrets) · post-mortems: `2026-05-19-workflow-sollicituds-redesigned.md`

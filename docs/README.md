@@ -4,9 +4,7 @@ Documentation for TopQuaranta, organised by audience.
 
 ```
 docs/
-├── platform-overview.md    — START HERE: cross-cutting onboarding map (stack,
-│                             data model, pipeline, territories, staff, social)
-├── EMAIL.md                — correu: Purelymail + Brevo/Resend
+│   (start with CLAUDE.md at the repo root — it is the entry map)
 │
 ├── architecture/           # one file per app: INVARIANTS + TRAPS only
 │   ├── music.md            — domain models: approval anchors, ISRC, MB, aliases
@@ -22,12 +20,9 @@ docs/
 ├── product/                # what the project is about
 │   └── definition.md       — què compta com a "música en català"
 │
-├── ops/                    # for the people running it
-│   ├── deprecation.md      — how we retire fields/commands/endpoints
-│   ├── infra.md            — multi-tenant Caddy (shared with cercol-api)
-│   ├── retention.md        — what we keep, for how long
-│   ├── runbook.md          — incident response + common tasks
-│   └── ssh-keys.md         — SSH key policy on the server
+├── ops/
+│   └── runbook.md          — everything for 3 a.m.: deploy, health, restore, Caddy
+│                             multi-tenant, secrets rotation, mail, backups, retention
 │
 ├── DECISIONS.md            — ADR digest: one entry per decision (what/why/guard)
 ├── LESSONS.md              — incident digest: one paragraph per incident + its guard
@@ -35,8 +30,7 @@ docs/
 ├── policies/               # the rules
 │   ├── conventions.md      — code + documentation conventions (what a doc may say,
 │   │                         when a PR must touch one, post-mortems, specs)
-│   ├── docs-map.yml        — prefix → doc mapping + size scope (CI reads this)
-│   └── identities.md       — human vs service identities
+│   └── docs-map.yml        — prefix → doc mapping + size scope (CI reads this)
 │
 ├── history/                # what happened and what's next
 │   ├── changelog.md        — release tags (Keep a Changelog)
@@ -49,6 +43,7 @@ docs/
     ├── recon/              — community + SEO outreach recon (2026-06)
     ├── decisions/          — full ADRs (digest: docs/DECISIONS.md)
     ├── post-mortems/       — full write-ups (digest: docs/LESSONS.md)
+    ├── ops/                — the pre-2026-08-19 runbook, infra, EMAIL, retention, ssh-keys…
     ├── policies/           — superseded policy files (now in conventions.md)
     ├── sprints/            — sprint narratives moved out of history/roadmap.md
     └── changelog/          — compressed per quarter

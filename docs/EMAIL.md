@@ -35,7 +35,7 @@ que va durar:
   copiava a `/etc/stalwart/certs/`, però Stalwart no el rellegia: el 26
   de juliol servia encara el d'abril, caducat, amb el bo al disc des de
   feia un mes. Post-mortem a
-  [`post-mortems/2026-07-26-stalwart-cert-expirat.md`](post-mortems/2026-07-26-stalwart-cert-expirat.md).
+  [`archive/post-mortems/2026-07-26-stalwart-cert-expirat.md`](archive/post-mortems/2026-07-26-stalwart-cert-expirat.md).
 - L'enviament. Hetzner bloqueja el port 25 d'eixida, així que Stalwart
   no podia entregar res pel seu compte i calia encaminar-ho tot per un
   smarthost. Eixa restricció **continua sent certa**, i és la raó per la

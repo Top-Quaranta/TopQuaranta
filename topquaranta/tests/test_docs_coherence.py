@@ -7,7 +7,7 @@ checks that the named doc exists on disk and matches a doc the
 mapping resolved for one of the touched subsystems.
 """
 
-# Spec: docs/policies/docs-maintenance.md
+# Spec: docs/policies/conventions.md
 
 from __future__ import annotations
 

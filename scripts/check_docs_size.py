@@ -17,7 +17,7 @@ Exit codes:
   1 - at least one offender exists; the message lists offenders
       with line counts.
 
-# Spec: docs/policies/docs-maintenance.md
+# Spec: docs/policies/conventions.md
 """
 
 from __future__ import annotations

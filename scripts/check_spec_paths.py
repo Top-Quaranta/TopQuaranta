@@ -10,7 +10,7 @@ Used both by the pre-commit hook (id: check-spec-paths) and the CI
 workflow (.github/workflows/ci-docs.yml). Exits 0 when everything
 resolves; exits 1 with a list of misses otherwise.
 
-See `docs/policies/docs-maintenance.md` Rule 1.
+See `docs/policies/conventions.md` Rule 1.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def main() -> int:
             print(f"  {src}:{lineno}  →  {target}  (file not found)", file=sys.stderr)
         print(
             f"\n{len(misses)} broken backlink(s); see "
-            f"docs/policies/docs-maintenance.md Rule 1.",
+            f"docs/policies/conventions.md Rule 1.",
             file=sys.stderr,
         )
         return 1

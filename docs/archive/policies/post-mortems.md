@@ -39,7 +39,7 @@ Write a post-mortem when:
 
 ## Format
 
-Copy `docs/post-mortems/TEMPLATE.md` to `YYYY-MM-DD-<slug>.md`
+Copy `docs/archive/post-mortems/TEMPLATE.md` to `YYYY-MM-DD-<slug>.md`
 where the date is the **incident date**, not the write-up date.
 
 Each post-mortem ends with a `## Prevention` block that links to
@@ -58,13 +58,13 @@ policy entry instead.
 
 ## Where they live
 
-- **`docs/post-mortems/` (live):** every post-mortem stays here
+- **`docs/archive/post-mortems/` (live):** every post-mortem stays here
   indefinitely.
 - **No archive:** see `docs/policies/docs-maintenance.md` Rule 5.
 
 ## How to use the inventory
 
 When designing a new sprint that touches a familiar shape (auth,
-deploy, social distribution), grep `docs/post-mortems/` for the
+deploy, social distribution), grep `docs/archive/post-mortems/` for the
 shape first. The previous incident's `## Prevention` link is the
 fastest way to surface the policy you need to comply with.

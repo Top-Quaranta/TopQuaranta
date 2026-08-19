@@ -1,6 +1,6 @@
 """Expire stale IG collaborator invitations + refresh the acceptance metric.
 
-# Spec: docs/decisions/0015-ig-collaborator-invitations.md §5.5
+# Spec: docs/archive/decisions/0015-ig-collaborator-invitations.md §5.5
 
 Definitive cycle (2026-07-13, ADR-0015 §5.5): programmatic acceptance
 reads are unviable with the app's API flavour (Instagram Login lacks

@@ -405,7 +405,7 @@ is the entire lesson of the July 2026 incident: `/etc/stalwart/certs`
 held a valid certificate from 26 June onwards while Stalwart kept
 serving an April one that expired on 26 July, so a file-based check
 would have reported healthy for a month. See
-`docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`.
+`docs/archive/post-mortems/2026-07-26-stalwart-cert-expirat.md`.
 
 Wired as `scripts/health/tls_certs.sh` → `music.health.check_tls_certs`,
 the same sub-check pattern as the Spotify and Instagram-token rows.
@@ -575,7 +575,7 @@ then skipped the venv sync and the SPA build, printed
 That is the same shape as the certificate sync script that reported
 success for a month while the mail server served an expiring
 certificate: **a check that cannot tell "nothing changed" from "I could
-not look"**. See `docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`
+not look"**. See `docs/archive/post-mortems/2026-07-26-stalwart-cert-expirat.md`
 and the Ops-scripts rule in `docs/policies/conventions.md`.
 
 The list is now computed once, before any condition, by
@@ -819,8 +819,8 @@ branca no hi era fins al 2026-08-18, i sense ella una entrada nova no
 s'instal·lava **i l'script eixia igualment amb èxit** — el pitjor mode de
 fallada possible en un desplegament.
 
-Vegeu `docs/decisions/0001-gunicorn-no-reload.md` i
-`docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
+Vegeu `docs/archive/decisions/0001-gunicorn-no-reload.md` i
+`docs/archive/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
 
 ---
 
@@ -860,8 +860,8 @@ revocació explícita al panel del compte Google.)
 
 Backup del `.env` pre-canvi a `/home/topquaranta/app/.env.bak-YYYYMMDD`.
 
-Vegeu `docs/decisions/0002-gsc-oauth-user-creds.md` i
-`docs/post-mortems/2026-05-20-gsc-permission-revoked.md`.
+Vegeu `docs/archive/decisions/0002-gsc-oauth-user-creds.md` i
+`docs/archive/post-mortems/2026-05-20-gsc-permission-revoked.md`.
 
 ## Spotify — auth path
 
@@ -913,8 +913,8 @@ està a Spotify (artistes auto-editats sense distribució). A
 investigar abans de reactivar Premium si es comporta diferent al
 patró 95%+ històric.
 
-Vegeu `docs/decisions/0009-spotify-identity-migration.md`,
-`docs/decisions/0011-spotify-cron-schedule.md` i
+Vegeu `docs/archive/decisions/0009-spotify-identity-migration.md`,
+`docs/archive/decisions/0011-spotify-cron-schedule.md` i
 `docs/architecture/ingesta.md`.
 
 ## Lessons learned

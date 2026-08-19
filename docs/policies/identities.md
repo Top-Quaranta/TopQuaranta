@@ -9,7 +9,7 @@ On 2026-05-20 the GSC daily cron started failing with HTTP 403.
 The refresh token had been minted against a personal Gmail account
 months earlier; when ownership of the GSC property was tidied up
 to `admin@topquaranta.cat`, the cron stopped working without
-warning. See `docs/post-mortems/2026-05-20-gsc-permission-revoked.md`.
+warning. See `docs/archive/post-mortems/2026-05-20-gsc-permission-revoked.md`.
 The pattern generalises: any automation tied to a person breaks when
 that person rotates, leaves, or cleans up permissions.
 
@@ -34,7 +34,7 @@ account: `qa_smoke` user paired with a fixture artist (slug
 `qa-smoke`). Real artists (Rosalía, La Fúmiga, Manel, anyone the
 DB has) are off-limits for E2E mutations.
 
-See `docs/post-mortems/2026-05-20-smoke-side-effects.md` for the
+See `docs/archive/post-mortems/2026-05-20-smoke-side-effects.md` for the
 incident this rule prevents. Until the `qa_smoke` fixture exists
 (open backlog item), the operator manually documents every smoke
 mutation and reverts it post-test.

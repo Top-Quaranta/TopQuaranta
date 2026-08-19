@@ -356,7 +356,7 @@ def check_instagram_token() -> tuple[Severity, str, dict]:
 # certificate from 26 June onwards while the mail server kept serving an
 # April one that expired on 26 July. Any check that read the file would
 # have reported healthy for a month. See
-# `docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`.
+# `docs/archive/post-mortems/2026-07-26-stalwart-cert-expirat.md`.
 #
 # The connection deliberately does NOT verify the chain (CERT_NONE +
 # check_hostname off). Verification raises on an expired certificate —

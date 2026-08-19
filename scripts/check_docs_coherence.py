@@ -38,7 +38,7 @@ Stdout markers consumed by the CI workflow:
                           (so the workflow can apply an audit
                           label for filtering).
 
-# Spec: docs/policies/docs-maintenance.md
+# Spec: docs/policies/conventions.md
 """
 
 from __future__ import annotations

@@ -31,7 +31,7 @@ Exit codes:
   0 - every top-level code directory is mapped or excluded.
   1 - at least one is uncovered; the message lists which.
 
-# Spec: docs/policies/docs-maintenance.md
+# Spec: docs/policies/conventions.md
 """
 
 from __future__ import annotations

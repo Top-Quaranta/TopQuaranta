@@ -9,7 +9,7 @@ Given a track's `preview_url` (and optionally its Deezer track ID), we:
   3. Run `faster-whisper large-v3 .detect_language()` without transcribing.
   4. Return (lang_code, probability).
 
-Evaluated on 48 clips (see ADR-0014, `docs/decisions/0014-whisper-lid-eval.md`):
+Evaluated on 48 clips (see ADR-0014, `docs/archive/decisions/0014-whisper-lid-eval.md`):
   precision(ca) = 100 %, recall(ca) = 81 %, specificity = 100 %.
 
 The model (~1.5 GB on disk, int8 quantised) is downloaded on first use

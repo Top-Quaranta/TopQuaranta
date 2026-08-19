@@ -306,7 +306,7 @@ class TelegramAuth(models.Model):
 class InvitacioColaboracioIG(models.Model):
     """One Instagram collaborator invite we sent for a feed post.
 
-    Spec: docs/decisions/0015-ig-collaborator-invitations.md §5.1.
+    Spec: docs/archive/decisions/0015-ig-collaborator-invitations.md §5.1.
 
     Records every invite + its async resolution (pending →
     accepted/rejected). Keyed by `(artista, ig_media_id)`: one invite per

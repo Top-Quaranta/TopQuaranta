@@ -29,20 +29,14 @@ docs/
 │   ├── runbook.md          — incident response + common tasks
 │   └── ssh-keys.md         — SSH key policy on the server
 │
-├── policies/               # consensus rules — prevention over memory
-│   ├── conventions.md      — code conventions (migrated from CLAUDE.md §10)
-│   ├── docs-maintenance.md — decay process + Spec: backlinks
-│   ├── identities.md       — human vs service identities
-│   ├── post-mortems.md     — when and how to write one
-│   └── sprint-process.md   — when a sprint needs a spec first
+├── DECISIONS.md            — ADR digest: one entry per decision (what/why/guard)
+├── LESSONS.md              — incident digest: one paragraph per incident + its guard
 │
-├── decisions/              # architecture decision records (ADRs)
-│   ├── 0000-template.md
-│   └── ...
-│
-├── post-mortems/           # incident write-ups + lessons
-│   ├── TEMPLATE.md
-│   └── YYYY-MM-DD-<slug>.md
+├── policies/               # the rules
+│   ├── conventions.md      — code + documentation conventions (what a doc may say,
+│   │                         when a PR must touch one, post-mortems, specs)
+│   ├── docs-map.yml        — prefix → doc mapping + size scope (CI reads this)
+│   └── identities.md       — human vs service identities
 │
 ├── history/                # what happened and what's next
 │   ├── changelog.md        — release tags (Keep a Changelog)
@@ -53,8 +47,10 @@ docs/
     ├── audits/             — audit + recon reports of finished sprints
     ├── notes/              — session notes / informes that used to sit at the repo root
     ├── recon/              — community + SEO outreach recon (2026-06)
-    ├── decisions/          — resolved >6m
-    ├── sprints/            — completed >3m
+    ├── decisions/          — full ADRs (digest: docs/DECISIONS.md)
+    ├── post-mortems/       — full write-ups (digest: docs/LESSONS.md)
+    ├── policies/           — superseded policy files (now in conventions.md)
+    ├── sprints/            — sprint narratives moved out of history/roadmap.md
     └── changelog/          — compressed per quarter
 ```
 

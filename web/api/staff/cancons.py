@@ -14,6 +14,7 @@ from django.db.models import (
     Q,
 )
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
@@ -26,6 +27,7 @@ from music.models import (
     Album,
     Artista,
     Canco,
+    CancoYouTubeVideo,
     SpotifyMetadata,
 )
 from music.services import (
@@ -40,6 +42,7 @@ from music.services import (
 from web.api.search_utils import normalize_search_term as _normalize_search_term
 from web.api.search_utils import unaccent_field as _unaccent_field
 from web.api.staff._spotify_url import SpotifyUrlError, parse_track_id
+from web.api.staff._youtube_url import YoutubeUrlError, parse_video_id
 
 Usuari = get_user_model()
 # Shared helpers from the staff package.
@@ -106,6 +109,20 @@ def _canco_row(c, homset=None) -> dict:
         "mb_lyrics_language": c.mb_lyrics_language or "",
         "mbrainz_confirmed": c.mbrainz_confirmed,
         "spotify": spotify_payload,
+        # YouTube lanes. `youtube_video_id` is the Art Track pointer (one
+        # per song); `youtube_videos` are the official-channel lanes
+        # (videoclip, live, lyric). Both are read-only here except the
+        # pointer — see `canco_detail`. `revisat` is the third state that
+        # lets a song leave the daily action list without a video.
+        "youtube": {
+            "video_id": c.youtube_video_id or "",
+            "match": c.youtube_match or "",
+            "revisat": c.youtube_revisat,
+            "carrils": [
+                {"video_id": v.video_id, "titol": v.titol}
+                for v in c.youtube_videos.all()
+            ],
+        },
         "artista": (
             {
                 "pk": c.artista_id,
@@ -169,7 +186,7 @@ def cancons_list(request: Request) -> Response:
     # row for the collab list and the Spotify payload — N+1 ×up-to-200
     # (auditoria 2026-06-07).
     qs = qs.select_related("artista", "album", "spotify").prefetch_related(
-        "artistes_col"
+        "artistes_col", "youtube_videos"
     )
     ml_classe = request.GET.get("ml_classe", "")
     if ml_classe in ("A", "B", "C"):
@@ -440,6 +457,37 @@ def canco_detail(request: Request, pk: int) -> Response:
                         status=400,
                     )
                 spotify_action = ("set", track_id)
+        # Manual YouTube video (store-and-trust: format only, no quota
+        # spent — see `_youtube_url`). Two destinations, decided by what
+        # the song already has, mirroring how staff pasting a Topic
+        # channel is adopted on the artist side:
+        #   · no Art Track yet → it becomes the Art Track pointer, and
+        #     the song starts being measured tonight;
+        #   · already has one  → it is added as an extra lane, which is
+        #     what a videoclip on the band's own channel is.
+        # Empty value clears the pointer only. Lanes are not removable
+        # on purpose: discovery re-creates them from the title match, so
+        # a delete button would undo itself overnight — a wrong lane is
+        # a `_conte_titol` bug, not a data-entry one.
+        youtube_action: tuple[str, str] | None = None
+        if "youtube_url" in data:
+            raw = (data.get("youtube_url") or "").strip()
+            if not raw:
+                youtube_action = ("clear", "")
+            else:
+                try:
+                    video_id = parse_video_id(raw)
+                except YoutubeUrlError as exc:
+                    return Response({"error": str(exc)}, status=400)
+                youtube_action = (
+                    "carril" if canco.youtube_video_id else "principal",
+                    video_id,
+                )
+        # Third state: "s'ha buscat i no en té". Final answer, and the
+        # only thing that takes a song out of the daily action list
+        # without a video.
+        if "youtube_revisat" in data:
+            canco.youtube_revisat = bool(data["youtube_revisat"])
         # Reassign to a different artist (when staff spots a mis-attribution).
         if "artista_pk" in data:
             raw = data.get("artista_pk")
@@ -535,6 +583,49 @@ def canco_detail(request: Request, pk: int) -> Response:
             # serializer reflects the row we just wrote (the earlier
             # `getattr(canco, "spotify", …)` may have cached its absence).
             canco.spotify = sm
+        # Apply the validated manual YouTube action.
+        if youtube_action is not None:
+            verb, video_id = youtube_action
+            if verb == "principal":
+                canco.youtube_video_id = video_id
+                canco.youtube_match = Canco.MATCH_MANUAL
+                canco.youtube_matched_at = timezone.now()
+                # Answered: a song with a video is no longer a task.
+                canco.youtube_revisat = True
+                canco.save(
+                    update_fields=[
+                        "youtube_video_id",
+                        "youtube_match",
+                        "youtube_matched_at",
+                        "youtube_revisat",
+                    ]
+                )
+            elif verb == "carril":
+                CancoYouTubeVideo.objects.get_or_create(
+                    canco=canco, video_id=video_id, defaults={"titol": ""}
+                )
+                if not canco.youtube_revisat:
+                    canco.youtube_revisat = True
+                    canco.save(update_fields=["youtube_revisat"])
+            else:  # clear → discovery may fill it again
+                canco.youtube_video_id = ""
+                canco.youtube_match = ""
+                canco.youtube_matched_at = None
+                canco.save(
+                    update_fields=[
+                        "youtube_video_id",
+                        "youtube_match",
+                        "youtube_matched_at",
+                    ]
+                )
+            log_staff_action(
+                request,
+                "canco_edit",
+                target=canco,
+                field="youtube_manual",
+                video_id=video_id,
+                carril=verb,
+            )
         # Replace the collaborator list (artistes_col ManyToMany). Expects
         # an array of Artista PKs. A check in Canco.clean() rejects the
         # D5 case where the main artist also appears as a collaborator;

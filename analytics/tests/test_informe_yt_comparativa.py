@@ -419,6 +419,39 @@ def test_the_report_says_what_would_happen_to_the_chart():
     assert val["mana_yt"] == 1  # la muda, que no té escoltes
 
 
+@pytest.mark.django_db
+def test_the_chart_effect_separates_what_youtube_earned_from_what_the_floor_gave():
+    """«+11 noves» no vol dir «YouTube n'ha portat onze».
+
+    El terra combinat també deixa entrar cançons que el terra en
+    escoltes deixava fora, i eixes no les porta la segona font: les
+    porta haver abaixat el llistó. Sense separar-ho, el correu
+    s'atribueix un guany que no és seu i la decisió es pren sobre un
+    número inflat.
+    """
+    from ranking.models import ConfiguracioGlobal
+
+    cfg, _ = ConfiguracioGlobal.objects.get_or_create(pk=1)
+    cfg.min_escoltes_top = 5
+    cfg.youtube_pes_escolta = 1000
+    cfg.min_senyal_combinat = 200
+    cfg.save()
+
+    # Cap escolta, molt públic a YouTube: només hi entra per la segona font.
+    _senyal(_canco("Només YouTube"), yt=50_000)
+    # Dues escoltes: 2×1000 = 2000 ≥ 200 (terra combinat) però < 5
+    # escoltes (terra vell). Hi entra perquè el terra ha canviat.
+    _senyal(_canco("Poques escoltes"), lfm=2)
+
+    val = next(t for t in _ctx()["efecte_top"]["territoris"] if t["codi"] == "VAL")
+    assert val["noves"] == 2
+    assert val["noves_yt"] == 1, "compta com a mèrit de YouTube el que no ho és"
+    assert val["noves_terra"] == 1, "amaga que el terra ha deixat entrar una fila"
+    assert val["noves_ordre"] == 0
+    # I la suma ha de quadrar sempre: són causes excloents.
+    assert val["noves_yt"] + val["noves_terra"] + val["noves_ordre"] == val["noves"]
+
+
 # ── El compte enrere de l'activació ────────────────────────────────
 #
 # El bloc «efecte al top» del correu té tres estats i els tres es
@@ -436,16 +469,27 @@ def _render(efecte):
     )
 
 
-def test_the_email_says_how_many_days_are_missing():
-    base = {"pes": 1000, "terra": 200, "territoris": []}
-    html = _render({**base, "actiu": False, "dies": 5, "dies_minims": 7, "falten": 2})
-    assert "falten 2 dies" in html
-    assert "s'activa sol" in html
+def test_the_email_says_the_date_it_turns_on_and_the_first_official_top():
+    """La data, no el compte enrere.
 
-    # Singular, perquè «falten 1 dies» és el detall que delata que ningú
-    # ha llegit el correu que envia.
-    html = _render({**base, "actiu": False, "dies": 6, "dies_minims": 7, "falten": 1})
-    assert "falten 1 dia<" in html, "plural castellanitzat o comptador mut"
+    «Falten 2 dies» obliga a fer el càlcul cada matí i, pitjor, no diu
+    quan es nota: el provisional entra el mateix dia de l'activació,
+    però el que veu la gent és el top oficial del dissabte següent.
+    """
+    base = {"pes": 1000, "terra": 200, "territoris": []}
+    html = _render(
+        {
+            **base,
+            "actiu": False,
+            "dies": 5,
+            "dies_minims": 7,
+            "falten": 2,
+            "activacio": datetime.date(2026, 8, 26),
+            "primer_top": datetime.date(2026, 8, 29),
+        }
+    )
+    assert "26/08" in html, "el correu no diu quin dia s'activa"
+    assert "29/08" in html, "el correu no diu quin top oficial ho porta"
 
     # Sense cap fotografia amb detall encara.
     html = _render(
@@ -456,4 +500,22 @@ def test_the_email_says_how_many_days_are_missing():
     # I quan ja compta, que quede clar que allò no és una simulació.
     html = _render({**base, "actiu": True, "dies": 9, "dies_minims": 7, "falten": 0})
     assert "Actiu" in html and "no una simulació" in html
-    assert "simulació:" not in html
+    assert "és una simulació" not in html
+
+
+def test_the_first_official_top_is_the_saturday_the_cron_runs():
+    """El dissabte és quan `calcular_top` publica (`deploy/cron.topquaranta`).
+
+    Si l'activació cau en dissabte, el top d'eixe matí ja la porta: el
+    senyal es fotografia a les 06:30 i el top es calcula a les 08:00.
+    """
+    from analytics.management.commands.enviar_informe_youtube import (
+        _primer_top_oficial,
+    )
+
+    for activacio, esperat in (
+        (datetime.date(2026, 8, 26), datetime.date(2026, 8, 29)),  # dc → ds
+        (datetime.date(2026, 8, 29), datetime.date(2026, 8, 29)),  # ds → eixe matí
+        (datetime.date(2026, 8, 30), datetime.date(2026, 9, 5)),  # dg → ds vinent
+    ):
+        assert _primer_top_oficial(activacio) == esperat, activacio

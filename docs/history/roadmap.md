@@ -7,6 +7,30 @@
 
 ---
 
+## Sprint 2026-08-19 bis — El correu de YouTube reparteix feina
+
+El descobriment automàtic ja ha passat per tot el catàleg (98 % dels
+artistes, 0 per provar): el que queda del buit —536 cançons sense cap
+vídeo i 155 del punt cec— només el tanca una persona. El correu diari
+passa de ser un panell d'estat a repartir **10 recerques al dia** amb la
+cerca escrita i l'enllaç al lloc on desar la resposta; ordre: artista
+sense cap canal → cançó cega → canal propi d'un artista que ja surt al
+top. Perquè hi haja on desar-ho, la fitxa de cançó accepta un vídeo
+enganxat (Art Track si no en té, carril extra si ja en té) i un tercer
+estat `youtube_revisat` («mirat, no en té») que és el que fa que la cua
+es buide en lloc de repetir-se. Correcció al pas: «connectada» ara vol
+dir Art Track **o** carril propi, la mateixa regla que fa servir el
+mesurador — abans la cobertura era pessimista i la llista demanava
+cançons que ja es mesuraven. El correu també separa les files noves per
+causa (per YT / pel terra / per ordre) i diu la data d'activació
+(26/08) i el primer top oficial que la portarà (29/08) en lloc d'un
+compte enrere.
+
+**Pendent d'aquest fil:** decidir amb el provisional del 26/08 a la mà
+si cal tocar res; i, si es vol anar a per les 155 del punt cec sense
+vídeo, mesurar quantes es resolen de veres a mà abans d'invertir-hi
+més matins.
+
 ## Sprint 2026-08-19 — Docs: només el que importa
 
 Postura del Miquel: la documentació només diu el que és important; un

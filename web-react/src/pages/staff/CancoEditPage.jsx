@@ -20,6 +20,7 @@ export default function CancoEditPage() {
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [spotifyUrl, setSpotifyUrl] = useState('')
+  const [youtubeUrl, setYoutubeUrl] = useState('')
 
   useEffect(() => {
     api.get(`/staff/cancons/${pk}/`).then(setC).catch(e => setErr(e.message))
@@ -72,6 +73,41 @@ export default function CancoEditPage() {
     try {
       const out = await api.patch(`/staff/cancons/${pk}/`, { spotify_url: '' })
       setC(out); setSpotifyUrl(''); setMsg('Enllaç de Spotify esborrat. L\'enriquiment automàtic el podrà tornar a resoldre.')
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  // YouTube, like Spotify, is PATCHed on its own: the destination
+  // (Art Track pointer vs extra lane) depends on what the song already
+  // has, so re-sending it with every "Desar" would keep adding lanes.
+  async function saveYoutube() {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const out = await api.patch(`/staff/cancons/${pk}/`, { youtube_url: youtubeUrl.trim() })
+      setC(out); setYoutubeUrl('')
+      setMsg('Vídeo desat. Aquesta nit ja se’n mesuraran les visualitzacions.')
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  async function clearYoutube() {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const out = await api.patch(`/staff/cancons/${pk}/`, { youtube_url: '' })
+      setC(out); setYoutubeUrl(''); setMsg('Vídeo esborrat. El descobriment automàtic el podrà tornar a omplir.')
+    } catch (e) {
+      setErr(e.payload?.error || e.message)
+    } finally { setBusy(false) }
+  }
+
+  async function setRevisat(valor) {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const out = await api.patch(`/staff/cancons/${pk}/`, { youtube_revisat: valor })
+      setC(out)
+      setMsg(valor ? 'Marcada com a revisada: no en té.' : 'Torna a la cua de recerca.')
     } catch (e) {
       setErr(e.payload?.error || e.message)
     } finally { setBusy(false) }
@@ -250,6 +286,94 @@ export default function CancoEditPage() {
                 </div>
               </div>
             )}
+          </div>
+          <div className="text-xs font-semibold">
+            YouTube
+            {c.youtube?.video_id ? (
+              <div className="mt-1 font-normal text-sm">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    className="underline"
+                    href={`https://www.youtube.com/watch?v=${c.youtube.video_id}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    ▶ Veure a YouTube
+                  </a>
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-tq-ink/10">
+                    {c.youtube.match === 'manual' ? 'manual' : c.youtube.match || 'automàtic'}
+                  </span>
+                  <code className="text-[11px] text-tq-ink/60">{c.youtube.video_id}</code>
+                  <Btn size="sm" tone="outline" onClick={clearYoutube} disabled={busy}>Buidar</Btn>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1 font-normal">
+                <Input
+                  value={youtubeUrl}
+                  onChange={e => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  className="w-full"
+                />
+                <p className="mt-1 text-[11px] text-tq-ink/75">
+                  Sense vídeo, aquesta cançó només la veu Last.fm — i si Last.fm
+                  tampoc la veu, no pot entrar al top. Enganxa l'enllaç del vídeo
+                  (l'Art&nbsp;Track «- Topic» o el videoclip del canal de l'artista).
+                  Es valida el format i es mesura des d'aquesta nit.
+                </p>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <Btn
+                    size="sm"
+                    tone="secondary"
+                    onClick={saveYoutube}
+                    disabled={busy || !youtubeUrl.trim()}
+                  >
+                    Desa vídeo
+                  </Btn>
+                  <a
+                    className="text-[11px] underline text-tq-ink/75"
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(
+                      `${c.artista?.nom || ''} ${c.nom}`.trim(),
+                    )}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    Buscar-la a YouTube ↗
+                  </a>
+                </div>
+              </div>
+            )}
+            {/* Official-channel lanes. Read-only on purpose: discovery
+                re-creates them from the title match, so a delete button
+                would undo itself overnight. */}
+            {c.youtube?.carrils?.length > 0 && (
+              <div className="mt-2 font-normal text-[11px] text-tq-ink/75">
+                Carrils del canal propi:{' '}
+                {c.youtube.carrils.map((v, i) => (
+                  <span key={v.video_id}>
+                    {i > 0 && ' · '}
+                    <a
+                      className="underline"
+                      href={`https://www.youtube.com/watch?v=${v.video_id}`}
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      {v.titol || v.video_id}
+                    </a>
+                  </span>
+                ))}
+              </div>
+            )}
+            <label className="mt-2 flex items-center gap-2 font-normal text-[11px] text-tq-ink/75">
+              <input
+                type="checkbox"
+                checked={!!c.youtube?.revisat}
+                disabled={busy}
+                onChange={e => setRevisat(e.target.checked)}
+              />
+              Revisada — no en trobe cap vídeo. Resposta vàlida i final: deixa
+              de sortir a la llista de recerques del correu diari.
+            </label>
           </div>
           <label className="text-xs font-semibold">Data llançament
             <Input type="date" value={c.data_llancament || ''} onChange={e => patch({ data_llancament: e.target.value })} className="w-full mt-1 font-normal" />

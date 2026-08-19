@@ -24,6 +24,7 @@ import datetime
 import logging
 import statistics
 from collections import defaultdict
+from urllib.parse import quote_plus
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -36,7 +37,7 @@ from analytics.management.commands.enviar_digest_setmanal import _delta, _mov
 from ingesta.clients import youtube as yt
 from ingesta.management.commands.descobrir_youtube import DEFAULT_BUDGET
 from music.constants import DIES_CADUCITAT
-from music.models import Artista, Canco
+from music.models import Artista, Canco, CancoYouTubeVideo
 from ranking.models import SenyalDiari, SenyalYouTube
 
 logger = logging.getLogger(__name__)
@@ -264,6 +265,18 @@ def _per_artista(ratios, en_finestra):
     }
 
 
+def _primer_top_oficial(activacio: datetime.date) -> datetime.date:
+    """El dissabte en què el top OFICIAL ja portarà la segona font.
+
+    El provisional diari (07:00) entra el mateix dia de l'activació,
+    però el que veu la gent és el top del dissabte a les 08:00
+    (`deploy/cron.topquaranta`). Si l'activació cau en dissabte, eixe
+    mateix matí ja la porta: el senyal es fotografia a les 06:30, dues
+    hores abans. weekday(): dilluns=0 … dissabte=5.
+    """
+    return activacio + datetime.timedelta(days=(5 - activacio.weekday()) % 7)
+
+
 def _efecte_al_top(today):
     """Què li passaria al top si s'encengués — o què li passa, si ja ho està.
 
@@ -315,13 +328,32 @@ def _efecte_al_top(today):
             (c for c in ids if lfm.get(c, 0) * pes + yt.get(c, 0) >= terra_comb),
             key=lambda c: -(lfm.get(c, 0) * pes + yt.get(c, 0)),
         )[:40]
+        # Per què entra cada fila nova. Sense separar-ho, «+11 noves»
+        # es llig com «YouTube n'ha portat onze», i pot no haver-ne
+        # portat cap: el terra combinat també deixa entrar cançons que
+        # el terra en escoltes deixava fora. Són tres causes distintes
+        # i excloents, i només la primera és mèrit de la segona font.
+        noves = set(combinat) - set(ara)
+        per_yt = sum(1 for c in noves if lfm.get(c, 0) * pes < terra_comb)
+        per_terra = sum(
+            1
+            for c in noves
+            if lfm.get(c, 0) * pes >= terra_comb and lfm.get(c, 0) < terra_lfm
+        )
         files.append(
             {
                 "codi": codi,
                 "ara": len(ara),
                 "amb_yt": len(combinat),
                 # Files que entren al top 40 i abans no hi eren.
-                "noves": len(set(combinat) - set(ara)),
+                "noves": len(noves),
+                # …que no hi entrarien sense les visualitzacions.
+                "noves_yt": per_yt,
+                # …que hi entren perquè el terra combinat és més baix.
+                "noves_terra": per_terra,
+                # …i la resta, que ja passaven els dos terres i pugen
+                # per reordenació.
+                "noves_ordre": len(noves) - per_yt - per_terra,
                 # …i en quantes mana YouTube per damunt de Last.fm.
                 "mana_yt": sum(
                     1 for c in combinat if yt.get(c, 0) > lfm.get(c, 0) * pes
@@ -332,11 +364,21 @@ def _efecte_al_top(today):
     # per vídeo hi ha. Així el correu pot dir el dia, no un condicional.
     dies_minims = int(getattr(cfg, "youtube_dies_minims", 7) or 0)
     dies = senyal_youtube.dies_de_dades(today)
+    falten = None if dies is None else max(0, dies_minims - dies)
+    # La data, no el compte enrere. «Falten 7 dies» obliga a fer el
+    # càlcul cada matí i no diu quan es nota de veres: el que canvia el
+    # que veu la gent és el primer top OFICIAL, i eixe el fa el cron del
+    # dissabte a les 8 (`deploy/cron.topquaranta`). El provisional diari
+    # ja hi entra el mateix dia de l'activació.
+    activacio = None if falten is None else today + datetime.timedelta(days=falten)
+    primer_top = None if activacio is None else _primer_top_oficial(activacio)
     return {
         "actiu": senyal_youtube.actiu(today, dies_minims),
         "dies": dies,
         "dies_minims": dies_minims,
-        "falten": None if dies is None else max(0, dies_minims - dies),
+        "falten": falten,
+        "activacio": activacio,
+        "primer_top": primer_top,
         "pes": pes,
         "terra": terra_comb,
         "territoris": files,
@@ -430,13 +472,195 @@ def _comparativa(en_finestra, today):
     }
 
 
+def _sense_video(qs):
+    """Cançons que el mesurador no pot fotografiar: cap carril, cap dels dos.
+
+    `obtenir_senyal_youtube` fotografia una cançó si té Art Track **o**
+    vídeo del canal propi. Comptar només l'Art Track ací donava una
+    cobertura pessimista i, pitjor, ficava a la llista de recerques
+    cançons que ja s'estan mesurant per l'altre carril.
+    """
+    return qs.filter(youtube_video_id="").exclude(
+        pk__in=CancoYouTubeVideo.objects.values("canco_id")
+    )
+
+
 def _cobertura(qs_cancons) -> dict:
     total = qs_cancons.count()
-    fetes = qs_cancons.exclude(youtube_video_id="").count()
+    fetes = total - _sense_video(qs_cancons).count()
     return {
         "total": total,
         "fetes": fetes,
         "pct": round(fetes / total * 100) if total else 0,
+    }
+
+
+# Quantes recerques caben en un matí. El límit no és tècnic —ací el
+# sistema no fa res— sinó humà: una llista de quaranta tasques no es fa,
+# s'ignora, i el correu passa a ser soroll.
+_ACCIONS_DIA = 10
+
+# Repartiment per tipus. Sense reserva, les cançons cegues ocuparien els
+# deu llocs cada matí durant setmanes i la cua de canals no avançaria
+# mai. Els números no són sagrats; el que han de garantir és que cada
+# dia isca alguna cosa de cada tipus mentre en quede.
+_QUOTA_INVISIBLES = 3
+_QUOTA_CEGUES = 5
+_QUOTA_CANALS = 3
+
+
+def _cerca_yt(*parts) -> str:
+    """L'enllaç de cerca a YouTube ja escrit, perquè siga un clic i no tres."""
+    return "https://www.youtube.com/results?search_query=" + quote_plus(
+        " ".join(p for p in parts if p)
+    )
+
+
+def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
+    """Les recerques del dia: què buscar, per què, i on es desa la resposta.
+
+    Tot el que hi ha ací és feina que **només** pot fer una persona: el
+    codi no endevina mai un canal (el cas «Malalts» torna un canal de
+    pàdel) i no aparella un vídeo que no case pel títol. La resta de
+    l'informe conta com va la part automàtica; això conta la manual.
+
+    L'ordre no és una opinió, són tres graus de ceguesa:
+
+    1. **Artista sense cap canal** — ni Topic ni propi, i ningú ho ha
+       mirat. Cap cançó seua es pot mesurar per YouTube. Un sol canal
+       en desbloqueja totes de colp.
+    2. **Cançó del punt cec sense vídeo** — Last.fm no la veu i YouTube
+       tampoc: avui no pot entrar al top per cap via. Enganxar un
+       enllaç la connecta eixa mateixa nit.
+    3. **Canal propi de l'artista** — ja el mesurem per l'Art Track,
+       però el videoclip té molt més públic. Primer els que ja surten
+       al top, que és on el senyal que falta pesa més.
+
+    Cada fila porta la cerca escrita i el lloc on desar-ho. La llista
+    es buida sola: una cançó amb vídeo o marcada «revisada» no torna, i
+    un artista amb canal o revisat tampoc. Mentre no es toquen,
+    reapareixen — segueixen sent la prioritat.
+    """
+    from django.db.models import Max
+
+    accions: list[dict] = []
+    sense_video = _sense_video(en_finestra).filter(youtube_revisat=False)
+    cegues_ids = set(
+        _sense_video(cegues).filter(youtube_revisat=False).values_list("id", flat=True)
+    )
+
+    # ── 1. Artistes totalment invisibles ────────────────────────────
+    invisibles = (
+        Artista.objects.filter(
+            youtube_channel_id="",
+            youtube_canal_revisat=False,
+            cancons__in=en_finestra,
+        )
+        .annotate(n_vives=Count("cancons", distinct=True))
+        .order_by("-n_vives", "nom")
+        .distinct()[:_QUOTA_INVISIBLES]
+    )
+    for a in invisibles:
+        accions.append(
+            {
+                "tipus": "artista",
+                "titol": a.nom,
+                "sub": "cap canal de YouTube",
+                "motiu": f"{a.n_vives} {'cançó' if a.n_vives == 1 else 'cançons'} "
+                "que ara mateix no es poden mesurar",
+                "cerca": _cerca_yt(a.nom),
+                "on": "/staff/artistes/sense-youtube",
+            }
+        )
+
+    # ── 2. Cançons del punt cec sense cap carril ────────────────────
+    # Les més recents primer: una novetat sense senyal és una absència
+    # que es nota esta setmana, no d'ací a un any.
+    cegues_files = (
+        sense_video.filter(id__in=cegues_ids)
+        .select_related("artista")
+        .order_by("-data_llancament", "pk")[:_QUOTA_CEGUES]
+    )
+    for c in cegues_files:
+        accions.append(
+            {
+                "tipus": "canco",
+                "titol": c.nom,
+                "sub": c.artista.nom if c.artista else "",
+                "motiu": "Last.fm no la veu i no té vídeo: avui no pot "
+                "entrar al top per cap via",
+                "cerca": _cerca_yt(c.artista.nom if c.artista else "", c.nom),
+                "on": f"/staff/cancons/{c.pk}",
+            }
+        )
+
+    # ── 3. Canal propi dels artistes que ja surten al top ───────────
+    canals = (
+        Artista.objects.filter(youtube_canal_revisat=False, cancons__in=en_finestra)
+        .exclude(youtube_channel_id="")
+        .annotate(
+            n_top=Count("cancons__rankings", distinct=True),
+            darrer_top=Max("cancons__rankings__setmana"),
+        )
+        .filter(n_top__gt=0)
+        .order_by("-n_top", "nom")
+        .distinct()[:_QUOTA_CANALS]
+    )
+    for a in canals:
+        accions.append(
+            {
+                "tipus": "artista",
+                "titol": a.nom,
+                "sub": "sense canal propi revisat",
+                "motiu": f"{a.n_top} aparicions al top · només el mesurem "
+                "per l'Art Track, i el videoclip té molt més públic",
+                "cerca": _cerca_yt(a.nom),
+                "on": "/staff/artistes/sense-youtube",
+            }
+        )
+
+    # ── Farciment: la resta de cançons sense vídeo ──────────────────
+    # Quan els calaixos anteriors no omplin els deu llocs, la llista es
+    # completa amb el que queda sense connectar, del més recent al més
+    # vell. **Sense excloure les cegues**: si totes les pendents ho són,
+    # la quota de dalt ja els ha donat prioritat i la resta continua sent
+    # la millor feina que hi ha. Excloure-les ací deixava el correu amb
+    # cinc files i dos-centes cançons pendents.
+    if len(accions) < n:
+        llistades = {a["on"] for a in accions}
+        resta = sense_video.select_related("artista").order_by(
+            "-data_llancament", "pk"
+        )[: n * 2]
+        for c in resta:
+            if len(accions) >= n:
+                break
+            if f"/staff/cancons/{c.pk}" in llistades:
+                continue
+            accions.append(
+                {
+                    "tipus": "canco",
+                    "titol": c.nom,
+                    "sub": c.artista.nom if c.artista else "",
+                    "motiu": (
+                        "Last.fm no la veu i no té vídeo"
+                        if c.pk in cegues_ids
+                        else "sense vídeo: només la veu Last.fm"
+                    ),
+                    "cerca": _cerca_yt(c.artista.nom if c.artista else "", c.nom),
+                    "on": f"/staff/cancons/{c.pk}",
+                }
+            )
+
+    return {
+        "files": accions[:n],
+        # El que queda per fer de cada tipus, perquè deu files no diguen
+        # «ja estem» quan en queden dos-cents.
+        "resten_cancons": sense_video.count(),
+        "resten_artistes": Artista.objects.filter(
+            youtube_canal_revisat=False, cancons__in=en_finestra
+        )
+        .distinct()
+        .count(),
     }
 
 
@@ -534,6 +758,11 @@ def build_context(today: datetime.date) -> dict:
             "eta_dies": eta,
             "eta_base": eta_base,
             "ahir": ahir_provats,
+            # El descobriment automàtic ja ha passat per tot el catàleg.
+            # Amb la cua a zero i cap prova ahir, el bloc només repetiria
+            # els mateixos números cada matí: el template l'amaga i el
+            # que queda per fer passa a ser feina de mà (vegeu `accions`).
+            "tancat": queden == 0 and ahir_provats == 0,
         },
         "aparellament": {
             "total": _delta(total_ap, total_ap - ap_avui),
@@ -542,6 +771,7 @@ def build_context(today: datetime.date) -> dict:
             "territoris": per_territori,
         },
         "punt_cec": punt_cec,
+        "accions": _accions(en_finestra, cegues),
         "comparativa": _comparativa(en_finestra, today),
         "senyal": {
             "avui": snap_avui.filter(error=False).count(),
@@ -568,8 +798,22 @@ def render_text(ctx: dict) -> str:
     d = ctx["descobriment"]
     a = ctx["aparellament"]
     s = ctx["senyal"]
+    ac = ctx["accions"]
     lines = [
         f"YOUTUBE · INFORME DIARI · {ctx['avui']}",
+        "",
+        f"LES {len(ac['files'])} RECERQUES D'AVUI",
+    ]
+    for i, f in enumerate(ac["files"], 1):
+        lines += [
+            f"  {i:>2}. {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+            f"      {f['motiu']}",
+            f"      cerca: {f['cerca']}",
+            f"      desa-ho a: {ctx['site_url']}{f['on']}",
+        ]
+    lines += [
+        f"  Queden {ac['resten_cancons']} cançons sense vídeo i "
+        f"{ac['resten_artistes']} artistes sense canal revisat.",
         "",
         "DESCOBRIMENT",
         f"  Artistes amb canal Topic  {d['amb_canal_n']}/{d['total']} ({d['pct']}%)"

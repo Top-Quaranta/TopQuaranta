@@ -140,8 +140,9 @@
 ## Traps
 - `youtube_channel_id` (auto "- Topic" channel) ≠ `youtube_url` /
   `youtube_canal_oficial` (the band's human channel). Mixing them
-  double-counts the Art Track. `youtube_canal_revisat` and
-  `instagram_revisat` mean "reviewed, has none" — a final state.
+  double-counts the Art Track. `youtube_canal_revisat`,
+  `Canco.youtube_revisat` and `instagram_revisat` mean "reviewed, has
+  none" — a final state, and what makes the daily work queues drain.
 - `instagram_suggerit` is a candidate, not evidence; `instagram_rebutjat_at`
   (Meta code 110) blanks the public URL. Never promote a suggestion by code.
 - `Album.descartat=True` is the only permanent exclusion from ingest;

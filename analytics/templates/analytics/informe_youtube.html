@@ -59,7 +59,9 @@
         <td style="padding-bottom:6px;">&nbsp;</td>
         <td align="right" style="padding-bottom:6px;">files ara</td>
         <td align="right" style="padding-bottom:6px;">amb YouTube</td>
-        <td align="right" style="padding-bottom:6px;">noves</td>
+        <td align="right" style="padding-bottom:6px;">per YT</td>
+        <td align="right" style="padding-bottom:6px;">pel terra</td>
+        <td align="right" style="padding-bottom:6px;">per ordre</td>
         <td align="right" style="padding-bottom:6px;">mana YT</td>
       </tr>
       {% for t in comparativa.efecte_top.territoris %}
@@ -67,20 +69,57 @@
         <td class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#facc15;padding:3px 0;">{{ t.codi }}</td>
         <td align="right" class="muted" style="color:#b7b7be;padding:3px 0;">{{ t.ara }}/40</td>
         <td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if t.amb_yt > t.ara %}#7bbf7b{% else %}#ffffff{% endif %};padding:3px 0;">{{ t.amb_yt }}/40</td>
-        <td align="right" class="muted" style="color:#b7b7be;padding:3px 0;">{% if t.noves %}+{{ t.noves }}{% else %}—{% endif %}</td>
+        <td align="right" style="color:{% if t.noves_yt %}#7bbf7b{% else %}#9aa0a6{% endif %};padding:3px 0;">{% if t.noves_yt %}+{{ t.noves_yt }}{% else %}—{% endif %}</td>
+        <td align="right" class="muted" style="color:#b7b7be;padding:3px 0;">{% if t.noves_terra %}+{{ t.noves_terra }}{% else %}—{% endif %}</td>
+        <td align="right" class="muted" style="color:#9aa0a6;padding:3px 0;">{% if t.noves_ordre %}+{{ t.noves_ordre }}{% else %}—{% endif %}</td>
         <td align="right" class="muted" style="color:{% if t.mana_yt %}#facc15{% else %}#9aa0a6{% endif %};padding:3px 0;">{{ t.mana_yt }}</td>
       </tr>
       {% endfor %}
     </table>
     <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
-      <strong style="color:#ffffff;">Noves</strong> = files que entren al top 40 i abans no hi eren.
+      <strong style="color:#ffffff;">Noves</strong> = files que entren al top 40 i abans no hi eren. Separades per causa, perquè no totes són mèrit de YouTube:
+      <strong style="color:#7bbf7b;">per YT</strong> = no hi entrarien sense les visualitzacions;
+      <strong style="color:#ffffff;">pel terra</strong> = ja tenien prou escoltes per al terra combinat, però no per al de només-escoltes;
+      <strong style="color:#ffffff;">per ordre</strong> = ja passaven els dos terres i pugen de posició.
       <strong style="color:#ffffff;">Mana YT</strong> = files on les visualitzacions pesen més que les escoltes; si es queda a zero, YouTube només omple buits i no reordena res.
       {% if comparativa.efecte_top.actiu %}<br><strong style="color:#7bbf7b;">Actiu</strong> des que hi ha {{ comparativa.efecte_top.dies_minims }} dies d'història per vídeo; ara en tenim {{ comparativa.efecte_top.dies }}. Això que veus a dalt és el top real, no una simulació.
       {% elif comparativa.efecte_top.dies == None %}<br>Encara no hi ha cap fotografia amb detall per vídeo, així que això és una simulació. S'activarà sol quan n'hi haja {{ comparativa.efecte_top.dies_minims }} dies.
-      {% else %}<br>Això és una simulació: <strong style="color:#ffffff;">falten {{ comparativa.efecte_top.falten }} {{ comparativa.efecte_top.falten|pluralize:"dia,dies" }}</strong> ({{ comparativa.efecte_top.dies }} de {{ comparativa.efecte_top.dies_minims }} d'història per vídeo). No cal encendre res: quan hi siguen, s'activa sol.{% endif %}
+      {% else %}<br>Això és una simulació. S'activa sol el <strong style="color:#ffffff;">{{ comparativa.efecte_top.activacio|date:"d/m" }}</strong> ({{ comparativa.efecte_top.dies }} de {{ comparativa.efecte_top.dies_minims }} dies d'història per vídeo); el primer top oficial que ho porta és el del <strong style="color:#ffffff;">{{ comparativa.efecte_top.primer_top|date:"d/m" }}</strong>. No cal encendre res.{% endif %}
     </div>
   </td></tr></table>
 </td></tr>
+
+{% comment %} LES RECERQUES DEL DIA — l'única part del correu que demana
+   res. Va ací dalt, just davall del top, perquè és el que fa moure els
+   números de baix; la resta del correu és estat, això és feina. Cada
+   fila porta la cerca ja escrita i l'enllaç al lloc on es desa la
+   resposta, així que són dos clics per tasca. {% endcomment %}
+{% if accions.files %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Les {{ accions.files|length }} recerques d'avui</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Això no ho pot fer el codi: un canal es tria mirant-lo, i un vídeo que no case pel títol no l'aparella ningú sol.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
+    {% for f in accions.files %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
+      <td width="26" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if f.tipus == 'artista' %}#7bbf7b{% else %}#facc15{% endif %};padding:10px 0 0;">{{ forloop.counter }}</td>
+      <td valign="top" style="padding:10px 0 0;">
+        <div style="font-size:14px;color:#ffffff;font-weight:700;line-height:1.4;">{{ f.titol }}{% if f.sub %} <span class="muted" style="font-weight:400;color:#9aa0a6;">&middot; {{ f.sub }}</span>{% endif %}</div>
+        <div class="muted" style="font-size:12.5px;color:#b7b7be;line-height:1.6;margin-top:2px;">{{ f.motiu }}</div>
+        <div style="font-size:12.5px;margin-top:5px;">
+          <a href="{{ f.cerca }}" style="color:#facc15;text-decoration:underline;">Buscar a YouTube &#8599;</a>
+          <span class="muted" style="color:#4a4a52;">&nbsp;&middot;&nbsp;</span>
+          <a href="{{ site_url }}{{ f.on }}" style="color:#7bbf7b;text-decoration:underline;">{% if f.tipus == 'artista' %}Desar el canal{% else %}Desar el vídeo{% endif %} &#8599;</a>
+        </div>
+      </td>
+    </tr></table>
+    {% endfor %}
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
+      Queden <strong style="color:#ffffff;">{{ accions.resten_cancons|milers }}</strong> cançons sense cap vídeo i <strong style="color:#ffffff;">{{ accions.resten_artistes|milers }}</strong> artistes sense canal propi revisat.
+      Les mateixes files tornen demà si no es toquen — són la prioritat mentre no canvie res. «No en té» també és una resposta: lleva la fila per sempre.
+    </div>
+  </td></tr></table>
+</td></tr>
+{% endif %}
 
 {% comment %} A. ES PODEN JUNTAR? — el bloc principal des del 17/08:
    el descobriment ja ha acabat el catàleg, i el que queda per saber és
@@ -201,7 +240,10 @@
   </td></tr></table>
 </td></tr>
 
-{% comment %} A. DESCOBRIMENT {% endcomment %}
+{% comment %} A. DESCOBRIMENT — amagat quan la cua automàtica és a zero:
+   repetir «0 provats, 0 queden» cada matí no informa de res, i el que
+   queda per fer ja ix a les recerques del dia. {% endcomment %}
+{% if not descobriment.tancat %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;">Descobriment de canals</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -223,6 +265,7 @@
     </div>
   </td></tr></table>
 </td></tr>
+{% endif %}
 
 {% comment %} B. APARELLAMENT {% endcomment %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">

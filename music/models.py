@@ -1183,6 +1183,18 @@ class Canco(models.Model):
     # (videoclip + live + lyric), so it lives in `CancoYouTubeVideo`.
     youtube_video_id = models.CharField(max_length=16, blank=True, db_index=True)
     youtube_match = models.CharField(max_length=10, blank=True, choices=MATCH_CHOICES)
+    # THREE states, exactly like `Artista.youtube_canal_revisat` and for
+    # the same reason: without it the daily action list has no way to
+    # tell "nobody has looked" from "looked, there is no video", and the
+    # same ten songs come back every morning until they are ignored.
+    # A song genuinely absent from YouTube is a final answer, not a
+    # pending task.
+    youtube_revisat = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Algú ha buscat el vídeo. Amb `youtube_video_id` buit "
+        "vol dir «revisat: no en té», que és un estat vàlid i final.",
+    )
     # When the link was made. Without it the daily bootstrap report has no
     # honest way to say "connected today" and would have to approximate —
     # which is precisely the class of guess this whole exercise exists to

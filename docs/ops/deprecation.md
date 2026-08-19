@@ -25,7 +25,7 @@ codebase or outside it:
 - **Management commands**: anything invoked from `manage.py`, cron, or
   scripts under `bin/`.
 - **API endpoints** (`/api/v1/*`): external contract, see also
-  `docs/architecture/api-versioning.md` — the two docs overlap on API changes and
+  `docs/architecture/web.md` — the two docs overlap on API changes and
   agree.
 - **Staff panel features**: URLs, template blocks, audit-log action
   codes that queries depend on.

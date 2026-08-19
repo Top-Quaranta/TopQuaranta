@@ -22,7 +22,7 @@ discards a pendent nobody has triaged, never touches non-lastfm_similar
 sources, and creates nothing speculative. Name matching is
 case-insensitive against either `nom` or `lastfm_nom`.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 
 Run `--dry-run` first; it writes nothing and prints the exact flip list.
 """

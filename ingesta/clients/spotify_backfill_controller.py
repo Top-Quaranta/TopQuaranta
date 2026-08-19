@@ -56,7 +56,7 @@ entirely for that single run and does NOT update the persisted
 state. Use it for sanity-test runs or to push through a one-off
 batch; never as a daily setting.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

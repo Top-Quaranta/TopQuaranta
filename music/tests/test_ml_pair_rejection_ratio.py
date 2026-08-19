@@ -12,7 +12,7 @@ pair semantics). Confirms:
   - Cold-start (no matching rows) returns the 0.5 prior.
 """
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 
 from __future__ import annotations
 

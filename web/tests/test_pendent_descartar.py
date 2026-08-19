@@ -7,7 +7,7 @@ approved artist that still recommended the name re-created the pendent
 every sync. Discarding must now leave a tombstone (aprovat=False,
 pendent_review=False).
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

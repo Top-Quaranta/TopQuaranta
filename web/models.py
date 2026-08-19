@@ -6,7 +6,7 @@ calls in-process. Empty by default, so an editorial landing degrades to
 its existing structured content (top, artist/song lists) without ever
 breaking the thin/noindex gate.
 
-# Spec: docs/architecture/seo.md
+# Spec: docs/architecture/web.md
 """
 
 from __future__ import annotations

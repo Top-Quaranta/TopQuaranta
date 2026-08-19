@@ -118,7 +118,7 @@ Split the cron into two commands and two processes:
   table of what the post-2026 API actually returns, constraining
   what Process B can pull (cover art, ISRC, duration, no
   popularity / preview_url / audio-features).
-- `docs/architecture/playlists.md` "Spotify enrichment (Process B)"
+- `docs/architecture/ingesta.md` "Spotify enrichment (Process B)"
   for the operational design and field tables.
 - PR #66 (`fix/spotify-playlists-items-migration`): the
   `/tracks -> /items` migration that Process A depends on.

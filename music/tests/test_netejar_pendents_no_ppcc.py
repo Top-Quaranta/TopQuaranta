@@ -7,7 +7,7 @@ Regression for the 2026-06-02 backlog audit: the cron now requires
 recommender is never auto-descarted even when it has 0 tracks /
 0 localitat / 0 staff touch.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

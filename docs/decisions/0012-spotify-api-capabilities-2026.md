@@ -166,7 +166,7 @@ Spotify is NOT the source of any rich metadata. Specifically:
 - [ADR-0010: Why not YouTube Music (for now)](0010-why-not-youtube-music.md).
 - [ADR-0011: Spotify cron schedule](0011-spotify-cron-schedule.md):
   the daily + weekly cadence that consumes this API budget.
-- `docs/architecture/playlists.md::Spotify enrichment (Process B)`:
+- `docs/architecture/ingesta.md::Spotify enrichment (Process B)`:
   the design space this ADR constrains.
 - PR #66 (`fix/spotify-playlists-items-migration`): the one-line
   endpoint fix for the February 2026 migration.

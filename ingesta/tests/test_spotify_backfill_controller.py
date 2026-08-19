@@ -6,7 +6,7 @@ tmp_path for the state file and synthetic cooldown files for the
 ban signal so they do not touch the production paths.
 """
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 
 from __future__ import annotations
 

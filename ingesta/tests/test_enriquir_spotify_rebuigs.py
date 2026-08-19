@@ -8,7 +8,7 @@ returns 400 Bad Request. Caught on the first wet run on
 2026-05-26.
 """
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 
 from __future__ import annotations
 

@@ -49,11 +49,12 @@ Every doc lives under `docs/` organised by audience. Quick map:
 
 - **`docs/EMAIL.md`** — correu: Purelymail per a les bústies,
   Brevo/Resend per a l'enviament automàtic.
-- **`docs/architecture/`** — `algorithm.md`, `analytics.md`,
-  `api-versioning.md`, `brand-logo.md` (read this BEFORE touching
-  anything that loads the brand SVG — three traps documented),
-  `comptes.md`, `models.md`, `pipeline.md`, `seo.md`, `social.md`,
-  `staff.md`. Reference for the codebase.
+- **`docs/architecture/`** — one file per app, **invariants and traps
+  only** (audit 2026-08-19): `music.md`, `ranking.md`, `ingesta.md`,
+  `social.md`, `web.md`, `comptes.md`, `analytics.md`, `frontend.md`
+  (brand SVG traps live here — read before touching the logo). No field
+  tables, no endpoint catalogues: the code is the doc for those. The
+  older narrative docs are kept read-only in `docs/archive/architecture/`.
 - **`docs/policies/`** — `conventions.md`, `docs-maintenance.md`,
   `identities.md`, `post-mortems.md`, `sprint-process.md`. Rules.
 - **`docs/decisions/`** — ADRs (Architecture Decision Records).
@@ -221,7 +222,7 @@ to refresh the dist bundle that Caddy serves.
    `TERR_COLORS`/`TERRITORI_COLORS` — removed PR B) are gone. Fase 2
    (promote the palette to `ConfiguracioGlobal` + a staff-editable API)
    is not done yet; it is all in code. See
-   `docs/audits/2026-06-23-recon-disseny-unificacio.md`.
+   `docs/archive/audits/2026-06-23-recon-disseny-unificacio.md`.
 
 **Design layers (real state, 2026-06-23).** There is no single shared
 primitive set across the SPA; public and staff run on separate systems
@@ -254,7 +255,7 @@ on top of the common `index.css` `@theme` tokens:
   **not** import editorial — it has its own local chart palette.) Do
   **not** build new UI on it; prefer `rd/primitives` (public) or `staff/*`
   (staff). Retirement is a tracked follow-up
-  (`docs/audits/2026-06-23-auditoria-dry-modular.md` §2.2).
+  (`docs/archive/audits/2026-06-23-auditoria-dry-modular.md` §2.2).
 
 **A11y baseline** (Sprint F + J bis): WCAG AA across the public
 SPA. Re-audited via puppeteer + axe-core on every redesign sprint
@@ -322,7 +323,7 @@ Import from `music/constants.py`:
 - `DEEZER_RATE_LIMIT`, `LASTFM_RATE_LIMIT`, `MAX_API_RETRIES`
 - `MOTIUS_REBUIG` — 3 action-based reject codes: `desvincular_canco`,
   `desvincular_album`, `desvincular_artista`. Renamed 2026-05-25 from
-  cause-based codes; semantics in `docs/architecture/staff.md §5`.
+  cause-based codes; semantics in `docs/architecture/web.md §5`.
 
 ## 8. Environment (.env)
 
@@ -359,7 +360,7 @@ overrides can't silently flip pytest to production settings. Vegeu
 React SPA: Vitest not yet wired for runtime tests; builds validated via
 `npm run build` in CI-style deploys.
 
-**Test policy (audit 2026-08-18, `docs/audits/2026-08-18-auditoria-tests.md`):**
+**Test policy (audit 2026-08-18, `docs/archive/audits/2026-08-18-auditoria-tests.md`):**
 anchor tests to the *promise*, never to today's coordinates/copy/call
 shape. Diagnostic question: *if someone improved this code, would the
 test fail?* If yes it obstructs. Every test that survives an audit must

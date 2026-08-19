@@ -18,7 +18,7 @@ Design notes:
   * We write the artist row only when the value actually changes, so
     repeated calls don't churn `updated_at`.
 
-# Spec: docs/architecture/playlists.md (Process B section)
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

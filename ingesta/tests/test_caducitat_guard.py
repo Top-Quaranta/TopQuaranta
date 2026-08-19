@@ -1,4 +1,4 @@
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """DIES_CADUCITAT guard at every Canco-creation frontier.
 
 Caught 2026-06-02: Tres Fan Ball albums from 1994/1997/2005/2013

@@ -10,7 +10,7 @@ Every test runs the real command against a tmpdir corpus via
 `--log-dir`, in `--dry-run` so nothing is written and goaccess is never
 invoked.
 
-# Spec: docs/architecture/analytics-goaccess.md
+# Spec: docs/architecture/analytics.md
 """
 
 from __future__ import annotations

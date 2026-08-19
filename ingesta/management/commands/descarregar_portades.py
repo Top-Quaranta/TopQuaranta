@@ -14,7 +14,7 @@ Per-entity source:
 Entities without a deezer_id or without a stored image URL are
 skipped. `--force` re-downloads even when the variants already exist.
 
-# Spec: docs/architecture/portades.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

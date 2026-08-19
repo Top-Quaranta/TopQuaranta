@@ -1,6 +1,6 @@
 """Prune self-hosted covers that no longer back any public surface.
 
-# Spec: docs/architecture/portades.md
+# Spec: docs/architecture/ingesta.md
 
 Retention for `PORTADES_ROOT` (disk-90% alert, 2026-08-12): the
 download cron had iterated the ENTIRE catalogue — descartat albums,

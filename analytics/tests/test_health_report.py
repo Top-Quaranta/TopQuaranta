@@ -2,7 +2,7 @@
 
 The renderer is pure stdlib (no Django), so these run without a DB.
 
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

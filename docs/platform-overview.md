@@ -67,7 +67,7 @@ staff/`). See §5.
 ## 2. Data model
 
 Domain models live in `music/models.py`; ranking/config models in
-`ranking/models.py`. Full reference: `docs/architecture/models.md`.
+`ranking/models.py`. Full reference: `docs/architecture/music.md`.
 
 ### Core entities (`music/models.py`)
 
@@ -132,7 +132,7 @@ Domain models live in `music/models.py`; ranking/config models in
 rebutjada}`, `motiu` is the *action* that resolved it — `ok` / `auto_ml` for
 approvals; `desvincular_canco` / `desvincular_album` / `desvincular_artista`
 for rejections (`music/constants.py::MOTIUS_REBUIG`; semantics in
-`docs/architecture/staff.md` §5). Denormalises `canco_isrc` +
+`docs/architecture/web.md` §5). Denormalises `canco_isrc` +
 `canco_deezer_id` so the rejection trail survives the `Canco` row's deletion.
 `reconsiderada` (1255) re-opens a rejected track for re-ingestion.
 
@@ -142,7 +142,7 @@ for rejections (`music/constants.py::MOTIUS_REBUIG`; semantics in
 
 **Signal** = Last.fm (`playcount` + `listeners`). **Metadata** = Deezer
 (public, 100 % ISRC). **Output** = Spotify playlists. **Disambiguation
-oracle** = MusicBrainz. Full pipeline: `docs/architecture/pipeline.md`.
+oracle** = MusicBrainz. Full pipeline: `docs/architecture/ingesta.md`.
 
 Commands live in `ingesta/management/commands/`. The cron table is
 `deploy/cron.topquaranta` (every line runs through `bin/tq-run`, which
@@ -284,7 +284,7 @@ for why a specific surface can read "1" while the global queue is large.
 The back-office is a **custom DRF API** under `web/api/staff/` consumed by
 the React staff pages — **not** Django ModelAdmin, **not** Wagtail (see §1).
 Endpoints require `IsStaff`. Routes in `web/api/urls.py` (`staff/*`). Full
-contract: `docs/architecture/staff.md`.
+contract: `docs/architecture/web.md`.
 
 Modules (`web/api/staff/`): `dashboard`, `cancons`, `artistes`, `pendents`,
 `albums`, `propostes`, `solicituds`, `sollicituds_revisio`, `senyal`,
@@ -554,7 +554,7 @@ a "publish as community post" action) — **the destination already exists**
 
 ## See also
 
-- `docs/architecture/models.md` · `pipeline.md` · `staff.md` ·
+- `docs/architecture/music.md` · `pipeline.md` · `staff.md` ·
   `social.md` · `playlists.md` · `algorithm.md` · `comptes.md` · `web.md`
 - `docs/decisions/` (ADRs — esp. 0012/0013 Spotify split) ·
   `docs/ops/runbook.md` · `docs/history/roadmap.md`

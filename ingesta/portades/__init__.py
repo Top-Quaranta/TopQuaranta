@@ -5,7 +5,7 @@ webp/avif/jpg variants stored on our own origin. State is derived
 from the filesystem (no DB column): a cover "exists" iff its
 500 px webp variant is on disk.
 
-# Spec: docs/architecture/portades.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from ingesta.portades.manager import (

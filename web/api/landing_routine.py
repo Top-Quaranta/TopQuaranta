@@ -9,7 +9,7 @@ never calls a paid API in-process. Reuses the same bearer-token gate
   GET  /api/v1/landing-routine/brief/   → pending landings + editorial_veu
   POST /api/v1/landing-routine/prosa/   → upsert one landing's prose
 
-# Spec: docs/architecture/seo.md
+# Spec: docs/architecture/web.md
 """
 
 from __future__ import annotations

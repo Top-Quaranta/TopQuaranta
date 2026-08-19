@@ -1,4 +1,4 @@
-# Spec: docs/architecture/pipeline.md
+# Spec: docs/architecture/ingesta.md
 """Caducity guard shared by every Canco-creation frontier.
 
 `DIES_CADUCITAT` is the project's hard "tracks older than this don't

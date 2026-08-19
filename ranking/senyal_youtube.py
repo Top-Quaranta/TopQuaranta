@@ -23,7 +23,7 @@ what it had accumulated.
 before have only the total, and fall back to the count check, which is
 equivalent for a single-lane song.
 
-# Spec: docs/architecture/algorithm.md
+# Spec: docs/architecture/ranking.md
 """
 
 from __future__ import annotations

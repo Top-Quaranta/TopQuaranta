@@ -26,7 +26,7 @@ want to see asset hot-paths in GoAccess), but the Django middleware
 analytics layer ignores those — the two surfaces complement each
 other instead of duplicating numbers.
 
-# Spec: docs/architecture/analytics-goaccess.md
+# Spec: docs/architecture/analytics.md
 """
 
 from __future__ import annotations

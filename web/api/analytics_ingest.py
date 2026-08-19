@@ -15,7 +15,7 @@ POST /api/v1/analytics/event/      {clau, dim1?, dim2?}
 the SPA (or anyone forging requests) from polluting the table with
 arbitrary keys. Throttled per-IP at 60/min via the project default.
 
-# Spec: docs/architecture/analytics-ingest.md
+# Spec: docs/architecture/analytics.md
 """
 
 from __future__ import annotations

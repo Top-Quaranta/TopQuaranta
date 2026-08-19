@@ -16,140 +16,27 @@
 # # Spec: docs/policies/docs-maintenance.md
 
 # ---------------------------------------------------------------------
-# mapping: ordered list of {prefix, doc}. Longest matching prefix wins
-# at resolution time, so the specific entry beats the generic one
-# (e.g. `ingesta/clients/spotify.py` resolves to `playlists.md`, not
-# the generic `ingesta/ → pipeline.md`). The order in this file is
-# only for human readability; the resolver sorts by descending prefix
-# length.
-# ---------------------------------------------------------------------
 mapping:
-  # Django apps (1-to-1 with INSTALLED_APPS where possible)
-  # The narrative engine was split out of social.md into its own doc
-  # (2026-06-05, docs-size headroom), so its code resolves to the
-  # narrower doc; the generic `social/` entry catches the rest.
-  - prefix: social/narrative/
-    doc: docs/architecture/social-narrative.md
-  # IG collaborator invitations split out of social.md (2026-07-06,
-  # docs-size headroom): policy module + poller + dry-run command
-  # resolve to the narrower doc; the wiring inside publicar_social.py
-  # stays with the generic `social/` entry.
-  - prefix: social/collaboradors.py
-    doc: docs/architecture/social-collaboradors.md
-  # L'etiquetatge d'IG i els handles caducats: doc propi perquè social.md
-  # ja estava al llindar de mida (mateix patró que narrative i
-  # collaboradors).
-  - prefix: social/instagram_client.py
-    doc: docs/architecture/social-etiquetatge.md
-  # El renderer d'imatges, partit de social.md per mida el 2026-08-12
-  # (Rule 3: split by sub-area). La distribució es queda a social.md.
-  - prefix: social/render_core.py
-    doc: docs/architecture/social-renderer.md
-  - prefix: social/top_redesign.py
-    doc: docs/architecture/social-renderer.md
-  - prefix: social/feed_redesign.py
-    doc: docs/architecture/social-renderer.md
-  - prefix: social/renderer.py
-    doc: docs/architecture/social-renderer.md
-  - prefix: social/management/commands/pollar_colaboracions_ig.py
-    doc: docs/architecture/social-collaboradors.md
-  - prefix: social/management/commands/simular_colaboradors_ig.py
-    doc: docs/architecture/social-collaboradors.md
+  # One doc per app. Each doc holds INVARIANTS and TRAPS only (audit
+  # 2026-08-19): a change trips the gate only when it touches an app,
+  # and needs a doc edit only when it changes an invariant. Everything
+  # else is an override — the expected case, not the exception.
   - prefix: social/
     doc: docs/architecture/social.md
-  # Newsletter split out of comptes.md (2026-08-12, docs-size Rule 3):
-  # the pipeline modules + commands resolve to the narrower doc; the
-  # subscriber model and the rest of comptes stay with the generic entry.
-  - prefix: comptes/newsletter
-    doc: docs/architecture/comptes-newsletter.md
-  - prefix: comptes/management/commands/enviar_newsletter.py
-    doc: docs/architecture/comptes-newsletter.md
-  - prefix: comptes/management/commands/generar_esborrany_newsletter.py
-    doc: docs/architecture/comptes-newsletter.md
-  - prefix: comptes/management/commands/generar_assets_newsletter.py
-    doc: docs/architecture/comptes-newsletter.md
   - prefix: comptes/
     doc: docs/architecture/comptes.md
   - prefix: music/
-    doc: docs/architecture/models.md
+    doc: docs/architecture/music.md
   - prefix: ranking/
-    doc: docs/architecture/algorithm.md
-  # GoAccess log analysis split out of analytics.md (2026-07-31,
-  # docs-size headroom — analytics.md was at 400/400). The reader
-  # command resolves to the narrower doc; the Django event pipeline,
-  # middleware and metrics collectors stay with the generic entry.
-  - prefix: analytics/management/commands/generar_goaccess.py
-    doc: docs/architecture/analytics-goaccess.md
-  # Informe temporal de la connexió amb YouTube (2026-08). Doc propi pel
-  # mateix motiu que GoAccess: analytics.md ja frega el llindar de mida.
-  - prefix: analytics/management/commands/enviar_informe_youtube.py
-    doc: docs/architecture/analytics-youtube.md
-  - prefix: analytics/templates/analytics/informe_youtube.html
-    doc: docs/architecture/analytics-youtube.md
-  # Els dos escriptors de MetricaEsdeveniment (middleware + beacon) es
-  # van separar el 2026-08-17, quan analytics.md va passar de 400 línies
-  # (docs-maintenance.md regla 3). Qui toque la classificació bot/humà
-  # actualitza el doc d'ingesta, no l'índex.
-  - prefix: analytics/middleware.py
-    doc: docs/architecture/analytics-ingest.md
-  - prefix: analytics/bots.py
-    doc: docs/architecture/analytics-ingest.md
-  - prefix: web/api/analytics_ingest.py
-    doc: docs/architecture/analytics-ingest.md
+    doc: docs/architecture/ranking.md
+  - prefix: ingesta/
+    doc: docs/architecture/ingesta.md
   - prefix: analytics/
     doc: docs/architecture/analytics.md
-
-  # web/ split: the more specific staff/SEO docs win over the generic
-  # api-versioning doc for files under their subtrees, and the
-  # ultra-generic `web/` fallback catches the leftover surface
-  # (error handlers, RSS feeds, sitemaps, legal versions).
-  # `web/seo` (no trailing slash) matches both `web/seo/<file>` and
-  # a hypothetical future `web/seo.py`.
-  # La taula d'endpoints es va separar el 2026-08-17, quan staff.md va
-  # passar de 400 línies (docs-maintenance.md regla 3). Qui toque un
-  # endpoint del panell actualitza staff-api.md; qui toque el control
-  # d'accés o els invariants, staff.md.
-  - prefix: web/api/staff/
-    doc: docs/architecture/staff-api.md
-  - prefix: web/seo
-    doc: docs/architecture/seo.md
-  - prefix: web/api/
-    doc: docs/architecture/api-versioning.md
+  - prefix: web/api/analytics_ingest.py
+    doc: docs/architecture/analytics.md
   - prefix: web/
     doc: docs/architecture/web.md
-
-  # ingesta/ granular split: the Spotify playlist subsystem has its
-  # own architectural doc (`playlists.md`) separate from the broader
-  # ingestion pipeline (`pipeline.md`). The specific file paths win.
-  #
-  # Not on this list (so they fall through to the generic `ingesta/
-  # -> pipeline.md` entry below):
-  #   - enriquir_spotify.py: metadata enrichment of the ISRC cache.
-  #     Conceptually pure pipeline work; the playlist sync is just
-  #     one downstream consumer of the cache it populates.
-  #   - recalcular_dispersio_spotify.py: recomputes the
-  #     `spotify_artist_dispersio` signal fed into the RF verification
-  #     classifier documented at pipeline.md §4. Has nothing to do
-  #     with playlist publication.
-  - prefix: ingesta/clients/spotify.py
-    doc: docs/architecture/playlists.md
-  - prefix: ingesta/management/commands/actualitzar_playlists_spotify.py
-    doc: docs/architecture/playlists.md
-  - prefix: ingesta/management/commands/autoritzar_spotify.py
-    doc: docs/architecture/playlists.md
-  - prefix: ingesta/management/commands/configurar_spotify_playlists.py
-    doc: docs/architecture/playlists.md
-  # Self-hosted cover pipeline (Fase 1, 2026-05-30) — its own doc.
-  - prefix: ingesta/portades
-    doc: docs/architecture/portades.md
-  - prefix: ingesta/management/commands/descarregar_portades.py
-    doc: docs/architecture/portades.md
-  - prefix: ingesta/management/commands/netejar_portades.py
-    doc: docs/architecture/portades.md
-  - prefix: ingesta/
-    doc: docs/architecture/pipeline.md
-
-  # SPA frontend
   - prefix: web-react/
     doc: docs/architecture/frontend.md
 
@@ -210,17 +97,3 @@ size:
         so a runbook split is a discretionary cleanup, not an
         automatic decay sweep. Candidates: deploy, ML, social,
         ingest sub-runbooks.
-    - path: docs/architecture/pipeline.md
-      current_lines: 531
-      reason: >-
-        Over Rule 3's hard 500-line ceiling for
-        docs/architecture/<X>.md. Schedule a split at the next
-        decay sweep into per-source files (Last.fm signal,
-        MusicBrainz reconciliation, Whisper LID).
-    - path: docs/architecture/models.md
-      current_lines: 467
-      reason: >-
-        Over the local 400 threshold but still under Rule 3's
-        500-line ceiling, so no decay-sweep obligation yet.
-        Split candidates if it grows: domain (music/), ranking
-        (ranking/), social (social/).

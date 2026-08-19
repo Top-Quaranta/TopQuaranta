@@ -8,17 +8,16 @@ docs/
 │                             data model, pipeline, territories, staff, social)
 ├── EMAIL.md                — correu: Purelymail + Brevo/Resend
 │
-├── architecture/           # how the codebase fits together
-│   ├── algorithm.md        — top algorithm v2.0
-│   ├── analytics.md        — pageviews, UTM, social, GoAccess
-│   ├── api-versioning.md   — public REST surface contract
-│   ├── brand-logo.md       — brand SVG traps (read before touching)
-│   ├── comptes.md          — auth + perfil + workflow sol·licituds
-│   ├── models.md           — every Django model with fields, relations, indexes
-│   ├── pipeline.md         — ingest → signal → top flow + cron + clients
-│   ├── seo.md              — SEO architecture (Sprint S)
-│   ├── social.md           — distribution (5 channels + narrative engine)
-│   └── staff.md            — React staff panel + DRF endpoints
+├── architecture/           # one file per app: INVARIANTS + TRAPS only
+│   ├── music.md            — domain models: approval anchors, ISRC, MB, aliases
+│   ├── ranking.md          — top algorithm, cutoffs, soft cap, distribution gates
+│   ├── ingesta.md          — Last.fm/Deezer/MB/Spotify/YouTube ingest rules
+│   ├── social.md           — publish contract, channel limits, narrative, IG tags
+│   ├── web.md              — API/SEO/staff invariants (auth, throttles, indexability)
+│   ├── comptes.md          — auth flow, gestors, community, newsletter
+│   ├── analytics.md        — privacy rules, health report, digest
+│   └── frontend.md         — SPA design layers, brand SVG traps, pagination
+│   (narrative versions of these live read-only in archive/architecture/)
 │
 ├── product/                # what the project is about
 │   └── definition.md       — què compta com a "música en català"
@@ -49,7 +48,11 @@ docs/
 │   ├── changelog.md        — release tags (Keep a Changelog)
 │   └── roadmap.md          — current state + sprints
 │
-└── archive/                # things older than the decay threshold
+└── archive/                # kept, not maintained; excluded from the link checker
+    ├── architecture/       — pre-2026-08-19 narrative docs
+    ├── audits/             — audit + recon reports of finished sprints
+    ├── notes/              — session notes / informes that used to sit at the repo root
+    ├── recon/              — community + SEO outreach recon (2026-06)
     ├── decisions/          — resolved >6m
     ├── sprints/            — completed >3m
     └── changelog/          — compressed per quarter

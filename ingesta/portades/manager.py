@@ -12,7 +12,7 @@ A cover is considered present when its 500 px webp variant exists
 (`exists()`), which is the sentinel the download command and later
 phases key on.
 
-# Spec: docs/architecture/portades.md
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

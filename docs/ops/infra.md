@@ -137,7 +137,7 @@ crawler sweep. `roll_keep_for 90d` caps the quiet end.
 
 Other vhosts (`cercol_api_access*`) own their own `log` blocks and
 are not covered by this. Detail and the measurements behind these
-numbers: `docs/architecture/analytics-goaccess.md`.
+numbers: `docs/architecture/analytics.md`.
 
 ## Project configuration (`topquaranta/`)
 
@@ -199,7 +199,7 @@ Cloud project as `PSI_API_KEY` (the two quotas are independent), with
 YouTube Data API v3 enabled. Empty default, so the three YouTube crons
 log a warning and exit 0 rather than going red. Quota is 10.000
 units/day per *project* and has no paid tier — `descobrir_youtube`
-budgets against it explicitly. See `docs/architecture/pipeline.md`
+budgets against it explicitly. See `docs/architecture/ingesta.md`
 §3.1 bis. Cinc crons: `suggerir_instagram` (02:30, sembra candidats
 d'IG per als artistes que entren a la cua de staff — sense quota),
 `sembrar_canals_youtube` (02:00),

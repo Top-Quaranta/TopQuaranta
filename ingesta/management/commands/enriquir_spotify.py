@@ -39,7 +39,7 @@ Subsequent cron ticks check the cooldown file and skip silently until
 the Retry-After window has passed. Per-Canço commits mean a mid-run
 abort never wastes the work already done.
 
-# Spec: docs/architecture/playlists.md (Process B section)
+# Spec: docs/architecture/ingesta.md
 """
 
 from __future__ import annotations

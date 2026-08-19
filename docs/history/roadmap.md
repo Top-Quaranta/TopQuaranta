@@ -21,7 +21,7 @@ tokens de baixa newsletter i avís-top, que cap test provava), 1
 contradicció latent resolta (desempat sense-IG vs instagram-revisat).
 **Verificació per mutació al 100 %** dels supervivents amb un arnés
 guiat per cobertura (`scripts/mutacio/`, vegeu
-`docs/audits/2026-08-18-auditoria-tests.md`): 3 tests falsos trobats
+`docs/archive/audits/2026-08-18-auditoria-tests.md`): 3 tests falsos trobats
 (un a ranking, esborrat; dos reescrits: l'àncora d'edat de les frases
 a7 era buida perquè el placeholder conté «estrena»; la guarda
 `verificada` de l'auto-decisió ML era inobservable amb SUBTIERS buit).
@@ -264,7 +264,7 @@ Macro autònom de 5 ítems (PRs #185-190, tots mergejats):
   horitzontal a mòbil (Sprint J ter). Filter-panel pattern reutilitzat
   per la pàgina pública d'artistes.
 - **Auth**: sessions Django + CSRF + TOTP 2FA per staff.
-- **Pipeline**: nightly chain documentada a `docs/architecture/pipeline.md`.
+- **Pipeline**: nightly chain documentada a `docs/architecture/ingesta.md`.
 - **DB**: PostgreSQL 14, 48 taules (nova `Album.last_album_check`).
   Volums actuals (2026-05-03): ~1.9k artistes aprovats, ~2.5k cançons
   verificades, 5 territoris amb top oficial actiu.
@@ -409,7 +409,7 @@ secció _completats_ amb la data i el detall.
 
 ### 2. Sprint S — SEO Bloc D (CWV + off-page outreach)
 
-> Estratègia documentada el 2026-05-06 a `docs/architecture/seo.md`.
+> Estratègia documentada el 2026-05-06 a `docs/architecture/web.md`.
 > Blocs A+B+C executats el mateix dia. **GSC ja verificat + PSI cron
 > actiu + `/genere/<slug>` lliurats després** (auditoria 2026-05-07);
 > el que queda és Core Web Vitals + outreach manual.
@@ -971,7 +971,7 @@ amb tests + docs + CI perquè no es repetissin:
   extreu `fill:X` i `stroke:X` de cada style inline i els promociona a
   atributs `fill="X"` / `stroke="X"` natius (que el parser **sí**
   cablefica). Anchorat amb 14 vitest cases a `TopQuarantaLogo.test.js`
-  + doc nou `docs/architecture/brand-logo.md` cobrint els tres traps
+  + doc nou `docs/architecture/frontend.md` cobrint els tres traps
   (cairosvg missing, parser quirk, mono-substitució flatten). Commits
   `5a29784` + `1c38766`.
 
@@ -1082,7 +1082,7 @@ a "~7 320 URLs amb metadata rica + JSON-LD + dynamic OG cards + sitemap-index
     crawl.
   - 3 sub-sitemaps generats automàticament (territoris_landing,
     comarques, decades) amb els mateixos thresholds.
-  - `docs/architecture/seo.md` (nou): 200 línies de referència
+  - `docs/architecture/web.md` (nou): 200 línies de referència
     arquitectural cobrint dynamic rendering rationale, mòduls,
     indexability rules, JSON-LD coverage, OG images, SPA Helmet parity,
     edge cases (Vary, 304, 404 vs 410), testing, Bloc D backlog.

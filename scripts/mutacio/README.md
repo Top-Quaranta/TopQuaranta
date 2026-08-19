@@ -1,7 +1,7 @@
 # scripts/mutacio — verificació per mutació, test a test
 
 Origen: auditoria de tests del 2026-08-18
-(`docs/audits/2026-08-18-auditoria-tests.md`). Regla: un test que
+(`docs/archive/audits/2026-08-18-auditoria-tests.md`). Regla: un test que
 sobreviu ha de caure quan es trenca el codi que diu que vigila.
 
 Corre-ho **en un worktree a banda** (muta fitxers de producció

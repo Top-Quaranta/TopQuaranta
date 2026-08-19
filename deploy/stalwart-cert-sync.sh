@@ -16,7 +16,7 @@
 # The copy did nothing and the restart was a pointless mail outage.
 # On 2026-06-26 that ran, appeared to succeed, and left Stalwart
 # serving a cert that expired a month later. See
-# docs/post-mortems/2026-07-26-stalwart-cert-expirat.md.
+# docs/archive/post-mortems/2026-07-26-stalwart-cert-expirat.md.
 #
 # Configuration therefore goes over the JMAP admin API on localhost,
 # and a restart IS required afterwards: writing the config does not

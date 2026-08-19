@@ -10,7 +10,7 @@ Workflow Sol·licituds, Multi-tenant Caddy) all benefited from a
 spec written upfront. The narrative engine reset, by contrast,
 was sized as a "library only" sprint and grew into a wired path
 without an updated spec — the ensuing regression cost a follow-up
-post-mortem (`docs/post-mortems/2026-05-20-narrative-engine-
+post-mortem (`docs/archive/post-mortems/2026-05-20-narrative-engine-
 collapsed.md`).
 
 The rule is not "every sprint needs a spec"; it's "sprints above a

@@ -203,7 +203,7 @@ def test_caption_top_fallback_on_engine_error(monkeypatch, caplog):
 
 # ── Regression guard: 2026-05-20 narrative-engine collapse ──────────
 #
-# Post-mortem docs/post-mortems/2026-05-20-narrative-engine-collapsed.md.
+# Post-mortem docs/archive/post-mortems/2026-05-20-narrative-engine-collapsed.md.
 # Two defects landed silently when compose_for_channel started routing
 # top_ppcc/top_territorial through the engine; fixed in #59 (55725dd,
 # 2026-05-21) via ADR-0006 (Catalan ordinals, no positional "#N") and

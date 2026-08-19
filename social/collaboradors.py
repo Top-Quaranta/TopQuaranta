@@ -1,6 +1,6 @@
 """Instagram collaborator slot policy — pure functions, no side effects.
 
-# Spec: docs/decisions/0015-ig-collaborator-invitations.md
+# Spec: docs/archive/decisions/0015-ig-collaborator-invitations.md
 
 Tranche 1 (INERT): this module is imported by nobody in the publish
 path yet. The acceptance poller and — later — `publicar_social` will

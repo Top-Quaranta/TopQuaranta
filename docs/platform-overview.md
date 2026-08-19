@@ -556,6 +556,6 @@ a "publish as community post" action) — **the destination already exists**
 
 - `docs/architecture/music.md` · `pipeline.md` · `staff.md` ·
   `social.md` · `playlists.md` · `algorithm.md` · `comptes.md` · `web.md`
-- `docs/decisions/` (ADRs — esp. 0012/0013 Spotify split) ·
+- `docs/archive/decisions/` (ADRs — esp. 0012/0013 Spotify split) ·
   `docs/ops/runbook.md` · `docs/history/roadmap.md`
 - `CLAUDE.md` (canonical project memory) · `deploy/cron.topquaranta`

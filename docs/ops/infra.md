@@ -243,7 +243,7 @@ Es conserven dues coses, a posta:
   servei que no el rellig sol— tornarà a fer falta el dia que allotgem
   qualsevol cosa amb TLS propi.
 - El post-mortem del certificat caducat
-  ([`../post-mortems/2026-07-26-stalwart-cert-expirat.md`](../post-mortems/2026-07-26-stalwart-cert-expirat.md)),
+  ([`../archive/post-mortems/2026-07-26-stalwart-cert-expirat.md`](../archive/post-mortems/2026-07-26-stalwart-cert-expirat.md)),
   amb la lliçó que va deixar: **mesurar el certificat pel cable, mai
   llegint el fitxer del disc**. La comprovació de `music/health.py` que
   en va eixir és genèrica i continua activa per a qualsevol endpoint que

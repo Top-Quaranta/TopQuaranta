@@ -7,7 +7,7 @@ Tests use synthetic configs + tmp_path repos so they do not depend
 on the real repo's current state, plus one real-repo guard.
 """
 
-# Spec: docs/policies/docs-maintenance.md
+# Spec: docs/policies/conventions.md
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def test_exempt_permanent_doc_is_not_flagged_even_if_over(script, tmp_path):
 
 
 def test_doc_outside_scope_is_ignored(script, tmp_path):
-    _mkdoc(tmp_path, "docs/post-mortems/big.md", 800)
+    _mkdoc(tmp_path, "docs/archive/post-mortems/big.md", 800)
     cfg = _cfg(["docs/architecture/"])
     assert script.find_oversize_docs(tmp_path, cfg) == []
 

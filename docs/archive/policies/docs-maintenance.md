@@ -120,7 +120,7 @@ the archive silently.
 | `docs/history/roadmap.md` sprints | Sprint completed >3 months ago | 1 line: `[DONE YYYY-MM] <Sprint Title> · <Brief outcome> · archive: docs/archive/sprints/YYYY-Qx/<slug>.md` |
 | `docs/history/changelog.md` | Entries older than rolling year | Compressed into `docs/archive/changelog/YYYY-Qx.md`; live file keeps current rolling year |
 | `docs/architecture/<X>.md` | LOC >500 | Split by sub-area; `<X>.md` becomes an index pointing to the sub-files |
-| `docs/decisions/<NNNN>.md` | `Status: Superseded` >6 months | Move to `docs/archive/decisions/`; live file becomes a 1-line stub pointing to the archive |
+| `docs/archive/decisions/<NNNN>.md` | `Status: Superseded` >6 months | Move to `docs/archive/decisions/`; live file becomes a 1-line stub pointing to the archive |
 
 ### Rule 4 — Canonical files never archive whole
 
@@ -130,7 +130,7 @@ move to the archive in full. Only sections inside them (like
 
 ### Rule 5 — Post-mortems live forever
 
-The `docs/post-mortems/` folder doesn't decay. Cost is bytes; the
+The `docs/archive/post-mortems/` folder doesn't decay. Cost is bytes; the
 value of "I just hit something familiar, let me check if we've
 seen this before" is high enough to keep the full log accessible.
 

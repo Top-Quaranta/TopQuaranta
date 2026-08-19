@@ -352,7 +352,7 @@ class ConfiguracioGlobal(models.Model):
 
     # ── Feed artwork covers + moviment tipus (2026-07 — INERT) ──────
     # Both gated OFF by default so the merge changes nothing that goes
-    # out. See docs/decisions/0016-feed-artwork-i-moviment.md and
+    # out. See docs/archive/decisions/0016-feed-artwork-i-moviment.md and
     # docs/architecture/social.md.
     feed_artwork_actiu = models.BooleanField(
         default=False,
@@ -392,7 +392,7 @@ class ConfiguracioGlobal(models.Model):
     # All dormant until `ig_collaboradors_actiu` is switched on. The
     # slot policy (`social/collaboradors.py`) and the acceptance poller
     # (`pollar_colaboracions_ig`) read these; nothing is wired into the
-    # publisher yet. See docs/decisions/0015-ig-collaborator-invitations.md.
+    # publisher yet. See docs/archive/decisions/0015-ig-collaborator-invitations.md.
     ig_collaboradors_actiu = models.BooleanField(
         default=False,
         help_text=(
@@ -444,7 +444,7 @@ class ConfiguracioGlobal(models.Model):
     # 2026-07-26. `tq-health` opens a TLS connection to each endpoint
     # and reads the certificate ACTUALLY SERVED; a PEM on disk proves
     # nothing, which is exactly how that incident stayed invisible for
-    # a month. See docs/post-mortems/2026-07-26-stalwart-cert-expirat.md.
+    # a month. See docs/archive/post-mortems/2026-07-26-stalwart-cert-expirat.md.
     #
     # Default EMPTY so deploying this changes nothing — the operator
     # opts in per endpoint. Recommended entries, one per line:

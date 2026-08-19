@@ -140,8 +140,8 @@ npm run build      # bundle estàtic a web-react/dist/
 - **Emergències / incidents**: [`docs/ops/runbook.md`](./docs/ops/runbook.md).
 - **Història del projecte**: [`docs/history/roadmap.md`](./docs/history/roadmap.md) i
   [`docs/history/changelog.md`](./docs/history/changelog.md).
-- **Decisions arquitectòniques**: [`docs/decisions/`](./docs/decisions/).
-- **Post-mortems**: [`docs/post-mortems/`](./docs/post-mortems/).
+- **Decisions arquitectòniques**: [`docs/DECISIONS.md`](./docs/DECISIONS.md) (digest; ADRs sencers a `docs/archive/decisions/`).
+- **Post-mortems**: [`docs/LESSONS.md`](./docs/LESSONS.md) (digest; write-ups a `docs/archive/post-mortems/`).
 - **Política d'API**: [`docs/architecture/web.md`](./docs/architecture/web.md).
 - **Política de claus SSH**: [`docs/ops/ssh-keys.md`](./docs/ops/ssh-keys.md).
 

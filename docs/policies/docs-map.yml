@@ -13,7 +13,7 @@
 # (`.pre-commit-config.yaml`, GitHub workflows). The CI cost is one
 # `pip install pyyaml --quiet` in the docs-coherence step.
 #
-# # Spec: docs/policies/docs-maintenance.md
+# # Spec: docs/policies/conventions.md
 
 # ---------------------------------------------------------------------
 mapping:

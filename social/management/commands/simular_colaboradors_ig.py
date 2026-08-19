@@ -1,6 +1,6 @@
 """Dry-run the IG collaborator slot policy — read-only, sends nothing.
 
-# Spec: docs/decisions/0015-ig-collaborator-invitations.md §5.2
+# Spec: docs/archive/decisions/0015-ig-collaborator-invitations.md §5.2
 
 Builds the real candidate pool for one or more feed posts (default: the
 latest weekly PPCC top + this week's novetats), applies the slot policy

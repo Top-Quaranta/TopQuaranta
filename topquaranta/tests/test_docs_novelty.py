@@ -7,7 +7,7 @@ Tests exercise the resolver on synthetic `tmp_path` repo layouts so
 they do not depend on the real repo's current state.
 """
 
-# Spec: docs/policies/docs-maintenance.md
+# Spec: docs/policies/conventions.md
 
 from __future__ import annotations
 

@@ -35,7 +35,7 @@ contents of `CLAUDE.md §10` (which now links here).
   ```
 
   Pre-commit hook `scripts/check_spec_paths.py` validates the
-  paths exist. See `docs/policies/docs-maintenance.md` Rule 1.
+  paths exist.
 
 ## Commits
 
@@ -57,11 +57,11 @@ that uses it**. Concretely:
 2. Include the migration file in the same PR as the model change.
 3. After merge, `bin/tq-deploy` will detect pending migrations and
    apply them **before** the gunicorn reload (see
-   `docs/decisions/0001-gunicorn-no-reload.md`).
+   `docs/archive/decisions/0001-gunicorn-no-reload.md`).
 
 Editing the live `app/models.py` on the server before the
 migration has been applied is the failure mode of
-`docs/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
+`docs/archive/post-mortems/2026-05-19-gunicorn-reload-incidents.md`.
 
 ## End-to-end smokes
 
@@ -97,7 +97,7 @@ Two corollaries:
   the time anyone investigates. Timestamp each line and cap the size.
 
 This rule was added after
-`docs/post-mortems/2026-07-26-stalwart-cert-expirat.md`, where a sync
+`docs/archive/post-mortems/2026-07-26-stalwart-cert-expirat.md`, where a sync
 script reported success for a month while the mail server served a
 certificate that eventually expired. Every command it ran did return
 0; none of them observed the certificate actually in use.
@@ -112,5 +112,65 @@ block. Mixing real captures with imagined ones without labels
 makes the entire report untrustworthy.
 
 This rule was added after
-`docs/post-mortems/2026-05-20-jordi-sarra-mock.md`. Claude Code in
+`docs/archive/post-mortems/2026-05-20-jordi-sarra-mock.md`. Claude Code in
 particular respects it as an active memory rule.
+
+## Documentation
+
+**Docs say only what matters.** A doc line survives only if someone
+touching the system would otherwise not know it and cannot get it
+faster from the code, a test or a docstring. There are two kinds of
+document and nothing else:
+
+- `docs/architecture/<app>.md` — **invariants and traps** of one app,
+  each with the test/check that guards it. No field tables, no
+  endpoint catalogues, no UI narration, no sprint history. ≤ 150
+  lines by habit, 400 by CI (`docs-size`).
+- `docs/DECISIONS.md` and `docs/LESSONS.md` — one paragraph per
+  decision / per incident. The full ADR or write-up goes to
+  `docs/archive/` the day it is written; the digest is what people
+  read.
+
+Everything else — session notes, recon, audits, informes, plans —
+is history: it goes straight to `docs/archive/`, out of the map and
+out of the link checker. `docs/ops/runbook.md` is the exception:
+procedures you need at 3 a.m.
+
+**When a PR must touch a doc.** Only when it changes an invariant:
+a constraint the code enforces or an external service imposes, the
+*why* of a decision, an operational procedure, a lesson. A new
+endpoint, route, page, model field, column, cron line, log line,
+config knob, or copy string is **not** a doc change — write the
+override line and move on. At this stage of the project the
+override is the normal case, not the exception; 75–90 % of PRs
+carrying one is healthy.
+
+**The gates** (`.github/workflows/ci-docs.yml`, config in
+`docs/policies/docs-map.yml`, tests in `topquaranta/tests/test_docs_*.py`):
+
+- `docs-coherence` — a PR that touches an app without touching its
+  doc needs one line in the body: `docs-reviewed: <doc> : <reason>`.
+  CI checks the doc is the mapped one and the reason is non-empty.
+  The mapping is one entry per app; if a prefix keeps tripping for
+  changes that never touch an invariant, fix the mapping, not the
+  reason.
+- `docs-size` — 400 lines hard for `docs/architecture/` and
+  `docs/ops/`; no grandfathering. Over the line means the doc is
+  narrating again: cut, don't split.
+- `docs-novelty` — a new top-level code directory must appear in
+  `docs-map.yml` (`mapping:` with its doc, or `exclude:` with a reason).
+
+**Post-mortems.** Write one (into `docs/LESSONS.md`, full text to
+`docs/archive/post-mortems/`) after: a production incident with
+user-visible breakage or a silenced channel; a redesign of work
+merged days earlier; an ADR reversed in under 6 months; a captured
+output that turns out to be invented (see *Captures*). Every entry
+names the test or check that now guards the lesson — a lesson
+without a guard is a lesson we will relearn.
+
+**Specs before sprints.** A change that touches two or more apps,
+adds an actor or a state machine, or introduces a contract others
+must respect gets a short spec first — as an entry in
+`docs/DECISIONS.md` with status *Proposed*, promoted to *Accepted*
+when the sprint merges, updated in the same PR if the sprint
+deviates. Smaller changes: code first, rationale in the PR body.

@@ -20,8 +20,8 @@ Només les declaracions que el CI no pot verificar (la resta ja les força):
       (`conventions.md`, `identities.md`, `sprint-process.md`,
       `docs-maintenance.md`, `post-mortems.md`).
 - [ ] Si el canvi és una decisió arquitectònica (criteris a
-      `docs/policies/sprint-process.md`), he creat un ADR a
-      `docs/decisions/`.
+      `docs/policies/conventions.md`), he creat un ADR a
+      `docs/archive/decisions/`.
 - [ ] Les captures/screenshots a la descripció són reals o estan
       etiquetades `EXAMPLE` / `MOCK`.
 
@@ -44,8 +44,8 @@ actualitza el doc; no facis servir l'override com a camí ràpid.
 ## Related
 
 <!-- Issues, ADRs, post-mortems, commits relacionats:
-     - ADR: docs/decisions/NNNN-slug.md
-     - Post-mortem: docs/post-mortems/YYYY-MM-DD-slug.md
+     - ADR: docs/archive/decisions/NNNN-slug.md
+     - Post-mortem: docs/archive/post-mortems/YYYY-MM-DD-slug.md
      - Commit antic: abc1234
 -->
 

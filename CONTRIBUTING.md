@@ -35,7 +35,7 @@ docs/
 1. **Branch** off `main`. Name: `feat/<slug>`, `fix/<slug>`,
    `chore/<slug>`, `docs/<slug>`.
 2. **Spec first** when the sprint is medium or large. See
-   `docs/policies/sprint-process.md` for the sizing rules. The
+   `docs/policies/conventions.md` for the sizing rules. The
    spec lives as an ADR with `Status: Proposed`.
 3. **Commit per phase** for multi-phase sprints (`docs: FASE A -
    …`). Easier to revert one phase than to unwind a single

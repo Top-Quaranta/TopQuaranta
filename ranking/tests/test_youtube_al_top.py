@@ -225,3 +225,23 @@ def test_swapping_a_video_does_not_count_either(cfg):
     )
 
     assert canco.pk not in _ids()
+
+
+# ── Qui pot entrar ─────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_una_sola_escolta_basta_quan_youtube_compta(cfg):
+    """Amb la font combinada activa, el terra de Last.fm passa de 5
+    escoltes a 0,2: una cançó amb una sola escolta i cap visualització
+    entra al top. No és un efecte col·lateral, és el criteri editorial
+    (Miquel, 2026-08-19) — tindre oients que usen Last.fm és rarísim en
+    música en català i una escolta ja és senyal real. Ancorat perquè
+    apujar `min_senyal_combinat` a unitats d'escolta trenque açò."""
+    # Qualsevol cançó amb història per vídeo encén la font per a tots.
+    _youtube(_canco("Encén la font"), 10_000)
+
+    una = _canco("Una escolta")
+    _lastfm(una, 1)  # 1 × 1000 = 1000 ≥ min_senyal_combinat (200)
+
+    assert una.pk in _ids()

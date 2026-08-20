@@ -26,6 +26,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
+from urllib.parse import unquote
 
 from django.core.management.base import BaseCommand
 
@@ -84,11 +85,15 @@ class Command(BaseCommand):
         gastat = 0
 
         for a in pendents:
-            m = _CHANNEL_URL.search(a.youtube_url)
+            # Els enllaços de MusicBrainz venen percent-codificats quan el
+            # handle porta accents (`@ComboAvan%C3%A7at`), i el `%` talla
+            # el handle a mitges. Cap handle en porta un de literal.
+            url = unquote(a.youtube_url or "")
+            m = _CHANNEL_URL.search(url)
             channel = m.group(1) if m else None
 
             if channel is None:
-                h = _HANDLE_URL.search(a.youtube_url)
+                h = _HANDLE_URL.search(url)
                 if not h:
                     continue
                 if not opts["resolve"]:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
+from urllib.parse import unquote
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -458,7 +459,12 @@ def _resol_canal_youtube(brut: str) -> tuple[str, str]:
     """
     from ingesta.clients import youtube as yt
 
-    brut = (brut or "").strip()
+    # El navegador percent-codifica l'accent en copiar la barra
+    # d'adreces: `@ComboAvançat` arriba com `@ComboAvan%C3%A7at`, i el
+    # `%` talla el handle a `@ComboAvan`, que YouTube no coneix. Es
+    # descodifica ací perquè cap handle de YouTube pot contindre un `%`
+    # literal — si n'hi ha un, sempre és codificació.
+    brut = unquote((brut or "").strip())
     kwargs: dict[str, str] = {}
     if _CANAL_ID.match(brut):
         kwargs = {"channel_id": brut}

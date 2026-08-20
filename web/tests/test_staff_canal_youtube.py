@@ -195,3 +195,30 @@ def test_a_topic_channel_is_adopted_when_discovery_missed_it(staff_client, artis
     canco.refresh_from_db()
     assert canco.youtube_video_id == "ay5vSouZZsk"
     assert canco.youtube_match == Canco.MATCH_EXACTE
+
+
+@pytest.mark.django_db
+def test_percent_encoded_handle_reaches_youtube_intact(staff_client, artista):
+    """Copiar la barra d'adreces d'un canal amb accent dóna
+    `@ComboAvan%C3%A7at`, no `@ComboAvançat`. El `%` no és part del
+    handle, així que la regex tallava a `@ComboAvan` i YouTube responia
+    que no el coneix — l'operador havia d'arreglar-ho a mà (Miquel,
+    2026-08-20).
+
+    S'afirma el handle que arriba a YouTube, no el que es desa: el que
+    es desa és l'id, i un id mockejat passaria igual amb el handle
+    trencat."""
+    with patch.object(
+        yt, "channel_info", return_value={"id": CANAL, "title": "Combo Avançat"}
+    ) as spy:
+        r = staff_client.patch(
+            f"/api/v1/staff/artistes/{artista.pk}/",
+            {
+                "youtube_canal_oficial": "https://www.youtube.com/@ComboAvan%C3%A7at",
+                "youtube_canal_revisat": True,
+            },
+            format="json",
+        )
+
+    assert r.status_code == 200, r.content
+    assert spy.call_args.kwargs == {"handle": "ComboAvançat"}

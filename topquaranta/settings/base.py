@@ -1,6 +1,20 @@
+import warnings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# sklearn advises, once per parallel task, that `delayed` should be used
+# with its own `Parallel`. It comes from inside sklearn's own estimators
+# during the background retrain (`recalcular_ml_si_cal`, a thread in
+# gunicorn), there is nothing for us to act on, and between the 9th and
+# the 16th of August 2026 it wrote 94.921 copies into /var/log/syslog —
+# 1,3 GB, 3,4 % of the disk, uncompressed for a week because rsyslog
+# rotates weekly with `delaycompress`.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*sklearn\.utils\.parallel\.delayed.*",
+    category=UserWarning,
+)
 
 INSTALLED_APPS = [
     # Django

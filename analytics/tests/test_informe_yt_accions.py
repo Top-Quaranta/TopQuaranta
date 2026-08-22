@@ -195,3 +195,26 @@ def test_songs_only_lastfm_sees_still_get_asked_about_last():
 
     titols = [f["titol"] for f in _accions()["files"]]
     assert titols.index("Ningú la veu") < titols.index("Last.fm la veu")
+
+
+@pytest.mark.django_db
+def test_no_demana_el_canal_dun_artista_encara_pendent():
+    """Un artista sense decidir no genera feina de canal.
+
+    Cas real del 22/08/2026: «Hores Extres» és verificada perquè els
+    col·laboradors sí que estan aprovats, però l'artista principal
+    —Sr. À— continua a la cua de pendents. El correu li demanava el
+    canal i enviava a `/staff/artistes/sense-youtube`, que filtra
+    `aprovat=1`: l'artista no hi apareixia i la fila tornava cada matí
+    sense poder-se contestar. La cançó sí que és feina d'avui.
+    """
+    pendent = Artista.objects.create(
+        nom="Sr. À", lastfm_nom="Sr. À", aprovat=False, pendent_review=True
+    )
+    _canco(pendent, "Hores Extres")
+
+    ac = _accions()
+    assert "Sr. À" not in [f["titol"] for f in ac["files"]]
+    assert "Hores Extres" in [f["titol"] for f in ac["files"]]
+    # I tampoc infla el compte del que queda per fer.
+    assert ac["resten_artistes"] == 0

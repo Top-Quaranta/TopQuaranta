@@ -100,28 +100,3 @@ def test_eta_uses_capacity_until_there_is_real_history():
 
     assert "capacitat diària" in out.getvalue()
     assert "ritme actual" not in out.getvalue()
-
-
-@pytest.mark.django_db
-def test_no_demana_el_canal_dun_artista_encara_pendent():
-    """El correu no demana canal d'un artista que ningú ha aprovat.
-
-    Cas real (22/08/2026): «Hores Extres» és una cançó verificada
-    perquè els col·laboradors sí que estan aprovats, però l'artista
-    principal —Sr. À— és a la cua de pendents. Demanar-ne el canal és
-    feina morta: `/staff/artistes/sense-youtube` filtra `aprovat=1` i
-    l'artista no hi apareix. La cançó sí que pot sortir a la llista:
-    aparellar-li un vídeo és feina que es pot fer avui.
-    """
-    pendent = Artista.objects.create(
-        nom="Sr. À", lastfm_nom="Sr. À", aprovat=False, pendent_review=True
-    )
-    _canco("Hores Extres", artista=pendent)
-
-    out = StringIO()
-    call_command("enviar_informe_youtube", "--dry-run", stdout=out)
-    body = out.getvalue()
-
-    assert "Sr. À — cap canal de YouTube" not in body
-    assert "Sr. À — sense canal propi revisat" not in body
-    assert "Hores Extres" in body

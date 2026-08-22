@@ -92,12 +92,19 @@ class Command(BaseCommand):
         while True:
             qs = (
                 Artista.objects
-                # Approved artists get first dibs, then pendents, then descartats.
+                # Approved artists get first dibs, then pendents.
+                # Descartats are out of the rotation: they are kept only
+                # for FK integrity, nothing reads their discography, and
+                # at 14.731 rows they made the queue bottomless — on
+                # 2026-08-22 the whole catalogue was fresh (0 aprovats,
+                # 25 pendents due) and the hourly cron was spending its
+                # entire hour re-syncing rejected artists, overrunning
+                # into the next run and tripping the watchdog STUCK.
+                .exclude(aprovat=False, pendent_review=False)
                 .annotate(
                     prio=Case(
                         When(aprovat=True, then=Value(0)),
-                        When(pendent_review=True, then=Value(1)),
-                        default=Value(2),
+                        default=Value(1),
                         output_field=IntegerField(),
                     )
                 )

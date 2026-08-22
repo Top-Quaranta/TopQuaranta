@@ -93,6 +93,18 @@
   detection. Guarded by: `test_lastfm_client.py::TestMbidFallback`,
   `::TestGetTrackInfoTopTracksFallback`,
   `test_obtenir_senyal.py::TestCollaboratorFallback`.
+- **A title carrying a version marker (remix / live / en directe /
+  acústica / instrumental / demo / extended / versió) only matches a
+  Last.fm title carrying one too — `_mateixa_gravacio`, applied to the
+  normalised retry and to the top-tracks fallback.** Why: `_normalize_track`
+  strips `(Remix)` exactly like it strips `(Remaster)`, so the recovery
+  chain answered a remix with the original's page. «DIUMENGE SENSE DRAMA
+  (Remix)» (Mon DJ) took Els Catarres' 705 plays and entered PPCC at #2
+  two days old; «El Boig de la Ciutat (En Directe al Palau Sant Jordi)»
+  was carrying the studio version's 25.033. ~60 rows a day, mostly live
+  albums. A remaster or a `(feat. X)` is the same tape and still
+  recovers. Guarded by:
+  `test_lastfm_client.py::TestVersionsNoHeretenLOriginal`.
 - **The name that answered (`asked_artist`) drives drift detection and
   alias summing; aliases are never summed onto a collaborator.** Drift
   (`_detect_drift`: artist ratio <0.90 or track <0.80 after stripping

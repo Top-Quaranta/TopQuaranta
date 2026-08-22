@@ -267,6 +267,74 @@ class TestObtenirSenyalYoutube:
         assert SenyalYouTube.objects.filter(canco=canco).count() == 1
 
 
+@pytest.mark.django_db
+class TestDataDePublicacio:
+    """La data de l'Art Track data la GRAVACIÓ, no l'edició.
+
+    És el que permet al rànquing no tractar una remasterització o una
+    reedició com un llançament fresc, que és la branca que banca el
+    playcount de tota la vida com si fóra una setmana (vegeu
+    `ranking/tests/test_compute_weekly_plays.py`). Ve de gratis: la
+    crida diària a `videos.list` val 1 unitat porte les parts que porte.
+    """
+
+    @pytest.fixture
+    def canco(self):
+        a = Artista.objects.create(nom="A", lastfm_nom="A", aprovat=True)
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=5)
+        )
+        return Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom="T",
+            data_llancament=date.today() - timedelta(days=5),
+            verificada=True,
+            activa=True,
+            youtube_video_id="art1",
+        )
+
+    def test_es_desa_la_data_de_lart_track(self, canco):
+        with patch.object(
+            yt,
+            "video_stats",
+            return_value={
+                "art1": {
+                    "views": 10,
+                    "likes": 1,
+                    "published_at": date(2024, 2, 6),
+                }
+            },
+        ):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+        canco.refresh_from_db()
+        assert canco.youtube_publicat_at == date(2024, 2, 6)
+
+    def test_un_video_del_canal_propi_no_data_la_gravacio(self, canco):
+        """Un videoclip pujat a mà pot ser d'una represa, d'un directe o
+        d'una pujada tardana: no diu res de quan es va gravar la cançó.
+        Només l'Art Track, que el genera el distribuïdor, ho diu.
+        """
+        from music.models import CancoYouTubeVideo
+
+        CancoYouTubeVideo.objects.create(canco=canco, video_id="propi1", titol="clip")
+        with patch.object(
+            yt,
+            "video_stats",
+            return_value={
+                "art1": {"views": 10, "likes": 1, "published_at": None},
+                "propi1": {
+                    "views": 99,
+                    "likes": 9,
+                    "published_at": date(2019, 1, 1),
+                },
+            },
+        ):
+            call_command("obtenir_senyal_youtube", stdout=StringIO())
+        canco.refresh_from_db()
+        assert canco.youtube_publicat_at is None
+
+
 class TestConteTitol:
     """The guard that decides whether a video on the artist's own channel
     is *this* song. Titles there are free text ("AUXILI - TARRINETES AL

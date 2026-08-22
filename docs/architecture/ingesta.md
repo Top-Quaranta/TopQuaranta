@@ -204,6 +204,13 @@
   (dead id, hidden `viewCount`) is not counted and does not raise
   `n_videos`; all lanes dead → `error=True, views=NULL`.** Guarded by:
   `test_youtube.py::TestObtenirSenyalYoutube`, `::TestDuesLlanes`.
+- **The daily poll also records the Art Track's `publishedAt`
+  (`Canco.youtube_publicat_at`), once per song and only for that lane.**
+  Why: it dates the recording for the ranking's fresh-release guard
+  (`ranking.md`); a hand-uploaded videoclip dates nothing (it can be a
+  re-take, a live or a late upload). `videos.list` costs 1 unit per call
+  whatever parts it carries, so `snippet` rides along free. Guarded by:
+  `test_youtube.py::TestDataDePublicacio`.
 - **Staff pasting a Topic channel into the official-channel field
   adopts it as Art Track lane only if the artist has none, and pairs
   songs immediately** (`_cua()` skips artists with a channel). Guarded

@@ -1200,6 +1200,20 @@ class Canco(models.Model):
     # which is precisely the class of guess this whole exercise exists to
     # stop shipping.
     youtube_matched_at = models.DateTimeField(null=True, blank=True)
+    # Quan es va publicar l'Art Track, que és qui data la GRAVACIÓ: el
+    # distribuïdor el genera el dia del llançament (mostra de 500
+    # cançons el 22/08/2026: 93,4 % dins de ±30 dies de la data que
+    # tenim). Quan surt molt abans, la data que tenim és d'una reedició
+    # i la gravació és vella —«Eterns (Remasteritzada)» d'Enemic
+    # Interior: nostra 2025-07-25, vídeo 2024-02-06—, i el rànquing no
+    # l'ha de tractar com a llançament fresc: eixa branca banca el
+    # playcount de tota la vida com si fora una setmana.
+    youtube_publicat_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Data de publicació de l'Art Track. Evidència d'edat "
+        "de la gravació per al rànquing.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     # SEO Sprint S (2026-05-06). See Artista.updated_at note. No

@@ -471,6 +471,15 @@ def _track_identity(s: str) -> str:
     return " ".join(s.split())
 
 
+# Quant abans ha d'haver-se publicat el vídeo perquè li fem cas per
+# damunt de la nostra data de llançament. Mostra de 500 cançons el
+# 22/08/2026: el 93,4 % dels Art Tracks cauen dins de ±30 dies de la
+# data que tenim, no n'hi ha cap entre 61 i 180 dies, i el 2 % que passa
+# de l'any són remasteritzacions i reedicions. El llindar va al mig del
+# buit, no arran del soroll.
+_MARGE_EVIDENCIA_EDAT = 180
+
+
 def _compute_weekly_plays(
     canco: Canco,
     signals: list[SenyalDiari],
@@ -536,6 +545,18 @@ def _compute_weekly_plays(
         primera = primer_llancament.get((canco.artista_id, _track_identity(canco.nom)))
         if primera and primera < data_ref:
             data_ref = primera
+    # …i tampoc si YouTube diu que la gravació ja existia. L'Art Track el
+    # genera el distribuïdor el dia del llançament, així que data la
+    # gravació i no l'edició: quan és molt anterior a la data que tenim,
+    # la que va nàixer fa poc és l'edició, no la música. La guarda de
+    # dalt només enxampa reedicions del mateix artista amb el mateix
+    # títol; això és evidència directa i cobreix el 73 % del catàleg viu.
+    if (
+        data_ref
+        and canco.youtube_publicat_at
+        and canco.youtube_publicat_at < data_ref - timedelta(days=_MARGE_EVIDENCIA_EDAT)
+    ):
+        data_ref = canco.youtube_publicat_at
     if data_ref and data_ref > today - timedelta(days=7):
         return max(0.0, float(playcount_today))
 

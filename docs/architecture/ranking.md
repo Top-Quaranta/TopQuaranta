@@ -21,6 +21,15 @@
   the artist's *whole* catalogue, not the pool. Guarded by:
   `test_compute_weekly_plays.py::test_reissue_of_an_older_homonym_is_not_fresh`,
   `test_coherencia_ranking.py::test_reissue_does_not_bank_the_originals_lifetime_playcount`.
+- **…and unless the Art Track was published >180 d before that release
+  date** (`Canco.youtube_publicat_at`): the distributor generates it on
+  release day, so it dates the *recording* while our date may be a
+  re-edition's. Direct evidence where the homonym rule needs a guess,
+  and it covers 73 % of the live catalogue. The margin sits in the gap,
+  not next to the noise: in a 500-song sample (2026-08-22) 93,4 % of Art
+  Tracks fall within ±30 d of our date, none between 61 and 180 d, and
+  the 2 % beyond a year were remasters and re-issues. Guarded by:
+  `test_compute_weekly_plays.py::test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament`.
 - **Last.fm merge steps are excised** (`_robust_weekly_from_series`): a
   one-day jump that is ≥8× the song's median daily rate AND ≥40 % of the
   cumulative AND ≥300 absolute is dropped and the week refilled from the

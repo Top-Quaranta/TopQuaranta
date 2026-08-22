@@ -37,6 +37,9 @@ class _Canco:
     data_llancament: date | None
     artista_id: int = 1
     nom: str = "X"
+    # Data de publicació de l'Art Track: evidència d'edat de la
+    # gravació quan la data de llançament és la d'una reedició.
+    youtube_publicat_at: date | None = None
 
 
 # ── Branch 1: fresh release (< 7 days old) ─────────────────────────
@@ -419,3 +422,34 @@ def test_robust_next_week_after_merge_is_legacy_identical():
     signals = [_Senyal(d, pc, "Noia de Porcellana") for d, pc in series]
     out = _compute_weekly_plays(canco, signals, today)
     assert out == float(series[-1][1] - series[0][1])  # plain 7-day delta
+
+
+def test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament():
+    """El vídeo data la gravació; la nostra data, l'edició.
+
+    «Eterns (Remasteritzada)» d'Enemic Interior: la tenim com a
+    2025-07-25 i l'Art Track es va publicar el 2024-02-06, 534 dies
+    abans. La branca de llançament fresc banca tot el playcount com si
+    fóra una setmana, i eixa és la que va posar un remix al número 2 el
+    22/08/2026. Amb l'evidència del vídeo, la fila cau a les branques de
+    línia base: 0 fins que el nostre propi senyal n'acumule una.
+
+    El marge existeix perquè l'Art Track puja la nit abans: 93,4 % de la
+    mostra cau dins de ±30 dies i això NO ha de desmentir res.
+    """
+    today = date(2026, 8, 22)
+    signals = [_Senyal(date(2026, 8, 20), 4200), _Senyal(date(2026, 8, 22), 4200)]
+
+    fresca = _Canco(date(2026, 8, 20), nom="Eterns")
+    assert _compute_weekly_plays(fresca, signals, today) == 4200.0
+
+    vella = _Canco(
+        date(2026, 8, 20), nom="Eterns", youtube_publicat_at=date(2025, 3, 4)
+    )
+    assert _compute_weekly_plays(vella, signals, today) == 0.0
+
+    # L'Art Track de la nit abans és el cas normal, no una reedició.
+    normal = _Canco(
+        date(2026, 8, 20), nom="Eterns", youtube_publicat_at=date(2026, 8, 19)
+    )
+    assert _compute_weekly_plays(normal, signals, today) == 4200.0

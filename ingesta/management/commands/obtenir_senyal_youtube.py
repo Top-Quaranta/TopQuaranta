@@ -68,10 +68,16 @@ class Command(BaseCommand):
             activa=True, verificada=True, data_llancament__gte=cutoff
         ).exclude(pk__in=ja)
         per_canco: dict[int, list[str]] = {}
-        for pk, vid in elegibles.exclude(youtube_video_id="").values_list(
-            "pk", "youtube_video_id"
+        # Quin vídeo de cada cançó és l'Art Track: només eixe data la
+        # gravació. Un videoclip del canal propi pot ser d'una represa,
+        # d'un directe o d'una pujada tardana.
+        art_tracks: dict[int, set[str]] = {}
+        for pk, vid, publicat in elegibles.exclude(youtube_video_id="").values_list(
+            "pk", "youtube_video_id", "youtube_publicat_at"
         ):
             per_canco.setdefault(pk, []).append(vid)
+            if publicat is None:
+                art_tracks.setdefault(pk, set()).add(vid)
         for pk, vid in CancoYouTubeVideo.objects.filter(
             canco__in=elegibles
         ).values_list("canco_id", "video_id"):
@@ -89,12 +95,19 @@ class Command(BaseCommand):
 
         recollit: dict[int, dict] = {}
         morts: dict[int, list[str]] = {}
+        publicacions: dict[int, object] = {}
         try:
             for i in range(0, len(pendents), BATCH):
                 tros = pendents[i : i + BATCH]
                 stats = yt.video_stats([vid for _, vid in tros])
                 for pk, vid in tros:
                     st = stats.get(vid)
+                    # La data de publicació de l'Art Track data la
+                    # gravació (vegeu `Canco.youtube_publicat_at`). Ve
+                    # de gratis amb la mateixa crida, i no canvia mai:
+                    # es desa una vegada i prou.
+                    if st and st.get("published_at") and vid in art_tracks.get(pk, ()):
+                        publicacions[pk] = st["published_at"]
                     if st is None or st["views"] is None:
                         # Gone (takedown, re-upload), a stale id, or an
                         # uploader who hides the view count — all the same
@@ -152,6 +165,8 @@ class Command(BaseCommand):
         errors = sum(1 for pk in morts if pk not in recollit)
 
         SenyalYouTube.objects.bulk_create(files, ignore_conflicts=True)
+        for pk, publicat in publicacions.items():
+            Canco.objects.filter(pk=pk).update(youtube_publicat_at=publicat)
         self.stdout.write(
             self.style.SUCCESS(f"Snapshots: {ok} correctes, {errors} amb error.")
         )

@@ -143,6 +143,10 @@
   double-counts the Art Track. `youtube_canal_revisat`,
   `Canco.youtube_revisat` and `instagram_revisat` mean "reviewed, has
   none" — a final state, and what makes the daily work queues drain.
+- `Canco.youtube_publicat_at` is the Art Track's publication date and
+  means *when the recording appeared*, not when we matched it
+  (`youtube_matched_at`). The ranking reads it as age evidence; write it
+  only from the Art Track lane.
 - `instagram_suggerit` is a candidate, not evidence; `instagram_rebutjat_at`
   (Meta code 110) blanks the public URL. Never promote a suggestion by code.
 - `Album.descartat=True` is the only permanent exclusion from ingest;

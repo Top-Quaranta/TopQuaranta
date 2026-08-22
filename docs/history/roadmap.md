@@ -3,9 +3,44 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-19.
+> Last updated: 2026-08-22.
 
 ---
+
+## Sprint 2026-08-22 — Feina que no es podia fer, i una cua sense fons
+
+Tres coses que semblaven independents i totes eren la mateixa: demanar
+feina que ningú pot fer.
+
+**El correu de YouTube demanava el canal d'artistes pendents** (#453).
+Una cançó pot ser verificada pel mèrit dels seus col·laboradors mentre
+l'artista principal continua a la cua de pendents —«Hores Extres» de
+Sr. À—, i els tres calaixos d'artista del correu no filtraven `aprovat`.
+L'enllaç anava a `/staff/artistes/sense-youtube`, que filtra `aprovat=1`:
+l'artista no hi apareixia i la fila tornava cada matí. Ara passen per
+`Artista.objects.public()`; la cançó continua a la llista, que aparellar
+un vídeo sí que és feina d'avui. 225 → 205 artistes pendents de canal.
+
+**El cron de MusicBrainz repassava els 14.731 descartats** (#454). El
+STUCK diari no era ni MB ni la xarxa (comprovat amb curl i amb el nostre
+client des d'un procés nou mentre el cron fallava: 80-200 ms): la cua
+incloïa els artistes rebutjats, que només es guarden per integritat
+d'FK. El 22/08 el catàleg viu estava fresc —0 aprovats, 25 pendents— i
+el cron passava l'hora sencera repassant rebutjats, s'allargava més
+enllà de l'hora i el següent saltava pel lock. Un `.exclude()`: el run
+va passar de 75-90 min a **90 segons**, «Cua buida — tot fresc».
+
+**1,3 GB de syslog d'un sol avís** (#455). 94.921 còpies d'un
+`UserWarning` de sklearn escopides pel reentrenament de fons del ML;
+sense comprimir una setmana perquè rsyslog rota `weekly` amb
+`delaycompress`. Filtre als settings base. De pas, neteja de la caixa
+—syslog vell, binaris del CLI supersedits, el stalwart retirat (excepte
+la config i la clau), cache d'apt i revisions de snap deshabilitades—:
+**81 % → 70 %**, d'11 G lliures.
+
+**Pendent d'aquest fil:** ~1,2 G més de `/root/.vscode-server` quan es
+tanquen les dues sessions vives que encara el fan servir; i confirmar al
+syslog d'ací a uns dies que l'avís de sklearn ha callat de veres.
 
 ## Sprint 2026-08-19 bis — El correu de YouTube reparteix feina
 

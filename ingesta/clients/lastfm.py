@@ -105,6 +105,40 @@ def _normalize_track(name: str) -> str:
     return name
 
 
+# Paraules que fan que un títol siga una GRAVACIÓ distinta, no el mateix
+# enregistrament amb un altre embolcall. Un remaster o un «(feat. X)» és
+# la mateixa cinta; un remix, un directe, una acústica o una demo no ho
+# són, i tenen el seu propi públic.
+#
+# 2026-08-22: «DIUMENGE SENSE DRAMA (Remix)» de Mon DJ no existeix a
+# Last.fm. La cadena de recuperació llevava «(Remix)», preguntava pel
+# títol pelat i es quedava amb la pàgina de l'original d'Els Catarres:
+# 705 escoltes que no són seues, i el número 2 del top de PPCC amb dos
+# dies de vida. Passava en ~60 cançons al dia — sobretot directes.
+_VERSION_MARKER = re.compile(
+    r"\b("
+    r"remix|remixes|live|en directe|en viu|directe|directo|"
+    r"ac[uú]stic[ao]?|acoustic|unplugged|instrumental|demo|extended|"
+    r"versi[oó]"
+    r")\b",
+    re.I,
+)
+
+
+def _mateixa_gravacio(demanat: str, candidat: str) -> bool:
+    """Els dos títols parlen del mateix enregistrament?
+
+    Només mira els marcadors de versió: si un diu «(En Directe)» i
+    l'altre no, són dues gravacions distintes encara que la resta del
+    títol case perfectament. No és una llista negra de paraules —cap
+    títol es descarta per contenir-les—, és una condició de simetria: el
+    que demanem i el que ens tornen han de portar les mateixes.
+    """
+    return bool(_VERSION_MARKER.search(demanat)) == bool(
+        _VERSION_MARKER.search(candidat)
+    )
+
+
 def _api_call(
     artist_name: str,
     track_name: str,
@@ -234,7 +268,14 @@ def _find_in_artist_top_tracks(
         if ratio > best_ratio:
             best = t
             best_ratio = ratio
-    if best is not None and best_ratio >= min_ratio:
+    if (
+        best is not None
+        and best_ratio >= min_ratio
+        # Mateix motiu que a la retry: el `_normalize_track` de dalt ha
+        # esborrat «(Remix)» dels dos costats, així que un remix casa al
+        # 100 % amb l'original. Els marcadors han de coincidir.
+        and _mateixa_gravacio(track_name, best.get("name", ""))
+    ):
         return best
     return None
 
@@ -411,6 +452,12 @@ def get_track_info(
     # at the caller and the ranking algorithm's `corregit=False` filter.
     if err == 6:
         normalized = _normalize_track(track_name)
+        # `_normalize_track` lleva «(Remix)» / «(En Directe)» igual que
+        # lleva «(Remaster)»: va nàixer per a retrys i no distingeix
+        # embolcall de gravació. Ací sí que cal distingir-ho — el títol
+        # pelat és una altra cançó, amb el públic de l'original.
+        if normalized and not _mateixa_gravacio(track_name, normalized):
+            normalized = ""
         retry_name = (
             normalized if (normalized and normalized != track_name) else track_name
         )

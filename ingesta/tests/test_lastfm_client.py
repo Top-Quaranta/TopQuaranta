@@ -316,3 +316,108 @@ class TestMbidFallback:
         ]
         assert carried[0] is True
         assert not any(carried[1:])
+
+
+class TestVersionsNoHeretenLOriginal:
+    """Un remix, un directe o una acústica no són la cançó original.
+
+    Last.fm sovint no en té pàgina. La cadena de recuperació llevava el
+    sufix i es quedava amb el títol pelat, que és una gravació distinta
+    amb el públic de l'original: el 22/08/2026 «DIUMENGE SENSE DRAMA
+    (Remix)» de Mon DJ va entrar al número 2 de PPCC amb les 705
+    escoltes d'Els Catarres i dos dies de vida.
+
+    El que ha de continuar funcionant és el cas contrari: «(Remaster)»,
+    «(feat. X)» o un canvi de majúscules són la mateixa cinta i s'han de
+    poder recuperar pel títol pelat.
+    """
+
+    @staticmethod
+    def _respostes(mock_get, per_titol):
+        """Contesta segons el `track` que demana cada crida."""
+
+        def fake_get(*args, **kwargs):
+            params = kwargs.get("params", {})
+            demanat = params.get("track") or params.get("artist")
+            resp = mock_get.return_value
+            resp.status_code = 200
+            resp.raise_for_status.return_value = None
+            resp.json.return_value = per_titol.get(
+                demanat, {"error": 6, "message": "Track not found"}
+            )
+            return resp
+
+        mock_get.side_effect = fake_get
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
+    def test_un_remix_desconegut_no_hereta_les_escoltes_de_loriginal(
+        self, mock_get, mock_sleep
+    ):
+        self._respostes(
+            mock_get,
+            {
+                # El títol pelat SÍ que existeix i té molt de públic.
+                "DIUMENGE SENSE DRAMA": {
+                    "track": {
+                        "name": "DIUMENGE SENSE DRAMA",
+                        "playcount": "705",
+                        "listeners": "273",
+                        "artist": {"name": "Els Catarres"},
+                    }
+                },
+            },
+        )
+
+        assert (
+            get_track_info("Els Catarres", "DIUMENGE SENSE DRAMA (Remix)") is None
+        ), "el remix s'ha quedat amb les escoltes de l'original"
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
+    def test_un_directe_no_casa_amb_lestudi_a_les_top_tracks(
+        self, mock_get, mock_sleep
+    ):
+        self._respostes(
+            mock_get,
+            {
+                "Lluna": {
+                    "toptracks": {
+                        "track": [
+                            {
+                                "name": "Plora",
+                                "playcount": "9000",
+                                "listeners": "800",
+                                "artist": {"name": "Lluna"},
+                            }
+                        ]
+                    }
+                },
+            },
+        )
+
+        assert (
+            get_track_info("Lluna", "Plora (En Directe a La Cova del Drac)") is None
+        ), "el directe ha casat amb la gravació d'estudi"
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
+    def test_un_remaster_sí_que_es_recupera_pel_títol_pelat(self, mock_get, mock_sleep):
+        self._respostes(
+            mock_get,
+            {
+                "L'Empordà": {
+                    "track": {
+                        "name": "L'Empordà",
+                        "playcount": "4200",
+                        "listeners": "900",
+                        "artist": {"name": "Sopa de Cabra"},
+                    }
+                },
+            },
+        )
+
+        result = get_track_info("Sopa de Cabra", "L'Empordà (Remaster 2015)")
+
+        assert result is not None, "un remaster és la mateixa cinta i s'ha de recuperar"
+        assert result["playcount"] == 4200

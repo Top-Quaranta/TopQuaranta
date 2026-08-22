@@ -7,6 +7,45 @@
 
 ---
 
+## Sprint 2026-08-22 bis — El senyal ha de dir de quina gravació parla
+
+Un remix acabat de traure, «DIUMENGE SENSE DRAMA (Remix)» de Mon DJ, va
+entrar al número 2 de PPCC amb dos dies de vida. No era seu: Last.fm no
+coneix el remix, la cadena de recuperació d'`err=6` lleva «(Remix)»
+igual que lleva «(Remaster)», va preguntar pel títol pelat a través del
+col·laborador Els Catarres i es va quedar amb la pàgina de l'original.
+705 escoltes, 273 oients, idèntiques a la nostra base de dades. La
+detecció de drift no ho veu perquè normalitza els dos costats abans de
+comparar.
+
+**El que demanem i el que ens tornen han de portar els mateixos
+marcadors de versió** (#457) — remix, directe, acústica, demo,
+instrumental. No és una llista negra: cap títol es descarta per contenir
+eixes paraules, és una condició de simetria. Un remaster o un «(feat.
+X)» és la mateixa cinta i es continua recuperant pel títol pelat. Eren
+~60 files al dia, sobretot directes: «El Boig de la Ciutat (En Directe
+al Palau Sant Jordi)» portava les 25.033 escoltes de la versió d'estudi.
+Les 1.150 files ja desades es deixen caducar soles (decisió del Miquel,
+22/08): treure 108 cançons dels tops de colp es nota massa.
+
+**L'Art Track data la gravació** (#458). El distribuïdor el genera el
+dia del llançament, així que la seua data de publicació diu quan va
+existir la música, mentre que la nostra pot ser la d'una reedició. Si és
+més de 180 dies anterior, la cançó no entra per la branca de llançament
+fresc —l'única que banca el playcount de tota la vida com si fóra una
+setmana, i la que va posar el remix al 2 i el Bocc a l'1 al juliol— i
+val 0 fins que el nostre senyal acumula base. Mostra de 500 cançons:
+93,4 % dels Art Tracks dins de ±30 dies de la nostra data, cap entre 61
+i 180, i el 2 % que passa de l'any són remàsters i reedicions; el
+llindar va al mig del buit. Cobertura 73 % del catàleg viu, cost zero de
+quota. Last.fm no serveix per a això: `track.getInfo` no dona cap data.
+
+**Pendent d'aquest fil:** el camp s'omple sol amb el cron del 23/08 a
+les 06:30. Si el 73 % de YouTube es queda curt, el graó següent és
+`first-release-date` de MusicBrainz (cobreix el 15 %, corrobora els
+casos mirats) i, com a senyal de rebuig, el nom de l'àlbum que Last.fm
+anomena (fiable, però només ve en el 44 % de les respostes).
+
 ## Sprint 2026-08-22 — Feina que no es podia fer, i una cua sense fons
 
 Tres coses que semblaven independents i totes eren la mateixa: demanar

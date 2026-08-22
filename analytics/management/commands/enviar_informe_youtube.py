@@ -548,8 +548,14 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
     )
 
     # ── 1. Artistes totalment invisibles ────────────────────────────
+    # Només aprovats. Una cançó pot ser vàlida amb l'artista principal
+    # encara pendent —«Hores Extres» de Sr. À hi és pels col·laboradors
+    # aprovats—, però demanar-ne el canal és feina morta: la cua de
+    # `/staff/artistes/sense-youtube` filtra `aprovat=1` i l'artista no
+    # hi apareix. Primer es decideix l'artista, després el canal.
     invisibles = (
-        Artista.objects.filter(
+        Artista.objects.public()
+        .filter(
             youtube_channel_id="",
             youtube_canal_revisat=False,
             cancons__in=en_finestra,
@@ -605,7 +611,8 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
     # n'hi ha de destacats ixen davant, i quan no, ix el que més cançons
     # vives té.
     canals = (
-        Artista.objects.filter(youtube_canal_revisat=False, cancons__in=en_finestra)
+        Artista.objects.public()
+        .filter(youtube_canal_revisat=False, cancons__in=en_finestra)
         .exclude(youtube_channel_id="")
         .annotate(
             n_top=Count("cancons__rankings", distinct=True),
@@ -669,9 +676,8 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
         # El que queda per fer de cada tipus, perquè deu files no diguen
         # «ja estem» quan en queden dos-cents.
         "resten_cancons": sense_video.count(),
-        "resten_artistes": Artista.objects.filter(
-            youtube_canal_revisat=False, cancons__in=en_finestra
-        )
+        "resten_artistes": Artista.objects.public()
+        .filter(youtube_canal_revisat=False, cancons__in=en_finestra)
         .distinct()
         .count(),
     }

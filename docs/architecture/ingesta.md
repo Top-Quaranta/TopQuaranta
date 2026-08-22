@@ -122,6 +122,13 @@
   normalised title ≥0.9; `mb_last_sync` is stamped regardless of
   outcome.** Shared `"ram_heavy"` lock (see `music.md`). Sync internals
   untested (`test_mb_resolve_location.py` covers resolve/validate only).
+- **The rotation is aprovats → pendents. Descartats never enter it.**
+  Why: they are 14.731 of 24.518 rows kept only for FK integrity, and
+  nothing reads their discography — with them in, the queue never
+  drains, the hourly run outlives its own hour, the next one skips on
+  the lock and the watchdog reports STUCK (22/08/2026: 0 aprovats and
+  25 pendents due, 8.604 descartats). Guarded by:
+  `ingesta/tests/test_obtenir_metadata_musicbrainz_cua.py::test_la_rotacio_ignora_els_descartats`.
 
 ### Whisper (`analitzar_whisper` 04:00)
 - **After saving Whisper fields, `auto_aprovar_per_whisper` may approve

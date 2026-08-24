@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from music.health import (
+    check_github_pat,
     check_instagram_token,
     check_spotify_coverage,
     check_spotify_premium,
@@ -396,6 +397,31 @@ def test_instagram_token_severity(days, expected):
     with patch("social.instagram_client.days_until_expiry", return_value=days):
         severity, _msg, _payload = check_instagram_token()
     assert severity == expected
+
+
+# ── check_github_pat (2026-08 AUTOMERGE_PAT stored-expiry alert) ───────
+
+
+@pytest.mark.parametrize(
+    "days,expected",
+    [
+        (30, "OK"),
+        (11, "OK"),
+        (10, "WARN"),  # boundary: warn at ≤10
+        (6, "WARN"),
+        (5, "CRIT"),  # boundary: crit at ≤5
+        (0, "CRIT"),
+        (-3, "CRIT"),  # already expired
+    ],
+)
+def test_github_pat_severity(days, expected, monkeypatch):
+    import datetime
+
+    expires = (datetime.date.today() + datetime.timedelta(days=days)).isoformat()
+    monkeypatch.setattr("music.health.GITHUB_PAT_EXPIRES", expires)
+    severity, _msg, payload = check_github_pat()
+    assert severity == expected
+    assert payload["days"] == days
 
 
 # ── check_tls_certs (2026-07 expiry watch, measured on the wire) ───────

@@ -386,6 +386,8 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     premium = spotify.get("premium", {})
     coverage = spotify.get("coverage", {})
     igtoken = extras.get("instagram", {}).get("token", {})
+    # AUTOMERGE_PAT stored-expiry watch. Absent in dev/CI → OK.
+    ghpat = extras.get("github", {}).get("pat", {})
     # TLS certificate expiry, measured on the wire by tq-health.
     # Absent in dev/CI and whenever no endpoint is configured → OK.
     tlscerts = extras.get("tls", {}).get("certs", {})
@@ -410,6 +412,8 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     if not coverage.get("ok", True):
         overall = 1
     if not igtoken.get("ok", True):
+        overall = 1
+    if not ghpat.get("ok", True):
         overall = 1
     if not tlscerts.get("ok", True):
         overall = 1
@@ -439,6 +443,10 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
     if not igtoken.get("ok", True):
         sys_anomalies.append(
             f"IG token {igtoken.get('severity', '?')}: {igtoken.get('message', '')}"
+        )
+    if not ghpat.get("ok", True):
+        sys_anomalies.append(
+            f"GitHub PAT {ghpat.get('severity', '?')}: {ghpat.get('message', '')}"
         )
     if not tlscerts.get("ok", True):
         sys_anomalies.append(
@@ -514,6 +522,13 @@ def render(crons: list[dict], extras: dict, now_ts: int) -> tuple[str, int]:
         "OK (matches origin/main, clean)" if git_ok else "DRIFT"
     )
     out.append(f"{_ok_emoji(git_ok)} Git tree: {git_detail}")
+    # Only rendered when tq-health supplied the block, so dev/CI reports
+    # (and every existing test fixture) stay byte-identical.
+    if ghpat:
+        out.append(
+            f"{_ok_emoji(ghpat.get('ok', True))} GitHub PAT (automerge): "
+            f"{ghpat.get('severity', '?')} — {ghpat.get('message', '')}"
+        )
     out.append("")
 
     # ── spotify ──

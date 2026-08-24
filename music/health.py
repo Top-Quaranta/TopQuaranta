@@ -350,6 +350,49 @@ def check_instagram_token() -> tuple[Severity, str, dict]:
     return "OK", f"IG token OK ({days}d fins l'expiració desada).", payload
 
 
+# GitHub fine-grained PAT that dependabot-automerge uses to merge
+# (AUTOMERGE_PAT). The box never holds the token, so the real expiry is
+# not queryable from here — we alert on the stored date, same approach
+# as the IG token. If the PAT lapses, automerge silently falls back to
+# GITHUB_TOKEN and merges stop triggering deploys (DRIFT incident,
+# 2026-08-24). Renewal: new fine-grained PAT (contents + pull-requests
+# write), `gh secret set AUTOMERGE_PAT`, and bump this date in the same
+# PR.
+GITHUB_PAT_EXPIRES = "2026-09-23"
+GITHUB_PAT_WARN_DAYS = 10
+GITHUB_PAT_CRIT_DAYS = 5
+
+
+def check_github_pat() -> tuple[Severity, str, dict]:
+    """WARN at ≤10 days, CRIT at ≤5 days before the stored AUTOMERGE_PAT
+    expiry, so the operator can mint a new PAT before dependabot merges
+    quietly stop deploying."""
+    import datetime
+
+    expires = datetime.date.fromisoformat(GITHUB_PAT_EXPIRES)
+    days = (expires - datetime.date.today()).days
+    payload = {
+        "days": days,
+        "expires": GITHUB_PAT_EXPIRES,
+        "warn_below": GITHUB_PAT_WARN_DAYS,
+        "crit_below": GITHUB_PAT_CRIT_DAYS,
+    }
+    if days <= GITHUB_PAT_CRIT_DAYS:
+        return (
+            "CRIT",
+            f"AUTOMERGE_PAT caduca en {days}d — renova'l JA "
+            "(PAT + gh secret set + bump de GITHUB_PAT_EXPIRES).",
+            payload,
+        )
+    if days <= GITHUB_PAT_WARN_DAYS:
+        return (
+            "WARN",
+            f"AUTOMERGE_PAT caduca en {days}d — planifica la renovació.",
+            payload,
+        )
+    return "OK", f"AUTOMERGE_PAT OK ({days}d fins l'expiració desada).", payload
+
+
 # ── TLS certificate expiry ────────────────────────────────────────────
 # Measured ON THE WIRE, never from a PEM on disk. The July 2026 incident
 # is the whole reason this exists: /etc/stalwart/certs held a valid
@@ -547,6 +590,7 @@ def main(argv: list[str]) -> int:
         "spotify_premium": check_spotify_premium,
         "spotify_coverage": check_spotify_coverage,
         "instagram_token": check_instagram_token,
+        "github_pat": check_github_pat,
         "tls_certs": check_tls_certs,
     }
     if len(argv) < 2 or argv[1] not in checks:

@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: markdownlint-cli2
-        uses: DavidAnson/markdownlint-cli2-action@v24.1.0
+        uses: DavidAnson/markdownlint-cli2-action@v24.2.0
         with:
           # Liberal config: surface broken-references and malformed
           # headings; don't enforce wrapped-at-80 (we don't follow that).

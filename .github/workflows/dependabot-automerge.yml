@@ -3,6 +3,14 @@
 # "Allow auto-merge" enabled; branch protection (11 required checks,
 # strict up-to-date) is what actually gates the merge — this only
 # presses the button.
+#
+# The merge MUST be enabled with AUTOMERGE_PAT (a fine-grained PAT,
+# contents + pull-requests write): merges attributed to GITHUB_TOKEN
+# don't trigger other workflows, so ci.yml/deploy.yml never ran on the
+# merge push and the box drifted (tq-health DRIFT, 2026-08-24). The
+# GITHUB_TOKEN fallback keeps automerge working if the PAT is missing
+# or expired — at the cost of that same silent no-deploy, which
+# tq-health flags within the hour.
 name: dependabot-automerge
 
 on:
@@ -26,4 +34,4 @@ jobs:
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.AUTOMERGE_PAT || secrets.GITHUB_TOKEN }}

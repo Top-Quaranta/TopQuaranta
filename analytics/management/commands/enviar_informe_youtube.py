@@ -419,9 +419,19 @@ def _comparativa(en_finestra, today):
 
     # Quantes cançons tenen ja set dies de fotos: sense això no hi ha
     # increment setmanal possible, i és el que encara està creixent.
+    # Només compten les que TAMBÉ tenen foto d'avui: una cançó
+    # fotografiada la setmana passada però no avui (vídeo esborrat, fora
+    # de finestra) no es pot comparar, i comptar-la feia passar el
+    # percentatge de 100 (informe del 25/08: 2.490 de 2.471).
+    ids_avui = set(
+        SenyalYouTube.objects.filter(data=today, error=False).values_list(
+            "canco_id", flat=True
+        )
+    )
     amb_setmana = (
         SenyalYouTube.objects.filter(
             error=False,
+            canco_id__in=ids_avui,
             data__gte=today - datetime.timedelta(days=7 + _MARGE_DIES),
             data__lte=today - datetime.timedelta(days=7 - _MARGE_DIES),
         )
@@ -429,12 +439,7 @@ def _comparativa(en_finestra, today):
         .distinct()
         .count()
     )
-    amb_avui = (
-        SenyalYouTube.objects.filter(data=today, error=False)
-        .values("canco_id")
-        .distinct()
-        .count()
-    )
+    amb_avui = len(ids_avui)
 
     guany = []
     for codi in ("CAT", "VAL", "BAL"):

@@ -113,6 +113,21 @@ def test_a_song_without_a_week_of_snapshots_cannot_be_compared():
 
 
 @pytest.mark.django_db
+def test_a_song_that_dropped_out_does_not_push_the_ratio_past_100():
+    """A song photographed a week ago but not today (delisted video,
+    out of the window) cannot be compared, so it must not count as
+    "with a full week". Counting it made the report say 101 %."""
+    _senyal(_canco("Viva"), yt=2000)
+    nomes_abans = _canco("Esborrada")
+    SenyalYouTube.objects.create(
+        canco=nomes_abans, data=FA_UNA_SETMANA, views=1000, error=False
+    )
+    ctx = _ctx()
+    assert ctx["amb_avui"] == 1 and ctx["amb_setmana"] == 1
+    assert ctx["pct_setmana"] == 100
+
+
+@pytest.mark.django_db
 def test_a_missing_day_does_not_empty_the_comparison():
     """The reference photo is looked up in a window around "seven days
     ago", not on that exact date. Demanding the exact day is brittle: one

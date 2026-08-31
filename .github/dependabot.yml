@@ -25,6 +25,11 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    ignore:
+      # Django 6.1+ requires PostgreSQL 15; the server runs PG 14
+      # (2026-08-31 outage). Drop this once PG is upgraded to 15/16.
+      - dependency-name: "django"
+        versions: [">=6.1"]
     groups:
       # Security-critical pins moved together so we don't ship partial
       # upgrades that break auth.

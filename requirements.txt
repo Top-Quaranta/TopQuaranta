@@ -2,7 +2,9 @@
 #   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
 # (torch is pinned to the CPU-only build; PyPI doesn't host +cpu wheels.)
 
-django==6.1
+# Django 6.1 requires PostgreSQL 15+; the server runs PG 14 (2026-08-31
+# outage). Keep 6.0.x until the PG upgrade; dependabot.yml ignores >=6.1.
+django==6.0.8
 psycopg2-binary==2.9.12
 python-decouple==3.8
 dj-database-url==3.1.2

@@ -11,10 +11,18 @@
 # GITHUB_TOKEN fallback keeps automerge working if the PAT is missing
 # or expired — at the cost of that same silent no-deploy, which
 # tq-health flags within the hour.
+#
+# Trigger is pull_request_target, NOT pull_request: dependabot-triggered
+# pull_request runs read the *Dependabot* secrets store, where
+# AUTOMERGE_PAT does not exist, so the fallback fired and PR #474
+# merged as github-actions with no deploy (DRIFT, 2026-08-31).
+# pull_request_target runs in the base-branch context with Actions
+# secrets. Safe here because nothing checks out PR code — this job only
+# reads PR metadata and presses the merge button.
 name: dependabot-automerge
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:

@@ -4,7 +4,7 @@ pytest-django==4.14.0
 pytest-cov==7.1.0
 pytest-xdist==3.8.0  # -n 4 in pytest.ini — see docs/decisions/0017-pytest-xdist-n4.md
 factory-boy==3.3.3
-responses==0.26.2
+responses==0.26.3
 black==26.5.1
-isort==8.0.1
+isort==9.0.1
 pre-commit==4.6.2  # C1: local hooks — see .pre-commit-config.yaml

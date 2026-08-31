@@ -39,7 +39,7 @@ soundfile==0.14.0            # WAV loader (no torchcodec dependency)
 # SEO monitoring (Sprint S Bloc D, 2026-05-06).
 google-api-python-client>=2.199.0
 google-auth>=2.56.2
-google-auth-httplib2>=0.4.0
+google-auth-httplib2>=0.4.2
 
 # Newsletter → Community bridge (2026-06-10): convert NewsletterDraft
 # narrative_html to markdown for the public Publicacio body (option b).

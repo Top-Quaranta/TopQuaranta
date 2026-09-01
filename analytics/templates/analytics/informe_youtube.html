@@ -47,24 +47,22 @@
 
 {% comment %} EL TOP — el que de veres canvia {% endcomment %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">
-  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:{% if comparativa.efecte_top.actiu %}#7bbf7b{% else %}#facc15{% endif %};text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">
-    {% if comparativa.efecte_top.actiu %}El top amb YouTube{% else %}Què li passaria al top{% endif %}
-  </div>
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:{% if efecte_top.actiu %}#7bbf7b{% else %}#f87171{% endif %};text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">El top amb YouTube</div>
   <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">
-    {% if comparativa.efecte_top.actiu %}Actiu · pes {{ comparativa.efecte_top.pes|milers }} · terra {{ comparativa.efecte_top.terra|milers }}{% else %}Simulació amb la configuració actual: pes {{ comparativa.efecte_top.pes|milers }}, terra {{ comparativa.efecte_top.terra|milers }}. Encara apagat.{% endif %}
+    {% if efecte_top.actiu %}Actiu · pes {{ efecte_top.pes|milers }} · terra {{ efecte_top.terra|milers }}{% else %}<span style="color:#f87171;">Inactiu: la història per vídeo s'ha perdut i YouTube no compta al top. Mira el cron d'obtenir_senyal_youtube.</span>{% endif %}
   </div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
       <tr class="muted" style="color:#9aa0a6;font-size:11.5px;text-transform:uppercase;letter-spacing:1px;">
         <td style="padding-bottom:6px;">&nbsp;</td>
-        <td align="right" style="padding-bottom:6px;">files ara</td>
+        <td align="right" style="padding-bottom:6px;">sense YT</td>
         <td align="right" style="padding-bottom:6px;">amb YouTube</td>
         <td align="right" style="padding-bottom:6px;">per YT</td>
         <td align="right" style="padding-bottom:6px;">pel terra</td>
         <td align="right" style="padding-bottom:6px;">per ordre</td>
         <td align="right" style="padding-bottom:6px;">mana YT</td>
       </tr>
-      {% for t in comparativa.efecte_top.territoris %}
+      {% for t in efecte_top.territoris %}
       <tr>
         <td class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#facc15;padding:3px 0;">{{ t.codi }}</td>
         <td align="right" class="muted" style="color:#b7b7be;padding:3px 0;">{{ t.ara }}/40</td>
@@ -77,14 +75,11 @@
       {% endfor %}
     </table>
     <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
-      <strong style="color:#ffffff;">Noves</strong> = files que entren al top 40 i abans no hi eren. Separades per causa, perquè no totes són mèrit de YouTube:
+      <strong style="color:#ffffff;">Sense YT</strong> = com quedaria el top si YouTube no comptara. <strong style="color:#ffffff;">Noves</strong> = files que hi entren gràcies al canvi, separades per causa, perquè no totes són mèrit de YouTube:
       <strong style="color:#7bbf7b;">per YT</strong> = no hi entrarien sense les visualitzacions;
       <strong style="color:#ffffff;">pel terra</strong> = ja tenien prou escoltes per al terra combinat, però no per al de només-escoltes;
       <strong style="color:#ffffff;">per ordre</strong> = ja passaven els dos terres i pugen de posició.
       <strong style="color:#ffffff;">Mana YT</strong> = files on les visualitzacions pesen més que les escoltes; si es queda a zero, YouTube només omple buits i no reordena res.
-      {% if comparativa.efecte_top.actiu %}<br><strong style="color:#7bbf7b;">Actiu</strong> des que hi ha {{ comparativa.efecte_top.dies_minims }} dies d'història per vídeo; ara en tenim {{ comparativa.efecte_top.dies }}. Això que veus a dalt és el top real, no una simulació.
-      {% elif comparativa.efecte_top.dies == None %}<br>Encara no hi ha cap fotografia amb detall per vídeo, així que això és una simulació. S'activarà sol quan n'hi haja {{ comparativa.efecte_top.dies_minims }} dies.
-      {% else %}<br>Això és una simulació. S'activa sol el <strong style="color:#ffffff;">{{ comparativa.efecte_top.activacio|date:"d/m" }}</strong> ({{ comparativa.efecte_top.dies }} de {{ comparativa.efecte_top.dies_minims }} dies d'història per vídeo); el primer top oficial que ho porta és el del <strong style="color:#ffffff;">{{ comparativa.efecte_top.primer_top|date:"d/m" }}</strong>. No cal encendre res.{% endif %}
     </div>
   </td></tr></table>
 </td></tr>
@@ -120,125 +115,6 @@
   </td></tr></table>
 </td></tr>
 {% endif %}
-
-{% comment %} A. ES PODEN JUNTAR? — el bloc principal des del 17/08:
-   el descobriment ja ha acabat el catàleg, i el que queda per saber és
-   si el senyal de YouTube es pot convertir a escoltes. {% endcomment %}
-<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
-  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Es poden juntar les dues fonts?</div>
-  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Cal saber quantes visualitzacions val una escolta. Per a esbrinar-ho fan falta cançons que es moguen a les dues bandes alhora.</div>
-
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr>
-      {% include "analytics/_kpi.html" with label="Cançons comparables" value=comparativa.comparables delta=None suffix=None %}
-      {% include "analytics/_kpi.html" with label="Amb setmana sencera" value=comparativa.pct_setmana suffix="%" delta=None %}
-    </tr>
-  </table>
-
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid {% if comparativa.factor.prou %}#7bbf7b{% else %}#facc15{% endif %};border-radius:12px;margin-top:6px;"><tr><td style="padding:16px;">
-    {% if comparativa.factor %}
-      <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:30px;color:#facc15;line-height:1;">{{ comparativa.factor.mediana|milers }}<span style="font-size:15px;color:#9aa0a6;">&nbsp;visualitzacions per escolta</span></div>
-      <div class="muted" style="font-size:13px;color:#b7b7be;margin-top:6px;">
-        Meitat central entre <strong style="color:#ffffff;">{{ comparativa.factor.p25|milers }}</strong> i <strong style="color:#ffffff;">{{ comparativa.factor.p75|milers }}</strong> · mostra de {{ comparativa.factor.n }} cançons
-      </div>
-      <div style="font-size:13px;margin-top:10px;line-height:1.6;">
-        {% if comparativa.factor.estable %}
-          <span style="color:#7bbf7b;">✓ S'ha assentat.</span> Tres dies seguits amb la mateixa mediana i mostra suficient: ja es pot decidir sobre aquest número.
-        {% elif comparativa.factor.prou %}
-          <span style="color:#facc15;">Mostra suficient, però el número encara balla.</span> La mida sola no basta — mira la columna de baix: mentre la mediana salte per múltiples d'un dia a l'altre, no hi ha res a decidir.
-        {% elif comparativa.factor.indici %}
-          <span style="color:#facc15;">Primer indici.</span> Mira'l com a tendència, no com a xifra.
-        {% else %}
-          <span style="color:#fca5a5;">Encara no és fiable.</span> Amb tan poques parelles, un sol cas estrany mou la mediana.
-        {% endif %}
-      </div>
-
-      {% comment %} L'històric: el que de veres diu si es pot decidir. {% endcomment %}
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
-        {% for h in comparativa.historial %}
-        <tr>
-          <td width="58" class="muted" style="font-size:12px;color:#9aa0a6;padding:2px 0;">{{ h.data|date:"d/m" }}</td>
-          <td class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if forloop.last %}#facc15{% else %}#b7b7be{% endif %};padding:2px 0;">{% if h.mediana %}{{ h.mediana|milers }}{% else %}—{% endif %}</td>
-          <td align="right" class="muted" style="font-size:12px;color:#9aa0a6;padding:2px 0;">{{ h.n }} parelles</td>
-        </tr>
-        {% endfor %}
-      </table>
-    {% else %}
-      <div class="muted" style="font-size:13px;color:#b7b7be;line-height:1.7;">
-        Encara no hi ha cap cançó que es moga a les dues fonts alhora aquesta setmana. Fa falta que les fotos de YouTube acumulen set dies i que Last.fm veja moviment.
-      </div>
-    {% endif %}
-    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
-      Es mouen a Last.fm: <strong style="color:#ffffff;">{{ comparativa.mou_lfm }}</strong> · a YouTube: <strong style="color:#ffffff;">{{ comparativa.mou_yt }}</strong> · a les dues: <strong style="color:#ffffff;">{{ comparativa.comparables }}</strong><br>
-      Amb foto de fa set dies: {{ comparativa.amb_setmana|milers }} de {{ comparativa.amb_avui|milers }} — la comparativa només pot mirar aquestes.
-    </div>
-  </td></tr></table>
-</td></tr>
-
-{% if comparativa.per_carril %}
-{% comment %} A ter. D ON VENEN LES VISUALITZACIONS {% endcomment %}
-<tr><td class="px" style="padding:18px 28px 0;background:#060608;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
-    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:13px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;">D'on venen les visualitzacions</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#b7b7be;">
-      <tr>
-        <td style="padding:2px 0;">Només Art Track (automàtic)</td>
-        <td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:#ffffff;">{{ comparativa.per_carril.art_track.mediana|milers }}</td>
-        <td align="right" width="70" class="muted" style="font-size:12px;color:#9aa0a6;">{{ comparativa.per_carril.art_track.n }} cançons</td>
-      </tr>
-      <tr>
-        <td style="padding:2px 0;">Amb videoclip del canal propi</td>
-        <td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:#facc15;">{{ comparativa.per_carril.videoclip.mediana|milers }}</td>
-        <td align="right" class="muted" style="font-size:12px;color:#9aa0a6;">{{ comparativa.per_carril.videoclip.n }} cançons</td>
-      </tr>
-    </table>
-    <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;line-height:1.7;">
-      Un videoclip té molt més públic que una caràtula amb àudio, així que la mateixa cançó dona proporcions molt distintes segons el carril. Barrejar-los infla la xifra de dalt: mira cada línia per separat abans de comparar res.
-    </div>
-  </td></tr></table>
-</td></tr>
-{% endif %}
-
-{% if comparativa.per_artista %}
-{% comment %} A bis. UN FACTOR O UN PER ARTISTA {% endcomment %}
-<tr><td class="px" style="padding:18px 28px 0;background:#060608;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
-    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:13px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;">Un factor per a tots, o un per artista?</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#b7b7be;">
-      <tr><td style="padding:2px 0;">Dispersió entre tot el catàleg</td><td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:#ffffff;">{{ comparativa.per_artista.cv_global }}</td></tr>
-      <tr><td style="padding:2px 0;">Dispersió dins d'un mateix artista</td><td align="right" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:17px;color:{% if comparativa.per_artista.millor_per_artista %}#7bbf7b{% else %}#ffffff{% endif %};">{{ comparativa.per_artista.cv_artista }}</td></tr>
-    </table>
-    <div class="muted" style="font-size:12.5px;color:#9aa0a6;margin-top:10px;line-height:1.7;">
-      {% if comparativa.per_artista.millor_per_artista %}
-        Molt més estreta dins de l'artista: la proporció sembla una propietat del seu públic, no del catàleg. Si es manté, la conversió ha de ser <strong style="color:#ffffff;">per artista</strong> — un factor global seria fals per a quasi tots.
-      {% else %}
-        De moment no hi ha diferència clara entre les dues: no hi ha motiu per a complicar-ho amb un factor per artista.
-      {% endif %}
-      <br>Mesurat sobre {{ comparativa.per_artista.n_artistes }} artistes amb 3 o més cançons comparables.
-    </div>
-  </td></tr></table>
-</td></tr>
-{% endif %}
-
-{% comment %} B. QUÈ GUANYARÍEM {% endcomment %}
-<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
-  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#7bbf7b;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Què guanyaríem</div>
-  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Cançons que YouTube veu moure's i Last.fm no. Són les que ara mateix no poden entrar al top.</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:14px 16px;">
-    <div class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:32px;color:#7bbf7b;line-height:1;">+{{ comparativa.noves }}<span style="font-size:15px;color:#9aa0a6;">&nbsp;cançons al conjunt</span></div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">
-      {% for g in comparativa.guany %}
-      <tr>
-        <td width="46" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:#facc15;padding:3px 0;">{{ g.codi }}</td>
-        <td class="muted" style="font-size:13px;color:#b7b7be;padding:3px 0;">
-          {{ g.lastfm }} amb Last.fm{% if g.noves %} <strong style="color:#7bbf7b;">+{{ g.noves }} noves</strong>{% else %} · cap de nova{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:10px;line-height:1.6;">Compta com a moviment a partir de {{ comparativa.moviment_min }} en una setmana, a les dues fonts.</div>
-  </td></tr></table>
-</td></tr>
 
 {% comment %} A. DESCOBRIMENT — amagat quan la cua automàtica és a zero:
    repetir «0 provats, 0 queden» cada matí no informa de res, i el que
@@ -333,7 +209,7 @@
 </td></tr>
 
 <tr><td class="px" style="padding:22px 28px;background:#060608;border-top:1px solid rgba(255,255,255,0.07);color:#7c7c84;font-size:11px;line-height:1.7;text-align:center;">
-  Informe temporal de la fase d'implementació. Quan acabe, s'esborra la línia del cron.<br>
+  Informe temporal: quan la cua de recerques quede buida, s'esborra la línia del cron.<br>
   <a href="{{ site_url }}" style="color:#facc15;">topquaranta.cat</a>
 </td></tr>
 

@@ -3,9 +3,28 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-22.
+> Last updated: 2026-09-01.
 
 ---
+
+## Sprint 2026-09-01 — El correu de YouTube deixa de preguntar el que ja sap
+
+YouTube compta al top des del 26/08 i els llindars ja estan on el Miquel
+els ha volgut deixar, així que les preguntes de la fase de bootstrap
+tenien resposta i el correu encara les feia cada matí. Fora: el factor
+visualitzacions/escolta amb el seu històric de 5 dies, la separació per
+carril, la dispersió per artista, «què guanyaríem» i el compte enrere de
+l'activació. Queda el que continua viu: la taula del top (ara amb capçalera
+«sense YT», i un avís en roig si `actiu` caiguera), les 10 recerques del
+dia, cobertura, punt cec, senyal i incidències. De pas, el correu deixa de
+duplicar el delta per vídeo: llig `ranking.senyal_youtube` com el rànquing
+(el `_increments` local queda només per a Last.fm), i la versió de text pla
+guanya el bloc del top que no tenia. Tests de la comparativa reescrits a
+`test_informe_yt_top.py`; el que guardava el delta per vídeo ja vivia a
+`ranking/tests/test_youtube_al_top.py`.
+
+**Pendent d'aquest fil:** cap; quan la cua de recerques quede buida,
+esborrar la línia del cron.
 
 ## Sprint 2026-08-22 bis — El senyal ha de dir de quina gravació parla
 

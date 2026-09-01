@@ -1,4 +1,4 @@
-"""Tests for the daily YouTube bootstrap report."""
+"""Tests for the daily YouTube report."""
 
 from __future__ import annotations
 

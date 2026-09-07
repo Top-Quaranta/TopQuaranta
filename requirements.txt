@@ -12,7 +12,7 @@ requests==2.34.2
 gunicorn==26.2.0
 djangorestframework==3.18.0
 scikit-learn>=1.9.0
-joblib>=1.5.3
+joblib>=1.6.0
 # Security
 # Already present transitively (google-auth), declared explicitly
 # because music/health.py imports it directly to parse the DER of

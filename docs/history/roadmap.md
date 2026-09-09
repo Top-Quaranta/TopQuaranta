@@ -354,8 +354,9 @@ Items petits per fer en sessions curtes:
       22.04). Django 6.1+ exigeix PG 15 i està blocat a
       `dependabot.yml` (incident 2026-08-31, `docs/LESSONS.md`);
       en acabar l'upgrade, retirar l'`ignore` de dependabot.
-- [ ] **Reautoritzar el token d'Instagram** — tq-health avisa que
-      caduca cap al 2026-09-10.
+- [x] ~~**Reautoritzar el token d'Instagram**~~ — fet 2026-09-09: el cron
+      de l'1/09 ja l'havia refrescat però només l'imprimia al log; aplicat
+      a mà (caduca 2026-10-31) i #487 fa que el cron desi la fila.
 
 - ~~**Backups off-site**~~ — risc acceptat (decisió 2026-05-07,
       documentada a `docs/ops/runbook.md` §4). Reconsiderar només si

@@ -25,7 +25,7 @@ qrcode[pil]==8.2             # S11: render enrollment QR (pulls Pillow)
 # Social renderer — brand logo + territory icons rasterisation. Caught
 # 2026-05-07: missing in production meant every territorial portada
 # published with an empty pill where the logo should have been.
-cairosvg==2.9.0
+cairosvg==2.9.1
 # Self-hosted cover pipeline (Fase 1, 2026-05-30): Deezer covers
 # downloaded + transcoded to webp/avif variants. Pillow is already
 # pulled by qrcode[pil]/cairosvg; this adds the AVIF encoder plugin.

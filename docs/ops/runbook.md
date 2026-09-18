@@ -158,6 +158,15 @@ list ships empty), Spotify Premium + coverage, Instagram token expiry
 
 Weekly top missing: `sudo -u topquaranta tq-run calcular_top [--setmana YYYY-MM-DD]`.
 
+Staff queue sorted wrong (`/staff/cancons` shows a confidence the model
+no longer gives): `recalcular_ml` is the only thing that writes
+`ml_classe` / `ml_confianca` in bulk — nightly 05:45, never from a web
+request. `STALE` here is invisible in the UI, which just keeps sorting by
+the old numbers. Re-run by hand with
+`sudo -u topquaranta tq-run recalcular_ml`; a full rebuild takes ~26 min
+(`--entrenar mai` rescores only, a couple of minutes). It refuses to
+train while `bin/tq-deploy` holds `/var/run/topquaranta/deploy.lock`.
+
 ## 5. Locked out
 
 ```bash

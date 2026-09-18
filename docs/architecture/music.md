@@ -115,6 +115,14 @@
   heuristic fallback); `entrenar_model` refuses while the deploy lock
   exists. Guarded by: `music/tests/test_ml_load_validation.py`,
   `music/tests/test_ml_spotify_dispersion.py` (index pin).
+- **Training and bulk rescoring happen ONLY in the `recalcular_ml` cron**
+  (nightly 05:45, `SingletonLock("recalcular_ml")`, exit 75 on contention);
+  no web request may start them. Until 2026-09 a daemon thread inside the
+  gunicorn worker did it every 5 staff decisions: it died unnoticed, so the
+  last completed run was 13-09 while 15 % of pendents carried a stale
+  `ml_confianca` — the key the staff queue sorts by. Scope is `pendents()`,
+  not every `verificada=False` row. Guarded by:
+  `music/tests/test_ml_recalc_cron.py`.
 - **`auto_ml` decisions never feed training; `auto_whisper` ones do**
   (`entrenar_model` excludes only `MOTIU_AUTO_ML`; Whisper is an
   independent oracle). Guarded by:

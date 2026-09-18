@@ -24,7 +24,6 @@ from music.constants import (
     TERRITORIS_FIXOS,
     TERRITORIS_OPCIONALS,
 )
-from music.ml import recalcular_ml_si_cal
 from music.models import (
     Artista,
     Canco,
@@ -177,7 +176,6 @@ def top_accio(request: Request) -> Response:
                 )
                 rp.delete()
                 total += 1
-        recalcular_ml_si_cal()
         return Response({"ok": True, "n": total})
     if action == "rebutjar_artista":
         artista_ids = set(entries.values_list("canco__artista_id", flat=True))
@@ -193,7 +191,6 @@ def top_accio(request: Request) -> Response:
                     source="provisional_ranking",
                 )
             TopProvisional.objects.filter(canco__artista_id__in=artista_ids).delete()
-        recalcular_ml_si_cal()
         return Response(
             {"ok": True, "n_artistes": len(artista_ids), "n_cancons": total_cancons}
         )

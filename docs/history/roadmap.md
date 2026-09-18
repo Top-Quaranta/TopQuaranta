@@ -3,9 +3,50 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-09-01.
+> Last updated: 2026-09-18.
 
 ---
+
+## Sprint 2026-09-18 — El model era bo; el que no arribava era la nota
+
+El Miquel demanava netejar el ML perquè li donava cançons «confiadament
+equivocades» al panell. Mesurat, el classificador no té res de roín:
+validació agrupada per artista, fora de mostra sobre 19.905 decisions,
+dona ROC-AUC 0,9994 amb les features d'avui, 0,9982 recalculant els
+ratios causalment i 0,9922 llevant tota feature d'historial. Whisper tot
+sol es queda a 0,9356.
+
+El que fallava era el repartiment. El 15 % de les 1.013 pendents portava
+una `ml_confianca` desada que ja no és la que el model dona, i el 7 %
+una `ml_classe` distinta. Tres de les deu files de dalt de
+`/staff/cancons` eren falses: «Everybody's changing (Acústic)» hi eixia
+com A 0,98 quan el model la classifica C 0,27.
+
+La causa era `recalcular_ml_si_cal()`, un fil dimoni dins del worker de
+gunicorn disparat cada 5 decisions de l'staff: ~26 min de feina, marca
+de temps escrita només al final (així que les còpies s'apilaven sense
+lock) i mort silenciosa en cada reciclatge de worker. L'última execució
+acabada va ser el 13/09; les 27 decisions dels quatre dies següents no
+en van llançar cap. Ara és cron a les 05:45 amb `SingletonLock`, com la
+resta del projecte.
+
+**Pendent d'aquest fil**, per ordre:
+1. Puntuar en escriure: una cançó es repuntua quan entra i quan li
+   canvia l'estat de Whisper, MusicBrainz o Spotify.
+2. `ml_scored_at` a `Canco`, i el número a `/staff/estat`, perquè
+   l'obsolescència es veja.
+3. Gate de reentrenament: tall temporal retingut, i si els trams A
+   empitjoren no se substitueix el model viu. La ranura del rollback ja
+   existeix (`ml_model.pre_whisper.joblib`).
+4. Features causals a l'entrenament: les d'historial es calculen amb
+   l'estat d'avui i no amb el del dia de la decisió. Val una mil·lèsima
+   de ROC-AUC, així que va l'última.
+5. Brief diari de revisió: 11 cançons/dia, que és el que ja calcula
+   `target_verificacio_setmanal` a `estat.py` (entrada 22,2/dia menys
+   les 80 que caduquen soles cada setmana).
+
+Descartat després de mesurar-ho: calibrar el bosc. Causalment el tram
+A++ encerta el 99,6 %, o siga que la calibració no era el problema.
 
 ## Sprint 2026-09-01 — El correu de YouTube deixa de preguntar el que ja sap
 

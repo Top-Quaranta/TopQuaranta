@@ -20,6 +20,12 @@
     "max_age_hours": 26,
     "skip_concern": 1
   },
+  "recalcular_ml": {
+    "frequency_label": "Cada nit 05:45",
+    "max_age_hours": 26,
+    "skip_concern": 1,
+    "description": "Reentrena el classificador de verificació i repuntua les cançons pendents. Única via de reentrenament: mai des d'una petició web."
+  },
   "detectar_anomalies_senyal": {
     "frequency_label": "Cada nit 06:45",
     "max_age_hours": 26,

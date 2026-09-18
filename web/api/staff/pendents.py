@@ -26,7 +26,6 @@ from rest_framework.response import Response
 
 from comptes.models import PropostaArtista
 from music.audit import log_staff_action
-from music.ml import recalcular_ml_si_cal
 from music.models import (
     Artista,
     ArtistaDeezer,
@@ -450,7 +449,6 @@ def pendent_descartar(request: Request, pk: int) -> Response:
     artista.aprovat = False
     artista.pendent_review = False
     artista.save(update_fields=["aprovat", "pendent_review"])
-    recalcular_ml_si_cal()
     log_staff_action(
         request,
         "pendent_descartar",

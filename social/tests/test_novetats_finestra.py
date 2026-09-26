@@ -123,3 +123,45 @@ class TestFinestraNovetats:
         assert "Primera" in _noms(
             build_novetats("nous_singles", seguent, publish_date=seguent)
         )
+
+
+@pytest.mark.django_db
+class TestAnunciatAt:
+    def test_una_publicacio_segella_el_que_ha_portat(self):
+        from social.payload import marca_anunciats
+
+        alb = _llancament("Nou", estrena=DIVENDRES, ingerit=_aware(DIVENDRES, 16, 0))
+        assert alb.anunciat_at is None
+        marca_anunciats([{"album_id": alb.pk}])
+        alb.refresh_from_db()
+        assert alb.anunciat_at is not None
+
+    def test_qui_mana_es_la_primera_vegada(self):
+        """Una republicació no ha de reescriure la data en què el públic
+        ho va vore."""
+        from social.payload import marca_anunciats
+
+        alb = _llancament("Nou", estrena=DIVENDRES, ingerit=_aware(DIVENDRES, 16, 0))
+        marca_anunciats([{"album_id": alb.pk}], quan=_aware(DIVENDRES, 10, 0))
+        marca_anunciats([{"album_id": alb.pk}], quan=_aware(DIVENDRES, 18, 0))
+        alb.refresh_from_db()
+        assert alb.anunciat_at == _aware(DIVENDRES, 10, 0)
+
+    def test_un_top_no_segella_res(self):
+        """El payload d'un top porta `entries`, no `items`."""
+        from social.payload import marca_anunciats
+
+        assert marca_anunciats(None) == 0
+        assert marca_anunciats([{"canco_id": 1, "posicio": 1}]) == 0
+
+    def test_un_album_ja_anunciat_no_torna_encara_que_el_cursor_l_agafe(self):
+        """El cursor diu quina finestra toca; `anunciat_at` diu si això ja
+        va eixir mai. Si el cursor recula —republicació, re-execució a mà,
+        un arreglo de dades— el segell ho atura igual."""
+        alb = _llancament("Ja", estrena=DIVENDRES, ingerit=_aware(DIVENDRES, 16, 0))
+        Album.objects.filter(pk=alb.pk).update(anunciat_at=_aware(DIVENDRES, 18, 0))
+
+        seguent = DIVENDRES + datetime.timedelta(days=2)
+        assert "Ja" not in _noms(
+            build_novetats("nous_singles", seguent, publish_date=seguent)
+        )

@@ -385,6 +385,11 @@ def build_novetats(
     # nothing is announced twice and nothing falls between two windows.
     qs = Album.objects.filter(
         created_at__gt=last,
+        # Belt to the cursor's braces. The cursor decides which releases
+        # belong to THIS window; `anunciat_at` records whether a release
+        # has ever been announced at all, so a republish, a manual re-run
+        # or a cursor that moves backwards cannot announce it twice.
+        anunciat_at__isnull=True,
         data_llancament__gte=publish_date
         - datetime.timedelta(days=MAX_ANTIGUITAT_DIES),
         data_llancament__lte=publish_date,
@@ -445,6 +450,7 @@ def build_novetats(
                 artistes_instagram_urls.append(u)
         items.append(
             {
+                "album_id": a.id,
                 "nom": a.nom,
                 "slug": a.slug,
                 "tipus": a.tipus,
@@ -470,6 +476,23 @@ def build_novetats(
             }
         )
     return {"items": items}
+
+
+def marca_anunciats(items: list[dict] | None, *, quan=None) -> int:
+    """Stamp the releases a novetats publication just carried.
+
+    Called from the publish sites, never from a preview: building a
+    payload is not announcing it. Idempotent and first-write-wins
+    (`anunciat_at__isnull=True`), so a republish keeps the date the
+    audience actually saw it, and any channel counts — a release
+    announced on Mastodon has been announced.
+    """
+    ids = [i["album_id"] for i in (items or []) if i.get("album_id")]
+    if not ids:
+        return 0
+    return Album.objects.filter(pk__in=ids, anunciat_at__isnull=True).update(
+        anunciat_at=quan or timezone.now()
+    )
 
 
 def _novetats_flags(albums, publish_date: datetime.date) -> dict[int, dict]:

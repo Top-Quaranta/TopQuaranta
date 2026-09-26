@@ -1014,6 +1014,22 @@ class Album(models.Model):
     # backfill uses `last_album_check` when set (which Cron P2 touches
     # on every Deezer re-scan).
     updated_at = models.DateTimeField(auto_now=True, db_index=True)
+    # When a `nous_albums` / `nous_singles` publication actually carried
+    # this release, on any channel. NULL = never announced.
+    #
+    # It is a recorded fact, not an inference. Until 2026-09-26 the only
+    # answer to "did we announce this?" was arithmetic on publication
+    # dates, and that arithmetic had a hole big enough to swallow 41 of
+    # 136 releases in three months without anyone noticing. A fact you
+    # can only re-derive is a fact you can silently get wrong; this one
+    # is written down when it happens.
+    anunciat_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Quan una publicació de novetats va portar aquest "
+        "llançament. Buit = mai anunciat.",
+    )
 
     class Meta:
         ordering = ["-data_llancament"]

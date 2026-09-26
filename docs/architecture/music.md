@@ -108,6 +108,15 @@
 - **`StaffAuditLog` snapshots `target_type/id/label` and never raises**
   (`music/audit.py::log_staff_action` returns `None` on failure) — an
   audit outage cannot 500 a staff action.
+- **`Album.anunciat_at` records that a novetats publication carried the
+  release; NULL means never announced.** Written only by
+  `social.payload.marca_anunciats` from the publish sites (any channel),
+  first-write-wins; a preview never stamps. It exists because the only
+  previous answer to "did we announce this?" was arithmetic on
+  publication dates, and that arithmetic silently lost 41 of 136
+  releases between July and September 2026. Read by the novetats window
+  and by the sonda's priority. Guarded by:
+  `social/tests/test_novetats_finestra.py::TestAnunciatAt`.
 
 ### ML classifier (`music/ml.py`)
 - **`FEATURE_NAMES` is append-only.** `_get_clf` flags a model whose

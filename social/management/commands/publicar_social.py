@@ -644,6 +644,10 @@ class Command(BaseCommand):
             },
             published_at=timezone.now(),
         )
+        # Record what this publication actually carried, so "did we
+        # announce this release?" stops being arithmetic on dates.
+        # No-op for a top (its payload has `entries`, not `items`).
+        payload.marca_anunciats(data.get("items"))
         log_staff_action(
             None,
             "social_publicat",

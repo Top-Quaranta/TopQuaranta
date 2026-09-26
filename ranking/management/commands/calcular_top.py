@@ -31,17 +31,33 @@ ALL_TERRITORIS = sorted(TERRITORIS_FIXOS | TERRITORIS_AGREGATS | TERRITORIS_OPCI
 # weekly-plays Python algorithm.
 ALGORITHM_VERSION = "v2.0"
 
-# R1: coefficients we snapshot into each TopSetmanal row. Only the
-# fields that still live on ConfiguracioGlobal after the v2.0 simplification.
+# R1: the coefficients we snapshot into each TopSetmanal row. Every
+# ConfiguracioGlobal field the algorithm reads must be here, and a test
+# reads `ranking/algorisme.py` to hold us to it: a week nobody can
+# reproduce is a week nobody can audit.
+#
+# It cost a whole wrong diagnosis to learn that. `youtube_pes_escolta`
+# went from 1000 to 10 between the runs of 2026-08-29 and 2026-09-05 —
+# a change that redefines the very UNITS of `weekly_plays` — and the
+# snapshots of 2026-08-17 and 2026-09-21 are byte-identical, so nothing
+# in the database says when or whether it happened. It had to be
+# reconstructed by arithmetic on a single-lane song (2026-09-26).
 _CONFIG_SNAPSHOT_FIELDS = [
     "exponent_penalitzacio_antiguitat",
     "penalitzacio_album_per_canco",
     "penalitzacio_artista_per_canco",
     "coeficient_penalitzacio_top",
     "min_cancons_ranking_propi",
+    "min_escoltes_top",
+    "ppcc_penalitzacio_per_posicio",
     "soft_cap_actiu",
     "soft_cap_multiplicador",
     "soft_cap_floor_escoltes",
+    "soft_cap_base_top_n",
+    # Les dues que decideixen en quines unitats està `weekly_plays`.
+    "youtube_dies_minims",
+    "youtube_pes_escolta",
+    "min_senyal_combinat",
 ]
 
 

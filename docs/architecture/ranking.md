@@ -119,8 +119,13 @@
   aggregates last; each territori is delete + bulk_create in one
   transaction; provisional truncates and rebuilds.** Guarded by:
   `ranking/tests/test_calcular_ranking.py` (partial).
-- **Each `TopSetmanal` row carries `algorithm_version` + `config_snapshot`**
-  (`calcular_top::_CONFIG_SNAPSHOT_FIELDS`). Untested.
+- **Each `TopSetmanal` row carries `algorithm_version` + `config_snapshot`,
+  and the snapshot holds EVERY `ConfiguracioGlobal` field the algorithm
+  reads** (`calcular_top::_CONFIG_SNAPSHOT_FIELDS`) — including
+  `youtube_pes_escolta` and `min_senyal_combinat`, which decide what unit
+  `weekly_plays` is even in. Guarded by:
+  `test_calcular_ranking.py::test_el_snapshot_recull_tot_el_que_llig_l_algorisme`,
+  which reads `algorisme.py` rather than pinning a list.
 
 ### Config and gates
 - **`ConfiguracioGlobal` is a singleton (`pk=1`, `full_clean()` on every
@@ -139,9 +144,6 @@
 ## Traps
 - `MAX_POSICIONS_TOP` exists in `music/constants.py` but `algorisme.py`
   (`posicio__lte=40`) and `calcular_top.py` (`<= 40`) hardcode 40.
-- `config_snapshot` omits `min_escoltes_top`, `ppcc_penalitzacio_per_posicio`,
-  `soft_cap_base_top_n` and every `youtube_*` field — a historic week is
-  not fully reproducible from its snapshot.
 - `TopSetmanal.algorithm_version` model default is `"v1.0"`; only
   `calcular_top` writes `"v2.0"`. Rows created elsewhere lie.
 - `test_soft_cap.py::TestMergeInertness` is a docstring with no tests.

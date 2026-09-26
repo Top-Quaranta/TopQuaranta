@@ -167,6 +167,12 @@
     "skip_concern": 3,
     "description": "Reconcilia invitacions de col·laboració IG pendents (ADR-0015); dorment fins que s'activa el flag mestre."
   },
+  "conciliar_colaboracions_ig": {
+    "frequency_label": "Cada dia",
+    "max_age_hours": 26,
+    "skip_concern": 3,
+    "description": "Llig del post públic d'Instagram quines invitacions de col·laboració s'han acceptat; dorment fins que s'activa el flag mestre."
+  },
   "enviar_digest_setmanal": {
     "frequency_label": "Cada dilluns 08:00",
     "max_age_hours": 170,

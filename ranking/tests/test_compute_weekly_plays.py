@@ -48,15 +48,20 @@ class _Canco:
 def test_reissue_of_an_older_homonym_is_not_fresh():
     """Bocc «Ànima D'Acer», 2026-08-15: a single re-issued 15 months
     later as a new Canco (own ISRC). Last.fm answered the ORIGINAL's
-    lifetime playcount (966, flat for 3 days) and the fresh branch
-    banked it as one week's plays → #1 CAT / #2 PPCC on zero movement.
-    An older homonym by the same artist means the row inherits its age;
-    with no matching baseline that is 0 until one accumulates."""
+    lifetime playcount (966) and the fresh branch banked it as one
+    week's plays → #1 CAT / #2 PPCC on zero movement. An older homonym
+    by the same artist means the row inherits its age; with no matching
+    baseline that is 0 until one accumulates.
+
+    The real incident's counter was flat, which the parked-counter guard
+    now catches on its own. A moving counter here so this test still
+    isolates the homonym rule — see
+    `test_un_comptador_parat_no_es_una_estrena` for the other one."""
     today = date(2026, 8, 15)
     reissue = _Canco(date(2026, 8, 11), artista_id=7, nom="Ànima D'Acer")
     # No entry → old behaviour, kept for every caller not passing the map.
-    signals = [_Senyal(date(2026, 8, 13), 966), _Senyal(date(2026, 8, 15), 966)]
-    assert _compute_weekly_plays(reissue, signals, today) == 966.0
+    signals = [_Senyal(date(2026, 8, 13), 966), _Senyal(date(2026, 8, 15), 970)]
+    assert _compute_weekly_plays(reissue, signals, today) == 970.0
     primer = {(7, "anima d acer"): date(2025, 4, 29)}
     assert _compute_weekly_plays(reissue, signals, today, primer) == 0.0
     # Same title, DIFFERENT artist → still fresh (covers are legitimate).
@@ -64,7 +69,7 @@ def test_reissue_of_an_older_homonym_is_not_fresh():
         _compute_weekly_plays(
             reissue, signals, today, {(8, "anima d acer"): date(2025, 4, 29)}
         )
-        == 966.0
+        == 970.0
     )
     # The original itself is not affected by the map (its own date IS the earliest).
     original = _Canco(date(2025, 4, 29), artista_id=7, nom="Ànima d'Acer")
@@ -90,6 +95,30 @@ def test_fresh_release_ignores_baseline_even_if_present():
         _Senyal(date(2026, 5, 7), 800),
     ]
     assert _compute_weekly_plays(canco, signals, today) == 800.0
+
+
+def test_un_comptador_parat_no_es_una_estrena():
+    """Cucorba, 24/09/2026: tretze cançons infantils dels 80 reeditades
+    de colp amb data de llançament d'eixe dia. El comptador de Last.fm
+    idèntic a cada foto (420, 420 / 216, 216 / 72, 72) i la branca fresca
+    el cobrava com a setmanal: cinc als llocs 1, 4, 9, 25 i 40 del top
+    balear amb zero escoltes eixa setmana.
+
+    Ni l'homònim ni l'Art Track les podien vore —no tenim l'original al
+    catàleg i el vídeo es va generar el dia abans—, però el comptador sí:
+    una estrena acumula, una reedició està clavada."""
+    today = date(2026, 9, 26)
+    canco = _Canco(date(2026, 9, 24), nom="Som els cavallers")
+    parat = [_Senyal(date(2026, 9, 25), 420), _Senyal(date(2026, 9, 26), 420)]
+    assert _compute_weekly_plays(canco, parat, today) == 0.0
+
+    # Una estrena de veritat acumula, encara que siga poc.
+    movent = [_Senyal(date(2026, 9, 25), 420), _Senyal(date(2026, 9, 26), 424)]
+    assert _compute_weekly_plays(canco, movent, today) == 424.0
+
+    # Amb una sola lectura no hi ha evidència de res: l'estrena es manté.
+    unica = [_Senyal(date(2026, 9, 26), 420)]
+    assert _compute_weekly_plays(canco, unica, today) == 420.0
 
 
 # ── Branch 2: rolling 7-day delta with full baseline ───────────────
@@ -438,10 +467,12 @@ def test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament():
     mostra cau dins de ±30 dies i això NO ha de desmentir res.
     """
     today = date(2026, 8, 22)
-    signals = [_Senyal(date(2026, 8, 20), 4200), _Senyal(date(2026, 8, 22), 4200)]
+    # Comptador en moviment: ací l'única cosa que ha de desmentir la data
+    # és el vídeo, no la guarda del comptador parat.
+    signals = [_Senyal(date(2026, 8, 20), 4200), _Senyal(date(2026, 8, 22), 4260)]
 
     fresca = _Canco(date(2026, 8, 20), nom="Eterns")
-    assert _compute_weekly_plays(fresca, signals, today) == 4200.0
+    assert _compute_weekly_plays(fresca, signals, today) == 4260.0
 
     vella = _Canco(
         date(2026, 8, 20), nom="Eterns", youtube_publicat_at=date(2025, 3, 4)
@@ -452,4 +483,4 @@ def test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament():
     normal = _Canco(
         date(2026, 8, 20), nom="Eterns", youtube_publicat_at=date(2026, 8, 19)
     )
-    assert _compute_weekly_plays(normal, signals, today) == 4200.0
+    assert _compute_weekly_plays(normal, signals, today) == 4260.0

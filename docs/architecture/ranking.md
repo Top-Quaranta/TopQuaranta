@@ -30,6 +30,16 @@
   Tracks fall within ±30 d of our date, none between 61 and 180 d, and
   the 2 % beyond a year were remasters and re-issues. Guarded by:
   `test_compute_weekly_plays.py::test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament`.
+- **…and unless the counter has not moved across the readings we have.**
+  A premiere accrues day by day; a re-issue's lifetime counter sits
+  still, so ≥2 readings of the same number are not a week of listening
+  whatever the release date says. One reading alone is no evidence and
+  the premiere stands. This reads directly the fact the two guards above
+  infer, so it also catches a re-issue whose original we do not hold and
+  one with no Art Track (Cucorba, 2026-09-24: 13 re-issued 1980s
+  children's songs, flat counters, 5 in BAL's top-40 at #1/#4/#9/#25/#40
+  on zero listening). Guarded by:
+  `test_compute_weekly_plays.py::test_un_comptador_parat_no_es_una_estrena`.
 - **Last.fm merge steps are excised** (`_robust_weekly_from_series`): a
   one-day jump that is ≥8× the song's median daily rate AND ≥40 % of the
   cumulative AND ≥300 absolute is dropped and the week refilled from the

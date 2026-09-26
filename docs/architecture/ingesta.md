@@ -199,6 +199,17 @@
   a search and stops at `--budget` (4 000); discovery keeps 9 000 and
   remembers a miss 30 days. Guarded by: `test_youtube.py::TestSembrarCanals`,
   `::TestDescobrirYoutube`.
+- **Both lanes are re-enumerated daily, not once at discovery: an artist
+  resolved last month still gets their later releases matched.** `_cua`
+  only ever yields artists WITHOUT a channel, so the Topic re-scan
+  (`_amb_topic_pendent` — the uploads playlist is already stored, so
+  `COST_LIST` per page and never a search) and the official one
+  (`_amb_canal_oficial`) are separate cheap passes. Without the Topic
+  pass, 98 of the 101 unmatched releases since YouTube became a signal
+  belonged to already-resolved artists, and a song with no lane is
+  measured on plays alone against rivals measured on views (2026-09-26).
+  Guarded by: `test_youtube.py::TestTopicRepassat`,
+  `::TestCarrilOficialDesacoblat`.
 - **A song's signal is the SUM of its lanes (Art Track + official
   videos); each snapshot stores `views_per_video`; a lane with no data
   (dead id, hidden `viewCount`) is not counted and does not raise

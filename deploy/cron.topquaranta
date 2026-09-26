@@ -251,6 +251,14 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # the feature (tranche 3) needs no crontab edit.
 0 * * * *   topquaranta   /home/topquaranta/bin/tq-run pollar_colaboracions_ig >> /var/log/topquaranta/analytics.log 2>&1
 
+# 07:20 → Llig del post públic qui ha acceptat la col·laboració. L'API no
+# ho diu (ADR-0015 §5.5, recomprovat el 2026-09-26 a v19/v21/v23) però la
+# capçalera del post sí, i `…/embed/captioned/` la serveix sense sessió.
+# Diari i no horari: acceptar és immediat-o-mai i 14 dies de finestra
+# donen de sobra. Va després d'obtenir_senyal per no competir-hi.
+# DORMANT igual que el poller mentre el flag mestre estiga apagat.
+20 7 * * *   topquaranta   /home/topquaranta/bin/tq-run conciliar_colaboracions_ig >> /var/log/topquaranta/analytics.log 2>&1
+
 # 02:00 dilluns → Setmanal: neteja pendents òrfens (sense Deezer ID
 # + sense tracks principals + ≥1 collab + 1 únic germà aprovat).
 0 2 * * 1   topquaranta   /home/topquaranta/bin/tq-run netejar_pendents_orfes >> /var/log/topquaranta/neteja.log 2>&1

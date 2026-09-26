@@ -486,3 +486,40 @@ def test_sense_candidats_omes(db):
     assert "cap artista elegible" in out
     post = SocialPost.objects.get(tipus="canco_dia")
     assert post.status == SocialPost.STATUS_OMES
+
+
+@pytest.mark.django_db
+def test_prioritat_al_llancament_que_no_vam_anunciar():
+    """Els 41 llançaments que la finestra de novetats es va empassar
+    entre juliol i setembre de 2026 continuen sense haver-se anomenat
+    enlloc. La sonda és on es reparen: entre dues cançons del mateix
+    artista, primer la de l'estrena recent sense anunci.
+
+    L'ordre per escoltes ha de perdre contra això — si no, guanya sempre
+    la cançó vella i coneguda, que és justament la que no ho necessita.
+    """
+    a = _artista("marta")
+    anunciada = _canco(a, "anunciada", llancament=AVUI - datetime.timedelta(days=20))
+    Album.objects.filter(pk=anunciada.album_id).update(anunciat_at=_DT(2026, 8, 1))
+    SenyalDiari.objects.create(canco=anunciada, data=AVUI, lastfm_playcount=5000)
+
+    oblidada = _canco(a, "oblidada", llancament=AVUI - datetime.timedelta(days=7))
+    SenyalDiari.objects.create(canco=oblidada, data=AVUI, lastfm_playcount=3)
+
+    cand = sonda.Candidat(artista=a, esglao=1, ultima_sonda=None, ultima_caducada=None)
+    assert sonda.tria_canco(cand, AVUI).nom == "oblidada"
+
+
+@pytest.mark.django_db
+def test_una_estrena_antiga_sense_anunci_no_es_prioritat():
+    """«Sense anunciar» sol no basta: tot el catàleg anterior a la
+    funció de novetats ho està. El que compta és estrena recent."""
+    a = _artista("marta")
+    vella = _canco(a, "vella", llancament=AVUI - datetime.timedelta(days=400))
+    SenyalDiari.objects.create(canco=vella, data=AVUI, lastfm_playcount=3)
+    forta = _canco(a, "forta", llancament=AVUI - datetime.timedelta(days=300))
+    Album.objects.filter(pk=forta.album_id).update(anunciat_at=_DT(2026, 8, 1))
+    SenyalDiari.objects.create(canco=forta, data=AVUI, lastfm_playcount=5000)
+
+    cand = sonda.Candidat(artista=a, esglao=1, ultima_sonda=None, ultima_caducada=None)
+    assert sonda.tria_canco(cand, AVUI).nom == "forta"

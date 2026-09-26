@@ -90,3 +90,32 @@ class TestCalcularRankingCommand:
         )
         second_count = TopProvisional.objects.filter(territori="CAT").count()
         assert first_count == second_count
+
+
+def test_el_snapshot_recull_tot_el_que_llig_l_algorisme():
+    """Una setmana que ningú pot reproduir és una setmana que ningú pot
+    auditar. La promesa no és «aquests 14 camps», és «tots»: llegim
+    `algorisme.py` i exigim que cada coeficient que en llig estiga desat.
+    Afegir un coeficient nou i usar-lo sense desar-lo ha de trencar açò.
+
+    El 2026-09-26 faltaven sis, entre ells `youtube_pes_escolta`, que
+    decideix en quines unitats està `weekly_plays`: els snapshots del
+    17/08 i del 21/09 eren idèntics tot i que el senyal havia canviat
+    d'escala pel mig.
+    """
+    import inspect
+    import re
+
+    from ranking import algorisme
+    from ranking.management.commands.calcular_top import _CONFIG_SNAPSHOT_FIELDS
+
+    src = inspect.getsource(algorisme)
+    llegits = set(re.findall(r"\b(?:cfg|config)\.(\w+)", src))
+    llegits |= set(re.findall(r'getattr\(\s*(?:cfg|config)\s*,\s*"(\w+)"', src))
+    llegits.discard("load")
+    assert llegits, "el regex ha deixat de trobar lectures de configuració"
+
+    falten = sorted(llegits - set(_CONFIG_SNAPSHOT_FIELDS))
+    assert (
+        not falten
+    ), f"coeficients que l'algorisme llig i el snapshot no desa: {falten}"

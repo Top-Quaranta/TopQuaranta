@@ -140,6 +140,21 @@ def _get(path: str, params: dict | None = None) -> dict:
     return r.json()
 
 
+def permalink(media_id: str) -> str | None:
+    """The public `instagram.com/p/<codi>/` URL of a published media.
+
+    One of the few things about a post the Instagram Login token DOES
+    answer (unlike `collaborators`, ADR-0015 §5.5). Read-only, costs no
+    publish quota. Returns None when the media is gone or the field is
+    refused — the caller skips it rather than failing the run.
+    """
+    try:
+        return _get(media_id, {"fields": "permalink"}).get("permalink") or None
+    except Exception as exc:  # xarxa, media esborrat, token caducat…
+        logger.warning("permalink %s: %s", media_id, exc)
+        return None
+
+
 def wait_until_finished(
     container_id: str, *, timeout_s: int = 90, interval_s: float = 2.0
 ) -> None:

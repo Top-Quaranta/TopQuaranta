@@ -17,10 +17,17 @@ import logging
 from typing import Optional
 
 from django.db.models import Q
+from django.utils import timezone
 
 from music.models import Album, Canco
 from ranking.models import TopSetmanal
 from social.models import SocialPost
+
+# A release ingested long after it came out is catalogue work, not news.
+# The cursor guarantees each album is offered exactly once; this decides
+# whether that once is worth a slide. 30 d covers the usual Deezer lag
+# with room to spare — «La Guardiola Groga» arrived two months late.
+MAX_ANTIGUITAT_DIES = 30
 
 logger = logging.getLogger(__name__)
 
@@ -296,10 +303,15 @@ def build_moviment(setmana: datetime.date, min_pujada: int) -> Optional[dict]:
     )
 
 
-def _last_publication_date(tipus: str) -> Optional[datetime.date]:
-    """Most recent successful publication date for `tipus`, used as
-    the lower bound of the next window. Returns None on first ever
-    run (caller falls back to `setmana - 7d`)."""
+def _last_publication_at(tipus: str) -> Optional[datetime.datetime]:
+    """Instant of the last successful publication of `tipus` — the
+    ingest cursor the next window starts from. None on the first ever
+    run (the caller falls back to a fixed look-back).
+
+    A timestamp, not a date: the post goes out at 10:00 and the day's
+    releases land in the catalogue through the afternoon, so the hours
+    are the whole point (see `build_novetats`).
+    """
     pub = (
         SocialPost.objects.filter(tipus=tipus, status=SocialPost.STATUS_PUBLICAT)
         .order_by("-published_at", "-setmana")
@@ -308,12 +320,18 @@ def _last_publication_date(tipus: str) -> Optional[datetime.date]:
     if pub is None:
         return None
     if pub.published_at:
-        return pub.published_at.date()
-    # Fallback: derive from the stored week — Tuesday for albums,
-    # Friday for singles. Imported here to avoid a top-level cycle.
+        return pub.published_at
+    # Fallback for a row with no timestamp: derive the day from the
+    # stored week — Tuesday for albums, Friday for singles — and take
+    # its end, so nothing from that day is claimed twice. Imported here
+    # to avoid a top-level cycle.
     from .calendari import publication_date_for
 
-    return publication_date_for(tipus, pub.setmana)
+    dia = publication_date_for(tipus, pub.setmana)
+    return timezone.make_aware(
+        datetime.datetime.combine(dia, datetime.time.max),
+        timezone.get_default_timezone(),
+    )
 
 
 def build_novetats(
@@ -325,29 +343,51 @@ def build_novetats(
 ) -> Optional[dict]:
     """For nous_albums + nous_singles.
 
-    Window: `(last_publication_of_same_tipus, publish_date]`. This
-    avoids the previous behaviour where two consecutive Tuesdays of
-    "nous albums" overlapped on the boundary day and a release would
-    appear twice. Falls back to `[publish_date - dies_enrere,
-    publish_date]` on first run.
+    Window: everything **ingested** since the last publication of the
+    same tipus — `created_at > last_published_at` — capped to releases
+    younger than `MAX_ANTIGUITAT_DIES` so a late import is not announced
+    as news.
 
-    `setmana` is the Monday of the TopSetmanal-style week and is
-    only used by the caller for the SocialPost row; the window is
-    computed from `publish_date` (the actual day the slot fires).
+    It used to be a window on `data_llancament`, bounded below by the
+    previous publication's DATE plus one day. That lower bound existed
+    so a release on the boundary day was not announced twice, and it is
+    what silently swallowed 41 of the 136 releases between July and
+    September 2026 (audit 2026-09-26). The collision is structural:
+    music comes out on Fridays, `nous_singles` goes out on Friday at
+    10:00, and the day's releases reach the catalogue during the
+    afternoon. A release ingested at 16:13 missed that morning's post,
+    and by the next one the cutoff had already moved past its release
+    date — «Flama», de Marta Shanti, 2026-09-11, is the case that got
+    reported, and Socunbohemio «Què serà de mi?» (the CAT #1 of the week
+    it was missed) is in the same list.
+
+    An ingest cursor cannot have that hole: every album has exactly one
+    `created_at`, the cursor only moves forward, so each release falls
+    in exactly one window — announced once, never skipped. This is the
+    property the old code wanted, applied to the column that answers it.
+
+    `setmana` is the Monday of the TopSetmanal-style week and is only
+    used by the caller for the SocialPost row.
     """
     if publish_date is None:
         # Best-effort: treat the stored Monday as the window's upper
         # bound. Old callers without `publish_date` keep working.
         publish_date = setmana
-    last = _last_publication_date(tipus)
+    last = _last_publication_at(tipus)
     if last is None:
-        cutoff = publish_date - datetime.timedelta(days=dies_enrere)
-    else:
-        # Strictly after last publication so the boundary day isn't
-        # counted twice across consecutive weeks.
-        cutoff = last + datetime.timedelta(days=1)
+        last = timezone.make_aware(
+            datetime.datetime.combine(
+                publish_date - datetime.timedelta(days=dies_enrere), datetime.time.min
+            ),
+            timezone.get_default_timezone(),
+        )
+    # Strictly after the last publication: the cursor never overlaps, so
+    # nothing is announced twice and nothing falls between two windows.
     qs = Album.objects.filter(
-        data_llancament__gte=cutoff, data_llancament__lte=publish_date
+        created_at__gt=last,
+        data_llancament__gte=publish_date
+        - datetime.timedelta(days=MAX_ANTIGUITAT_DIES),
+        data_llancament__lte=publish_date,
     ).select_related("artista")
     if tipus == "nous_albums":
         qs = qs.filter(tipus__iexact="album")

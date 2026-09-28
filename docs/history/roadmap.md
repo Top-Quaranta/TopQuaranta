@@ -3,9 +3,39 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-09-18.
+> Last updated: 2026-09-28.
 
 ---
+
+## Ops 2026-09-28 — La verificació de Search Console s'havia perdut del DNS
+
+Correus de `tq-health` dos matins seguits: `recollir_metrics_gsc` en FAIL
+amb 403 `User does not have sufficient permission`. No era codi. El
+registre `google-site-verification` de `topquaranta.cat` ja no estava a
+la zona de cdmon —hi quedaven l'SPF, el DMARC i el BIMI i prou—, Google
+va revalidar i va degradar `admin@topquaranta.cat` a `siteUnverifiedUser`.
+El serial del SOA apuntava al 21/08 com a última modificació anterior:
+cinc setmanes entre la pèrdua i l'avís.
+
+Reparat afegint el TXT que demanava el diàleg de verificació del compte
+correcte (cap dels dos tokens que teníem apuntats servia; n'emet un per
+compte i propietat). Propietat verificada, el servidor torna a veure
+`siteOwner`, i els dos dies caiguts recuperats amb
+`recollir_metrics_gsc --date`: 117 files el 25/09 i 150 el 26/09.
+`tq-health` torna a 🟢 amb 0 anomalies.
+
+De passada, `CDMON_API_KEY` ja és al `.env` del servidor. El runbook §8
+la documentava des de sempre però no existia enlloc — ni al servidor, ni
+en local, ni en cap repo.
+
+**Pendent d'aquest fil:**
+1. Llevar del panell de cdmon el TXT de verificació sobrant que va
+   quedar a l'arrel. No es pot fer per API: `dnsrecords/delete` ignora
+   el `value` i esborra tot el `host`+`type`, o siga que s'enduria
+   l'SPF (comprovat en un host de prova; veure `docs/LESSONS.md`).
+2. Decidir si val la pena una comprovació del TXT de verificació a
+   `tq-health`. Avui la detecció funciona però arriba quan el cron ja
+   falla; una sonda al registre tancaria la finestra de cinc setmanes.
 
 ## Sprint 2026-09-18 — El model era bo; el que no arribava era la nota
 

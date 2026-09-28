@@ -250,6 +250,9 @@ class Command(BaseCommand):
             },
             published_at=timezone.now(),
         )
+        # Qualsevol canal compta: una novetat anunciada a Mastodon està
+        # anunciada. No-op per a un top (el seu payload porta `entries`).
+        payload.marca_anunciats(data.get("items"))
         log_staff_action(None, f"{channel}_publicat", target=post, tipus=slot.tipus)
         # K1 analytics: count successful publications per channel +
         # tipus so we can chart channel reach + content-mix over time.

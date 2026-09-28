@@ -156,6 +156,25 @@ def _te_llancament_since(a: Artista, since: datetime.date) -> bool:
     ).exists()
 
 
+def _te_llancament_no_anunciat(a: Artista, since: datetime.date) -> bool:
+    """Un llançament recent que cap post de novetats va arribar a portar.
+
+    Fins al 2026-09-26 la finestra de novetats es tancava sobre la data
+    d'estrena amb el tall a «publicació anterior + 1 dia», i com que la
+    música ix els divendres i el post ix els divendres al matí, tota
+    estrena ingerida eixa vesprada quedava fora per sempre: 41 de 136
+    llançaments en tres mesos. La finestra ja està arreglada, però els
+    que es van perdre continuen perduts, i eixa gent va estrenar i no
+    la vam anomenar enlloc. La sonda és on ho podem reparar.
+    """
+    return a.albums.filter(
+        descartat=False,
+        data_llancament__isnull=False,
+        data_llancament__gte=since,
+        anunciat_at__isnull=True,
+    ).exists()
+
+
 def tria_artista(avui: datetime.date, franja: str) -> Candidat | None:
     """The §5ter ORDER BY ... LIMIT 1."""
     cands = elegibles(avui)
@@ -176,6 +195,8 @@ def tria_artista(avui: datetime.date, franja: str) -> Candidat | None:
             # round-robin de gènere: mai sondejat primer, després el
             # que fa més temps (date asc; None → epoch = primer).
             genere_data or epoca,
+            # Primer qui va estrenar i es va quedar sense anunci.
+            not _te_llancament_no_anunciat(c.artista, recent_tall),
             not _te_llancament_since(c.artista, recent_tall),
             not (contacte and _te_llancament_since(c.artista, contacte)),
             contacte or epoca,
@@ -221,10 +242,18 @@ def tria_canco(cand: Candidat, avui: datetime.date) -> Canco | None:
     }
     epoca = datetime.date(1970, 1, 1)
 
+    recent_tall = avui - datetime.timedelta(days=LLANCAMENT_RECENT_DIES)
+
     def _key(c: Canco):
         llanc = c.album.data_llancament if c.album else None
+        # Entre les cançons d'aquest artista, primer la del llançament
+        # recent que no vam anunciar mai (vegeu `_te_llancament_no_anunciat`).
+        no_anunciada = bool(
+            c.album and c.album.anunciat_at is None and llanc and llanc >= recent_tall
+        )
         return (
             not (cand.esglao in (2, 3) and contacte and llanc and llanc > contacte),
+            not no_anunciada,
             -(playcounts.get(c.id) or 0),
             -(llanc or epoca).toordinal(),
         )

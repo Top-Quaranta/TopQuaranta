@@ -3,9 +3,101 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-09-28.
+> Last updated: 2026-10-04.
 
 ---
+
+## Sprint 2026-09-26 — El top mesurava mig catàleg i no ho sabíem
+
+El Miquel reportava massa moviments sospitosos d'entrar directament al
+#1. L'origen no era l'algorisme: era que la meitat del catàleg no es
+mesurava. `descobrir_youtube` només encuava artistes **sense** canal
+Topic, així que un artista es resolia una vegada i no hi tornava mai, i
+tot el que publicava després es quedava sense Art Track. De les 101
+cançons estrenades des que YouTube és senyal i encara sense carril, 98
+eren d'artistes ja resolts. Cobertura de carril: 24 % a les estrenes de
+menys de 30 dies contra 86 % a les de més de 90, i 0 de les 181 files
+publicades al top-40 sense carril.
+
+Les dues cares al rànquing: les 7 entrades al top-3 des de fora del
+top-40 cauen totes damunt del dia que el carril fa 7 dies (Els Amics de
+les Arts va entrar al #1 de CAT el primer dia en què la cançó podia
+tindre delta setmanal), i les cançons sense carril queden **fora** del
+top de colp, no baixen — 11 casos en dues setmanes, els 11 a zero.
+
+Corregit amb un tercer pas barat (`_amb_topic_pendent`, la llista de
+pujades ja està desada → `COST_LIST`, mai un `search.list`). Primera
+passada: 143 cançons aparellades, 975 unitats de 9.000. Cobertura
+d'estrenes 24 % → 68 % i estable una setmana després.
+
+Pel camí, tres coses més:
+
+- **Cucorba.** Tretze cançons infantils dels 80 reeditades de colp amb
+  data del dia; el comptador de Last.fm clavat a cada foto i la branca
+  de llançament fresc el cobrava com a setmanal. Cinc al top-40 balear
+  (#1, #4, #9, #25, #40) amb zero escoltes. Les dues guardes existents
+  —homònim més antic, data de l'Art Track— són inferències sobre el
+  mateix fet; ara es llig directament: dues lectures iguals no són una
+  setmana d'escoltes. Recalculada la setmana del 21-09 (el #1 balear
+  passa a La Fúmiga); la resta de l'històric, intacte per decisió.
+- **`config_snapshot` desava 8 dels 14 coeficients.** Faltaven els dos
+  que decideixen en quines unitats està `weekly_plays`, i això va costar
+  un diagnòstic sencer equivocat: `youtube_pes_escolta` va passar de
+  1000 a 10 entre el 29-08 i el 05-09 i els snapshots del 17-08 i del
+  21-09 són idèntics. Es va haver de reconstruir per aritmètica sobre
+  una cançó d'un sol carril. El test llig `algorisme.py` i exigeix que
+  tot coeficient que es llija estiga desat.
+- **El sostre suau s'ha arreglat sol.** El genoll es deriva de la
+  mediana de 10 setmanes de `weekly_plays`, i eixa columna va canviar
+  d'escala dues vegades; a CAT va saltar de 1.869 a 13.065 en una
+  setmana i a 27.471 la següent, en sortir de la finestra les setmanes
+  d'abans de YouTube. Avui no comprimeix res del top català. A VAL i BAL
+  sí (La Fúmiga 8.234 → 2.819 a BAL).
+
+**Decisió presa (2026-10-04):** la penalització de permanència es queda
+acumulativa, sense finestra ni terra. És volguda: penalitzar les cançons
+que porten molt de temps al top és el que manté la rotació. Conseqüència
+assumida: el #1 el decideixen les penalitzacions i no l'audiència —el
+28-09 Socunbohemio és #1 sent **tercer** per senyal, i Rosalía, que té
+l'audiència més gran de CAT, puntua al 30 % després de 19 setmanes.
+
+## Sprint 2026-09-26 — Instagram: qui havia acceptat i qui no vam anunciar
+
+Dos forats al mateix lloc: convidàvem i no registràvem el resultat.
+
+**Col·laboracions.** L'ADR-0015 §5.5 va tancar la via de l'API i va
+deixar l'acceptació com un clic manual. Ningú no clicava: de les 9
+acceptacions reals, 6 constaven `caducada` o `pendent`, i quatre
+d'eixos artistes complien 90 dies de penalització per una col·laboració
+que havien acceptat. L'API continua tancada (recomprovat a v19, v21 i
+v23: `collaborators` no existeix ni com a camp ni com a aresta), però la
+co-autoria és pública al capçal del post i `…/embed/captioned/` la
+serveix renderitzada, sense sessió. `conciliar_colaboracions_ig` la
+llig cada dia i **només confirma, mai descobreix**: creua el capçal amb
+els usernames convidats en eixe media, i el peu de foto —on els artistes
+ixen mencionats amb @ sempre— no compta. Primera setmana en producció:
+Terra i Sal detectada sola el 30-09, un dia després de la invitació.
+
+**Novetats.** La finestra corria sobre `data_llancament` amb el tall a
+«publicació anterior + 1 dia». La música s'estrena els divendres,
+`nous_singles` ix els divendres a les 10:00, i les estrenes del dia
+entren al catàleg durant la vesprada: **41 de 136 llançaments entre
+juliol i setembre no s'han anunciat mai** (30 %), entre ells Marta
+Shanti «Flama» —que ens va avisar que l'estrenava— i Socunbohemio «Què
+serà de mi?», que eixa setmana era el #1 de Catalunya. Ara la finestra
+és el cursor d'ingesta, i `Album.anunciat_at` registra el fet en lloc
+d'inferir-lo: el cursor diu quins llançaments toquen en *aquesta*
+finestra, el segell diu si s'ha anunciat *mai*. La sonda «cançó del dia»
+dona el torn a qui es va quedar sense anunci, per damunt de l'ordre per
+escoltes: 48 cançons elegibles, unes sis setmanes reparant-ho.
+
+**Pendent d'aquest fil:**
+1. Vigilar la primera setmana de la prioritat de la sonda: que les
+   sondes isquen de les 48 i no es repetisquen.
+2. La migració 0105 replica la finestra antiga i per tant no encerta els
+   dos posts que ja van eixir amb el cursor (29-09 i 02-10). Dos àlbums
+   de frontera corregits a mà el 04-10; si es torna a tocar la finestra,
+   recordar que el replay i el cursor no són la mateixa cosa.
 
 ## Ops 2026-09-28 — La verificació de Search Console s'havia perdut del DNS
 

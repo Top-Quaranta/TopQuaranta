@@ -4,7 +4,7 @@
 
 # Django 6.1 requires PostgreSQL 15+; the server runs PG 14 (2026-08-31
 # outage). Keep 6.0.x until the PG upgrade; dependabot.yml ignores >=6.1.
-django==6.0.8
+django==6.0.9
 psycopg2-binary==2.9.13
 python-decouple==3.8
 dj-database-url==3.1.2
@@ -20,7 +20,7 @@ joblib>=1.6.0
 cryptography==50.0.1
 argon2-cffi==25.1.0          # S10: stronger password hashing
 django-axes==8.3.1           # S4: brute-force login protection
-django-otp==1.7.3            # S11: TOTP 2FA for staff
+django-otp==1.7.4            # S11: TOTP 2FA for staff
 qrcode[pil]==8.2             # S11: render enrollment QR (pulls Pillow)
 # Social renderer — brand logo + territory icons rasterisation. Caught
 # 2026-05-07: missing in production meant every territorial portada

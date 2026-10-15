@@ -3,9 +3,24 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-10-04.
+> Last updated: 2026-10-15.
 
 ---
+
+## Sprint 2026-10-15 — El correu diari també reparteix les pendents d'aprovar
+
+El Miquel ho havia demanat el 18/09 i la sessió va derivar cap al ML:
+el brief diari de revisió va quedar com a punt 5 pendent i no es va fer.
+Ara el correu de YouTube de les 07:00 porta un calaix nou, «Les N cançons
+pendents d'aprovar d'avui», davall de les recerques. N ix de la fórmula
+que el panell `/staff/estat` ja feia (entrades setmanals robustes menys
+les que caduquen soles, entre set; 11 el 18/09), treta a `flux_cancons()`
+perquè la lligen els dos i no se'n facen dues còpies. Les files són les
+`pendents()` de més `ml_confianca`, que `recalcular_ml` acaba de
+repuntuar a les 05:45, cada una amb la nota ML, la de Whisper si n'hi
+ha, i l'enllaç a `/staff/cancons` filtrat fins a la fila. Cap estat nou:
+una cançó mirada i no decidida torna demà. Tests a
+`analytics/tests/test_informe_yt_pendents.py`.
 
 ## Sprint 2026-09-26 — El top mesurava mig catàleg i no ho sabíem
 
@@ -163,9 +178,9 @@ resta del projecte.
 4. Features causals a l'entrenament: les d'historial es calculen amb
    l'estat d'avui i no amb el del dia de la decisió. Val una mil·lèsima
    de ROC-AUC, així que va l'última.
-5. Brief diari de revisió: 11 cançons/dia, que és el que ja calcula
-   `target_verificacio_setmanal` a `estat.py` (entrada 22,2/dia menys
-   les 80 que caduquen soles cada setmana).
+5. ~~Brief diari de revisió: 11 cançons/dia, que és el que ja calcula
+   `target_verificacio_setmanal` a `estat.py`~~ — fet el 2026-10-15 (vegeu
+   el sprint d'eixe dia).
 
 Descartat després de mesurar-ho: calibrar el bosc. Causalment el tram
 A++ encerta el 99,6 %, o siga que la calibració no era el problema.

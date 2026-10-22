@@ -87,15 +87,18 @@ class ActivationLinkTest(TestCase):
         u.refresh_from_db()
         self.assertTrue(u.is_active)
 
-    def test_second_click_sends_to_login_not_to_register_again(self):
+    def test_second_click_says_already_active_not_register_again(self):
         u = Usuari.objects.create_user(
             email="carla@example.test", password="x", username="carla", is_active=False
         )
         link = self._link(u)
         Client().get(link)  # first click, another browser
         resp = Client().get(link)  # second click, not logged in
-        self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.url, "/compte/accedir")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertIn("ja està actiu", body)
+        self.assertIn("/compte/accedir", body)
+        self.assertNotIn("Tornar a registrar-se", body)
 
     def test_second_click_while_logged_in_goes_to_dashboard(self):
         u = Usuari.objects.create_user(

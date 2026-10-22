@@ -1,0 +1,15 @@
+{% extends "comptes/_base_auth.html" %}
+
+{% block title %}Compte ja actiu — TopQuaranta{% endblock %}
+
+{% block content %}
+<div class="tq-card" style="text-align:center">
+  <p class="tq-label">Compte</p>
+  <h1 class="tq-title">El teu compte ja està actiu</h1>
+  <p class="tq-sub">
+    Aquest enllaç ja s'ha fet servir i el compte està activat. Només
+    cal que iniciïs sessió amb el teu correu i la contrasenya.
+  </p>
+  <a href="/compte/accedir" class="tq-btn">Inicia sessió</a>
+</div>
+{% endblock %}

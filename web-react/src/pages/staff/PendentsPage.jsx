@@ -12,6 +12,7 @@
  * /api/v1/localitzacio/* endpoints so we don't over-fetch on mount.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { api } from '../../lib/api'
 import {
@@ -214,7 +215,10 @@ export default function PendentsPage() {
   const [data, setData] = useState(null)
   const [page, setPage] = useState(1)
   const [error, setError] = useState(null)
-  const [q, setQ] = useState('')
+  // `/staff/pendents?q=Nom` is what the 07:00 mail links to: seed the
+  // search from the URL so the link lands on the row, not on page 1.
+  const [urlParams] = useSearchParams()
+  const [q, setQ] = useState(urlParams.get('q') || '')
   // Discovery-source filter (`font_descoberta`). Empty = all.
   const [font, setFont] = useState('')
   // Sort key. Empty = backend default; `similars_lastfm` orders by

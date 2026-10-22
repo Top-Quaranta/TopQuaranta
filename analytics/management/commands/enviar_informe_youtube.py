@@ -24,13 +24,14 @@ from __future__ import annotations
 
 import datetime
 import logging
+import math
 from collections import defaultdict
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -40,6 +41,7 @@ from ingesta.management.commands.descobrir_youtube import DEFAULT_BUDGET
 from music.constants import DIES_CADUCITAT
 from music.models import Artista, Canco, CancoYouTubeVideo
 from ranking.models import SenyalDiari, SenyalYouTube
+from web.api.staff.estat import flux_cancons
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +397,47 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
     }
 
 
+def _pendents(today: datetime.date) -> dict:
+    """Les cançons pendents d'aprovar que toca mirar hui.
+
+    Quantes: les que fan falta per a no acumular backlog. Ix de la
+    mateixa fórmula que el panell `/staff/estat` (`flux_cancons`):
+    entrades setmanals robustes menys les que caduquen soles, repartit
+    en set dies. El 2026-09-18 eren 11. Quan el signe és negatiu el
+    backlog baixa sol, però el correu continua proposant-ne una perquè
+    la cua no es quede sense mirar.
+
+    Quines: les de més confiança ML, que el cron `recalcular_ml` de les
+    05:45 ha repuntuat eixa mateixa nit. Cap estat nou: una cançó mirada
+    i no decidida torna demà al mateix lloc, i una d'aprovada o
+    rebutjada deixa de ser pendent i no torna.
+    """
+    setmanal = flux_cancons(today)["target_verificacio_setmanal"]
+    n = max(1, math.ceil(setmanal / 7))
+    qs = Canco.objects.pendents()
+    files = []
+    for c in qs.select_related("artista").order_by(
+        F("ml_confianca").desc(nulls_last=True), "pk"
+    )[:n]:
+        # El llistat de l'staff, filtrat fins a la fila: hi ha el botó
+        # d'aprovar i la cerca ignora accents i apòstrofs.
+        filtre = {"q": c.nom}
+        if c.artista_id:
+            filtre["artista_pk"] = c.artista_id
+        files.append(
+            {
+                "titol": c.nom,
+                "sub": c.artista.nom if c.artista else "",
+                "classe": c.ml_classe,
+                "confianca": c.ml_confianca,
+                "whisper": c.whisper_lang,
+                "whisper_p": c.whisper_p,
+                "on": "/staff/cancons?" + urlencode(filtre),
+            }
+        )
+    return {"files": files, "dia": n, "resten": qs.count()}
+
+
 def build_context(today: datetime.date) -> dict:
     ahir = today - datetime.timedelta(days=1)
     cutoff = today - datetime.timedelta(days=DIES_CADUCITAT)
@@ -503,6 +546,7 @@ def build_context(today: datetime.date) -> dict:
         },
         "punt_cec": punt_cec,
         "accions": _accions(en_finestra, cegues),
+        "pendents": _pendents(today),
         "efecte_top": _efecte_al_top(today),
         "senyal": {
             "avui": snap_avui.filter(error=False).count(),
@@ -557,6 +601,31 @@ def render_text(ctx: dict) -> str:
     lines += [
         f"  Queden {ac['resten_cancons']} cançons sense vídeo i "
         f"{ac['resten_artistes']} artistes sense canal revisat.",
+    ]
+    p = ctx["pendents"]
+    if p["files"]:
+        lines += ["", f"LES {len(p['files'])} CANÇONS PENDENTS D'APROVAR D'AVUI"]
+        for i, f in enumerate(p["files"], 1):
+            ml = (
+                f"ML {f['classe']} {f['confianca']:.2f}"
+                if f["confianca"] is not None
+                else "sense nota ML"
+            )
+            wh = (
+                f" · Whisper {f['whisper']} {f['whisper_p']:.2f}"
+                if f["whisper"] and f["whisper_p"] is not None
+                else ""
+            )
+            lines += [
+                f"  {i:>2}. {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+                f"      {ml}{wh}",
+                f"      decideix a: {ctx['site_url']}{f['on']}",
+            ]
+        lines += [
+            f"  Queden {p['resten']} pendents. {p['dia']} al dia és el ritme que "
+            "buida el backlog (fórmula de /staff/estat)."
+        ]
+    lines += [
         "",
         "DESCOBRIMENT",
         f"  Artistes amb canal Topic  {d['amb_canal_n']}/{d['total']} ({d['pct']}%)"

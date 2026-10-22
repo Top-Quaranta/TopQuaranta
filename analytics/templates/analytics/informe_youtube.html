@@ -116,6 +116,37 @@
 </td></tr>
 {% endif %}
 
+{% comment %} LES PENDENTS D'APROVAR — l'altra feina de mà. Tantes com cal
+   per a no acumular backlog (la fórmula de /staff/estat), les de més
+   confiança ML primer, repuntuades a les 05:45. Una cançó mirada i no
+   decidida torna demà; una decidida no. {% endcomment %}
+{% if pendents.files %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Les {{ pendents.files|length }} cançons pendents d'aprovar d'avui</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Les que el model dona per més segures. Whisper només escolta trenta segons: un «no» seu no decideix res, però un «ca» quasi sempre encerta.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
+    {% for f in pendents.files %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
+      <td width="26" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if f.classe == 'A' %}#7bbf7b{% elif f.classe == 'C' %}#e06c6c{% else %}#facc15{% endif %};padding:10px 0 0;">{{ forloop.counter }}</td>
+      <td valign="top" style="padding:10px 0 0;">
+        <div style="font-size:14px;color:#ffffff;font-weight:700;line-height:1.4;">{{ f.titol }}{% if f.sub %} <span class="muted" style="font-weight:400;color:#9aa0a6;">&middot; {{ f.sub }}</span>{% endif %}</div>
+        <div class="muted" style="font-size:12.5px;color:#b7b7be;line-height:1.6;margin-top:2px;">
+          {% if f.confianca is not None %}ML <strong style="color:#ffffff;">{{ f.classe }} {{ f.confianca|floatformat:2 }}</strong>{% else %}sense nota ML{% endif %}{% if f.whisper and f.whisper_p is not None %} &middot; Whisper <strong style="color:#ffffff;">{{ f.whisper }} {{ f.whisper_p|floatformat:2 }}</strong>{% endif %}
+        </div>
+        <div style="font-size:12.5px;margin-top:5px;">
+          <a href="{{ site_url }}{{ f.on }}" style="color:#7bbf7b;text-decoration:underline;">Aprovar o rebutjar &#8599;</a>
+        </div>
+      </td>
+    </tr></table>
+    {% endfor %}
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
+      Queden <strong style="color:#ffffff;">{{ pendents.resten|milers }}</strong> pendents. {{ pendents.dia }} al dia és el ritme que buida el backlog, segons la fórmula de <code>/staff/estat</code>.
+      Una cançó que mires i no decidisques torna demà al mateix lloc.
+    </div>
+  </td></tr></table>
+</td></tr>
+{% endif %}
+
 {% comment %} A. DESCOBRIMENT — amagat quan la cua automàtica és a zero:
    repetir «0 provats, 0 queden» cada matí no informa de res, i el que
    queda per fer ja ix a les recerques del dia. {% endcomment %}

@@ -42,6 +42,7 @@ from music.constants import DIES_CADUCITAT
 from music.models import Artista, Canco, CancoYouTubeVideo
 from ranking.models import SenyalDiari, SenyalYouTube
 from web.api.staff.estat import flux_cancons
+from web.api.staff.pendents import cua_pendents
 
 logger = logging.getLogger(__name__)
 
@@ -438,6 +439,46 @@ def _pendents(today: datetime.date) -> dict:
     return {"files": files, "dia": n, "resten": qs.count()}
 
 
+# Quants artistes pendents cap mirar en un matí. Ací no hi ha fórmula de
+# backlog com a les cançons: amb 7.000 pendents (2026-10-22) cap ritme
+# raonable el buida, i deu files que es miren valen més que trenta que
+# s'ignoren.
+_ARTISTES_DIA = 10
+
+
+def _artistes_pendents(n=_ARTISTES_DIA) -> dict:
+    """Els artistes pendents de decidir que toca mirar hui.
+
+    Quins: els de més senyal segons la mateixa cua que l'staff veu a
+    `/staff/pendents` (`cua_pendents`): propostes d'usuari, cançons
+    verificades, i d'empat, Last.fm. No hi ha nota ML per artista, així
+    que l'ordre és el de la cua i prou. Cada fila diu si té Deezer ID o
+    MBID —sense cap dels dos no es pot aprovar— perquè es veja abans
+    de clicar què demanarà el formulari. Cap estat nou: un artista
+    mirat i no decidit torna demà al mateix lloc.
+    """
+    qs = cua_pendents()
+    files = []
+    for a in qs[:n]:
+        loc = next(iter(a.localitats.all()), None)
+        files.append(
+            {
+                "titol": a.nom,
+                "lloc": loc.nom_display if loc else "",
+                "territori": loc.territori_display if loc else "",
+                "deezer": any(True for _ in a.deezer_ids.all()),
+                "mbid": bool(a.musicbrainz_id),
+                "similars": a.nb_similars_lastfm or 0,
+                "verificades": a.nb_verif,
+                "propostes": a.n_propostes or 0,
+                # El llistat de l'staff, filtrat fins a la fila: hi ha el
+                # botó d'aprovar i la cerca ignora accents i apòstrofs.
+                "on": "/staff/pendents?" + urlencode({"q": a.nom}),
+            }
+        )
+    return {"files": files, "resten": qs.count()}
+
+
 def build_context(today: datetime.date) -> dict:
     ahir = today - datetime.timedelta(days=1)
     cutoff = today - datetime.timedelta(days=DIES_CADUCITAT)
@@ -547,6 +588,7 @@ def build_context(today: datetime.date) -> dict:
         "punt_cec": punt_cec,
         "accions": _accions(en_finestra, cegues),
         "pendents": _pendents(today),
+        "artistes_pendents": _artistes_pendents(),
         "efecte_top": _efecte_al_top(today),
         "senyal": {
             "avui": snap_avui.filter(error=False).count(),
@@ -625,6 +667,28 @@ def render_text(ctx: dict) -> str:
             f"  Queden {p['resten']} pendents. {p['dia']} al dia és el ritme que "
             "buida el backlog (fórmula de /staff/estat)."
         ]
+    ap = ctx["artistes_pendents"]
+    if ap["files"]:
+        lines += ["", f"ELS {len(ap['files'])} ARTISTES PENDENTS DE DECIDIR D'AVUI"]
+        for i, f in enumerate(ap["files"], 1):
+            lloc = f" — {f['lloc']}" if f["lloc"] else ""
+            if f["territori"]:
+                lloc += f" ({f['territori']})"
+            ancora = (
+                f"{'Deezer' if f['deezer'] else 'sense Deezer'} · "
+                f"{'MBID' if f['mbid'] else 'sense MBID'}"
+            )
+            if not f["deezer"] and not f["mbid"]:
+                ancora += " — no es pot aprovar sense cap dels dos"
+            lines += [
+                f"  {i:>2}. {f['titol']}{lloc}",
+                f"      {ancora}",
+                f"      {f['similars']} similars Last.fm · "
+                f"{f['verificades']} cançons verificades · "
+                f"{f['propostes']} propostes",
+                f"      decideix a: {ctx['site_url']}{f['on']}",
+            ]
+        lines += [f"  Queden {ap['resten']} artistes pendents."]
     lines += [
         "",
         "DESCOBRIMENT",

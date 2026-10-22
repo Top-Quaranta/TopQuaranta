@@ -7,6 +7,23 @@
 
 ---
 
+## Sprint 2026-10-22 bis — L'onboarding estava mort des de maig
+
+Gioba Fellini va escriure per Instagram que el compte «es bloqueja al
+verificar»: primer era el segon clic a l'enllaç d'activació (#531), però
+després de dins tampoc no passava de «Carregant…». `OnboardingPage.jsx`
+demanava `/comunitat/perfil/`, renombrat a `/compte/perfil-usuari/` el
+2026-05-04, i s'empassava el 404. Els 21 comptes registrats des de
+llavors no han acabat mai l'onboarding. Corregit el path i afegit
+`web/tests/test_spa_endpoints_existeixen.py`, que resol contra `urls.py`
+cada endpoint literal que el SPA crida. Lliçó a `docs/LESSONS.md`.
+De pas: Gioba Fellini (Barcelona, Deezer 121802452) aprovat a mà i
+vinculat al seu compte com a gestor.
+
+**Pendent d'aquest fil:** escriure als 21 usuaris encallats (llista a
+`PerfilUsuari.objects.filter(onboarding_complet=False)`) quan el fix
+siga a producció.
+
 ## Sprint 2026-10-22 — El correu diari també reparteix els artistes pendents
 
 El calaix de cançons del 15/10 deixava fora l'altra cua: 7.072 artistes

@@ -50,6 +50,7 @@ BACKUP_CODES_COUNT = 10
 # dashboard. Django has no URL pattern for this path since the flip —
 # it's a literal route handled by React.
 SPA_DASHBOARD_URL = "/compte/"
+SPA_LOGIN_URL = "/compte/accedir"
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -171,6 +172,15 @@ def activar(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
         user = Usuari.objects.get(pk=uid)
     except (TypeError, ValueError, OverflowError, Usuari.DoesNotExist):
         user = None
+
+    if user and user.is_active:
+        # The link clicked a second time (mail prefetch, another device):
+        # the token hashes `is_active`, so it no longer matches. The
+        # account is fine — send them where they can log in, not to
+        # «Tornar a registrar-se» (2026-10-22, Gioba Fellini).
+        if request.user.pk == user.pk:
+            return redirect(SPA_DASHBOARD_URL)
+        return redirect(SPA_LOGIN_URL)
 
     if user and email_verification_token.check_token(user, token):
         user.is_active = True

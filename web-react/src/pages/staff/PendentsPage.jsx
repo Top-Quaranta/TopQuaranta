@@ -11,9 +11,8 @@
  * The location dropdowns are populated lazily via the existing
  * /api/v1/localitzacio/* endpoints so we don't over-fetch on mount.
  */
-import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import {
   Btn,

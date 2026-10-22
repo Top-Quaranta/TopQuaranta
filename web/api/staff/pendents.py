@@ -190,15 +190,21 @@ def _artista_card(a, homset=None) -> dict:
     }
 
 
-@api_view(["GET"])
-@permission_classes([IsStaff])
-def pendents_list(request: Request) -> Response:
+def cua_pendents(sort: str = ""):
+    """The staff review queue, annotated and ordered by signal.
+
+    Shared by `pendents_list` and the 07:00 mail (`enviar_informe_youtube`)
+    so both hand out the same rows in the same order: user proposals
+    first, then verified tracks, then — only with `sort="similars_lastfm"`
+    — Last.fm affinity ahead of both. Callers may filter further; the
+    annotations survive a later `.filter()`.
+    """
     # distinct=True on both Count() calls to avoid the cartesian
     # multiplication that happens when two LEFT JOINs stack up (Django
     # ticket #10060). Without it, an artist with 3 main tracks and 4
     # collab tracks reported 12 verified, not 7.
     qs = (
-        Artista.objects.filter(aprovat=False, pendent_review=True)
+        Artista.objects.pendents()
         .prefetch_related(
             "territoris", "deezer_ids", "localitats__municipi", "lastfm_aliases"
         )
@@ -214,18 +220,6 @@ def pendents_list(request: Request) -> Response:
         )
         .annotate(nb_verif=F("nb_verif_main") + F("nb_verif_col"))
     )
-    cerca = (request.GET.get("q") or "").strip()
-    if cerca:
-        qs = qs.annotate(_nom_norm=_unaccent_field("nom")).filter(
-            _nom_norm__contains=_normalize_search_term(cerca)
-        )
-
-    # Restrict to a single discovery source. Most useful right now:
-    # `font_descoberta=lastfm_similar` to triage the network of
-    # similar-artists Last.fm flagged as related to our aprovats.
-    font = (request.GET.get("font_descoberta") or "").strip()
-    if font:
-        qs = qs.filter(font_descoberta=font)
 
     # Annotate with n_propostes: count of pending PropostaArtista rows
     # whose deezer_ids JSON array references any of this artist's
@@ -248,13 +242,33 @@ def pendents_list(request: Request) -> Response:
         qs = qs.annotate(n_propostes=Value(0, output_field=IntegerField()))
 
     # Default sort: propostes first, then verified-tracks count, then
-    # alphabetical. `?sort=similars_lastfm` switches to "Last.fm
-    # affinity descending" for the similar-artists triage workflow.
-    sort = (request.GET.get("sort") or "").strip()
+    # Last.fm affinity (2026-10-22: before that the tie-break was the
+    # name, which with 7,000 rows at zero propostes and zero verified
+    # meant the queue — and the 07:00 mail — opened on the letter A every
+    # day). `?sort=similars_lastfm` puts affinity first for the
+    # similar-artists triage workflow.
     if sort == "similars_lastfm":
-        qs = qs.order_by("-nb_similars_lastfm", "-n_propostes", "-nb_verif", "nom")
-    else:
-        qs = qs.order_by("-n_propostes", "-nb_verif", "nom")
+        return qs.order_by("-nb_similars_lastfm", "-n_propostes", "-nb_verif", "nom")
+    return qs.order_by("-n_propostes", "-nb_verif", "-nb_similars_lastfm", "nom")
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def pendents_list(request: Request) -> Response:
+    qs = cua_pendents((request.GET.get("sort") or "").strip())
+    cerca = (request.GET.get("q") or "").strip()
+    if cerca:
+        qs = qs.annotate(_nom_norm=_unaccent_field("nom")).filter(
+            _nom_norm__contains=_normalize_search_term(cerca)
+        )
+
+    # Restrict to a single discovery source. Most useful right now:
+    # `font_descoberta=lastfm_similar` to triage the network of
+    # similar-artists Last.fm flagged as related to our aprovats.
+    font = (request.GET.get("font_descoberta") or "").strip()
+    if font:
+        qs = qs.filter(font_descoberta=font)
+
     page, meta = _paginate(qs, request)
     homset = noms_amb_homonims()
     rows = []

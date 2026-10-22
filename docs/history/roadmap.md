@@ -3,9 +3,24 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-10-15.
+> Last updated: 2026-10-22.
 
 ---
+
+## Sprint 2026-10-22 — El correu diari també reparteix els artistes pendents
+
+El calaix de cançons del 15/10 deixava fora l'altra cua: 7.072 artistes
+pendents que ningú mira. El correu de les 07:00 porta ara un segon
+calaix davall d'aquell, «Els 10 artistes pendents de decidir d'avui».
+No hi ha nota ML per artista, així que l'ordre és el de la cua de
+`/staff/pendents` mateixa, treta a `cua_pendents()` perquè la lligen el
+panell i el correu: propostes d'usuari, cançons verificades i, de
+desempat, afinitat Last.fm (abans el desempat era el nom, i amb set mil
+files a zero la cua obria cada dia per la lletra A). Cada fila diu
+localitat, si té Deezer ID o MBID (sense cap dels dos no es pot
+aprovar), similars Last.fm, verificades i propostes, i enllaça a
+`/staff/pendents` filtrat fins a la fila. Cap estat nou. Tests a
+`analytics/tests/test_informe_yt_artistes_pendents.py`.
 
 ## Sprint 2026-10-15 — El correu diari també reparteix les pendents d'aprovar
 

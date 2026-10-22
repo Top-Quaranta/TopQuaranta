@@ -20,9 +20,9 @@ cada endpoint literal que el SPA crida. Lliçó a `docs/LESSONS.md`.
 De pas: Gioba Fellini (Barcelona, Deezer 121802452) aprovat a mà i
 vinculat al seu compte com a gestor.
 
-**Pendent d'aquest fil:** escriure als 21 usuaris encallats (llista a
-`PerfilUsuari.objects.filter(onboarding_complet=False)`) quan el fix
-siga a producció.
+**Pendent d'aquest fil:** cap. Amb el fix desplegat, correu d'excuses i
+avís als 21 usuaris encallats el mateix 22/10 (21 acceptats per Brevo).
+El cron de les 23:00 ja va importar 3 discos i 8 cançons de Gioba Fellini.
 
 ## Sprint 2026-10-22 — El correu diari també reparteix els artistes pendents
 

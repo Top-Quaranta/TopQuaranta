@@ -14,11 +14,12 @@ aprovar o rebutjar una cançó des del correu mateix, i que el correu
 deixe de ser «de YouTube» ara que el senyal ja està normalitzat. Fet:
 assumpte `Brief diari · dd/mm · N cançons · M artistes · T tasques`,
 un bloc nou de tasques pendents amb els comptadors del panell
-(`comptadors()` a `dashboard.py`, compartit), i a cada cançó dos
-botons «Aprovar» / «Rebutjar» (`web/api/staff/correu.py`: token signat
-per cançó i acció, 14 dies, només amb la sessió de l'staff oberta;
-«rebutjar» = `desvincular_canco`). L'ordre del correu: tasques, cançons,
-artistes, i després tot el de YouTube. La comanda conserva el nom
+(`comptadors()` a `dashboard.py`, compartit), i a cada cançó el botó
+«Aprovar» d'un clic (`web/api/staff/correu.py`: token signat per
+cançó, 14 dies, només amb la sessió de l'staff oberta). «Rebutjar» no
+és un clic: porta a la fila del panell, perquè rebutjar té una segona
+decisió dins (cançó, àlbum o artista). L'ordre del correu: tasques,
+cançons, artistes, i després tot el de YouTube. La comanda conserva el nom
 `enviar_informe_youtube` i la línia del cron. Tests a
 `test_correu_accions.py` i `test_brief_tasques.py`, verificats contra
 4 mutacions.

@@ -69,7 +69,7 @@
 {% if pendents.files %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">
   <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Les {{ pendents.files|length }} cançons pendents d'aprovar d'avui</div>
-  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Les que el model dona per més segures. Whisper només escolta trenta segons: un «no» seu no decideix res, però un «ca» quasi sempre encerta. Un clic aprova o rebutja (cal la sessió de l'staff oberta); «rebutjar» desvincula només la cançó.</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Les que el model dona per més segures. Whisper només escolta trenta segons: un «no» seu no decideix res, però un «ca» quasi sempre encerta. «Aprovar» és un clic (cal la sessió de l'staff oberta); «rebutjar» obri la fila al panell, on tries què desvincular.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
     {% for f in pendents.files %}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
@@ -81,8 +81,7 @@
         </div>
         <div style="font-size:12.5px;margin-top:8px;">
           <a href="{{ site_url }}{{ f.aprovar }}" style="display:inline-block;padding:6px 14px;border-radius:999px;background:#7bbf7b;color:#0a0a0a;font-weight:700;text-decoration:none;">&#10003; Aprovar</a>
-          &nbsp;<a href="{{ site_url }}{{ f.rebutjar }}" style="display:inline-block;padding:6px 14px;border-radius:999px;background:#e06c6c;color:#0a0a0a;font-weight:700;text-decoration:none;">&#10007; Rebutjar</a>
-          &nbsp;<a href="{{ site_url }}{{ f.on }}" class="muted" style="color:#9aa0a6;text-decoration:underline;">al panell &#8599;</a>
+          &nbsp;<a href="{{ site_url }}{{ f.on }}" style="display:inline-block;padding:6px 14px;border-radius:999px;background:transparent;border:1px solid #e06c6c;color:#e06c6c;font-weight:700;text-decoration:none;">&#10007; Rebutjar al panell &#8599;</a>
         </div>
       </td>
     </tr></table>
@@ -291,7 +290,7 @@
 </td></tr>
 
 <tr><td class="px" style="padding:22px 28px;background:#060608;border-top:1px solid rgba(255,255,255,0.07);color:#7c7c84;font-size:11px;line-height:1.7;text-align:center;">
-  Cada matí a les 07:00. Els botons d'un clic només funcionen amb la sessió de l'staff oberta.<br>
+  Cada matí a les 07:00. El botó «Aprovar» només funciona amb la sessió de l'staff oberta.<br>
   <a href="{{ site_url }}" style="color:#facc15;">topquaranta.cat</a>
 </td></tr>
 

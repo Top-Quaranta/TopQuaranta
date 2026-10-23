@@ -1,8 +1,10 @@
 """One-click actions from the daily staff mail.
 
-Each pending song in the 07:00 mail carries two links, «Aprovar» and
-«Rebutjar». A link is a GET — mail clients cannot POST — so two things
-keep it from being a foot-gun: the URL carries a signed token bound to
+Each pending song in the 07:00 mail carries an «Aprovar» link that
+decides in one click. «Rebutjar» is NOT one: a rejection has a second
+decision inside it (unlink the song, the album or the artist), so that
+button opens the panel row instead. A link is a GET — mail clients
+cannot POST — so two things keep it from being a foot-gun: the URL carries a signed token bound to
 *that* song and *that* action (nothing to guess, nothing to swap), and
 the view only acts for a logged-in staff session (a link scanner, a
 preview fetcher or a forwarded mail has no session and gets the login
@@ -24,15 +26,11 @@ from django.views.decorators.http import require_GET
 
 from music.audit import log_staff_action
 from music.models import Canco
-from music.services import aprovar_canco, rebutjar_canco
+from music.services import aprovar_canco
 
-ACCIONS = ("aprovar", "rebutjar")
+ACCIONS = ("aprovar",)
 # A mail older than this has been superseded by fourteen newer ones.
 MAX_AGE = datetime.timedelta(days=14)
-# Rejecting from the mail means «this song is not Catalan»: the song
-# alone is unlinked, never its album or artist (those need a human look
-# at more than one row, and the panel is where that happens).
-MOTIU_REBUIG_CORREU = "desvincular_canco"
 LOGIN_URL = "/compte/accedir"
 
 _signer = signing.TimestampSigner(salt="staff-correu-canco")
@@ -84,24 +82,10 @@ def canco_accio(request: HttpRequest, pk: int, accio: str, token: str) -> HttpRe
         "staff_url": "/staff/cancons?" + urlencode(filtre),
     }
 
-    if accio == "aprovar":
-        if canco.verificada:
-            ctx["titol"] = "Ja estava aprovada"
-        else:
-            aprovar_canco(canco)
-            log_staff_action(request, "canco_aprovar", target=canco, via="correu")
-            ctx["titol"] = "Aprovada"
+    if canco.verificada:
+        ctx["titol"] = "Ja estava aprovada"
     else:
-        if not canco.activa:
-            ctx["titol"] = "Ja estava rebutjada"
-        else:
-            rebutjar_canco(canco, MOTIU_REBUIG_CORREU)
-            log_staff_action(
-                request,
-                "canco_rebutjar",
-                target=canco,
-                motiu=MOTIU_REBUIG_CORREU,
-                via="correu",
-            )
-            ctx["titol"] = "Rebutjada"
+        aprovar_canco(canco)
+        log_staff_action(request, "canco_aprovar", target=canco, via="correu")
+        ctx["titol"] = "Aprovada"
     return render(request, "analytics/correu_accio.html", ctx)

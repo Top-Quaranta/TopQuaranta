@@ -436,10 +436,11 @@ def _pendents(today: datetime.date) -> dict:
                 "whisper": c.whisper_lang,
                 "whisper_p": c.whisper_p,
                 "on": "/staff/cancons?" + urlencode(filtre),
-                # One click each, signed for this song and this action;
-                # the view only acts for a logged-in staff session.
+                # One click, signed for this song; the view only acts for
+                # a logged-in staff session. Rejecting is NOT one click:
+                # it has a second decision inside (song, album or
+                # artist), so that button opens the panel row (`on`).
                 "aprovar": enllac_accio(c.pk, "aprovar"),
-                "rebutjar": enllac_accio(c.pk, "rebutjar"),
             }
         )
     return {"files": files, "dia": n, "resten": qs.count()}
@@ -717,9 +718,8 @@ def render_text(ctx: dict) -> str:
             lines += [
                 f"  {i:>2}. {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
                 f"      {ml}{wh}",
-                f"      aprovar:  {ctx['site_url']}{f['aprovar']}",
-                f"      rebutjar: {ctx['site_url']}{f['rebutjar']}",
-                f"      al panell: {ctx['site_url']}{f['on']}",
+                f"      aprovar (un clic): {ctx['site_url']}{f['aprovar']}",
+                f"      rebutjar (al panell): {ctx['site_url']}{f['on']}",
             ]
         lines += [
             f"  Queden {p['resten']} pendents. {p['dia']} al dia és el ritme que "

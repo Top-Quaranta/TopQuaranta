@@ -1,9 +1,11 @@
-"""Un clic des del correu aprova o rebutja una cançó — i res més.
+"""Un clic des del correu aprova una cançó — i res més.
 
-La promesa: l'enllaç del correu fa exactament el que faria l'staff al
-panell, només per a qui té la sessió de l'staff oberta, només per a la
-cançó i l'acció que l'enllaç signa. Qui no té sessió va al login i no
-canvia res; un enllaç manipulat no canvia res.
+La promesa: l'enllaç «Aprovar» del correu fa exactament el que faria
+l'staff al panell, només per a qui té la sessió de l'staff oberta,
+només per a la cançó que l'enllaç signa. Rebutjar no és un clic: té una
+segona decisió dins (cançó, àlbum o artista), així que eixe botó porta
+a la fila del panell. Qui no té sessió va al login i no canvia res; un
+enllaç manipulat no canvia res.
 
 # Spec: docs/architecture/analytics.md
 """
@@ -13,11 +15,12 @@ from __future__ import annotations
 import datetime
 
 import pytest
+from django.template.loader import render_to_string
 from django.test import Client
 
 from analytics.management.commands import enviar_informe_youtube as cmd
 from comptes.models import Usuari
-from music.models import Album, Artista, Canco, HistorialRevisio
+from music.models import Album, Artista, Canco
 from web.api.staff.correu import enllac_accio
 
 AVUI = datetime.date(2026, 10, 23)
@@ -51,16 +54,19 @@ def _staff_client():
     return c
 
 
-@pytest.mark.django_db
-def test_one_click_approves_and_the_row_links_are_the_ones_the_view_honours(
-    monkeypatch,
-):
-    canco = _canco()
+def _row(monkeypatch):
     monkeypatch.setattr(
         cmd, "flux_cancons", lambda today: {"target_verificacio_setmanal": 7}
     )
-    row = cmd._pendents(AVUI)["files"][0]
-    resp = _staff_client().get(row["aprovar"])
+    return cmd._pendents(AVUI)["files"][0]
+
+
+@pytest.mark.django_db
+def test_one_click_approves_and_the_row_link_is_the_one_the_view_honours(
+    monkeypatch,
+):
+    canco = _canco()
+    resp = _staff_client().get(_row(monkeypatch)["aprovar"])
     assert resp.status_code == 200
     canco.refresh_from_db()
     assert canco.verificada and canco.activa
@@ -68,19 +74,23 @@ def test_one_click_approves_and_the_row_links_are_the_ones_the_view_honours(
 
 
 @pytest.mark.django_db
-def test_one_click_rejects_only_that_song():
+def test_rejecting_is_never_one_click_it_goes_to_the_panel_row(monkeypatch):
     canco = _canco()
-    germana = _canco("Bestofme")
-    resp = _staff_client().get(enllac_accio(canco.pk, "rebutjar"))
-    assert resp.status_code == 200
-    canco.refresh_from_db()
-    germana.refresh_from_db()
-    assert not canco.activa and not canco.verificada
-    assert germana.activa  # «desvincular_canco», never the album or artist
-    assert (
-        HistorialRevisio.objects.filter(canco_nom="Oversize").latest("pk").motiu
-        == "desvincular_canco"
+    row = _row(monkeypatch)
+    assert "rebutjar" not in row
+    assert row["on"].startswith("/staff/cancons?")
+    assert str(canco.artista_id) in row["on"]
+    html = render_to_string("analytics/informe_youtube.html", cmd.build_context(AVUI))
+    # The token carries a timestamp, so compare the path up to it.
+    assert html.count(f"/correu/canco/{canco.pk}/aprovar/") == 1
+    assert f"/correu/canco/{canco.pk}/rebutjar/" not in html
+    token = row["aprovar"].rstrip("/").rsplit("/", 1)[1]
+    resp = _staff_client().get(
+        f"/api/v1/staff/correu/canco/{canco.pk}/rebutjar/{token}/"
     )
+    assert resp.status_code == 400
+    canco.refresh_from_db()
+    assert canco.activa and not canco.verificada
 
 
 @pytest.mark.django_db
@@ -98,20 +108,14 @@ def test_without_a_staff_session_nothing_happens():
 
 
 @pytest.mark.django_db
-def test_a_link_cannot_be_bent_to_another_song_or_another_action():
+def test_a_link_cannot_be_bent_to_another_song():
     canco = _canco()
     altra = _canco("Bestofme")
-    link = enllac_accio(canco.pk, "aprovar")
-    token = link.rstrip("/").rsplit("/", 1)[1]
-    c = _staff_client()
-    assert (
-        c.get(f"/api/v1/staff/correu/canco/{altra.pk}/aprovar/{token}/").status_code
-        == 400
+    token = enllac_accio(canco.pk, "aprovar").rstrip("/").rsplit("/", 1)[1]
+    resp = _staff_client().get(
+        f"/api/v1/staff/correu/canco/{altra.pk}/aprovar/{token}/"
     )
-    assert (
-        c.get(f"/api/v1/staff/correu/canco/{canco.pk}/rebutjar/{token}/").status_code
-        == 400
-    )
+    assert resp.status_code == 400
     canco.refresh_from_db()
     altra.refresh_from_db()
-    assert not canco.verificada and not altra.verificada and canco.activa
+    assert not canco.verificada and not altra.verificada

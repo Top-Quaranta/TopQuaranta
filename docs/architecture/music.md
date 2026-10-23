@@ -108,6 +108,15 @@
 - **`StaffAuditLog` snapshots `target_type/id/label` and never raises**
   (`music/audit.py::log_staff_action` returns `None` on failure) — an
   audit outage cannot 500 a staff action.
+- **`Album.anunciat_at` records that a novetats publication carried the
+  release; NULL means never announced.** Written only by
+  `social.payload.marca_anunciats` from the publish sites (any channel),
+  first-write-wins; a preview never stamps. It exists because the only
+  previous answer to "did we announce this?" was arithmetic on
+  publication dates, and that arithmetic silently lost 41 of 136
+  releases between July and September 2026. Read by the novetats window
+  and by the sonda's priority. Guarded by:
+  `social/tests/test_novetats_finestra.py::TestAnunciatAt`.
 
 ### ML classifier (`music/ml.py`)
 - **`FEATURE_NAMES` is append-only.** `_get_clf` flags a model whose
@@ -115,6 +124,14 @@
   heuristic fallback); `entrenar_model` refuses while the deploy lock
   exists. Guarded by: `music/tests/test_ml_load_validation.py`,
   `music/tests/test_ml_spotify_dispersion.py` (index pin).
+- **Training and bulk rescoring happen ONLY in the `recalcular_ml` cron**
+  (nightly 05:45, `SingletonLock("recalcular_ml")`, exit 75 on contention);
+  no web request may start them. Until 2026-09 a daemon thread inside the
+  gunicorn worker did it every 5 staff decisions: it died unnoticed, so the
+  last completed run was 13-09 while 15 % of pendents carried a stale
+  `ml_confianca` — the key the staff queue sorts by. Scope is `pendents()`,
+  not every `verificada=False` row. Guarded by:
+  `music/tests/test_ml_recalc_cron.py`.
 - **`auto_ml` decisions never feed training; `auto_whisper` ones do**
   (`entrenar_model` excludes only `MOTIU_AUTO_ML`; Whisper is an
   independent oracle). Guarded by:

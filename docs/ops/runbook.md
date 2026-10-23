@@ -158,6 +158,15 @@ list ships empty), Spotify Premium + coverage, Instagram token expiry
 
 Weekly top missing: `sudo -u topquaranta tq-run calcular_top [--setmana YYYY-MM-DD]`.
 
+Staff queue sorted wrong (`/staff/cancons` shows a confidence the model
+no longer gives): `recalcular_ml` is the only thing that writes
+`ml_classe` / `ml_confianca` in bulk — nightly 05:45, never from a web
+request. `STALE` here is invisible in the UI, which just keeps sorting by
+the old numbers. Re-run by hand with
+`sudo -u topquaranta tq-run recalcular_ml`; a full rebuild takes ~26 min
+(`--entrenar mai` rescores only, a couple of minutes). It refuses to
+train while `bin/tq-deploy` holds `/var/run/topquaranta/deploy.lock`.
+
 ## 5. Locked out
 
 ```bash
@@ -226,7 +235,7 @@ pick up `.env` on next tick) → verify one call → revoke old.
 | `LASTFM_API_KEY/SECRET` | `.env` | last.fm/api/account |
 | `SPOTIFY_CLIENT_ID/SECRET` | admin@ + Premium; `.env`; redirect default `/spotify/callback` (`production.py`) must match the dashboard | Spotify dashboard, then re-OAuth at `/staff/social/spotify/` |
 | Spotify refresh token | `music.SpotifyAuth` row | `/staff/social/spotify/` "Reautoritzar" (fallback `manage.py autoritzar_spotify`). `invalid_grant`/401 ⇒ this; 403 "premium required" ⇒ renew Premium at spotify.com, wait 3–6 h |
-| Instagram long-lived token | `social.InstagramAuth` row (`.env` fallback) | **Manual, every 60 d**: Meta App Dashboard → Instagram-Login token (`instagram_business_content_publish`) → paste at `/staff/social/instagram`. `renovar_token_instagram` (monthly cron) only prints; Meta can also revoke early (LESSONS 2026-07-07) — shows as publish `FAIL`, not expiry |
+| Instagram long-lived token | `social.InstagramAuth` row (`.env` fallback) | `renovar_token_instagram` (monthly cron) refreshes and writes the row in place (2026-09-09; before it only printed and the value was never applied). Only if refresh fails or Meta revoked: Meta App Dashboard → Instagram-Login token (`instagram_business_content_publish`) → paste at `/staff/social/instagram`. Meta can also revoke early (LESSONS 2026-07-07) — shows as publish `FAIL`, not expiry |
 | `MastodonAuth`, `BlueskyAuth`, `TelegramAuth` | DB rows | re-OAuth `/staff/social/mastodon/`; new app password (bsky.app) → `/staff/social/bluesky/`; BotFather `/revoke` → `/staff/social/telegram/` |
 | Brevo SMTP key | admin@; `.env::EMAIL_HOST_PASSWORD` | Brevo → SMTP & API → regenerate; reload |
 | Resend key (cercol.team) | Cercol repo `.env`, not here | Resend dashboard |

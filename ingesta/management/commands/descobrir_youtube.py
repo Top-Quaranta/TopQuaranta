@@ -167,6 +167,39 @@ def _cua(limit: int | None) -> list[Artista]:
     return cua
 
 
+def _amb_topic_pendent() -> list[Artista]:
+    """Artists already discovered whose in-window songs still lack an Art Track.
+
+    `_cua` only ever yields artists with NO channel, so an artist is
+    resolved once and never returns — and every release after that day
+    goes unmatched. It is the same hole `_amb_canal_oficial` closed for
+    the official lane, and on the Topic lane it was doing the real
+    damage: of the 101 songs released since YouTube became a signal and
+    still without a lane, 98 belong to artists whose channel was already
+    resolved, and 0 of the 181 rows published in the top-40 lacked one
+    (audit 2026-09-26). A song without a lane is measured on Last.fm
+    alone against rivals measured mostly on views, so it charts the one
+    week the fresh-release branch inflates it and then drops out.
+
+    The uploads playlist is already stored, so this costs `COST_LIST` per
+    page and never a `search.list`. Least-covered artists first, so a
+    short budget spends on the ones missing the most.
+    """
+    cutoff = timezone.localdate() - datetime.timedelta(days=DIES_CADUCITAT)
+    return list(
+        Artista.objects.exclude(youtube_uploads_playlist="")
+        .filter(
+            cancons__verificada=True,
+            cancons__activa=True,
+            cancons__data_llancament__gte=cutoff,
+            cancons__youtube_video_id="",
+        )
+        .annotate(n_orfes=Count("cancons", distinct=True))
+        .order_by("-n_orfes", "pk")
+        .distinct()
+    )
+
+
 def _amb_canal_oficial() -> list[Artista]:
     """Artists whose official channel should be (re-)enumerated today.
 
@@ -213,6 +246,7 @@ class Command(BaseCommand):
         trobats = 0
         sense = 0
         aparellades = 0
+        repassades = 0
         aparellades_oficial = 0
         try:
             for artista in cua:
@@ -256,7 +290,22 @@ class Command(BaseCommand):
                 # comment on `Artista.youtube_canal_oficial`.
                 if artista.youtube_canal_oficial:
                     gastat += self._carril_oficial(artista)
-            # Second phase: enumerate OFFICIAL channels. Decoupled from
+            # Second phase: re-enumerate the TOPIC channel of artists
+            # already discovered, so their later releases get an Art
+            # Track. See `_amb_topic_pendent` for why this is where the
+            # catalogue was losing its dominant signal.
+            for artista in _amb_topic_pendent():
+                cost_estimat = yt.COST_LIST * 8
+                if gastat + cost_estimat > budget:
+                    self.stdout.write("Pressupost exhaurit (repàs del Topic).")
+                    break
+                if dry:
+                    continue
+                videos = yt.playlist_videos(artista.youtube_uploads_playlist)
+                gastat += yt.COST_LIST * max(1, (len(videos) + 49) // 50)
+                repassades += self._aparella(artista, videos)
+
+            # Third phase: enumerate OFFICIAL channels. Decoupled from
             # discovery on purpose — a channel confirmed from the staff
             # queue (or the seeder) lands AFTER the artist's Topic pass,
             # and without this loop it would never be scanned: the day the
@@ -279,13 +328,16 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Canals trobats: {trobats} · sense canal: {sense} · "
-                f"cançons aparellades: {aparellades} · vídeos del carril "
-                f"oficial: {aparellades_oficial} · quota gastada: {gastat}"
+                f"cançons aparellades: {aparellades} · repassant el Topic: "
+                f"{repassades} · vídeos del carril oficial: "
+                f"{aparellades_oficial} · quota gastada: {gastat}"
             )
         )
         # WORK_DONE protocol: tq-run surfaces this so a run that resolves
         # nothing several days running is visible instead of silently OK.
-        self.stdout.write(f"WORK_DONE={trobats + aparellades + aparellades_oficial}")
+        self.stdout.write(
+            f"WORK_DONE={trobats + aparellades + repassades + aparellades_oficial}"
+        )
 
     def _carril_oficial(self, artista: Artista) -> int:
         """Enumerate the official channel and attach its videos.

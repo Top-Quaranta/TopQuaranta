@@ -558,7 +558,28 @@ def _compute_weekly_plays(
     ):
         data_ref = canco.youtube_publicat_at
     if data_ref and data_ref > today - timedelta(days=7):
-        return max(0.0, float(playcount_today))
+        # …i l'última evidència, que és la més barata i la teníem davant:
+        # el comptador mateix. Una estrena de veritat acumula dia a dia;
+        # el comptador de tota la vida d'una reedició està clavat. Dues
+        # lectures del mateix número no són una setmana d'escoltes, diga
+        # el que diga la data de llançament.
+        #
+        # Cucorba, 24/09/2026: tretze cançons infantils dels 80 reeditades
+        # de colp, cada playcount idèntic a cada foto, i cinc al top-40
+        # balear als llocs 1, 4, 9, 25 i 40 amb zero escoltes eixa setmana
+        # (auditoria 2026-09-26). Les dues guardes de dalt —l'homònim més
+        # antic i la data de l'Art Track— són inferències sobre aquest
+        # mateix fet; açò el llig directament, i per tant també enxampa la
+        # reedició d'un artista que no tenim al catàleg i la que no té
+        # vídeo. Amb una sola lectura no hi ha evidència de res: l'estrena
+        # es manté.
+        llegides = [
+            s.lastfm_playcount for s in signals if s.lastfm_playcount is not None
+        ]
+        if len(llegides) < 2 or len(set(llegides)) > 1:
+            return max(0.0, float(playcount_today))
+        # Comptador parat: cau a les branques de línia base → 0 fins que
+        # el nostre propi senyal n'acumule una.
 
     # Track-switch guard (2026-05-08): a baseline is only valid if it
     # was sampled against the SAME recording the latest signal points

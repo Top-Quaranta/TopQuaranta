@@ -3,9 +3,272 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-08-22.
+> Last updated: 2026-10-22.
 
 ---
+
+## Sprint 2026-10-23 — El correu de YouTube passa a ser el brief diari
+
+Primer matí amb els tres calaixos i el Miquel demana dues coses: poder
+aprovar o rebutjar una cançó des del correu mateix, i que el correu
+deixe de ser «de YouTube» ara que el senyal ja està normalitzat. Fet:
+assumpte `Brief diari · dd/mm · N cançons · M artistes · T tasques`,
+un bloc nou de tasques pendents amb els comptadors del panell
+(`comptadors()` a `dashboard.py`, compartit), i a cada cançó el botó
+«Aprovar» d'un clic (`web/api/staff/correu.py`: token signat per
+cançó, 14 dies, només amb la sessió de l'staff oberta). «Rebutjar» no
+és un clic: porta a la fila del panell, perquè rebutjar té una segona
+decisió dins (cançó, àlbum o artista). L'ordre del correu: tasques,
+cançons, artistes, i després tot el de YouTube. La comanda conserva el nom
+`enviar_informe_youtube` i la línia del cron. Tests a
+`test_correu_accions.py` i `test_brief_tasques.py`, verificats contra
+4 mutacions.
+
+Segona volta el mateix dia: el bloc de tasques només duia comptadors,
+i el Miquel vol veure QUÈ espera (nom de la proposta, de qui, on
+decidir-ho; títol de la publicació…), cinc files per cua i «… i N més»,
+més un bloc d'usuaris nous de l'última setmana amb si han activat el
+compte i acabat l'onboarding (el forat de maig s'hauria vist ací en una
+setmana). Les dues propostes del dia (Un de Vint, Callosa de Segura;
+Tramuntana, Olocau) aprovades a mà amb lletres en català confirmades,
+i la publicació de Clara publicada.
+
+Gioba Fellini: onboarding fet, canal de YouTube propi desat a mà
+(`@giobafellini` → UC…), 8 cançons importades, 1 autoaprovada per
+Whisper. Duplicats avisen d'un tema balear amb Sr. À (eivissenc, és el
+primer de la cua de pendents, amb Deezer) i Suc i Sopes.
+
+**Pendent d'aquest fil:** aprovar Sr. À quan sapiguem el municipi
+d'Eivissa.
+
+## Sprint 2026-10-22 bis — L'onboarding estava mort des de maig
+
+Gioba Fellini va escriure per Instagram que el compte «es bloqueja al
+verificar»: primer era el segon clic a l'enllaç d'activació (#531), però
+després de dins tampoc no passava de «Carregant…». `OnboardingPage.jsx`
+demanava `/comunitat/perfil/`, renombrat a `/compte/perfil-usuari/` el
+2026-05-04, i s'empassava el 404. Els 21 comptes registrats des de
+llavors no han acabat mai l'onboarding. Corregit el path i afegit
+`web/tests/test_spa_endpoints_existeixen.py`, que resol contra `urls.py`
+cada endpoint literal que el SPA crida. Lliçó a `docs/LESSONS.md`.
+De pas: Gioba Fellini (Barcelona, Deezer 121802452) aprovat a mà i
+vinculat al seu compte com a gestor.
+
+**Pendent d'aquest fil:** cap. Amb el fix desplegat, correu d'excuses i
+avís als 21 usuaris encallats el mateix 22/10 (21 acceptats per Brevo).
+El cron de les 23:00 ja va importar 3 discos i 8 cançons de Gioba Fellini.
+
+## Sprint 2026-10-22 — El correu diari també reparteix els artistes pendents
+
+El calaix de cançons del 15/10 deixava fora l'altra cua: 7.072 artistes
+pendents que ningú mira. El correu de les 07:00 porta ara un segon
+calaix davall d'aquell, «Els 10 artistes pendents de decidir d'avui».
+No hi ha nota ML per artista, així que l'ordre és el de la cua de
+`/staff/pendents` mateixa, treta a `cua_pendents()` perquè la lligen el
+panell i el correu: propostes d'usuari, cançons verificades i, de
+desempat, afinitat Last.fm (abans el desempat era el nom, i amb set mil
+files a zero la cua obria cada dia per la lletra A). Cada fila diu
+localitat, si té Deezer ID o MBID (sense cap dels dos no es pot
+aprovar), similars Last.fm, verificades i propostes, i enllaça a
+`/staff/pendents` filtrat fins a la fila. Cap estat nou. Tests a
+`analytics/tests/test_informe_yt_artistes_pendents.py`.
+
+## Sprint 2026-10-15 — El correu diari també reparteix les pendents d'aprovar
+
+El Miquel ho havia demanat el 18/09 i la sessió va derivar cap al ML:
+el brief diari de revisió va quedar com a punt 5 pendent i no es va fer.
+Ara el correu de YouTube de les 07:00 porta un calaix nou, «Les N cançons
+pendents d'aprovar d'avui», davall de les recerques. N ix de la fórmula
+que el panell `/staff/estat` ja feia (entrades setmanals robustes menys
+les que caduquen soles, entre set; 11 el 18/09), treta a `flux_cancons()`
+perquè la lligen els dos i no se'n facen dues còpies. Les files són les
+`pendents()` de més `ml_confianca`, que `recalcular_ml` acaba de
+repuntuar a les 05:45, cada una amb la nota ML, la de Whisper si n'hi
+ha, i l'enllaç a `/staff/cancons` filtrat fins a la fila. Cap estat nou:
+una cançó mirada i no decidida torna demà. Tests a
+`analytics/tests/test_informe_yt_pendents.py`.
+
+## Sprint 2026-09-26 — El top mesurava mig catàleg i no ho sabíem
+
+El Miquel reportava massa moviments sospitosos d'entrar directament al
+#1. L'origen no era l'algorisme: era que la meitat del catàleg no es
+mesurava. `descobrir_youtube` només encuava artistes **sense** canal
+Topic, així que un artista es resolia una vegada i no hi tornava mai, i
+tot el que publicava després es quedava sense Art Track. De les 101
+cançons estrenades des que YouTube és senyal i encara sense carril, 98
+eren d'artistes ja resolts. Cobertura de carril: 24 % a les estrenes de
+menys de 30 dies contra 86 % a les de més de 90, i 0 de les 181 files
+publicades al top-40 sense carril.
+
+Les dues cares al rànquing: les 7 entrades al top-3 des de fora del
+top-40 cauen totes damunt del dia que el carril fa 7 dies (Els Amics de
+les Arts va entrar al #1 de CAT el primer dia en què la cançó podia
+tindre delta setmanal), i les cançons sense carril queden **fora** del
+top de colp, no baixen — 11 casos en dues setmanes, els 11 a zero.
+
+Corregit amb un tercer pas barat (`_amb_topic_pendent`, la llista de
+pujades ja està desada → `COST_LIST`, mai un `search.list`). Primera
+passada: 143 cançons aparellades, 975 unitats de 9.000. Cobertura
+d'estrenes 24 % → 68 % i estable una setmana després.
+
+Pel camí, tres coses més:
+
+- **Cucorba.** Tretze cançons infantils dels 80 reeditades de colp amb
+  data del dia; el comptador de Last.fm clavat a cada foto i la branca
+  de llançament fresc el cobrava com a setmanal. Cinc al top-40 balear
+  (#1, #4, #9, #25, #40) amb zero escoltes. Les dues guardes existents
+  —homònim més antic, data de l'Art Track— són inferències sobre el
+  mateix fet; ara es llig directament: dues lectures iguals no són una
+  setmana d'escoltes. Recalculada la setmana del 21-09 (el #1 balear
+  passa a La Fúmiga); la resta de l'històric, intacte per decisió.
+- **`config_snapshot` desava 8 dels 14 coeficients.** Faltaven els dos
+  que decideixen en quines unitats està `weekly_plays`, i això va costar
+  un diagnòstic sencer equivocat: `youtube_pes_escolta` va passar de
+  1000 a 10 entre el 29-08 i el 05-09 i els snapshots del 17-08 i del
+  21-09 són idèntics. Es va haver de reconstruir per aritmètica sobre
+  una cançó d'un sol carril. El test llig `algorisme.py` i exigeix que
+  tot coeficient que es llija estiga desat.
+- **El sostre suau s'ha arreglat sol.** El genoll es deriva de la
+  mediana de 10 setmanes de `weekly_plays`, i eixa columna va canviar
+  d'escala dues vegades; a CAT va saltar de 1.869 a 13.065 en una
+  setmana i a 27.471 la següent, en sortir de la finestra les setmanes
+  d'abans de YouTube. Avui no comprimeix res del top català. A VAL i BAL
+  sí (La Fúmiga 8.234 → 2.819 a BAL).
+
+**Decisió presa (2026-10-04):** la penalització de permanència es queda
+acumulativa, sense finestra ni terra. És volguda: penalitzar les cançons
+que porten molt de temps al top és el que manté la rotació. Conseqüència
+assumida: el #1 el decideixen les penalitzacions i no l'audiència —el
+28-09 Socunbohemio és #1 sent **tercer** per senyal, i Rosalía, que té
+l'audiència més gran de CAT, puntua al 30 % després de 19 setmanes.
+
+## Sprint 2026-09-26 — Instagram: qui havia acceptat i qui no vam anunciar
+
+Dos forats al mateix lloc: convidàvem i no registràvem el resultat.
+
+**Col·laboracions.** L'ADR-0015 §5.5 va tancar la via de l'API i va
+deixar l'acceptació com un clic manual. Ningú no clicava: de les 9
+acceptacions reals, 6 constaven `caducada` o `pendent`, i quatre
+d'eixos artistes complien 90 dies de penalització per una col·laboració
+que havien acceptat. L'API continua tancada (recomprovat a v19, v21 i
+v23: `collaborators` no existeix ni com a camp ni com a aresta), però la
+co-autoria és pública al capçal del post i `…/embed/captioned/` la
+serveix renderitzada, sense sessió. `conciliar_colaboracions_ig` la
+llig cada dia i **només confirma, mai descobreix**: creua el capçal amb
+els usernames convidats en eixe media, i el peu de foto —on els artistes
+ixen mencionats amb @ sempre— no compta. Primera setmana en producció:
+Terra i Sal detectada sola el 30-09, un dia després de la invitació.
+
+**Novetats.** La finestra corria sobre `data_llancament` amb el tall a
+«publicació anterior + 1 dia». La música s'estrena els divendres,
+`nous_singles` ix els divendres a les 10:00, i les estrenes del dia
+entren al catàleg durant la vesprada: **41 de 136 llançaments entre
+juliol i setembre no s'han anunciat mai** (30 %), entre ells Marta
+Shanti «Flama» —que ens va avisar que l'estrenava— i Socunbohemio «Què
+serà de mi?», que eixa setmana era el #1 de Catalunya. Ara la finestra
+és el cursor d'ingesta, i `Album.anunciat_at` registra el fet en lloc
+d'inferir-lo: el cursor diu quins llançaments toquen en *aquesta*
+finestra, el segell diu si s'ha anunciat *mai*. La sonda «cançó del dia»
+dona el torn a qui es va quedar sense anunci, per damunt de l'ordre per
+escoltes: 48 cançons elegibles, unes sis setmanes reparant-ho.
+
+**Pendent d'aquest fil:**
+1. Vigilar la primera setmana de la prioritat de la sonda: que les
+   sondes isquen de les 48 i no es repetisquen.
+2. La migració 0105 replica la finestra antiga i per tant no encerta els
+   dos posts que ja van eixir amb el cursor (29-09 i 02-10). Dos àlbums
+   de frontera corregits a mà el 04-10; si es torna a tocar la finestra,
+   recordar que el replay i el cursor no són la mateixa cosa.
+
+## Ops 2026-09-28 — La verificació de Search Console s'havia perdut del DNS
+
+Correus de `tq-health` dos matins seguits: `recollir_metrics_gsc` en FAIL
+amb 403 `User does not have sufficient permission`. No era codi. El
+registre `google-site-verification` de `topquaranta.cat` ja no estava a
+la zona de cdmon —hi quedaven l'SPF, el DMARC i el BIMI i prou—, Google
+va revalidar i va degradar `admin@topquaranta.cat` a `siteUnverifiedUser`.
+El serial del SOA apuntava al 21/08 com a última modificació anterior:
+cinc setmanes entre la pèrdua i l'avís.
+
+Reparat afegint el TXT que demanava el diàleg de verificació del compte
+correcte (cap dels dos tokens que teníem apuntats servia; n'emet un per
+compte i propietat). Propietat verificada, el servidor torna a veure
+`siteOwner`, i els dos dies caiguts recuperats amb
+`recollir_metrics_gsc --date`: 117 files el 25/09 i 150 el 26/09.
+`tq-health` torna a 🟢 amb 0 anomalies.
+
+De passada, `CDMON_API_KEY` ja és al `.env` del servidor. El runbook §8
+la documentava des de sempre però no existia enlloc — ni al servidor, ni
+en local, ni en cap repo.
+
+**Pendent d'aquest fil:**
+1. Llevar del panell de cdmon el TXT de verificació sobrant que va
+   quedar a l'arrel. No es pot fer per API: `dnsrecords/delete` ignora
+   el `value` i esborra tot el `host`+`type`, o siga que s'enduria
+   l'SPF (comprovat en un host de prova; veure `docs/LESSONS.md`).
+2. Decidir si val la pena una comprovació del TXT de verificació a
+   `tq-health`. Avui la detecció funciona però arriba quan el cron ja
+   falla; una sonda al registre tancaria la finestra de cinc setmanes.
+
+## Sprint 2026-09-18 — El model era bo; el que no arribava era la nota
+
+El Miquel demanava netejar el ML perquè li donava cançons «confiadament
+equivocades» al panell. Mesurat, el classificador no té res de roín:
+validació agrupada per artista, fora de mostra sobre 19.905 decisions,
+dona ROC-AUC 0,9994 amb les features d'avui, 0,9982 recalculant els
+ratios causalment i 0,9922 llevant tota feature d'historial. Whisper tot
+sol es queda a 0,9356.
+
+El que fallava era el repartiment. El 15 % de les 1.013 pendents portava
+una `ml_confianca` desada que ja no és la que el model dona, i el 7 %
+una `ml_classe` distinta. Tres de les deu files de dalt de
+`/staff/cancons` eren falses: «Everybody's changing (Acústic)» hi eixia
+com A 0,98 quan el model la classifica C 0,27.
+
+La causa era `recalcular_ml_si_cal()`, un fil dimoni dins del worker de
+gunicorn disparat cada 5 decisions de l'staff: ~26 min de feina, marca
+de temps escrita només al final (així que les còpies s'apilaven sense
+lock) i mort silenciosa en cada reciclatge de worker. L'última execució
+acabada va ser el 13/09; les 27 decisions dels quatre dies següents no
+en van llançar cap. Ara és cron a les 05:45 amb `SingletonLock`, com la
+resta del projecte.
+
+**Pendent d'aquest fil**, per ordre:
+1. Puntuar en escriure: una cançó es repuntua quan entra i quan li
+   canvia l'estat de Whisper, MusicBrainz o Spotify.
+2. `ml_scored_at` a `Canco`, i el número a `/staff/estat`, perquè
+   l'obsolescència es veja.
+3. Gate de reentrenament: tall temporal retingut, i si els trams A
+   empitjoren no se substitueix el model viu. La ranura del rollback ja
+   existeix (`ml_model.pre_whisper.joblib`).
+4. Features causals a l'entrenament: les d'historial es calculen amb
+   l'estat d'avui i no amb el del dia de la decisió. Val una mil·lèsima
+   de ROC-AUC, així que va l'última.
+5. ~~Brief diari de revisió: 11 cançons/dia, que és el que ja calcula
+   `target_verificacio_setmanal` a `estat.py`~~ — fet el 2026-10-15 (vegeu
+   el sprint d'eixe dia).
+
+Descartat després de mesurar-ho: calibrar el bosc. Causalment el tram
+A++ encerta el 99,6 %, o siga que la calibració no era el problema.
+
+## Sprint 2026-09-01 — El correu de YouTube deixa de preguntar el que ja sap
+
+YouTube compta al top des del 26/08 i els llindars ja estan on el Miquel
+els ha volgut deixar, així que les preguntes de la fase de bootstrap
+tenien resposta i el correu encara les feia cada matí. Fora: el factor
+visualitzacions/escolta amb el seu històric de 5 dies, la separació per
+carril, la dispersió per artista, «què guanyaríem» i el compte enrere de
+l'activació. Queda el que continua viu: la taula del top (ara amb capçalera
+«sense YT», i un avís en roig si `actiu` caiguera), les 10 recerques del
+dia, cobertura, punt cec, senyal i incidències. De pas, el correu deixa de
+duplicar el delta per vídeo: llig `ranking.senyal_youtube` com el rànquing
+(el `_increments` local queda només per a Last.fm), i la versió de text pla
+guanya el bloc del top que no tenia. Tests de la comparativa reescrits a
+`test_informe_yt_top.py`; el que guardava el delta per vídeo ja vivia a
+`ranking/tests/test_youtube_al_top.py`.
+
+**Pendent d'aquest fil:** cap; quan la cua de recerques quede buida,
+esborrar la línia del cron.
 
 ## Sprint 2026-08-22 bis — El senyal ha de dir de quina gravació parla
 
@@ -335,8 +598,9 @@ Items petits per fer en sessions curtes:
       22.04). Django 6.1+ exigeix PG 15 i està blocat a
       `dependabot.yml` (incident 2026-08-31, `docs/LESSONS.md`);
       en acabar l'upgrade, retirar l'`ignore` de dependabot.
-- [ ] **Reautoritzar el token d'Instagram** — tq-health avisa que
-      caduca cap al 2026-09-10.
+- [x] ~~**Reautoritzar el token d'Instagram**~~ — fet 2026-09-09: el cron
+      de l'1/09 ja l'havia refrescat però només l'imprimia al log; aplicat
+      a mà (caduca 2026-10-31) i #487 fa que el cron desi la fila.
 
 - ~~**Backups off-site**~~ — risc acceptat (decisió 2026-05-07,
       documentada a `docs/ops/runbook.md` §4). Reconsiderar només si

@@ -117,9 +117,24 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # La recollida diària costa ~60 unitats: després del descobriment, i
 # abans que arribe l'informe.
 30 6 * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_senyal_youtube >> /var/log/topquaranta/youtube.log 2>&1
-# TEMPORAL — informe de progrés mentre dura la fase d'implementació.
-# Per a apagar-lo: esborra aquesta línia i torna a executar tq-sync-infra.
+# Brief diari de l'staff: tasques pendents, cançons i artistes per decidir
+# (amb botons d'un clic), recerques de YouTube i l'estat del senyal.
 0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run enviar_informe_youtube >> /var/log/topquaranta/analytics.log 2>&1
+
+# 05:45 → Reentrenament + repuntuació del classificador de verificació.
+# Fins al 2026-09 açò corria com a fil de fons dins del worker de
+# gunicorn, disparat pels clics de l'staff cada 5 decisions. Es moria
+# sense deixar rastre: l'última execució acabada va ser el 13/09 i les
+# 27 decisions dels quatre dies següents no en van llançar cap, deixant
+# el 15 % de les pendents amb una `ml_confianca` obsoleta — que és per
+# on ordena la pàgina de cançons de l'staff.
+#
+# Slot 05:45: després de Whisper (04:00, ~90 min pitjor cas) perquè
+# veja les llengües de la nit, i abans de l'informe de les 07:00.
+# `--entrenar auto` només reconstrueix el model si hi ha ≥5 decisions
+# noves; una nit tranquil·la només repuntua, que és el que llig el panell.
+# El reentrenament complet val ~26 min (19.905 files × consultes per fila).
+45 5 * * *  topquaranta   /home/topquaranta/bin/tq-run recalcular_ml >> /var/log/topquaranta/ml.log 2>&1
 
 # 06:45 → Anomaly detector. Reads today's SenyalDiari and flags
 # `corregit=True` on any row whose day-over-day delta is wildly
@@ -235,6 +250,14 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # stays fresh + green on the health dashboard. Ships in cron so activating
 # the feature (tranche 3) needs no crontab edit.
 0 * * * *   topquaranta   /home/topquaranta/bin/tq-run pollar_colaboracions_ig >> /var/log/topquaranta/analytics.log 2>&1
+
+# 07:20 → Llig del post públic qui ha acceptat la col·laboració. L'API no
+# ho diu (ADR-0015 §5.5, recomprovat el 2026-09-26 a v19/v21/v23) però la
+# capçalera del post sí, i `…/embed/captioned/` la serveix sense sessió.
+# Diari i no horari: acceptar és immediat-o-mai i 14 dies de finestra
+# donen de sobra. Va després d'obtenir_senyal per no competir-hi.
+# DORMANT igual que el poller mentre el flag mestre estiga apagat.
+20 7 * * *   topquaranta   /home/topquaranta/bin/tq-run conciliar_colaboracions_ig >> /var/log/topquaranta/analytics.log 2>&1
 
 # 02:00 dilluns → Setmanal: neteja pendents òrfens (sense Deezer ID
 # + sense tracks principals + ≥1 collab + 1 únic germà aprovat).

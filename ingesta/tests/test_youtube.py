@@ -656,3 +656,73 @@ class TestCarrilOficialDesacoblat:
         assert CancoYouTubeVideo.objects.count() == 1
         again = CancoYouTubeVideo.objects.get()
         assert (again.pk, again.video_id) == (first.pk, "v1")
+
+
+@pytest.mark.django_db
+class TestTopicRepassat:
+    """A release by an artist we discovered LAST month must still get its
+    Art Track. `_cua` only yields artists without a channel, so a resolved
+    artist never returned and everything they published afterwards stayed
+    unmeasured — the shape that left 98 of 101 recent releases without a
+    YouTube lane while every published top-40 row had one (2026-09-26)."""
+
+    def _artista_ja_descobert(self):
+        return Artista.objects.create(
+            nom="Marga Rotger",
+            lastfm_nom="Marga Rotger",
+            aprovat=True,
+            youtube_channel_id="UCtopic" + "x" * 15,
+            youtube_uploads_playlist="UUtopic" + "x" * 15,
+            youtube_checked_at=timezone.now(),
+        )
+
+    def test_a_release_after_discovery_still_gets_its_art_track(self):
+        a = self._artista_ja_descobert()
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=3)
+        )
+        nova = Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom="El Sopar",
+            data_llancament=date.today() - timedelta(days=3),
+            verificada=True,
+            activa=True,
+        )
+
+        def _mai(*args, **kwargs):  # pragma: no cover - ha de no cridar-se
+            raise AssertionError("no cal gastar 100 unitats de search per a això")
+
+        with (
+            patch.object(yt, "find_topic_channel", side_effect=_mai),
+            patch.object(
+                yt,
+                "playlist_videos",
+                return_value=[{"video_id": "v7", "title": "El sopar"}],
+            ),
+        ):
+            call_command("descobrir_youtube", stdout=StringIO())
+
+        nova.refresh_from_db()
+        assert nova.youtube_video_id == "v7"
+
+    def test_an_artist_with_nothing_missing_is_not_re_enumerated(self):
+        """Budget guard: the pass exists for the gap, not as a daily sweep
+        of the whole catalogue."""
+        from ingesta.management.commands.descobrir_youtube import _amb_topic_pendent
+
+        a = self._artista_ja_descobert()
+        alb = Album.objects.create(
+            artista=a, nom="X", data_llancament=date.today() - timedelta(days=3)
+        )
+        Canco.objects.create(
+            artista=a,
+            album=alb,
+            nom="El Sopar",
+            data_llancament=date.today() - timedelta(days=3),
+            verificada=True,
+            activa=True,
+            youtube_video_id="v7",
+        )
+
+        assert _amb_topic_pendent() == []

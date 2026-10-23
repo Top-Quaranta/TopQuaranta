@@ -22,7 +22,6 @@ from rest_framework.response import Response
 
 from music.audit import log_staff_action
 from music.constants import MOTIUS_VALIDS
-from music.ml import recalcular_ml_si_cal
 from music.models import (
     Album,
     Artista,
@@ -328,7 +327,6 @@ def cancons_accio(request: Request) -> Response:
             for c in qs:
                 aprovar_canco(c)
                 log_staff_action(request, "canco_aprovar", target=c)
-        recalcular_ml_si_cal()
         return Response({"ok": True, "n": qs.count()})
 
     motiu = data.get("motiu", "")
@@ -367,7 +365,6 @@ def cancons_accio(request: Request) -> Response:
                     rebutjar_canco(c, motiu)
                     log_staff_action(request, "canco_rebutjar", target=c, motiu=motiu)
                 msgs.append(f"{qs.count()} cançons rebutjades")
-        recalcular_ml_si_cal()
         return Response({"ok": True, "msg": "; ".join(msgs)})
 
     return Response({"error": "Acció desconeguda."}, status=400)

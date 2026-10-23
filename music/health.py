@@ -358,7 +358,7 @@ def check_instagram_token() -> tuple[Severity, str, dict]:
 # 2026-08-24). Renewal: new fine-grained PAT (contents + pull-requests
 # write), `gh secret set AUTOMERGE_PAT`, and bump this date in the same
 # PR.
-GITHUB_PAT_EXPIRES = "2026-09-23"
+GITHUB_PAT_EXPIRES = "2027-09-17"
 GITHUB_PAT_WARN_DAYS = 10
 GITHUB_PAT_CRIT_DAYS = 5
 

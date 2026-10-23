@@ -13,7 +13,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from comptes.models import Feedback, PropostaArtista, Publicacio, UserArtista
+from comptes.models import (
+    Feedback,
+    PropostaArtista,
+    Publicacio,
+    SolicitudRevisio,
+    UserArtista,
+)
 from music.models import (
     Artista,
     Canco,
@@ -31,28 +37,36 @@ from web.api.staff._common import IsStaff
 # ═════════════════════════════════════════════════════════════════════════
 
 
+def comptadors() -> dict:
+    """Counters for every staff tool. One definition: the panel's
+    dashboard and the 07:00 mail (`enviar_informe_youtube`) both read
+    it, so they can never disagree on what is pending."""
+    return {
+        "sollicituds_revisio_pendents": SolicitudRevisio.objects.filter(
+            estat=SolicitudRevisio.ESTAT_PENDENT
+        ).count(),
+        "artistes_pendents": Artista.objects.filter(
+            aprovat=False, pendent_review=True
+        ).count(),
+        "cancons_no_verificades": Canco.objects.filter(
+            verificada=False, activa=True
+        ).count(),
+        "propostes_obertes": PropostaArtista.objects.filter(
+            estat=PropostaArtista.ESTAT_PENDENT
+        ).count(),
+        "solicituds_gestio_obertes": UserArtista.objects.filter(
+            estat=UserArtista.ESTAT_PENDENT
+        ).count(),
+        "feedback_obert": Feedback.objects.filter(resolt=False).count(),
+        "publicacions_pendents": Publicacio.objects.filter(
+            estat=Publicacio.ESTAT_PENDENT
+        ).count(),
+        "usuaris_total": Usuari.objects.filter(is_active=True).count(),
+    }
+
+
 @api_view(["GET"])
 @permission_classes([IsStaff])
 def dashboard(request: Request) -> Response:
     """Counters for every tool in one call."""
-    return Response(
-        {
-            "artistes_pendents": Artista.objects.filter(
-                aprovat=False, pendent_review=True
-            ).count(),
-            "cancons_no_verificades": Canco.objects.filter(
-                verificada=False, activa=True
-            ).count(),
-            "propostes_obertes": PropostaArtista.objects.filter(
-                estat=PropostaArtista.ESTAT_PENDENT
-            ).count(),
-            "solicituds_gestio_obertes": UserArtista.objects.filter(
-                estat=UserArtista.ESTAT_PENDENT
-            ).count(),
-            "feedback_obert": Feedback.objects.filter(resolt=False).count(),
-            "publicacions_pendents": Publicacio.objects.filter(
-                estat=Publicacio.ESTAT_PENDENT
-            ).count(),
-            "usuaris_total": Usuari.objects.filter(is_active=True).count(),
-        }
-    )
+    return Response(comptadors())

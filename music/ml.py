@@ -11,22 +11,21 @@ Pipeline:
    heuristics if fewer than MIN_TRAINING_SAMPLES (20) decisions exist.
 3. Output: class A (likely Catalan, >= 0.7), B (uncertain, 0.4-0.7),
    C (likely false positive, < 0.4). Stored on Canco.ml_classe / ml_confianca.
-4. Retraining: triggered automatically via recalcular_ml_si_cal() when >= 5 new
-   decisions since last recalc. Runs in background daemon thread.
+4. Retraining + rescoring: ONLY from the `recalcular_ml` management command,
+   nightly on cron under `SingletonLock("recalcular_ml")`. Never from a web
+   request — see `recalcular_ml` for why the old in-worker thread was removed.
 
 Model files: ml_model.joblib (RF), ml_tfidf.joblib (TF-IDF vectorizer).
 """
 
 import logging
 import re
-import threading
 import time
 from pathlib import Path
 
 from django.db.models import QuerySet
 
 from .constants import (
-    MIN_NEW_DECISIONS,
     MIN_TRAINING_SAMPLES,
     ML_AUTO_APPROVE_SUBTIERS,
     ML_CLASSE_A_THRESHOLD,
@@ -162,8 +161,8 @@ _model_cache: dict = {
 
 # Lock file checked by `entrenar_model` to refuse training while a
 # deploy is in progress. The deploy script (`bin/tq-deploy`) touches
-# this path at the start of the run and removes it at the end. If a
-# background retrain triggered by `recalcular_ml_si_cal` lands during
+# this path at the start of the run and removes it at the end. If the
+# nightly `recalcular_ml` cron lands during
 # the deploy window, it sees the lock and aborts cleanly so the
 # model joblib is never written with a half-updated codebase.
 #
@@ -334,9 +333,8 @@ def _get_rejection_ratio(
     2026-05-25; length 50 stays. The RF on disk was trained on the
     by-name semantics, so until the next `entrenar_model()` run the
     classifier sees the new value at the same index with the old
-    learned splits — silently degraded, not misaligned. Retrain
-    triggers automatically once 5 new decisions pile up via
-    `recalcular_ml_si_cal()`.
+    learned splits — silently degraded, not misaligned. The nightly
+    `recalcular_ml` cron picks up the new splits on its next run.
     """
     from music.models import HistorialRevisio
 
@@ -694,8 +692,8 @@ def entrenar_model() -> bool:
     if _is_deploy_in_progress():
         logger.warning(
             "[ml] entrenar_model() refused: %s exists (deploy in progress). "
-            "The retrain will be picked up on the next recalcular_ml_si_cal "
-            "tick once the deploy completes.",
+            "The retrain will be picked up on the next nightly "
+            "recalcular_ml run once the deploy completes.",
             DEPLOY_LOCK_PATH,
         )
         return False
@@ -938,18 +936,50 @@ def classificar_i_guardar(canco) -> None:
     maybe_auto_decide(canco)
 
 
-def recalcular_ml(qs: QuerySet | None = None, limit: int | None = None) -> int:
+def recalcular_ml(
+    qs: QuerySet | None = None,
+    limit: int | None = None,
+    entrenar: bool = True,
+) -> int:
     """
     Recalculate ml_classe and ml_confianca for unverified cancons.
     Retrains the RF model first if enough data.
+
+    Callers: the `recalcular_ml` management command only (nightly cron,
+    under `SingletonLock`). Until 2026-09 a `recalcular_ml_si_cal()` helper
+    span this off as a daemon thread inside the gunicorn worker every time
+    staff accumulated 5 decisions. Three things were wrong with that, all
+    measured on prod 2026-09-18:
+
+      * It is slow. Rebuilding the 19 905-row training set costs ~78 s per
+        1 000 rows (per-row `HistorialRevisio` queries in
+        `_build_features_from_historial`) — ~26 min, plus the rescoring
+        loop below.
+      * `LAST_RECALC_FILE` is only written at the END, so every further
+        batch of 5 decisions inside that window span ANOTHER concurrent
+        copy. No lock, last writer wins.
+      * A daemon thread in a web worker dies silently on worker recycle or
+        `systemctl reload`, leaving no trace. The last run that actually
+        finished was 2026-09-13; 27 staff decisions over the following four
+        days triggered nothing, and 15 % of pendents were left carrying a
+        stale `ml_confianca` (7 % a stale `ml_classe`) — which is the order
+        the staff cançons page sorts by.
+
+    The scoring scope is `pendents()` (verificada=False AND activa=True),
+    not every `verificada=False` row: the other 1 796 are deactivated and
+    are neither listed nor rankable, so rescoring them was 64 % of the loop
+    for no reader.
     """
     from music.models import Canco
 
-    # Retrain before recalculating
-    entrenar_model()
+    # Retrain before recalculating. `entrenar=False` (a night with fewer
+    # than MIN_NEW_DECISIONS new decisions) skips the ~26 min rebuild and
+    # only refreshes the scores, which is the part the panel reads.
+    if entrenar:
+        entrenar_model()
 
     if qs is None:
-        qs = Canco.objects.filter(verificada=False).select_related("artista")
+        qs = Canco.objects.pendents().select_related("artista")
 
     if limit:
         qs = qs[:limit]
@@ -983,10 +1013,15 @@ def recalcular_ml(qs: QuerySet | None = None, limit: int | None = None) -> int:
     return updated
 
 
-def recalcular_ml_si_cal() -> None:
+def decisions_des_de_l_ultim_recalc() -> int:
+    """How many staff decisions have landed since the last completed recalc.
+
+    Read-only: reporting for the nightly command and the staff dashboard.
+    It does NOT start any work — that is the cron's job. `MIN_NEW_DECISIONS`
+    remains the threshold below which retraining buys nothing.
     """
-    Trigger ML recalc in a background thread if ≥5 new decisions since last recalc.
-    """
+    from datetime import datetime, timezone
+
     from music.models import HistorialRevisio
 
     last_recalc = 0.0
@@ -996,17 +1031,5 @@ def recalcular_ml_si_cal() -> None:
     except (OSError, ValueError):
         pass
 
-    from datetime import datetime, timezone
-
     last_dt = datetime.fromtimestamp(last_recalc, tz=timezone.utc)
-    new_decisions = HistorialRevisio.objects.filter(created_at__gt=last_dt).count()
-
-    if new_decisions < MIN_NEW_DECISIONS:
-        return
-
-    logger.info(
-        "ML recalc triggered in background: %d new decisions since last recalc",
-        new_decisions,
-    )
-    thread = threading.Thread(target=recalcular_ml, daemon=True, name="ml-recalc")
-    thread.start()
+    return HistorialRevisio.objects.filter(created_at__gt=last_dt).count()

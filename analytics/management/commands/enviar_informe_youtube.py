@@ -1,13 +1,15 @@
-"""Daily progress report for the YouTube integration — bootstrap phase.
+"""Daily report for the YouTube integration — active phase.
 
-Discovery is rationed to ~90 artists a day by the quota, so the build-out
-runs for weeks. This mail is the instrument panel for that stretch: every
-morning it answers "what came in yesterday, and how much of the catalogue
-can we actually connect?" without anyone opening a shell.
+YouTube counts in the top since 2026-08-26, so the bootstrap questions
+this mail was built around — can the two signals be merged, what is the
+conversion factor — are answered and gone: the weight is editorial
+(`youtube_pes_escolta`), not measured. What the mail answers now, every
+morning: what does YouTube decide in today's top, what manual work is
+left (the 10 recerques), and is the signal still flowing.
 
-**Temporary by design.** When the bootstrap finishes, delete the cron
-line — there is deliberately no config toggle for a thing whose off
-switch is one line in `deploy/cron.topquaranta`.
+**Still temporary.** The off switch is one line in
+`deploy/cron.topquaranta` — delete it when the recerques queue drains
+and the mail is reduced to status nobody reads.
 
 Shares the Setmanari's visual language and its `_kpi.html` partial, and
 reuses `_delta` so the movement arrows behave identically (absolute
@@ -22,14 +24,14 @@ from __future__ import annotations
 
 import datetime
 import logging
-import statistics
+import math
 from collections import defaultdict
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -39,31 +41,21 @@ from ingesta.management.commands.descobrir_youtube import DEFAULT_BUDGET
 from music.constants import DIES_CADUCITAT
 from music.models import Artista, Canco, CancoYouTubeVideo
 from ranking.models import SenyalDiari, SenyalYouTube
+from web.api.staff.correu import enllac_accio
+from web.api.staff.dashboard import comptadors
+from web.api.staff.estat import flux_cancons
+from web.api.staff.pendents import cua_pendents
 
 logger = logging.getLogger(__name__)
 
 DASHBOARD_URL = "https://www.topquaranta.cat/staff/estat"
 
 
-# Quantes parelles calen abans de fiar-se de la mediana. Per davall de 30
-# el rang interquartílic es mou massa d'un dia a l'altre per a dir res;
-# per damunt de 100 ja es pot mirar si convergeix. Són llindars de sentit
-# comú, no d'estadística formal: la decisió que han d'alimentar és
-# editorial, no un contrast d'hipòtesis.
-_MOSTRA_INDICI = 30
-_MOSTRA_PROU = 100
-
-# Moviment mínim setmanal perquè una cançó entre a la comparativa. Amb
-# menys, la divisió amplifica el soroll: 1 escolta i 300 visualitzacions
-# dona un factor de 300 que no significa res.
-_MOVIMENT_MIN = 5
-
-
 # Marge al voltant de «fa set dies» per a buscar la foto de referència,
 # el mateix que fa `ranking.algorisme` amb SenyalDiari. Exigir la data
-# exacta és fràgil: un sol dia de cron perdut buidaria la comparativa
-# sencera, i el correu diria «cap cançó comparable» quan el que passa és
-# que falta una foto.
+# exacta és fràgil: un sol dia de cron perdut buidaria la comparació
+# sencera, i el correu diria «cap cançó» quan el que passa és que falta
+# una foto.
 _MARGE_DIES = 3
 
 
@@ -73,42 +65,21 @@ def _increments(model, camp, fi, *, dies=7):
     Agafa la foto més pròxima a `fi - dies` dins de `±_MARGE_DIES` i
     divideix pel nombre real de dies transcorreguts, així una referència
     de fa 5 o de fa 9 dies continua donant una xifra setmanal comparable.
+
+    Només serveix la sèrie de Last.fm: la de YouTube demana el detall per
+    vídeo i viu a `ranking.senyal_youtube.visualitzacions_setmanals`, que
+    és qui llig `SenyalYouTube` per al rànquing i per a este correu — dues
+    implementacions del mateix delta és com es desvien.
     """
     objectiu = fi - datetime.timedelta(days=dies)
     des_de = objectiu - datetime.timedelta(days=_MARGE_DIES)
     fins_a = objectiu + datetime.timedelta(days=_MARGE_DIES)
 
-    # L'increment de YouTube se suma **per vídeo**, no restant les sumes.
-    #
-    # `views` és la suma de tots els carrils d'una cançó, i un carril nou
-    # entra amb el seu comptador de tota la vida: Andreu Valor va passar
-    # de 140 visualitzacions amb 1 vídeo a 88.450 amb 4 en una nit, i
-    # l'informe li'n comptava 103.048 com a setmana (17 de reals).
-    #
-    # La primera guarda comparava `n_videos` als dos extrems, però és un
-    # substitut: si un dia en marxa un de menut i n'entra un de gran, el
-    # compte no es mou i el bot es cola igual. Ho va assenyalar el Miquel
-    # el 2026-08-18, i té raó — el que cal saber no és quants n'hi ha
-    # sinó quins.
-    #
-    # Amb `views_per_video` es fa el que toca: sumar la diferència dels
-    # vídeos que hi ha **a les dues fotos**. Un vídeo nou no aporta res
-    # el dia que apareix (no en tenim base) i sí a partir de l'endemà;
-    # un que desapareix deixa d'aportar sense restar el que havia
-    # acumulat.
-    #
-    # Les files anteriors al 2026-08-19 no porten detall: es tracten amb
-    # el criteri antic, que per a una cançó d'un sol carril és equivalent.
     per = defaultdict(dict)
-    per_video = defaultdict(dict)
     for s in model.objects.filter(error=False, data__gte=des_de, data__lte=fi):
         v = getattr(s, camp)
-        if v is None:
-            continue
-        per[s.canco_id][s.data] = (v, getattr(s, "n_videos", None))
-        detall = getattr(s, "views_per_video", None)
-        if detall:
-            per_video[s.canco_id][s.data] = detall
+        if v is not None:
+            per[s.canco_id][s.data] = v
 
     out = {}
     for canco_id, fotos in per.items():
@@ -119,180 +90,26 @@ def _increments(model, camp, fi, *, dies=7):
             continue
         base = min(candidates, key=lambda d: abs((d - objectiu).days))
         span = (fi - base).days
-        if span <= 0:
+        if span <= 0 or fotos[fi] < fotos[base]:
             continue
-
-        detalls = per_video.get(canco_id, {})
-        if fi in detalls and base in detalls:
-            avui, abans = detalls[fi], detalls[base]
-            comuns = set(avui) & set(abans)
-            if not comuns:
-                continue  # cap vídeo en comú: no hi ha res de comparable
-            delta = sum(avui[v] - abans[v] for v in comuns if avui[v] >= abans[v])
-        else:
-            # Sense detall: el criteri antic. Cobreix les files escrites
-            # abans del 2026-08-19 i la sèrie de Last.fm, que no té
-            # carrils. Encara exigeix que el nombre de vídeos siga el
-            # mateix als dos extrems — més fluix que comparar quins, però
-            # és el que hi ha per a la història ja escrita.
-            valor_fi, carrils_fi = fotos[fi]
-            valor_base, carrils_base = fotos[base]
-            if carrils_fi != carrils_base or valor_fi < valor_base:
-                continue
-            delta = valor_fi - valor_base
-        out[canco_id] = delta * dies / span
+        out[canco_id] = (fotos[fi] - fotos[base]) * dies / span
     return out
 
 
-# Dies enrere que es recalculen per a vore si el factor s'assenta. La
-# mida de la mostra sola no ho diu: el 18/08 hi havia 179 parelles —
-# «prou» pel llindar— i la mediana havia anat 1 → 23 → 9 en tres dies.
-# El que decideix és que pare de moure's.
-_DIES_HISTORIAL = 5
-
-# Marge dins del qual dues medianes consecutives compten com a «la
-# mateixa». Un ±25 % és ample a posta: buscem que deixe de saltar per
-# múltiples, no precisió decimal.
-_ESTABLE_MARGE = 0.25
-
-
-def _ratios(en_finestra_ids, today):
-    """`{canco_id: visualitzacions per escolta}` d'una setmana."""
-    lfm = _increments(SenyalDiari, "lastfm_playcount", today)
-    yt_inc = _increments(SenyalYouTube, "views", today)
-    return {
-        c: yt_inc[c] / lfm[c]
-        for c in set(lfm) & set(yt_inc)
-        if c in en_finestra_ids
-        and lfm[c] >= _MOVIMENT_MIN
-        and yt_inc[c] >= _MOVIMENT_MIN
-    }
-
-
-def _historial(en_finestra_ids, today):
-    """La mediana de cada un dels últims dies, i si s'ha assentat.
-
-    Es recalcula en lloc de desar-se: són poques consultes i evita una
-    taula nova per a un informe que és temporal.
-    """
-    files = []
-    for enrere in range(_DIES_HISTORIAL - 1, -1, -1):
-        dia = today - datetime.timedelta(days=enrere)
-        r = sorted(_ratios(en_finestra_ids, dia).values())
-        files.append(
-            {
-                "data": dia,
-                "n": len(r),
-                "mediana": round(statistics.median(r)) if r else None,
-            }
-        )
-    darreres = [f["mediana"] for f in files[-3:] if f["mediana"]]
-    estable = False
-    if len(darreres) == 3:
-        centre = statistics.median(darreres)
-        estable = centre > 0 and all(
-            abs(m - centre) / centre <= _ESTABLE_MARGE for m in darreres
-        )
-    return files, estable
-
-
-def _per_carril(ratios, en_finestra):
-    """La proporció separada segons d'on venen les visualitzacions.
-
-    Un videoclip del canal propi té un ordre de magnitud més de públic
-    que una Art Track (mediana de 3.392 visualitzacions contra 92,
-    mesurat el 17/08), així que barrejar els dos carrils en una sola
-    proporció n'infla la dispersió. Mesurat el 18/08: 4 de mediana amb
-    Art Track sol i 36 amb videoclip — nou vegades.
-
-    Ho va assenyalar el Miquel: «té en compte si tenim canal oficial?».
-    No ho tenia, i era una variable de primer ordre.
-    """
-    if len(ratios) < 10:
-        return None
-    amb_clip = set(
-        en_finestra.filter(
-            id__in=ratios,
-            youtube_videos__isnull=False,
-        ).values_list("id", flat=True)
-    )
-    fora = [r for c, r in ratios.items() if c not in amb_clip]
-    dins = [r for c, r in ratios.items() if c in amb_clip]
-    if not fora or not dins:
-        return None
-    return {
-        "art_track": {"n": len(fora), "mediana": round(statistics.median(fora))},
-        "videoclip": {"n": len(dins), "mediana": round(statistics.median(dins))},
-    }
-
-
-def _per_artista(ratios, en_finestra):
-    """Compara la dispersió global amb la de dins de cada artista.
-
-    La hipòtesi que això contrasta: la proporció entre visualitzacions i
-    escoltes no és una constant del catàleg sinó una propietat del públic
-    de cada artista — qui té públic de YouTube en té a totes les seues
-    cançons. Si es confirma, la conversió ha de ser per artista i un
-    factor global seria fals per a quasi tothom.
-    """
-    if len(ratios) < 10:
-        return None
-    artista_de = dict(en_finestra.filter(id__in=ratios).values_list("id", "artista_id"))
-    per_art = defaultdict(list)
-    for canco_id, r in ratios.items():
-        aid = artista_de.get(canco_id)
-        if aid:
-            per_art[aid].append(r)
-    grups = [v for v in per_art.values() if len(v) >= 3]
-    if not grups:
-        return None
-
-    def _cv(vals):
-        mitjana = statistics.mean(vals)
-        return statistics.pstdev(vals) / mitjana if mitjana else 0
-
-    tots = list(ratios.values())
-    cv_global = _cv(tots)
-    cvs = [_cv(v) for v in grups if statistics.mean(v)]
-    cv_artista = statistics.median(cvs) if cvs else 0
-    return {
-        "cv_global": round(cv_global, 2),
-        "cv_artista": round(cv_artista, 2),
-        "n_artistes": len(grups),
-        # Un terç més estret ja no és soroll: vol dir que el número
-        # pertany a l'artista, no al catàleg.
-        "millor_per_artista": cv_artista and cv_artista < cv_global * 0.7,
-    }
-
-
-def _primer_top_oficial(activacio: datetime.date) -> datetime.date:
-    """El dissabte en què el top OFICIAL ja portarà la segona font.
-
-    El provisional diari (07:00) entra el mateix dia de l'activació,
-    però el que veu la gent és el top del dissabte a les 08:00
-    (`deploy/cron.topquaranta`). Si l'activació cau en dissabte, eixe
-    mateix matí ja la porta: el senyal es fotografia a les 06:30, dues
-    hores abans. weekday(): dilluns=0 … dissabte=5.
-    """
-    return activacio + datetime.timedelta(days=(5 - activacio.weekday()) % 7)
-
-
 def _efecte_al_top(today):
-    """Què li passaria al top si s'encengués — o què li passa, si ja ho està.
+    """Què decideix YouTube al top d'avui: quantes files i qui les mana.
 
-    És la pregunta que substitueix «es poden juntar?» una vegada la
-    decisió estiga presa: no un factor abstracte sinó **quantes files
-    canvien** i **qui les decideix**. Es calcula amb la configuració
-    real, així que si el Miquel mou el pes al panell, l'endemà el correu
-    li conta l'efecte del número nou.
+    Activa des del 2026-08-26, la pregunta ja no és «es poden juntar?»
+    sinó si la segona font continua fent el que es va decidir que fera:
+    omplir els buits que Last.fm no veu sense reordenar el que sí que
+    veu. Es calcula amb la configuració real, així que si el Miquel mou
+    el pes o el terra al panell, l'endemà el correu li conta l'efecte
+    del número nou.
 
-    Simula sense tocar res: llegeix els mateixos senyals que el rànquing
-    i compara el conjunt de candidates amb i sense la segona font.
+    Recalcula sense tocar res: llegeix els mateixos senyals que el
+    rànquing i compara el conjunt de candidates amb i sense la segona
+    font.
     """
-    from django.db.models import Q
-
-    from music.constants import DIES_CADUCITAT
-    from music.models import Canco
     from ranking import senyal_youtube
     from ranking.models import ConfiguracioGlobal
     from ranking.senyal_youtube import visualitzacions_setmanals
@@ -360,120 +177,15 @@ def _efecte_al_top(today):
                 ),
             }
         )
-    # Quan s'encén no ho decideix ningú: ho decideix quanta història
-    # per vídeo hi ha. Així el correu pot dir el dia, no un condicional.
+    # `actiu` hauria de ser sempre cert des del 26/08: si un dia no ho
+    # és, la història per vídeo s'ha perdut i el correu ho ha de dir en
+    # roig, no amagar el bloc.
     dies_minims = int(getattr(cfg, "youtube_dies_minims", 7) or 0)
-    dies = senyal_youtube.dies_de_dades(today)
-    falten = None if dies is None else max(0, dies_minims - dies)
-    # La data, no el compte enrere. «Falten 7 dies» obliga a fer el
-    # càlcul cada matí i no diu quan es nota de veres: el que canvia el
-    # que veu la gent és el primer top OFICIAL, i eixe el fa el cron del
-    # dissabte a les 8 (`deploy/cron.topquaranta`). El provisional diari
-    # ja hi entra el mateix dia de l'activació.
-    activacio = None if falten is None else today + datetime.timedelta(days=falten)
-    primer_top = None if activacio is None else _primer_top_oficial(activacio)
     return {
         "actiu": senyal_youtube.actiu(today, dies_minims),
-        "dies": dies,
-        "dies_minims": dies_minims,
-        "falten": falten,
-        "activacio": activacio,
-        "primer_top": primer_top,
         "pes": pes,
         "terra": terra_comb,
         "territoris": files,
-    }
-
-
-def _comparativa(en_finestra, today):
-    """Es poden juntar les dues fonts, i què guanyaríem.
-
-    La pregunta que aquest informe existeix per a respondre des del
-    2026-08-17: el descobriment ja ha acabat el catàleg, així que el que
-    queda per saber és si el senyal de YouTube es pot convertir a
-    escoltes i quantes cançons rescataria.
-    """
-    lfm = _increments(SenyalDiari, "lastfm_playcount", today)
-    yt_inc = _increments(SenyalYouTube, "views", today)
-    vius = set(en_finestra.values_list("id", flat=True))
-    ratios_avui = _ratios(vius, today)
-    historial, estable = _historial(vius, today)
-
-    mou_lfm = {c for c, v in lfm.items() if c in vius and v >= _MOVIMENT_MIN}
-    mou_yt = {c for c, v in yt_inc.items() if c in vius and v >= _MOVIMENT_MIN}
-    parelles = sorted(yt_inc[c] / lfm[c] for c in (mou_lfm & mou_yt) if lfm[c])
-
-    factor = None
-    if parelles:
-        n = len(parelles)
-        factor = {
-            "n": n,
-            "mediana": round(statistics.median(parelles)),
-            "p25": round(parelles[n // 4]),
-            "p75": round(parelles[3 * n // 4]),
-            "prou": n >= _MOSTRA_PROU,
-            "indici": _MOSTRA_INDICI <= n < _MOSTRA_PROU,
-            # La mida de la mostra és condició necessària, no suficient.
-            "estable": estable,
-        }
-
-    # Quantes cançons tenen ja set dies de fotos: sense això no hi ha
-    # increment setmanal possible, i és el que encara està creixent.
-    # Només compten les que TAMBÉ tenen foto d'avui: una cançó
-    # fotografiada la setmana passada però no avui (vídeo esborrat, fora
-    # de finestra) no es pot comparar, i comptar-la feia passar el
-    # percentatge de 100 (informe del 25/08: 2.490 de 2.471).
-    ids_avui = set(
-        SenyalYouTube.objects.filter(data=today, error=False).values_list(
-            "canco_id", flat=True
-        )
-    )
-    amb_setmana = (
-        SenyalYouTube.objects.filter(
-            error=False,
-            canco_id__in=ids_avui,
-            data__gte=today - datetime.timedelta(days=7 + _MARGE_DIES),
-            data__lte=today - datetime.timedelta(days=7 - _MARGE_DIES),
-        )
-        .values("canco_id")
-        .distinct()
-        .count()
-    )
-    amb_avui = len(ids_avui)
-
-    guany = []
-    for codi in ("CAT", "VAL", "BAL"):
-        ids = set(
-            en_finestra.filter(
-                Q(artista__territoris__codi=codi)
-                | Q(artistes_col__territoris__codi=codi)
-            )
-            .distinct()
-            .values_list("id", flat=True)
-        )
-        guany.append(
-            {
-                "codi": codi,
-                "lastfm": len(ids & mou_lfm),
-                "noves": len(ids & mou_yt - mou_lfm),
-            }
-        )
-
-    return {
-        "comparables": len(mou_lfm & mou_yt),
-        "mou_lfm": len(mou_lfm),
-        "mou_yt": len(mou_yt),
-        "noves": len(mou_yt - mou_lfm),
-        "factor": factor,
-        "amb_setmana": amb_setmana,
-        "amb_avui": amb_avui,
-        "pct_setmana": round(amb_setmana / amb_avui * 100) if amb_avui else 0,
-        "guany": guany,
-        "moviment_min": _MOVIMENT_MIN,
-        "historial": historial,
-        "per_artista": _per_artista(ratios_avui, en_finestra),
-        "per_carril": _per_carril(ratios_avui, en_finestra),
-        "efecte_top": _efecte_al_top(today),
     }
 
 
@@ -688,6 +400,293 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
     }
 
 
+def _pendents(today: datetime.date) -> dict:
+    """Les cançons pendents d'aprovar que toca mirar hui.
+
+    Quantes: les que fan falta per a no acumular backlog. Ix de la
+    mateixa fórmula que el panell `/staff/estat` (`flux_cancons`):
+    entrades setmanals robustes menys les que caduquen soles, repartit
+    en set dies. El 2026-09-18 eren 11. Quan el signe és negatiu el
+    backlog baixa sol, però el correu continua proposant-ne una perquè
+    la cua no es quede sense mirar.
+
+    Quines: les de més confiança ML, que el cron `recalcular_ml` de les
+    05:45 ha repuntuat eixa mateixa nit. Cap estat nou: una cançó mirada
+    i no decidida torna demà al mateix lloc, i una d'aprovada o
+    rebutjada deixa de ser pendent i no torna.
+    """
+    setmanal = flux_cancons(today)["target_verificacio_setmanal"]
+    n = max(1, math.ceil(setmanal / 7))
+    qs = Canco.objects.pendents()
+    files = []
+    for c in qs.select_related("artista").order_by(
+        F("ml_confianca").desc(nulls_last=True), "pk"
+    )[:n]:
+        # El llistat de l'staff, filtrat fins a la fila: hi ha el botó
+        # d'aprovar i la cerca ignora accents i apòstrofs.
+        filtre = {"q": c.nom}
+        if c.artista_id:
+            filtre["artista_pk"] = c.artista_id
+        files.append(
+            {
+                "titol": c.nom,
+                "sub": c.artista.nom if c.artista else "",
+                "classe": c.ml_classe,
+                "confianca": c.ml_confianca,
+                "whisper": c.whisper_lang,
+                "whisper_p": c.whisper_p,
+                "on": "/staff/cancons?" + urlencode(filtre),
+                # One click, signed for this song; the view only acts for
+                # a logged-in staff session. Rejecting is NOT one click:
+                # it has a second decision inside (song, album or
+                # artist), so that button opens the panel row (`on`).
+                "aprovar": enllac_accio(c.pk, "aprovar"),
+            }
+        )
+    return {"files": files, "dia": n, "resten": qs.count()}
+
+
+# How many rows of each queue the mail shows before «… i N més».
+_FILES_TASCA = 5
+
+
+def _files_propostes(n):
+    from comptes.models import PropostaArtista
+    from music.models import Municipi
+
+    rows = []
+    qs = PropostaArtista.objects.filter(estat=PropostaArtista.ESTAT_PENDENT)
+    for p in qs.select_related("usuari").order_by("created_at")[:n]:
+        lloc = ""
+        for loc in p.localitzacions or []:
+            if loc.get("municipi_id"):
+                m = Municipi.objects.filter(pk=loc["municipi_id"]).first()
+                lloc = m.nom if m else ""
+                break
+            if loc.get("manual"):
+                lloc = loc["manual"]
+                break
+        rows.append(
+            {
+                "titol": p.nom,
+                "sub": " · ".join(
+                    x for x in (lloc, p.usuari.email, f"{p.created_at:%d/%m}") if x
+                ),
+                "on": f"/staff/propostes/{p.pk}",
+            }
+        )
+    return rows
+
+
+def _files_gestio(n):
+    from comptes.models import UserArtista
+
+    qs = UserArtista.objects.filter(estat=UserArtista.ESTAT_PENDENT)
+    return [
+        {
+            "titol": f"{ua.usuari.email} → {ua.artista.nom}",
+            "sub": f"{ua.created_at:%d/%m}",
+            "on": "/staff/solicituds",
+        }
+        for ua in qs.select_related("usuari", "artista").order_by("created_at")[:n]
+    ]
+
+
+def _files_revisio(n):
+    from comptes.models import SolicitudRevisio
+
+    qs = SolicitudRevisio.objects.filter(estat=SolicitudRevisio.ESTAT_PENDENT)
+    return [
+        {
+            "titol": sr.artista.nom,
+            "sub": f"{sr.gestor.email} · {len(sr.pendents_ids or [])} cançons",
+            "on": f"/staff/sollicituds-revisio/{sr.pk}",
+        }
+        for sr in qs.select_related("artista", "gestor").order_by("pk")[:n]
+    ]
+
+
+def _files_feedback(n):
+    from comptes.models import Feedback
+
+    qs = Feedback.objects.filter(resolt=False).select_related("usuari")
+    return [
+        {
+            "titol": (fb.missatge or "").strip()[:90],
+            "sub": " · ".join(
+                x
+                for x in (
+                    fb.usuari.email if fb.usuari else "anònim",
+                    fb.target_label or fb.url,
+                    f"{fb.created_at:%d/%m}",
+                )
+                if x
+            ),
+            "on": "/staff/feedback",
+        }
+        for fb in qs.order_by("created_at")[:n]
+    ]
+
+
+def _files_publicacions(n):
+    from comptes.models import Publicacio, Usuari
+
+    qs = Publicacio.objects.filter(estat=Publicacio.ESTAT_PENDENT).order_by(
+        "created_at"
+    )
+    autors = {
+        u.pk: u.email
+        for u in Usuari.objects.filter(pk__in=qs.values_list("autor_id", flat=True))
+    }
+    return [
+        {
+            "titol": pub.titol,
+            "sub": f"{autors.get(pub.autor_id, '?')} · {pub.created_at:%d/%m}",
+            "on": "/staff/publicacions",
+        }
+        for pub in qs[:n]
+    ]
+
+
+# The staff queues that are someone's turn, in the order they get stale:
+# (dashboard counter, what the number is, where the queue is, its rows).
+# Only the ones above zero reach the mail — an empty queue is not a task.
+_TASQUES = (
+    (
+        "propostes_obertes",
+        "propostes d'artista per revisar",
+        "/staff/propostes",
+        _files_propostes,
+    ),
+    (
+        "solicituds_gestio_obertes",
+        "sol·licituds de gestió per aprovar",
+        "/staff/solicituds",
+        _files_gestio,
+    ),
+    (
+        "sollicituds_revisio_pendents",
+        "sol·licituds de revisió de gestors",
+        "/staff/sollicituds-revisio",
+        _files_revisio,
+    ),
+    (
+        "feedback_obert",
+        "missatges de feedback sense resoldre",
+        "/staff/feedback",
+        _files_feedback,
+    ),
+    (
+        "publicacions_pendents",
+        "publicacions de la comunitat per moderar",
+        "/staff/publicacions",
+        _files_publicacions,
+    ),
+)
+
+
+def _tasques() -> list[dict]:
+    """The open staff queues, from the same counters as `/staff`, each
+    with its first rows so the mail says WHAT is waiting, not how many."""
+    n = comptadors()
+    return [
+        {
+            "n": n[clau],
+            "que": que,
+            "on": on,
+            "files": files(_FILES_TASCA),
+            "mes": max(0, n[clau] - _FILES_TASCA),
+        }
+        for clau, que, on, files in _TASQUES
+        if n.get(clau, 0) > 0
+    ]
+
+
+# Who signed up lately. A week, not a day: a Sunday sign-up would
+# otherwise only ever show in Monday's mail, which nobody reads first.
+_DIES_USUARIS_NOUS = 7
+
+
+def _usuaris_nous(today: datetime.date) -> list[dict]:
+    from comptes.models import PerfilUsuari, Usuari
+
+    des_de = today - datetime.timedelta(days=_DIES_USUARIS_NOUS)
+    # The `admin` pseudo-user (seeded by a migration) is not a sign-up.
+    qs = (
+        Usuari.objects.filter(date_joined__date__gte=des_de)
+        .exclude(username=getattr(settings, "ADMIN_INBOX_USERNAME", "admin"))
+        .order_by("-date_joined")
+    )
+    fets = set(
+        PerfilUsuari.objects.filter(usuari__in=qs, onboarding_complet=True).values_list(
+            "usuari_id", flat=True
+        )
+    )
+    return [
+        {
+            "email": u.email,
+            "dia": u.date_joined.date(),
+            "actiu": u.is_active,
+            "onboarding": u.pk in fets,
+            "on": f"/staff/usuaris/{u.pk}",
+        }
+        for u in qs
+    ]
+
+
+def _assumpte(ctx: dict) -> str:
+    parts = [
+        f"{len(ctx['pendents']['files'])} cançons",
+        f"{len(ctx['artistes_pendents']['files'])} artistes",
+    ]
+    tasques = sum(t["n"] for t in ctx["tasques"])
+    if tasques:
+        parts.append(f"{tasques} tasques")
+    if ctx["usuaris_nous"]:
+        parts.append(f"{len(ctx['usuaris_nous'])} usuaris nous")
+    return f"[TopQuaranta] Brief diari · {ctx['avui']:%d/%m} · " + " · ".join(parts)
+
+
+# Quants artistes pendents cap mirar en un matí. Ací no hi ha fórmula de
+# backlog com a les cançons: amb 7.000 pendents (2026-10-22) cap ritme
+# raonable el buida, i deu files que es miren valen més que trenta que
+# s'ignoren.
+_ARTISTES_DIA = 10
+
+
+def _artistes_pendents(n=_ARTISTES_DIA) -> dict:
+    """Els artistes pendents de decidir que toca mirar hui.
+
+    Quins: els de més senyal segons la mateixa cua que l'staff veu a
+    `/staff/pendents` (`cua_pendents`): propostes d'usuari, cançons
+    verificades, i d'empat, Last.fm. No hi ha nota ML per artista, així
+    que l'ordre és el de la cua i prou. Cada fila diu si té Deezer ID o
+    MBID —sense cap dels dos no es pot aprovar— perquè es veja abans
+    de clicar què demanarà el formulari. Cap estat nou: un artista
+    mirat i no decidit torna demà al mateix lloc.
+    """
+    qs = cua_pendents()
+    files = []
+    for a in qs[:n]:
+        loc = next(iter(a.localitats.all()), None)
+        files.append(
+            {
+                "titol": a.nom,
+                "lloc": loc.nom_display if loc else "",
+                "territori": loc.territori_display if loc else "",
+                "deezer": any(True for _ in a.deezer_ids.all()),
+                "mbid": bool(a.musicbrainz_id),
+                "similars": a.nb_similars_lastfm or 0,
+                "verificades": a.nb_verif,
+                "propostes": a.n_propostes or 0,
+                # El llistat de l'staff, filtrat fins a la fila: hi ha el
+                # botó d'aprovar i la cerca ignora accents i apòstrofs.
+                "on": "/staff/pendents?" + urlencode({"q": a.nom}),
+            }
+        )
+    return {"files": files, "resten": qs.count()}
+
+
 def build_context(today: datetime.date) -> dict:
     ahir = today - datetime.timedelta(days=1)
     cutoff = today - datetime.timedelta(days=DIES_CADUCITAT)
@@ -767,10 +766,10 @@ def build_context(today: datetime.date) -> dict:
 
     total_ap = en_finestra.exclude(youtube_video_id="").count()
     ap_avui = en_finestra.filter(youtube_matched_at__date=today).count()
-    return {
-        "subject": f"[TopQuaranta] YouTube · dia {today:%d/%m} · "
-        f"{total_ap} cançons connectades",
+    ctx = {
         "avui": today,
+        "tasques": _tasques(),
+        "usuaris_nous": _usuaris_nous(today),
         "descobriment": {
             "total": tot_art,
             "amb_canal": _delta(amb_canal, amb_canal - canals_avui),
@@ -796,7 +795,9 @@ def build_context(today: datetime.date) -> dict:
         },
         "punt_cec": punt_cec,
         "accions": _accions(en_finestra, cegues),
-        "comparativa": _comparativa(en_finestra, today),
+        "pendents": _pendents(today),
+        "artistes_pendents": _artistes_pendents(),
+        "efecte_top": _efecte_al_top(today),
         "senyal": {
             "avui": snap_avui.filter(error=False).count(),
             "errors": snap_avui.filter(error=True).count(),
@@ -816,6 +817,8 @@ def build_context(today: datetime.date) -> dict:
             "/"
         ),
     }
+    ctx["subject"] = _assumpte(ctx)
+    return ctx
 
 
 def render_text(ctx: dict) -> str:
@@ -823,8 +826,38 @@ def render_text(ctx: dict) -> str:
     a = ctx["aparellament"]
     s = ctx["senyal"]
     ac = ctx["accions"]
-    lines = [
-        f"YOUTUBE · INFORME DIARI · {ctx['avui']}",
+    e = ctx["efecte_top"]
+    lines = [f"TOPQUARANTA · BRIEF DIARI · {ctx['avui']}"]
+    if ctx["tasques"]:
+        lines += ["", "TASQUES PENDENTS"]
+        for t in ctx["tasques"]:
+            lines += [f"  {t['n']:>3} {t['que']} · {ctx['site_url']}{t['on']}"]
+            for f in t["files"]:
+                lines += [
+                    f"      · {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+                    f"        {ctx['site_url']}{f['on']}",
+                ]
+            if t["mes"]:
+                lines += [f"      … i {t['mes']} més"]
+    if ctx["usuaris_nous"]:
+        lines += ["", f"USUARIS NOUS ({_DIES_USUARIS_NOUS} DIES)"]
+        for u in ctx["usuaris_nous"]:
+            estat = ("actiu" if u["actiu"] else "sense activar") + (
+                ", onboarding fet" if u["onboarding"] else ", onboarding pendent"
+            )
+            lines += [f"  {u['dia']:%d/%m} {u['email']} · {estat}"]
+    lines += [
+        "",
+        f"EL TOP AMB YOUTUBE · {'actiu' if e['actiu'] else 'INACTIU!'} · "
+        f"pes {e['pes']} · terra {e['terra']}",
+    ]
+    lines += [
+        f"  {t['codi']:<5} {t['ara']}/40 → {t['amb_yt']}/40 · "
+        f"+{t['noves']} noves ({t['noves_yt']} per YT, {t['noves_terra']} "
+        f"pel terra, {t['noves_ordre']} per ordre) · mana YT: {t['mana_yt']}"
+        for t in e["territoris"]
+    ]
+    lines += [
         "",
         f"LES {len(ac['files'])} RECERQUES D'AVUI",
     ]
@@ -838,6 +871,54 @@ def render_text(ctx: dict) -> str:
     lines += [
         f"  Queden {ac['resten_cancons']} cançons sense vídeo i "
         f"{ac['resten_artistes']} artistes sense canal revisat.",
+    ]
+    p = ctx["pendents"]
+    if p["files"]:
+        lines += ["", f"LES {len(p['files'])} CANÇONS PENDENTS D'APROVAR D'AVUI"]
+        for i, f in enumerate(p["files"], 1):
+            ml = (
+                f"ML {f['classe']} {f['confianca']:.2f}"
+                if f["confianca"] is not None
+                else "sense nota ML"
+            )
+            wh = (
+                f" · Whisper {f['whisper']} {f['whisper_p']:.2f}"
+                if f["whisper"] and f["whisper_p"] is not None
+                else ""
+            )
+            lines += [
+                f"  {i:>2}. {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+                f"      {ml}{wh}",
+                f"      aprovar (un clic): {ctx['site_url']}{f['aprovar']}",
+                f"      rebutjar (al panell): {ctx['site_url']}{f['on']}",
+            ]
+        lines += [
+            f"  Queden {p['resten']} pendents. {p['dia']} al dia és el ritme que "
+            "buida el backlog (fórmula de /staff/estat)."
+        ]
+    ap = ctx["artistes_pendents"]
+    if ap["files"]:
+        lines += ["", f"ELS {len(ap['files'])} ARTISTES PENDENTS DE DECIDIR D'AVUI"]
+        for i, f in enumerate(ap["files"], 1):
+            lloc = f" — {f['lloc']}" if f["lloc"] else ""
+            if f["territori"]:
+                lloc += f" ({f['territori']})"
+            ancora = (
+                f"{'Deezer' if f['deezer'] else 'sense Deezer'} · "
+                f"{'MBID' if f['mbid'] else 'sense MBID'}"
+            )
+            if not f["deezer"] and not f["mbid"]:
+                ancora += " — no es pot aprovar sense cap dels dos"
+            lines += [
+                f"  {i:>2}. {f['titol']}{lloc}",
+                f"      {ancora}",
+                f"      {f['similars']} similars Last.fm · "
+                f"{f['verificades']} cançons verificades · "
+                f"{f['propostes']} propostes",
+                f"      decideix a: {ctx['site_url']}{f['on']}",
+            ]
+        lines += [f"  Queden {ap['resten']} artistes pendents."]
+    lines += [
         "",
         "DESCOBRIMENT",
         f"  Artistes amb canal Topic  {d['amb_canal_n']}/{d['total']} ({d['pct']}%)"
@@ -874,7 +955,7 @@ def render_text(ctx: dict) -> str:
 
 
 class Command(BaseCommand):
-    help = "Envia l'informe diari de progrés de la integració amb YouTube."
+    help = "Envia el brief diari de l'staff: tasques, cançons i artistes pendents, YouTube."
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")

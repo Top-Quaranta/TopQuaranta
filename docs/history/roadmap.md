@@ -7,6 +7,25 @@
 
 ---
 
+## Sprint 2026-10-23 ter — El gestor sap quan li entren cançons
+
+SAMU (Barcelona, proposta d'usuari) té el Deezer fusionat amb dotzenes
+d'homònims: 103 discos de l'últim any, 101 rebutjats sencers a mà abans
+que entrara cap cançó. El gestor no se n'hauria assabentat mai: cap
+correu avisava de cançons noves pendents. Ara `avisar_gestors_novetats`
+(cron 07:30) envia a cada gestor verificat les cançons pendents creades
+des de l'últim avís (stamp `UserArtista.avis_novetats_at`, migració
+0024), amb dues peticions: demana revisió si són teues, avisa'ns si no
+ho són. Tests a `comptes/tests/test_avis_gestors_novetats.py`.
+També: el workflow de dependabot posa la branca al dia abans de
+fusionar i repassa els PR oberts cada 6 h (#537); quatre PR verds
+encallats fusionats a mà; Un de Vint i Tramuntana aprovats amb els seus
+gestors; publicació de Clara publicada.
+
+**Pendent d'aquest fil:** SAMU encara no ha demanat la gestió del seu
+artista; quan ho faça, aprovar-la i el correu li arribarà. Demanar-li
+que la distribuïdora li separe el perfil de Deezer.
+
 ## Sprint 2026-10-23 — El correu de YouTube passa a ser el brief diari
 
 Primer matí amb els tres calaixos i el Miquel demana dues coses: poder

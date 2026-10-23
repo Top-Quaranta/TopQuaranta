@@ -1,0 +1,26 @@
+{% extends "comptes/email_base.html" %}
+{% block pretitle %}Cançons noves{% endblock %}
+{% block content %}
+<h1 style="font-family:'Playfair Display',Georgia,serif;font-size:24px;font-weight:900;color:#fff;margin:0 0 14px;line-height:1.2;">
+  {{ artista_nom }} té {{ cancons|length }} {% if cancons|length == 1 %}cançó nova pendent{% else %}cançons noves pendents{% endif %}
+</h1>
+<p style="margin:0 0 16px;">
+  Han entrat des de Deezer i esperen que algú les aprove abans d'entrar al top:
+</p>
+<ul style="margin:0 0 18px;padding-left:20px;color:#d1d5db;font-size:14px;line-height:1.6;">
+  {% for c in cancons %}
+  <li><strong style="color:#fff;">{{ c.nom }}</strong>{% if c.album %} &middot; {{ c.album }}{% endif %}{% if c.data %} &middot; {{ c.data|date:"d/m/Y" }}{% endif %}</li>
+  {% endfor %}
+</ul>
+<p style="margin:0 0 10px;color:#d1d5db;font-size:14px;line-height:1.6;">
+  <strong style="color:#facc15;">Si són teues</strong>, obri el portal i demana'ns que les revisem: les aprovem de seguida.
+</p>
+<p style="margin:0 0 18px;color:#d1d5db;font-size:14px;line-height:1.6;">
+  <strong style="color:#facc15;">Si no són teues</strong>, és que Deezer té el teu perfil compartit amb un altre artista del mateix nom. Digues-nos-ho responent a aquest correu, i demana a la teua distribuïdora un perfil propi a Deezer: és l'única manera que no torne a passar.
+</p>
+<p style="margin:24px 0;text-align:center;">
+  <a href="{{ portal_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Obrir el portal
+  </a>
+</p>
+{% endblock %}

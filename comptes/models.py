@@ -83,6 +83,18 @@ class UserArtista(models.Model):
     # before the notification layer existed without double-sending to
     # anyone whose approval was processed under the new flow.
     email_aprovacio_at = models.DateTimeField(null=True, blank=True)
+    # Stamp of the last «your artist has new pending songs» mail
+    # (`avisar_gestors_novetats`): songs created after it are the next
+    # mail, so the daily cron is idempotent without a per-song table.
+    avis_novetats_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Last time this gestor was emailed about new pending songs of "
+            "the artist (avisar_gestors_novetats). Songs created after "
+            "this stamp are the next mail."
+        ),
+    )
 
     class Meta:
         verbose_name = "Vinculació usuari-artista"

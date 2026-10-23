@@ -239,7 +239,12 @@
     "skip_concern": 1
   },
   "enviar_informe_youtube": {
-    "frequency_label": "Cada dia 07:00 (temporal)",
+    "frequency_label": "Cada dia 07:00 (brief de l'staff)",
+    "max_age_hours": 26,
+    "skip_concern": 1
+  },
+  "avisar_gestors_novetats": {
+    "frequency_label": "Cada dia 07:30",
     "max_age_hours": 26,
     "skip_concern": 1
   },

@@ -258,6 +258,34 @@ def notify_gestor_sollicitud_revisio_resolta(sollicitud) -> None:
     )
 
 
+def notify_gestor_novetats(user_artista, cancons) -> None:
+    """The gestor's artist got new songs from Deezer that await
+    approval. Two asks in one mail: «if they are yours, request a
+    review from the portal»; «if they are not, the Deezer profile is
+    shared — tell us». Sent by `avisar_gestors_novetats`."""
+    artista = user_artista.artista
+    _send(
+        subject=(
+            f"TopQuaranta · {artista.nom} té {len(cancons)} "
+            f"{'cançó nova pendent' if len(cancons) == 1 else 'cançons noves pendents'}"
+        ),
+        template="comptes/email_gestor_novetats.html",
+        context={
+            "artista_nom": artista.nom,
+            "cancons": [
+                {
+                    "nom": c.nom,
+                    "album": c.album.nom if c.album_id else "",
+                    "data": c.data_llancament,
+                }
+                for c in cancons
+            ],
+            "portal_url": f"{_site_url()}/compte/artista/{artista.slug}/",
+        },
+        to=[user_artista.usuari.email],
+    )
+
+
 def notify_user_feedback_resolt(feedback) -> None:
     """Staff resolved a Feedback. Sends a thank-you with optional
     notes for the reporter."""

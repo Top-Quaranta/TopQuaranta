@@ -120,6 +120,9 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # Brief diari de l'staff: tasques pendents, cançons i artistes per decidir
 # (amb botons d'un clic), recerques de YouTube i l'estat del senyal.
 0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run enviar_informe_youtube >> /var/log/topquaranta/analytics.log 2>&1
+# 07:30 → cada gestor verificat rep les cançons noves pendents del seu
+# artista (stamp UserArtista.avis_novetats_at: mai repeteix).
+30 7 * * *  topquaranta   /home/topquaranta/bin/tq-run avisar_gestors_novetats --send >> /var/log/topquaranta/comptes.log 2>&1
 
 # 05:45 → Reentrenament + repuntuació del classificador de verificació.
 # Fins al 2026-09 açò corria com a fil de fons dins del worker de

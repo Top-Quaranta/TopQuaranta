@@ -59,7 +59,7 @@ def test_report_sends_html_and_survives_an_empty_catalogue():
     assert len(mail.outbox) == 1
     html, mimetype = mail.outbox[0].alternatives[0]
     assert mimetype == "text/html"
-    assert "Connexió amb YouTube" in html
+    assert "Brief diari" in html
     assert "facc15" in html
 
 

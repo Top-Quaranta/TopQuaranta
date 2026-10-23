@@ -3,9 +3,90 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-10-04.
+> Last updated: 2026-10-22.
 
 ---
+
+## Sprint 2026-10-23 — El correu de YouTube passa a ser el brief diari
+
+Primer matí amb els tres calaixos i el Miquel demana dues coses: poder
+aprovar o rebutjar una cançó des del correu mateix, i que el correu
+deixe de ser «de YouTube» ara que el senyal ja està normalitzat. Fet:
+assumpte `Brief diari · dd/mm · N cançons · M artistes · T tasques`,
+un bloc nou de tasques pendents amb els comptadors del panell
+(`comptadors()` a `dashboard.py`, compartit), i a cada cançó el botó
+«Aprovar» d'un clic (`web/api/staff/correu.py`: token signat per
+cançó, 14 dies, només amb la sessió de l'staff oberta). «Rebutjar» no
+és un clic: porta a la fila del panell, perquè rebutjar té una segona
+decisió dins (cançó, àlbum o artista). L'ordre del correu: tasques,
+cançons, artistes, i després tot el de YouTube. La comanda conserva el nom
+`enviar_informe_youtube` i la línia del cron. Tests a
+`test_correu_accions.py` i `test_brief_tasques.py`, verificats contra
+4 mutacions.
+
+Segona volta el mateix dia: el bloc de tasques només duia comptadors,
+i el Miquel vol veure QUÈ espera (nom de la proposta, de qui, on
+decidir-ho; títol de la publicació…), cinc files per cua i «… i N més»,
+més un bloc d'usuaris nous de l'última setmana amb si han activat el
+compte i acabat l'onboarding (el forat de maig s'hauria vist ací en una
+setmana). Les dues propostes del dia (Un de Vint, Callosa de Segura;
+Tramuntana, Olocau) aprovades a mà amb lletres en català confirmades,
+i la publicació de Clara publicada.
+
+Gioba Fellini: onboarding fet, canal de YouTube propi desat a mà
+(`@giobafellini` → UC…), 8 cançons importades, 1 autoaprovada per
+Whisper. Duplicats avisen d'un tema balear amb Sr. À (eivissenc, és el
+primer de la cua de pendents, amb Deezer) i Suc i Sopes.
+
+**Pendent d'aquest fil:** aprovar Sr. À quan sapiguem el municipi
+d'Eivissa.
+
+## Sprint 2026-10-22 bis — L'onboarding estava mort des de maig
+
+Gioba Fellini va escriure per Instagram que el compte «es bloqueja al
+verificar»: primer era el segon clic a l'enllaç d'activació (#531), però
+després de dins tampoc no passava de «Carregant…». `OnboardingPage.jsx`
+demanava `/comunitat/perfil/`, renombrat a `/compte/perfil-usuari/` el
+2026-05-04, i s'empassava el 404. Els 21 comptes registrats des de
+llavors no han acabat mai l'onboarding. Corregit el path i afegit
+`web/tests/test_spa_endpoints_existeixen.py`, que resol contra `urls.py`
+cada endpoint literal que el SPA crida. Lliçó a `docs/LESSONS.md`.
+De pas: Gioba Fellini (Barcelona, Deezer 121802452) aprovat a mà i
+vinculat al seu compte com a gestor.
+
+**Pendent d'aquest fil:** cap. Amb el fix desplegat, correu d'excuses i
+avís als 21 usuaris encallats el mateix 22/10 (21 acceptats per Brevo).
+El cron de les 23:00 ja va importar 3 discos i 8 cançons de Gioba Fellini.
+
+## Sprint 2026-10-22 — El correu diari també reparteix els artistes pendents
+
+El calaix de cançons del 15/10 deixava fora l'altra cua: 7.072 artistes
+pendents que ningú mira. El correu de les 07:00 porta ara un segon
+calaix davall d'aquell, «Els 10 artistes pendents de decidir d'avui».
+No hi ha nota ML per artista, així que l'ordre és el de la cua de
+`/staff/pendents` mateixa, treta a `cua_pendents()` perquè la lligen el
+panell i el correu: propostes d'usuari, cançons verificades i, de
+desempat, afinitat Last.fm (abans el desempat era el nom, i amb set mil
+files a zero la cua obria cada dia per la lletra A). Cada fila diu
+localitat, si té Deezer ID o MBID (sense cap dels dos no es pot
+aprovar), similars Last.fm, verificades i propostes, i enllaça a
+`/staff/pendents` filtrat fins a la fila. Cap estat nou. Tests a
+`analytics/tests/test_informe_yt_artistes_pendents.py`.
+
+## Sprint 2026-10-15 — El correu diari també reparteix les pendents d'aprovar
+
+El Miquel ho havia demanat el 18/09 i la sessió va derivar cap al ML:
+el brief diari de revisió va quedar com a punt 5 pendent i no es va fer.
+Ara el correu de YouTube de les 07:00 porta un calaix nou, «Les N cançons
+pendents d'aprovar d'avui», davall de les recerques. N ix de la fórmula
+que el panell `/staff/estat` ja feia (entrades setmanals robustes menys
+les que caduquen soles, entre set; 11 el 18/09), treta a `flux_cancons()`
+perquè la lligen els dos i no se'n facen dues còpies. Les files són les
+`pendents()` de més `ml_confianca`, que `recalcular_ml` acaba de
+repuntuar a les 05:45, cada una amb la nota ML, la de Whisper si n'hi
+ha, i l'enllaç a `/staff/cancons` filtrat fins a la fila. Cap estat nou:
+una cançó mirada i no decidida torna demà. Tests a
+`analytics/tests/test_informe_yt_pendents.py`.
 
 ## Sprint 2026-09-26 — El top mesurava mig catàleg i no ho sabíem
 
@@ -163,9 +244,9 @@ resta del projecte.
 4. Features causals a l'entrenament: les d'historial es calculen amb
    l'estat d'avui i no amb el del dia de la decisió. Val una mil·lèsima
    de ROC-AUC, així que va l'última.
-5. Brief diari de revisió: 11 cançons/dia, que és el que ja calcula
-   `target_verificacio_setmanal` a `estat.py` (entrada 22,2/dia menys
-   les 80 que caduquen soles cada setmana).
+5. ~~Brief diari de revisió: 11 cançons/dia, que és el que ja calcula
+   `target_verificacio_setmanal` a `estat.py`~~ — fet el 2026-10-15 (vegeu
+   el sprint d'eixe dia).
 
 Descartat després de mesurar-ho: calibrar el bosc. Causalment el tram
 A++ encerta el 99,6 %, o siga que la calibració no era el problema.

@@ -64,6 +64,54 @@ class RegisterEndpointTest(TestCase):
         self.assertEqual(resp.status_code, 201, resp.content)
 
 
+class ActivationLinkTest(TestCase):
+    """`/compte/activar/<uid>/<token>/` activates once; a second click
+    (mail prefetch, another device) must not dead-end the user."""
+
+    def _link(self, user):
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        from comptes.tokens import email_verification_token
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        return f"/compte/activar/{uid}/{email_verification_token.make_token(user)}/"
+
+    def test_first_click_activates_and_logs_in(self):
+        u = Usuari.objects.create_user(
+            email="carla@example.test", password="x", username="carla", is_active=False
+        )
+        client = Client()
+        resp = client.get(self._link(u))
+        self.assertEqual(resp.status_code, 302)
+        u.refresh_from_db()
+        self.assertTrue(u.is_active)
+
+    def test_second_click_says_already_active_not_register_again(self):
+        u = Usuari.objects.create_user(
+            email="carla@example.test", password="x", username="carla", is_active=False
+        )
+        link = self._link(u)
+        Client().get(link)  # first click, another browser
+        resp = Client().get(link)  # second click, not logged in
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertIn("ja està actiu", body)
+        self.assertIn("/compte/accedir", body)
+        self.assertNotIn("Tornar a registrar-se", body)
+
+    def test_second_click_while_logged_in_goes_to_dashboard(self):
+        u = Usuari.objects.create_user(
+            email="carla@example.test", password="x", username="carla", is_active=False
+        )
+        link = self._link(u)
+        client = Client()
+        client.get(link)
+        resp = client.get(link)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, "/compte/")
+
+
 class NewsletterTokenExpiryTest(TestCase):
     """The May-2026 audit found the unsubscribe token never expired.
     We added `max_age=1y` to `signing.loads`. Verify the

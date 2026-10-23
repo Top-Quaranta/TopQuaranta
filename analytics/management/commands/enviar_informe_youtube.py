@@ -24,13 +24,14 @@ from __future__ import annotations
 
 import datetime
 import logging
+import math
 from collections import defaultdict
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -40,6 +41,10 @@ from ingesta.management.commands.descobrir_youtube import DEFAULT_BUDGET
 from music.constants import DIES_CADUCITAT
 from music.models import Artista, Canco, CancoYouTubeVideo
 from ranking.models import SenyalDiari, SenyalYouTube
+from web.api.staff.correu import enllac_accio
+from web.api.staff.dashboard import comptadors
+from web.api.staff.estat import flux_cancons
+from web.api.staff.pendents import cua_pendents
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +400,293 @@ def _accions(en_finestra, cegues, n=_ACCIONS_DIA):
     }
 
 
+def _pendents(today: datetime.date) -> dict:
+    """Les cançons pendents d'aprovar que toca mirar hui.
+
+    Quantes: les que fan falta per a no acumular backlog. Ix de la
+    mateixa fórmula que el panell `/staff/estat` (`flux_cancons`):
+    entrades setmanals robustes menys les que caduquen soles, repartit
+    en set dies. El 2026-09-18 eren 11. Quan el signe és negatiu el
+    backlog baixa sol, però el correu continua proposant-ne una perquè
+    la cua no es quede sense mirar.
+
+    Quines: les de més confiança ML, que el cron `recalcular_ml` de les
+    05:45 ha repuntuat eixa mateixa nit. Cap estat nou: una cançó mirada
+    i no decidida torna demà al mateix lloc, i una d'aprovada o
+    rebutjada deixa de ser pendent i no torna.
+    """
+    setmanal = flux_cancons(today)["target_verificacio_setmanal"]
+    n = max(1, math.ceil(setmanal / 7))
+    qs = Canco.objects.pendents()
+    files = []
+    for c in qs.select_related("artista").order_by(
+        F("ml_confianca").desc(nulls_last=True), "pk"
+    )[:n]:
+        # El llistat de l'staff, filtrat fins a la fila: hi ha el botó
+        # d'aprovar i la cerca ignora accents i apòstrofs.
+        filtre = {"q": c.nom}
+        if c.artista_id:
+            filtre["artista_pk"] = c.artista_id
+        files.append(
+            {
+                "titol": c.nom,
+                "sub": c.artista.nom if c.artista else "",
+                "classe": c.ml_classe,
+                "confianca": c.ml_confianca,
+                "whisper": c.whisper_lang,
+                "whisper_p": c.whisper_p,
+                "on": "/staff/cancons?" + urlencode(filtre),
+                # One click, signed for this song; the view only acts for
+                # a logged-in staff session. Rejecting is NOT one click:
+                # it has a second decision inside (song, album or
+                # artist), so that button opens the panel row (`on`).
+                "aprovar": enllac_accio(c.pk, "aprovar"),
+            }
+        )
+    return {"files": files, "dia": n, "resten": qs.count()}
+
+
+# How many rows of each queue the mail shows before «… i N més».
+_FILES_TASCA = 5
+
+
+def _files_propostes(n):
+    from comptes.models import PropostaArtista
+    from music.models import Municipi
+
+    rows = []
+    qs = PropostaArtista.objects.filter(estat=PropostaArtista.ESTAT_PENDENT)
+    for p in qs.select_related("usuari").order_by("created_at")[:n]:
+        lloc = ""
+        for loc in p.localitzacions or []:
+            if loc.get("municipi_id"):
+                m = Municipi.objects.filter(pk=loc["municipi_id"]).first()
+                lloc = m.nom if m else ""
+                break
+            if loc.get("manual"):
+                lloc = loc["manual"]
+                break
+        rows.append(
+            {
+                "titol": p.nom,
+                "sub": " · ".join(
+                    x for x in (lloc, p.usuari.email, f"{p.created_at:%d/%m}") if x
+                ),
+                "on": f"/staff/propostes/{p.pk}",
+            }
+        )
+    return rows
+
+
+def _files_gestio(n):
+    from comptes.models import UserArtista
+
+    qs = UserArtista.objects.filter(estat=UserArtista.ESTAT_PENDENT)
+    return [
+        {
+            "titol": f"{ua.usuari.email} → {ua.artista.nom}",
+            "sub": f"{ua.created_at:%d/%m}",
+            "on": "/staff/solicituds",
+        }
+        for ua in qs.select_related("usuari", "artista").order_by("created_at")[:n]
+    ]
+
+
+def _files_revisio(n):
+    from comptes.models import SolicitudRevisio
+
+    qs = SolicitudRevisio.objects.filter(estat=SolicitudRevisio.ESTAT_PENDENT)
+    return [
+        {
+            "titol": sr.artista.nom,
+            "sub": f"{sr.gestor.email} · {len(sr.pendents_ids or [])} cançons",
+            "on": f"/staff/sollicituds-revisio/{sr.pk}",
+        }
+        for sr in qs.select_related("artista", "gestor").order_by("pk")[:n]
+    ]
+
+
+def _files_feedback(n):
+    from comptes.models import Feedback
+
+    qs = Feedback.objects.filter(resolt=False).select_related("usuari")
+    return [
+        {
+            "titol": (fb.missatge or "").strip()[:90],
+            "sub": " · ".join(
+                x
+                for x in (
+                    fb.usuari.email if fb.usuari else "anònim",
+                    fb.target_label or fb.url,
+                    f"{fb.created_at:%d/%m}",
+                )
+                if x
+            ),
+            "on": "/staff/feedback",
+        }
+        for fb in qs.order_by("created_at")[:n]
+    ]
+
+
+def _files_publicacions(n):
+    from comptes.models import Publicacio, Usuari
+
+    qs = Publicacio.objects.filter(estat=Publicacio.ESTAT_PENDENT).order_by(
+        "created_at"
+    )
+    autors = {
+        u.pk: u.email
+        for u in Usuari.objects.filter(pk__in=qs.values_list("autor_id", flat=True))
+    }
+    return [
+        {
+            "titol": pub.titol,
+            "sub": f"{autors.get(pub.autor_id, '?')} · {pub.created_at:%d/%m}",
+            "on": "/staff/publicacions",
+        }
+        for pub in qs[:n]
+    ]
+
+
+# The staff queues that are someone's turn, in the order they get stale:
+# (dashboard counter, what the number is, where the queue is, its rows).
+# Only the ones above zero reach the mail — an empty queue is not a task.
+_TASQUES = (
+    (
+        "propostes_obertes",
+        "propostes d'artista per revisar",
+        "/staff/propostes",
+        _files_propostes,
+    ),
+    (
+        "solicituds_gestio_obertes",
+        "sol·licituds de gestió per aprovar",
+        "/staff/solicituds",
+        _files_gestio,
+    ),
+    (
+        "sollicituds_revisio_pendents",
+        "sol·licituds de revisió de gestors",
+        "/staff/sollicituds-revisio",
+        _files_revisio,
+    ),
+    (
+        "feedback_obert",
+        "missatges de feedback sense resoldre",
+        "/staff/feedback",
+        _files_feedback,
+    ),
+    (
+        "publicacions_pendents",
+        "publicacions de la comunitat per moderar",
+        "/staff/publicacions",
+        _files_publicacions,
+    ),
+)
+
+
+def _tasques() -> list[dict]:
+    """The open staff queues, from the same counters as `/staff`, each
+    with its first rows so the mail says WHAT is waiting, not how many."""
+    n = comptadors()
+    return [
+        {
+            "n": n[clau],
+            "que": que,
+            "on": on,
+            "files": files(_FILES_TASCA),
+            "mes": max(0, n[clau] - _FILES_TASCA),
+        }
+        for clau, que, on, files in _TASQUES
+        if n.get(clau, 0) > 0
+    ]
+
+
+# Who signed up lately. A week, not a day: a Sunday sign-up would
+# otherwise only ever show in Monday's mail, which nobody reads first.
+_DIES_USUARIS_NOUS = 7
+
+
+def _usuaris_nous(today: datetime.date) -> list[dict]:
+    from comptes.models import PerfilUsuari, Usuari
+
+    des_de = today - datetime.timedelta(days=_DIES_USUARIS_NOUS)
+    # The `admin` pseudo-user (seeded by a migration) is not a sign-up.
+    qs = (
+        Usuari.objects.filter(date_joined__date__gte=des_de)
+        .exclude(username=getattr(settings, "ADMIN_INBOX_USERNAME", "admin"))
+        .order_by("-date_joined")
+    )
+    fets = set(
+        PerfilUsuari.objects.filter(usuari__in=qs, onboarding_complet=True).values_list(
+            "usuari_id", flat=True
+        )
+    )
+    return [
+        {
+            "email": u.email,
+            "dia": u.date_joined.date(),
+            "actiu": u.is_active,
+            "onboarding": u.pk in fets,
+            "on": f"/staff/usuaris/{u.pk}",
+        }
+        for u in qs
+    ]
+
+
+def _assumpte(ctx: dict) -> str:
+    parts = [
+        f"{len(ctx['pendents']['files'])} cançons",
+        f"{len(ctx['artistes_pendents']['files'])} artistes",
+    ]
+    tasques = sum(t["n"] for t in ctx["tasques"])
+    if tasques:
+        parts.append(f"{tasques} tasques")
+    if ctx["usuaris_nous"]:
+        parts.append(f"{len(ctx['usuaris_nous'])} usuaris nous")
+    return f"[TopQuaranta] Brief diari · {ctx['avui']:%d/%m} · " + " · ".join(parts)
+
+
+# Quants artistes pendents cap mirar en un matí. Ací no hi ha fórmula de
+# backlog com a les cançons: amb 7.000 pendents (2026-10-22) cap ritme
+# raonable el buida, i deu files que es miren valen més que trenta que
+# s'ignoren.
+_ARTISTES_DIA = 10
+
+
+def _artistes_pendents(n=_ARTISTES_DIA) -> dict:
+    """Els artistes pendents de decidir que toca mirar hui.
+
+    Quins: els de més senyal segons la mateixa cua que l'staff veu a
+    `/staff/pendents` (`cua_pendents`): propostes d'usuari, cançons
+    verificades, i d'empat, Last.fm. No hi ha nota ML per artista, així
+    que l'ordre és el de la cua i prou. Cada fila diu si té Deezer ID o
+    MBID —sense cap dels dos no es pot aprovar— perquè es veja abans
+    de clicar què demanarà el formulari. Cap estat nou: un artista
+    mirat i no decidit torna demà al mateix lloc.
+    """
+    qs = cua_pendents()
+    files = []
+    for a in qs[:n]:
+        loc = next(iter(a.localitats.all()), None)
+        files.append(
+            {
+                "titol": a.nom,
+                "lloc": loc.nom_display if loc else "",
+                "territori": loc.territori_display if loc else "",
+                "deezer": any(True for _ in a.deezer_ids.all()),
+                "mbid": bool(a.musicbrainz_id),
+                "similars": a.nb_similars_lastfm or 0,
+                "verificades": a.nb_verif,
+                "propostes": a.n_propostes or 0,
+                # El llistat de l'staff, filtrat fins a la fila: hi ha el
+                # botó d'aprovar i la cerca ignora accents i apòstrofs.
+                "on": "/staff/pendents?" + urlencode({"q": a.nom}),
+            }
+        )
+    return {"files": files, "resten": qs.count()}
+
+
 def build_context(today: datetime.date) -> dict:
     ahir = today - datetime.timedelta(days=1)
     cutoff = today - datetime.timedelta(days=DIES_CADUCITAT)
@@ -474,10 +766,10 @@ def build_context(today: datetime.date) -> dict:
 
     total_ap = en_finestra.exclude(youtube_video_id="").count()
     ap_avui = en_finestra.filter(youtube_matched_at__date=today).count()
-    return {
-        "subject": f"[TopQuaranta] YouTube · dia {today:%d/%m} · "
-        f"{total_ap} cançons connectades",
+    ctx = {
         "avui": today,
+        "tasques": _tasques(),
+        "usuaris_nous": _usuaris_nous(today),
         "descobriment": {
             "total": tot_art,
             "amb_canal": _delta(amb_canal, amb_canal - canals_avui),
@@ -503,6 +795,8 @@ def build_context(today: datetime.date) -> dict:
         },
         "punt_cec": punt_cec,
         "accions": _accions(en_finestra, cegues),
+        "pendents": _pendents(today),
+        "artistes_pendents": _artistes_pendents(),
         "efecte_top": _efecte_al_top(today),
         "senyal": {
             "avui": snap_avui.filter(error=False).count(),
@@ -523,6 +817,8 @@ def build_context(today: datetime.date) -> dict:
             "/"
         ),
     }
+    ctx["subject"] = _assumpte(ctx)
+    return ctx
 
 
 def render_text(ctx: dict) -> str:
@@ -531,8 +827,26 @@ def render_text(ctx: dict) -> str:
     s = ctx["senyal"]
     ac = ctx["accions"]
     e = ctx["efecte_top"]
-    lines = [
-        f"YOUTUBE · INFORME DIARI · {ctx['avui']}",
+    lines = [f"TOPQUARANTA · BRIEF DIARI · {ctx['avui']}"]
+    if ctx["tasques"]:
+        lines += ["", "TASQUES PENDENTS"]
+        for t in ctx["tasques"]:
+            lines += [f"  {t['n']:>3} {t['que']} · {ctx['site_url']}{t['on']}"]
+            for f in t["files"]:
+                lines += [
+                    f"      · {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+                    f"        {ctx['site_url']}{f['on']}",
+                ]
+            if t["mes"]:
+                lines += [f"      … i {t['mes']} més"]
+    if ctx["usuaris_nous"]:
+        lines += ["", f"USUARIS NOUS ({_DIES_USUARIS_NOUS} DIES)"]
+        for u in ctx["usuaris_nous"]:
+            estat = ("actiu" if u["actiu"] else "sense activar") + (
+                ", onboarding fet" if u["onboarding"] else ", onboarding pendent"
+            )
+            lines += [f"  {u['dia']:%d/%m} {u['email']} · {estat}"]
+    lines += [
         "",
         f"EL TOP AMB YOUTUBE · {'actiu' if e['actiu'] else 'INACTIU!'} · "
         f"pes {e['pes']} · terra {e['terra']}",
@@ -557,6 +871,54 @@ def render_text(ctx: dict) -> str:
     lines += [
         f"  Queden {ac['resten_cancons']} cançons sense vídeo i "
         f"{ac['resten_artistes']} artistes sense canal revisat.",
+    ]
+    p = ctx["pendents"]
+    if p["files"]:
+        lines += ["", f"LES {len(p['files'])} CANÇONS PENDENTS D'APROVAR D'AVUI"]
+        for i, f in enumerate(p["files"], 1):
+            ml = (
+                f"ML {f['classe']} {f['confianca']:.2f}"
+                if f["confianca"] is not None
+                else "sense nota ML"
+            )
+            wh = (
+                f" · Whisper {f['whisper']} {f['whisper_p']:.2f}"
+                if f["whisper"] and f["whisper_p"] is not None
+                else ""
+            )
+            lines += [
+                f"  {i:>2}. {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+                f"      {ml}{wh}",
+                f"      aprovar (un clic): {ctx['site_url']}{f['aprovar']}",
+                f"      rebutjar (al panell): {ctx['site_url']}{f['on']}",
+            ]
+        lines += [
+            f"  Queden {p['resten']} pendents. {p['dia']} al dia és el ritme que "
+            "buida el backlog (fórmula de /staff/estat)."
+        ]
+    ap = ctx["artistes_pendents"]
+    if ap["files"]:
+        lines += ["", f"ELS {len(ap['files'])} ARTISTES PENDENTS DE DECIDIR D'AVUI"]
+        for i, f in enumerate(ap["files"], 1):
+            lloc = f" — {f['lloc']}" if f["lloc"] else ""
+            if f["territori"]:
+                lloc += f" ({f['territori']})"
+            ancora = (
+                f"{'Deezer' if f['deezer'] else 'sense Deezer'} · "
+                f"{'MBID' if f['mbid'] else 'sense MBID'}"
+            )
+            if not f["deezer"] and not f["mbid"]:
+                ancora += " — no es pot aprovar sense cap dels dos"
+            lines += [
+                f"  {i:>2}. {f['titol']}{lloc}",
+                f"      {ancora}",
+                f"      {f['similars']} similars Last.fm · "
+                f"{f['verificades']} cançons verificades · "
+                f"{f['propostes']} propostes",
+                f"      decideix a: {ctx['site_url']}{f['on']}",
+            ]
+        lines += [f"  Queden {ap['resten']} artistes pendents."]
+    lines += [
         "",
         "DESCOBRIMENT",
         f"  Artistes amb canal Topic  {d['amb_canal_n']}/{d['total']} ({d['pct']}%)"
@@ -593,7 +955,7 @@ def render_text(ctx: dict) -> str:
 
 
 class Command(BaseCommand):
-    help = "Envia l'informe diari de progrés de la integració amb YouTube."
+    help = "Envia el brief diari de l'staff: tasques, cançons i artistes pendents, YouTube."
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")

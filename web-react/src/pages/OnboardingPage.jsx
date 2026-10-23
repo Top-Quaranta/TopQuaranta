@@ -42,7 +42,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (loading || !profile) return
-    api.get('/comunitat/perfil/').then(setPerfil).catch(() => {})
+    api.get('/compte/perfil-usuari/').then(setPerfil).catch(() => {})
   }, [loading, profile])
 
   // Slice E: funnel instrumentation. Fire "inici" once on mount.
@@ -93,7 +93,7 @@ export default function OnboardingPage() {
         onboarding_complet: onboardingDone,
         ...(perfil.social || {}),
       }
-      await api.patch('/comunitat/perfil/', body)
+      await api.patch('/compte/perfil-usuari/', body)
       if (onboardingDone) fire('onboarding_complet')
       if (refresh) await refresh()
       navigate('/compte')
@@ -107,7 +107,7 @@ export default function OnboardingPage() {
   async function saltar() {
     setBusy(true)
     try {
-      await api.patch('/comunitat/perfil/', { onboarding_complet: true })
+      await api.patch('/compte/perfil-usuari/', { onboarding_complet: true })
       fire('onboarding_saltat')
       if (refresh) await refresh()
       navigate('/compte')

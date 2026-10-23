@@ -17,6 +17,7 @@ from . import (
     staff_views,
     top_views,
 )
+from .staff import correu as staff_correu
 from .staff import sollicituds_revisio as staff_sr
 
 app_name = "api"
@@ -164,6 +165,13 @@ urlpatterns = [
     ),
     # ── Staff (is_staff required) ──
     path("staff/dashboard/", staff_views.dashboard, name="staff_dashboard"),
+    # One-click «Aprovar» / «Rebutjar» from the daily mail: signed token +
+    # staff session, plain Django view (renders a page, not JSON).
+    path(
+        "staff/correu/canco/<int:pk>/<str:accio>/<str:token>/",
+        staff_correu.canco_accio,
+        name="staff_correu_canco_accio",
+    ),
     path("staff/estat/", staff_views.estat, name="staff_estat"),
     # K1: ethical aggregate analytics dashboard.
     path(

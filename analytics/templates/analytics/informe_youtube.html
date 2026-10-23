@@ -39,11 +39,92 @@
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
     <td align="left" valign="middle">
       <img src="{{ site_url }}{% static 'web/img/newsletter/logo_email.png' %}" width="170" alt="TopQuaranta" style="width:170px;height:auto;">
-      <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#facc15;font-size:17px;margin-top:10px;">Connexió amb YouTube &middot; informe diari</div>
+      <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#facc15;font-size:17px;margin-top:10px;">Brief diari de l'staff</div>
     </td>
     <td align="right" valign="top" class="muted" style="font-size:12px;color:#9aa0a6;">{{ avui|date:"d/m/Y" }}</td>
   </tr></table>
 </td></tr>
+
+{% comment %} TASQUES PENDENTS — les cues de l'staff que esperen algú,
+   dels mateixos comptadors que /staff. Només les que no són a zero. {% endcomment %}
+{% if tasques %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Tasques pendents</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Les cues del panell que esperen una persona.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
+    {% for t in tasques %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
+      <td width="44" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:18px;color:#facc15;padding:10px 0 0;">{{ t.n|milers }}</td>
+      <td valign="top" style="padding:12px 0 0;font-size:14px;color:#ffffff;line-height:1.4;"><a href="{{ site_url }}{{ t.on }}" style="color:#ffffff;text-decoration:underline;">{{ t.que }} &#8599;</a></td>
+    </tr></table>
+    {% endfor %}
+  </td></tr></table>
+</td></tr>
+{% endif %}
+
+{% comment %} LES PENDENTS D'APROVAR — l'altra feina de mà. Tantes com cal
+   per a no acumular backlog (la fórmula de /staff/estat), les de més
+   confiança ML primer, repuntuades a les 05:45. Una cançó mirada i no
+   decidida torna demà; una decidida no. {% endcomment %}
+{% if pendents.files %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Les {{ pendents.files|length }} cançons pendents d'aprovar d'avui</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Les que el model dona per més segures. Whisper només escolta trenta segons: un «no» seu no decideix res, però un «ca» quasi sempre encerta. «Aprovar» és un clic (cal la sessió de l'staff oberta); «rebutjar» obri la fila al panell, on tries què desvincular.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
+    {% for f in pendents.files %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
+      <td width="26" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if f.classe == 'A' %}#7bbf7b{% elif f.classe == 'C' %}#e06c6c{% else %}#facc15{% endif %};padding:10px 0 0;">{{ forloop.counter }}</td>
+      <td valign="top" style="padding:10px 0 0;">
+        <div style="font-size:14px;color:#ffffff;font-weight:700;line-height:1.4;">{{ f.titol }}{% if f.sub %} <span class="muted" style="font-weight:400;color:#9aa0a6;">&middot; {{ f.sub }}</span>{% endif %}</div>
+        <div class="muted" style="font-size:12.5px;color:#b7b7be;line-height:1.6;margin-top:2px;">
+          {% if f.confianca is not None %}ML <strong style="color:#ffffff;">{{ f.classe }} {{ f.confianca|floatformat:2 }}</strong>{% else %}sense nota ML{% endif %}{% if f.whisper and f.whisper_p is not None %} &middot; Whisper <strong style="color:#ffffff;">{{ f.whisper }} {{ f.whisper_p|floatformat:2 }}</strong>{% endif %}
+        </div>
+        <div style="font-size:12.5px;margin-top:8px;">
+          <a href="{{ site_url }}{{ f.aprovar }}" style="display:inline-block;padding:6px 14px;border-radius:999px;background:#7bbf7b;color:#0a0a0a;font-weight:700;text-decoration:none;">&#10003; Aprovar</a>
+          &nbsp;<a href="{{ site_url }}{{ f.on }}" style="display:inline-block;padding:6px 14px;border-radius:999px;background:transparent;border:1px solid #e06c6c;color:#e06c6c;font-weight:700;text-decoration:none;">&#10007; Rebutjar al panell &#8599;</a>
+        </div>
+      </td>
+    </tr></table>
+    {% endfor %}
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
+      Queden <strong style="color:#ffffff;">{{ pendents.resten|milers }}</strong> pendents. {{ pendents.dia }} al dia és el ritme que buida el backlog, segons la fórmula de <code>/staff/estat</code>.
+      Una cançó que mires i no decidisques torna demà al mateix lloc.
+    </div>
+  </td></tr></table>
+</td></tr>
+{% endif %}
+
+{% comment %} ELS ARTISTES PENDENTS DE DECIDIR — la mateixa cua que
+   /staff/pendents, en el mateix ordre (propostes, cançons verificades,
+   Last.fm), deu al dia. Cada fila diu si té Deezer o MBID perquè sense
+   cap dels dos el formulari d'aprovar no deixarà passar. Un artista
+   mirat i no decidit torna demà. {% endcomment %}
+{% if artistes_pendents.files %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Els {{ artistes_pendents.files|length }} artistes pendents de decidir d'avui</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Els de més senyal: primer els que algú ha proposat, després els que ja tenen cançons verificades, i d'empat, Last.fm. Sense Deezer ni MBID no es pot aprovar.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
+    {% for f in artistes_pendents.files %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
+      <td width="26" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if f.deezer or f.mbid %}#7bbf7b{% else %}#e06c6c{% endif %};padding:10px 0 0;">{{ forloop.counter }}</td>
+      <td valign="top" style="padding:10px 0 0;">
+        <div style="font-size:14px;color:#ffffff;font-weight:700;line-height:1.4;">{{ f.titol }}{% if f.lloc %} <span class="muted" style="font-weight:400;color:#9aa0a6;">&middot; {{ f.lloc }}{% if f.territori %} ({{ f.territori }}){% endif %}</span>{% endif %}</div>
+        <div class="muted" style="font-size:12.5px;color:#b7b7be;line-height:1.6;margin-top:2px;">
+          {% if f.deezer %}<strong style="color:#ffffff;">Deezer</strong>{% else %}sense Deezer{% endif %} &middot; {% if f.mbid %}<strong style="color:#ffffff;">MBID</strong>{% else %}sense MBID{% endif %}{% if not f.deezer and not f.mbid %} &middot; <span style="color:#e06c6c;">no es pot aprovar sense cap dels dos</span>{% endif %}<br>
+          <strong style="color:#ffffff;">{{ f.similars }}</strong> similars Last.fm &middot; <strong style="color:#ffffff;">{{ f.verificades }}</strong> cançons verificades &middot; <strong style="color:#ffffff;">{{ f.propostes }}</strong> propostes
+        </div>
+        <div style="font-size:12.5px;margin-top:5px;">
+          <a href="{{ site_url }}{{ f.on }}" style="color:#7bbf7b;text-decoration:underline;">Aprovar o descartar &#8599;</a>
+        </div>
+      </td>
+    </tr></table>
+    {% endfor %}
+    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
+      Queden <strong style="color:#ffffff;">{{ artistes_pendents.resten|milers }}</strong> artistes pendents. Un artista que mires i no decidisques torna demà al mateix lloc.
+    </div>
+  </td></tr></table>
+</td></tr>
+{% endif %}
 
 {% comment %} EL TOP — el que de veres canvia {% endcomment %}
 <tr><td class="px" style="padding:24px 28px 0;background:#060608;">
@@ -111,69 +192,6 @@
     <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
       Queden <strong style="color:#ffffff;">{{ accions.resten_cancons|milers }}</strong> cançons sense cap vídeo i <strong style="color:#ffffff;">{{ accions.resten_artistes|milers }}</strong> artistes sense canal propi revisat.
       Les mateixes files tornen demà si no es toquen — són la prioritat mentre no canvie res. «No en té» també és una resposta: lleva la fila per sempre.
-    </div>
-  </td></tr></table>
-</td></tr>
-{% endif %}
-
-{% comment %} LES PENDENTS D'APROVAR — l'altra feina de mà. Tantes com cal
-   per a no acumular backlog (la fórmula de /staff/estat), les de més
-   confiança ML primer, repuntuades a les 05:45. Una cançó mirada i no
-   decidida torna demà; una decidida no. {% endcomment %}
-{% if pendents.files %}
-<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
-  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Les {{ pendents.files|length }} cançons pendents d'aprovar d'avui</div>
-  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Les que el model dona per més segures. Whisper només escolta trenta segons: un «no» seu no decideix res, però un «ca» quasi sempre encerta.</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
-    {% for f in pendents.files %}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
-      <td width="26" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if f.classe == 'A' %}#7bbf7b{% elif f.classe == 'C' %}#e06c6c{% else %}#facc15{% endif %};padding:10px 0 0;">{{ forloop.counter }}</td>
-      <td valign="top" style="padding:10px 0 0;">
-        <div style="font-size:14px;color:#ffffff;font-weight:700;line-height:1.4;">{{ f.titol }}{% if f.sub %} <span class="muted" style="font-weight:400;color:#9aa0a6;">&middot; {{ f.sub }}</span>{% endif %}</div>
-        <div class="muted" style="font-size:12.5px;color:#b7b7be;line-height:1.6;margin-top:2px;">
-          {% if f.confianca is not None %}ML <strong style="color:#ffffff;">{{ f.classe }} {{ f.confianca|floatformat:2 }}</strong>{% else %}sense nota ML{% endif %}{% if f.whisper and f.whisper_p is not None %} &middot; Whisper <strong style="color:#ffffff;">{{ f.whisper }} {{ f.whisper_p|floatformat:2 }}</strong>{% endif %}
-        </div>
-        <div style="font-size:12.5px;margin-top:5px;">
-          <a href="{{ site_url }}{{ f.on }}" style="color:#7bbf7b;text-decoration:underline;">Aprovar o rebutjar &#8599;</a>
-        </div>
-      </td>
-    </tr></table>
-    {% endfor %}
-    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
-      Queden <strong style="color:#ffffff;">{{ pendents.resten|milers }}</strong> pendents. {{ pendents.dia }} al dia és el ritme que buida el backlog, segons la fórmula de <code>/staff/estat</code>.
-      Una cançó que mires i no decidisques torna demà al mateix lloc.
-    </div>
-  </td></tr></table>
-</td></tr>
-{% endif %}
-
-{% comment %} ELS ARTISTES PENDENTS DE DECIDIR — la mateixa cua que
-   /staff/pendents, en el mateix ordre (propostes, cançons verificades,
-   Last.fm), deu al dia. Cada fila diu si té Deezer o MBID perquè sense
-   cap dels dos el formulari d'aprovar no deixarà passar. Un artista
-   mirat i no decidit torna demà. {% endcomment %}
-{% if artistes_pendents.files %}
-<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
-  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Els {{ artistes_pendents.files|length }} artistes pendents de decidir d'avui</div>
-  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Els de més senyal: primer els que algú ha proposat, després els que ja tenen cançons verificades, i d'empat, Last.fm. Sense Deezer ni MBID no es pot aprovar.</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
-    {% for f in artistes_pendents.files %}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
-      <td width="26" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:15px;color:{% if f.deezer or f.mbid %}#7bbf7b{% else %}#e06c6c{% endif %};padding:10px 0 0;">{{ forloop.counter }}</td>
-      <td valign="top" style="padding:10px 0 0;">
-        <div style="font-size:14px;color:#ffffff;font-weight:700;line-height:1.4;">{{ f.titol }}{% if f.lloc %} <span class="muted" style="font-weight:400;color:#9aa0a6;">&middot; {{ f.lloc }}{% if f.territori %} ({{ f.territori }}){% endif %}</span>{% endif %}</div>
-        <div class="muted" style="font-size:12.5px;color:#b7b7be;line-height:1.6;margin-top:2px;">
-          {% if f.deezer %}<strong style="color:#ffffff;">Deezer</strong>{% else %}sense Deezer{% endif %} &middot; {% if f.mbid %}<strong style="color:#ffffff;">MBID</strong>{% else %}sense MBID{% endif %}{% if not f.deezer and not f.mbid %} &middot; <span style="color:#e06c6c;">no es pot aprovar sense cap dels dos</span>{% endif %}<br>
-          <strong style="color:#ffffff;">{{ f.similars }}</strong> similars Last.fm &middot; <strong style="color:#ffffff;">{{ f.verificades }}</strong> cançons verificades &middot; <strong style="color:#ffffff;">{{ f.propostes }}</strong> propostes
-        </div>
-        <div style="font-size:12.5px;margin-top:5px;">
-          <a href="{{ site_url }}{{ f.on }}" style="color:#7bbf7b;text-decoration:underline;">Aprovar o descartar &#8599;</a>
-        </div>
-      </td>
-    </tr></table>
-    {% endfor %}
-    <div class="muted" style="font-size:12px;color:#9aa0a6;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);line-height:1.7;">
-      Queden <strong style="color:#ffffff;">{{ artistes_pendents.resten|milers }}</strong> artistes pendents. Un artista que mires i no decidisques torna demà al mateix lloc.
     </div>
   </td></tr></table>
 </td></tr>
@@ -272,7 +290,7 @@
 </td></tr>
 
 <tr><td class="px" style="padding:22px 28px;background:#060608;border-top:1px solid rgba(255,255,255,0.07);color:#7c7c84;font-size:11px;line-height:1.7;text-align:center;">
-  Informe temporal: quan la cua de recerques quede buida, s'esborra la línia del cron.<br>
+  Cada matí a les 07:00. El botó «Aprovar» només funciona amb la sessió de l'staff oberta.<br>
   <a href="{{ site_url }}" style="color:#facc15;">topquaranta.cat</a>
 </td></tr>
 

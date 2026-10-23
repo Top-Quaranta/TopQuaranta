@@ -41,6 +41,8 @@ from ingesta.management.commands.descobrir_youtube import DEFAULT_BUDGET
 from music.constants import DIES_CADUCITAT
 from music.models import Artista, Canco, CancoYouTubeVideo
 from ranking.models import SenyalDiari, SenyalYouTube
+from web.api.staff.correu import enllac_accio
+from web.api.staff.dashboard import comptadors
 from web.api.staff.estat import flux_cancons
 from web.api.staff.pendents import cua_pendents
 
@@ -434,9 +436,59 @@ def _pendents(today: datetime.date) -> dict:
                 "whisper": c.whisper_lang,
                 "whisper_p": c.whisper_p,
                 "on": "/staff/cancons?" + urlencode(filtre),
+                # One click, signed for this song; the view only acts for
+                # a logged-in staff session. Rejecting is NOT one click:
+                # it has a second decision inside (song, album or
+                # artist), so that button opens the panel row (`on`).
+                "aprovar": enllac_accio(c.pk, "aprovar"),
             }
         )
     return {"files": files, "dia": n, "resten": qs.count()}
+
+
+# The staff queues that are someone's turn, in the order they get stale:
+# (dashboard counter, what the number is, where to go). Only the ones
+# above zero reach the mail — an empty queue is not a task.
+_TASQUES = (
+    ("propostes_obertes", "propostes d'artista per revisar", "/staff/propostes"),
+    (
+        "solicituds_gestio_obertes",
+        "sol·licituds de gestió per aprovar",
+        "/staff/solicituds",
+    ),
+    (
+        "sollicituds_revisio_pendents",
+        "sol·licituds de revisió de gestors",
+        "/staff/sollicituds-revisio",
+    ),
+    ("feedback_obert", "missatges de feedback sense resoldre", "/staff/feedback"),
+    (
+        "publicacions_pendents",
+        "publicacions de la comunitat per moderar",
+        "/staff/publicacions",
+    ),
+)
+
+
+def _tasques() -> list[dict]:
+    """The open staff queues, from the same counters as `/staff`."""
+    n = comptadors()
+    return [
+        {"n": n[clau], "que": que, "on": on}
+        for clau, que, on in _TASQUES
+        if n.get(clau, 0) > 0
+    ]
+
+
+def _assumpte(ctx: dict) -> str:
+    parts = [
+        f"{len(ctx['pendents']['files'])} cançons",
+        f"{len(ctx['artistes_pendents']['files'])} artistes",
+    ]
+    tasques = sum(t["n"] for t in ctx["tasques"])
+    if tasques:
+        parts.append(f"{tasques} tasques")
+    return f"[TopQuaranta] Brief diari · {ctx['avui']:%d/%m} · " + " · ".join(parts)
 
 
 # Quants artistes pendents cap mirar en un matí. Ací no hi ha fórmula de
@@ -558,10 +610,9 @@ def build_context(today: datetime.date) -> dict:
 
     total_ap = en_finestra.exclude(youtube_video_id="").count()
     ap_avui = en_finestra.filter(youtube_matched_at__date=today).count()
-    return {
-        "subject": f"[TopQuaranta] YouTube · dia {today:%d/%m} · "
-        f"{total_ap} cançons connectades",
+    ctx = {
         "avui": today,
+        "tasques": _tasques(),
         "descobriment": {
             "total": tot_art,
             "amb_canal": _delta(amb_canal, amb_canal - canals_avui),
@@ -609,6 +660,8 @@ def build_context(today: datetime.date) -> dict:
             "/"
         ),
     }
+    ctx["subject"] = _assumpte(ctx)
+    return ctx
 
 
 def render_text(ctx: dict) -> str:
@@ -617,8 +670,12 @@ def render_text(ctx: dict) -> str:
     s = ctx["senyal"]
     ac = ctx["accions"]
     e = ctx["efecte_top"]
-    lines = [
-        f"YOUTUBE · INFORME DIARI · {ctx['avui']}",
+    lines = [f"TOPQUARANTA · BRIEF DIARI · {ctx['avui']}"]
+    if ctx["tasques"]:
+        lines += ["", "TASQUES PENDENTS"]
+        for t in ctx["tasques"]:
+            lines += [f"  {t['n']:>3} {t['que']}", f"      {ctx['site_url']}{t['on']}"]
+    lines += [
         "",
         f"EL TOP AMB YOUTUBE · {'actiu' if e['actiu'] else 'INACTIU!'} · "
         f"pes {e['pes']} · terra {e['terra']}",
@@ -661,7 +718,8 @@ def render_text(ctx: dict) -> str:
             lines += [
                 f"  {i:>2}. {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
                 f"      {ml}{wh}",
-                f"      decideix a: {ctx['site_url']}{f['on']}",
+                f"      aprovar (un clic): {ctx['site_url']}{f['aprovar']}",
+                f"      rebutjar (al panell): {ctx['site_url']}{f['on']}",
             ]
         lines += [
             f"  Queden {p['resten']} pendents. {p['dia']} al dia és el ritme que "
@@ -726,7 +784,7 @@ def render_text(ctx: dict) -> str:
 
 
 class Command(BaseCommand):
-    help = "Envia l'informe diari de progrés de la integració amb YouTube."
+    help = "Envia el brief diari de l'staff: tasques, cançons i artistes pendents, YouTube."
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")

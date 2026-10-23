@@ -117,8 +117,8 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # La recollida diària costa ~60 unitats: després del descobriment, i
 # abans que arribe l'informe.
 30 6 * * *  topquaranta   /home/topquaranta/bin/tq-run obtenir_senyal_youtube >> /var/log/topquaranta/youtube.log 2>&1
-# TEMPORAL — informe de progrés mentre dura la fase d'implementació.
-# Per a apagar-lo: esborra aquesta línia i torna a executar tq-sync-infra.
+# Brief diari de l'staff: tasques pendents, cançons i artistes per decidir
+# (amb botons d'un clic), recerques de YouTube i l'estat del senyal.
 0 7 * * *   topquaranta   /home/topquaranta/bin/tq-run enviar_informe_youtube >> /var/log/topquaranta/analytics.log 2>&1
 
 # 05:45 → Reentrenament + repuntuació del classificador de verificació.

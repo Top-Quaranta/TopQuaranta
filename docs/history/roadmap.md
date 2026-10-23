@@ -24,6 +24,15 @@ cançons, artistes, i després tot el de YouTube. La comanda conserva el nom
 `test_correu_accions.py` i `test_brief_tasques.py`, verificats contra
 4 mutacions.
 
+Segona volta el mateix dia: el bloc de tasques només duia comptadors,
+i el Miquel vol veure QUÈ espera (nom de la proposta, de qui, on
+decidir-ho; títol de la publicació…), cinc files per cua i «… i N més»,
+més un bloc d'usuaris nous de l'última setmana amb si han activat el
+compte i acabat l'onboarding (el forat de maig s'hauria vist ací en una
+setmana). Les dues propostes del dia (Un de Vint, Callosa de Segura;
+Tramuntana, Olocau) aprovades a mà amb lletres en català confirmades,
+i la publicació de Clara publicada.
+
 Gioba Fellini: onboarding fet, canal de YouTube propi desat a mà
 (`@giobafellini` → UC…), 8 cançons importades, 1 autoaprovada per
 Whisper. Duplicats avisen d'un tema balear amb Sr. À (eivissenc, és el

@@ -55,7 +55,37 @@
     {% for t in tasques %}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
       <td width="44" valign="top" class="crit" style="font-family:'Anton',Arial,sans-serif;font-size:18px;color:#facc15;padding:10px 0 0;">{{ t.n|milers }}</td>
-      <td valign="top" style="padding:12px 0 0;font-size:14px;color:#ffffff;line-height:1.4;"><a href="{{ site_url }}{{ t.on }}" style="color:#ffffff;text-decoration:underline;">{{ t.que }} &#8599;</a></td>
+      <td valign="top" style="padding:12px 0 0;font-size:14px;color:#ffffff;line-height:1.4;">
+        <a href="{{ site_url }}{{ t.on }}" style="color:#ffffff;text-decoration:underline;">{{ t.que }} &#8599;</a>
+        {% for f in t.files %}
+        <div style="margin-top:6px;font-size:13px;line-height:1.5;">
+          <a href="{{ site_url }}{{ f.on }}" style="color:#facc15;text-decoration:none;font-weight:700;">{{ f.titol }}</a>{% if f.sub %} <span class="muted" style="color:#9aa0a6;">&middot; {{ f.sub }}</span>{% endif %}
+          &nbsp;<a href="{{ site_url }}{{ f.on }}" style="color:#7bbf7b;text-decoration:underline;font-size:12px;">decidir &#8599;</a>
+        </div>
+        {% endfor %}
+        {% if t.mes %}<div class="muted" style="margin-top:4px;font-size:12px;color:#9aa0a6;">… i {{ t.mes }} més</div>{% endif %}
+      </td>
+    </tr></table>
+    {% endfor %}
+  </td></tr></table>
+</td></tr>
+{% endif %}
+
+{% comment %} USUARIS NOUS — els registrats l'última setmana, amb si han
+   activat el compte i acabat l'onboarding (el bloqueig de maig–octubre
+   es va veure ací, massa tard). {% endcomment %}
+{% if usuaris_nous %}
+<tr><td class="px" style="padding:24px 28px 0;background:#060608;">
+  <div class="crit" style="font-family:'Anton','Arial Black',Arial,sans-serif;font-size:15px;color:#facc15;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;">Usuaris nous</div>
+  <div class="whisper" style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;color:#9aa0a6;font-size:13px;margin-bottom:10px;">Els registrats l'última setmana, i si han pogut entrar.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#141319;border:1px solid rgba(255,255,255,0.08);border-radius:12px;"><tr><td style="padding:6px 16px 14px;">
+    {% for u in usuaris_nous %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 0;border-top:1px solid rgba(255,255,255,0.06);"><tr>
+      <td width="48" valign="top" class="muted" style="font-size:12px;color:#9aa0a6;padding:9px 0 0;">{{ u.dia|date:"d/m" }}</td>
+      <td valign="top" style="padding:8px 0 0;font-size:13px;color:#ffffff;line-height:1.5;">
+        <a href="{{ site_url }}{{ u.on }}" style="color:#ffffff;text-decoration:underline;">{{ u.email }}</a>
+        <span class="muted" style="color:#9aa0a6;">&middot; {% if u.actiu %}actiu{% else %}<span style="color:#e06c6c;">sense activar</span>{% endif %}, {% if u.onboarding %}onboarding fet{% else %}<span style="color:#facc15;">onboarding pendent</span>{% endif %}</span>
+      </td>
     </tr></table>
     {% endfor %}
   </td></tr></table>

@@ -446,37 +446,191 @@ def _pendents(today: datetime.date) -> dict:
     return {"files": files, "dia": n, "resten": qs.count()}
 
 
+# How many rows of each queue the mail shows before «… i N més».
+_FILES_TASCA = 5
+
+
+def _files_propostes(n):
+    from comptes.models import PropostaArtista
+    from music.models import Municipi
+
+    rows = []
+    qs = PropostaArtista.objects.filter(estat=PropostaArtista.ESTAT_PENDENT)
+    for p in qs.select_related("usuari").order_by("created_at")[:n]:
+        lloc = ""
+        for loc in p.localitzacions or []:
+            if loc.get("municipi_id"):
+                m = Municipi.objects.filter(pk=loc["municipi_id"]).first()
+                lloc = m.nom if m else ""
+                break
+            if loc.get("manual"):
+                lloc = loc["manual"]
+                break
+        rows.append(
+            {
+                "titol": p.nom,
+                "sub": " · ".join(
+                    x for x in (lloc, p.usuari.email, f"{p.created_at:%d/%m}") if x
+                ),
+                "on": f"/staff/propostes/{p.pk}",
+            }
+        )
+    return rows
+
+
+def _files_gestio(n):
+    from comptes.models import UserArtista
+
+    qs = UserArtista.objects.filter(estat=UserArtista.ESTAT_PENDENT)
+    return [
+        {
+            "titol": f"{ua.usuari.email} → {ua.artista.nom}",
+            "sub": f"{ua.created_at:%d/%m}",
+            "on": "/staff/solicituds",
+        }
+        for ua in qs.select_related("usuari", "artista").order_by("created_at")[:n]
+    ]
+
+
+def _files_revisio(n):
+    from comptes.models import SolicitudRevisio
+
+    qs = SolicitudRevisio.objects.filter(estat=SolicitudRevisio.ESTAT_PENDENT)
+    return [
+        {
+            "titol": sr.artista.nom,
+            "sub": f"{sr.gestor.email} · {len(sr.pendents_ids or [])} cançons",
+            "on": f"/staff/sollicituds-revisio/{sr.pk}",
+        }
+        for sr in qs.select_related("artista", "gestor").order_by("pk")[:n]
+    ]
+
+
+def _files_feedback(n):
+    from comptes.models import Feedback
+
+    qs = Feedback.objects.filter(resolt=False).select_related("usuari")
+    return [
+        {
+            "titol": (fb.missatge or "").strip()[:90],
+            "sub": " · ".join(
+                x
+                for x in (
+                    fb.usuari.email if fb.usuari else "anònim",
+                    fb.target_label or fb.url,
+                    f"{fb.created_at:%d/%m}",
+                )
+                if x
+            ),
+            "on": "/staff/feedback",
+        }
+        for fb in qs.order_by("created_at")[:n]
+    ]
+
+
+def _files_publicacions(n):
+    from comptes.models import Publicacio, Usuari
+
+    qs = Publicacio.objects.filter(estat=Publicacio.ESTAT_PENDENT).order_by(
+        "created_at"
+    )
+    autors = {
+        u.pk: u.email
+        for u in Usuari.objects.filter(pk__in=qs.values_list("autor_id", flat=True))
+    }
+    return [
+        {
+            "titol": pub.titol,
+            "sub": f"{autors.get(pub.autor_id, '?')} · {pub.created_at:%d/%m}",
+            "on": "/staff/publicacions",
+        }
+        for pub in qs[:n]
+    ]
+
+
 # The staff queues that are someone's turn, in the order they get stale:
-# (dashboard counter, what the number is, where to go). Only the ones
-# above zero reach the mail — an empty queue is not a task.
+# (dashboard counter, what the number is, where the queue is, its rows).
+# Only the ones above zero reach the mail — an empty queue is not a task.
 _TASQUES = (
-    ("propostes_obertes", "propostes d'artista per revisar", "/staff/propostes"),
+    (
+        "propostes_obertes",
+        "propostes d'artista per revisar",
+        "/staff/propostes",
+        _files_propostes,
+    ),
     (
         "solicituds_gestio_obertes",
         "sol·licituds de gestió per aprovar",
         "/staff/solicituds",
+        _files_gestio,
     ),
     (
         "sollicituds_revisio_pendents",
         "sol·licituds de revisió de gestors",
         "/staff/sollicituds-revisio",
+        _files_revisio,
     ),
-    ("feedback_obert", "missatges de feedback sense resoldre", "/staff/feedback"),
+    (
+        "feedback_obert",
+        "missatges de feedback sense resoldre",
+        "/staff/feedback",
+        _files_feedback,
+    ),
     (
         "publicacions_pendents",
         "publicacions de la comunitat per moderar",
         "/staff/publicacions",
+        _files_publicacions,
     ),
 )
 
 
 def _tasques() -> list[dict]:
-    """The open staff queues, from the same counters as `/staff`."""
+    """The open staff queues, from the same counters as `/staff`, each
+    with its first rows so the mail says WHAT is waiting, not how many."""
     n = comptadors()
     return [
-        {"n": n[clau], "que": que, "on": on}
-        for clau, que, on in _TASQUES
+        {
+            "n": n[clau],
+            "que": que,
+            "on": on,
+            "files": files(_FILES_TASCA),
+            "mes": max(0, n[clau] - _FILES_TASCA),
+        }
+        for clau, que, on, files in _TASQUES
         if n.get(clau, 0) > 0
+    ]
+
+
+# Who signed up lately. A week, not a day: a Sunday sign-up would
+# otherwise only ever show in Monday's mail, which nobody reads first.
+_DIES_USUARIS_NOUS = 7
+
+
+def _usuaris_nous(today: datetime.date) -> list[dict]:
+    from comptes.models import PerfilUsuari, Usuari
+
+    des_de = today - datetime.timedelta(days=_DIES_USUARIS_NOUS)
+    # The `admin` pseudo-user (seeded by a migration) is not a sign-up.
+    qs = (
+        Usuari.objects.filter(date_joined__date__gte=des_de)
+        .exclude(username=getattr(settings, "ADMIN_INBOX_USERNAME", "admin"))
+        .order_by("-date_joined")
+    )
+    fets = set(
+        PerfilUsuari.objects.filter(usuari__in=qs, onboarding_complet=True).values_list(
+            "usuari_id", flat=True
+        )
+    )
+    return [
+        {
+            "email": u.email,
+            "dia": u.date_joined.date(),
+            "actiu": u.is_active,
+            "onboarding": u.pk in fets,
+            "on": f"/staff/usuaris/{u.pk}",
+        }
+        for u in qs
     ]
 
 
@@ -488,6 +642,8 @@ def _assumpte(ctx: dict) -> str:
     tasques = sum(t["n"] for t in ctx["tasques"])
     if tasques:
         parts.append(f"{tasques} tasques")
+    if ctx["usuaris_nous"]:
+        parts.append(f"{len(ctx['usuaris_nous'])} usuaris nous")
     return f"[TopQuaranta] Brief diari · {ctx['avui']:%d/%m} · " + " · ".join(parts)
 
 
@@ -613,6 +769,7 @@ def build_context(today: datetime.date) -> dict:
     ctx = {
         "avui": today,
         "tasques": _tasques(),
+        "usuaris_nous": _usuaris_nous(today),
         "descobriment": {
             "total": tot_art,
             "amb_canal": _delta(amb_canal, amb_canal - canals_avui),
@@ -674,7 +831,21 @@ def render_text(ctx: dict) -> str:
     if ctx["tasques"]:
         lines += ["", "TASQUES PENDENTS"]
         for t in ctx["tasques"]:
-            lines += [f"  {t['n']:>3} {t['que']}", f"      {ctx['site_url']}{t['on']}"]
+            lines += [f"  {t['n']:>3} {t['que']} · {ctx['site_url']}{t['on']}"]
+            for f in t["files"]:
+                lines += [
+                    f"      · {f['titol']}" + (f" — {f['sub']}" if f["sub"] else ""),
+                    f"        {ctx['site_url']}{f['on']}",
+                ]
+            if t["mes"]:
+                lines += [f"      … i {t['mes']} més"]
+    if ctx["usuaris_nous"]:
+        lines += ["", f"USUARIS NOUS ({_DIES_USUARIS_NOUS} DIES)"]
+        for u in ctx["usuaris_nous"]:
+            estat = ("actiu" if u["actiu"] else "sense activar") + (
+                ", onboarding fet" if u["onboarding"] else ", onboarding pendent"
+            )
+            lines += [f"  {u['dia']:%d/%m} {u['email']} · {estat}"]
     lines += [
         "",
         f"EL TOP AMB YOUTUBE · {'actiu' if e['actiu'] else 'INACTIU!'} · "

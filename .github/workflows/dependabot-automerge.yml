@@ -19,11 +19,25 @@
 # pull_request_target runs in the base-branch context with Actions
 # secrets. Safe here because nothing checks out PR code — this job only
 # reads PR metadata and presses the merge button.
+#
+# Pressing the button is not enough: branch protection is strict
+# ("require branches to be up to date") and GitHub's auto-merge never
+# updates the branch. Every merge to main leaves the other Dependabot
+# PRs BEHIND, and nothing re-triggers this workflow for them, so four
+# green PRs sat for days (#528–#530, #429, 2026-10-23). Hence the
+# `gh pr update-branch` before the merge, and the scheduled `catch-up`
+# job that updates every open Dependabot PR with auto-merge enabled.
+# The update MUST also use AUTOMERGE_PAT: a branch updated with
+# GITHUB_TOKEN gets no CI run (same rule as the merge), so the merge
+# would wait for checks that never start.
 name: dependabot-automerge
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -31,7 +45,7 @@ permissions:
 
 jobs:
   automerge:
-    if: github.actor == 'dependabot[bot]'
+    if: github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - id: meta
@@ -39,7 +53,26 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - if: steps.meta.outputs.update-type != 'version-update:semver-major'
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: |
+          gh pr update-branch "$PR_URL" || true  # already up to date → exit 1, harmless
+          gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.AUTOMERGE_PAT || secrets.GITHUB_TOKEN }}
+
+  catch-up:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update every open Dependabot PR that has auto-merge enabled
+        run: |
+          gh pr list --repo "$REPO" --author "app/dependabot" --state open \
+            --json number,autoMergeRequest,mergeStateStatus \
+            -q '.[] | select(.autoMergeRequest != null) | "\(.number) \(.mergeStateStatus)"' \
+          | while read -r num state; do
+              echo "#$num ($state)"
+              gh pr update-branch "$num" --repo "$REPO" || true
+            done
+        env:
+          REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.AUTOMERGE_PAT || secrets.GITHUB_TOKEN }}

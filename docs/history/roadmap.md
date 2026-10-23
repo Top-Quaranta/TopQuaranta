@@ -7,6 +7,30 @@
 
 ---
 
+## Sprint 2026-10-23 — El correu de YouTube passa a ser el brief diari
+
+Primer matí amb els tres calaixos i el Miquel demana dues coses: poder
+aprovar o rebutjar una cançó des del correu mateix, i que el correu
+deixe de ser «de YouTube» ara que el senyal ja està normalitzat. Fet:
+assumpte `Brief diari · dd/mm · N cançons · M artistes · T tasques`,
+un bloc nou de tasques pendents amb els comptadors del panell
+(`comptadors()` a `dashboard.py`, compartit), i a cada cançó dos
+botons «Aprovar» / «Rebutjar» (`web/api/staff/correu.py`: token signat
+per cançó i acció, 14 dies, només amb la sessió de l'staff oberta;
+«rebutjar» = `desvincular_canco`). L'ordre del correu: tasques, cançons,
+artistes, i després tot el de YouTube. La comanda conserva el nom
+`enviar_informe_youtube` i la línia del cron. Tests a
+`test_correu_accions.py` i `test_brief_tasques.py`, verificats contra
+4 mutacions.
+
+Gioba Fellini: onboarding fet, canal de YouTube propi desat a mà
+(`@giobafellini` → UC…), 8 cançons importades, 1 autoaprovada per
+Whisper. Duplicats avisen d'un tema balear amb Sr. À (eivissenc, és el
+primer de la cua de pendents, amb Deezer) i Suc i Sopes.
+
+**Pendent d'aquest fil:** aprovar Sr. À quan sapiguem el municipi
+d'Eivissa.
+
 ## Sprint 2026-10-22 bis — L'onboarding estava mort des de maig
 
 Gioba Fellini va escriure per Instagram que el compte «es bloqueja al

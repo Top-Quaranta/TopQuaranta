@@ -1,0 +1,17 @@
+{% extends "comptes/_base_auth.html" %}
+
+{% block title %}{{ titol }} — TopQuaranta{% endblock %}
+
+{% block content %}
+<div class="tq-card" style="text-align:center">
+  <p class="tq-label">Correu diari</p>
+  <h1 class="tq-title">{{ titol }}</h1>
+  {% if canco %}
+  <p class="tq-sub">{{ canco.nom }}{% if canco.artista %} &middot; {{ canco.artista.nom }}{% endif %}</p>
+  <a href="{{ staff_url }}" class="tq-btn">Obre-la al panell</a>
+  {% else %}
+  <p class="tq-sub">{{ detall }}</p>
+  <a href="/staff/cancons" class="tq-btn">Anar al panell</a>
+  {% endif %}
+</div>
+{% endblock %}

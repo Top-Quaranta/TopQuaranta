@@ -17,17 +17,17 @@ sonda a una cançó concreta (esglaó 0 a les metadades; #541).
 @curialoficial avisa que «Aigua Negra» no és seua: Deezer fusiona Cürial
 (CAT) i Curial (VAL, folk metal) sota un sol artista; vegeu LESSONS.
 
+Fet el mateix dia: Curial creat (pk 53596, VAL, Alzira, @curialfolkmetal,
+aprovat sense àncora Deezer perquè l'ID 55387482 és compartit), «Aigua
+Negra» i «Els Amants de la Murta» reassignats, invitació 194 a
+@curialoficial esborrada; sonda d'Umbert publicada a la vesprada
+(story 18153966334545115, esglaó 0).
+
 **Pendent d'aquest fil:**
-- Executar la separació Cürial/Curial al servidor (script
-  `separar_curial.py` de la sessió: crea Curial VAL amb @curialfolkmetal,
-  mou «Aigua Negra» i «Els Amants de la Murta», esborra la invitació
-  194 a @curialoficial). El mode auto no permet escriptures remotes.
-- Publicar la sonda d'Umbert: `tq-run publicar_social --franja vesprada
-  --canco 40517` (30-10 abans de les 16:00 UTC, o 1-11 mati/vesprada).
 - Les properes estrenes de Curial tornaran a entrar com a Cürial fins que
   la distribuïdora separe el perfil de Deezer: reassignar l'àlbum des
   del panell quan passe. Demanar-ho a @curialfolkmetal.
-- Respondre els dos missatges (esborranys a la sessió).
+- Respondre els dos missatges d'Instagram (esborranys a la sessió).
 
 ## Sprint 2026-10-23 ter — El gestor sap quan li entren cançons
 

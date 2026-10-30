@@ -3,9 +3,31 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-10-22.
+> Last updated: 2026-10-30.
 
 ---
+
+## Sprint 2026-10-30 — Dos missatges d'Instagram
+
+Umbert (@jjumbert, BAL) demana la «cançó del dia» de «La Nit de les
+Ànimes» per a la Nit de les Ànimes mallorquina (30-10 → 1-11). L'escala
+de la sonda l'exclou fins al 12-11 (invitació caducada d'agost), així
+que `publicar_social --franja <mati|vesprada> --canco <id>` força la
+sonda a una cançó concreta (esglaó 0 a les metadades; #541).
+@curialoficial avisa que «Aigua Negra» no és seua: Deezer fusiona Cürial
+(CAT) i Curial (VAL, folk metal) sota un sol artista; vegeu LESSONS.
+
+**Pendent d'aquest fil:**
+- Executar la separació Cürial/Curial al servidor (script
+  `separar_curial.py` de la sessió: crea Curial VAL amb @curialfolkmetal,
+  mou «Aigua Negra» i «Els Amants de la Murta», esborra la invitació
+  194 a @curialoficial). El mode auto no permet escriptures remotes.
+- Publicar la sonda d'Umbert: `tq-run publicar_social --franja vesprada
+  --canco 40517` (30-10 abans de les 16:00 UTC, o 1-11 mati/vesprada).
+- Les properes estrenes de Curial tornaran a entrar com a Cürial fins que
+  la distribuïdora separe el perfil de Deezer: reassignar l'àlbum des
+  del panell quan passe. Demanar-ho a @curialfolkmetal.
+- Respondre els dos missatges (esborranys a la sessió).
 
 ## Sprint 2026-10-23 ter — El gestor sap quan li entren cançons
 

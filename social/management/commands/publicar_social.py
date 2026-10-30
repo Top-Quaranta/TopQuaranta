@@ -275,6 +275,13 @@ class Command(BaseCommand):
             "cançó-del-dia sonda slots.",
         )
         parser.add_argument(
+            "--canco",
+            type=int,
+            default=None,
+            help="Force the cançó-del-dia sonda of this --franja run to this "
+            "Canco id (skips the selector ladder; artist needs instagram_url).",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Render the PNGs but never call the IG API.",
@@ -1084,7 +1091,19 @@ class Command(BaseCommand):
         from social.models import SondaStoryIG
 
         try:
-            cand = S.tria_artista(target_date, slot.franja)
+            if opts.get("canco"):
+                # Manual pick (an artist asked for it, a date matters):
+                # the ladder is skipped, esglaó 0 marks it in metadata.
+                from music.models import Canco
+
+                canco = Canco.objects.select_related("artista", "album").get(
+                    pk=opts["canco"]
+                )
+                if not canco.artista.instagram_url:
+                    raise ValueError(f"{canco.artista.nom} no té instagram_url")
+                cand = S.Candidat(canco.artista, 0, None, None)
+            else:
+                cand = S.tria_artista(target_date, slot.franja)
             if cand is None:
                 self._mark(
                     post,
@@ -1093,7 +1112,8 @@ class Command(BaseCommand):
                 )
                 self.stdout.write("  · cap artista elegible → omès")
                 return
-            canco = S.tria_canco(cand, target_date)
+            if not opts.get("canco"):
+                canco = S.tria_canco(cand, target_date)
             if canco is None:
                 self._mark(
                     post,

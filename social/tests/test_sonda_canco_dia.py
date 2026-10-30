@@ -392,10 +392,12 @@ def test_avaluar_cold_start_mai_flag():
 # ── publish flow ─────────────────────────────────────────────────────
 
 
-def _run(franja="mati", data="2026-08-18", force=False):
+def _run(franja="mati", data="2026-08-18", force=False, canco=None):
     argv = {"data": data, "franja": franja}
     if force:
         argv["force"] = True
+    if canco:
+        argv["canco"] = canco
     out = io.StringIO()
     with (
         patch(
@@ -523,3 +525,26 @@ def test_una_estrena_antiga_sense_anunci_no_es_prioritat():
 
     cand = sonda.Candidat(artista=a, esglao=1, ultima_sonda=None, ultima_caducada=None)
     assert sonda.tria_canco(cand, AVUI).nom == "forta"
+
+
+@pytest.mark.django_db
+def test_canco_forcada_salta_l_escala(sonda_activa):
+    """`--canco` publica eixa cançó encara que l'artista no siga
+    elegible (ací: invitació caducada fa 10 dies, dins del cooldown)."""
+    b = _artista("demanada")
+    c = _canco(b, "la-nit")
+    InvitacioColaboracioIG.objects.create(
+        artista=b,
+        username_snapshot="demanada",
+        ig_media_id="m",
+        tipus_publicacio="nous_singles",
+        data_invitacio=_DT(2026, 8, 8),
+        estat=InvitacioColaboracioIG.ESTAT_CADUCADA,
+        data_resolucio=_DT(2026, 8, 8),
+    )
+    assert b.pk not in {x.artista.pk for x in sonda.elegibles(AVUI)}
+    out = _run(canco=c.pk)
+    assert "sonda publicada" in out
+    s = SondaStoryIG.objects.get()
+    assert s.artista == b and s.canco == c
+    assert SocialPost.objects.get(tipus="canco_dia").metadata["esglao"] == 0

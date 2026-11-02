@@ -1,5 +1,5 @@
 -r requirements.txt
-pytest==9.1.1
+pytest==9.2.0
 pytest-django==4.14.0
 pytest-cov==7.1.0
 pytest-xdist==3.8.0  # -n 4 in pytest.ini — see docs/decisions/0017-pytest-xdist-n4.md

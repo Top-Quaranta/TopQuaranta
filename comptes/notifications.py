@@ -218,7 +218,10 @@ def notify_user_proposta_resolta(proposta, accio: str) -> None:
 def notify_admins_nova_sollicitud_revisio(sollicitud) -> None:
     """A gestor has just opened a SolicitudRevisio. Pings every active
     staff member with the link to the workbench. Sprint Workflow
-    Sol·licituds (2026-05-20)."""
+    Sol·licituds (2026-05-20). Carries the one-click «Aprovar-les
+    totes» link (approve every pendent + resolve)."""
+    from web.api.staff.correu import enllac_sollicitud
+
     _send(
         subject=(
             f"TopQuaranta · nova sol·licitud de revisió: "
@@ -235,6 +238,7 @@ def notify_admins_nova_sollicitud_revisio(sollicitud) -> None:
             "workbench_url": (
                 f"{_site_url()}/staff/sollicituds-revisio/{sollicitud.pk}/"
             ),
+            "aprovar_url": f"{_site_url()}{enllac_sollicitud(sollicitud.pk)}",
         },
         to=_staff_emails(),
     )

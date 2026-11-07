@@ -274,3 +274,116 @@ def test_gestor_sollicituds_empty(db, gestor, artista):
     body = r.json()
     assert body["n_total"] == 0
     assert body["ultima"] is None
+
+
+# ─────────────── Aprovar totes (panel + one click from the mail) ───────────────
+# Promise: a gestor only asks review for Catalan songs, so approving is one
+# action — every pendent song verified, the sol·licitud closed, the gestor
+# mailed. The mail link does it only for a staff session and only for the
+# sol·licitud it signs.
+
+
+def _pendents_verificades(s):
+    return set(
+        Canco.objects.filter(pk__in=s.pendents_ids).values_list("verificada", flat=True)
+    )
+
+
+def test_aprovar_totes_verifies_every_pendent_and_resolves(
+    client_staff, sollicitud, mailoutbox
+):
+    r = client_staff.post(
+        f"/api/v1/staff/sollicituds-revisio/{sollicitud.pk}/aprovar-totes/"
+    )
+    assert r.status_code == 200
+    sollicitud.refresh_from_db()
+    assert sollicitud.estat == SolicitudRevisio.ESTAT_RESOLTA
+    assert _pendents_verificades(sollicitud) == {True}
+    assert any(sollicitud.gestor.email in m.to for m in mailoutbox)
+
+
+def _mail_link(sollicitud, mailoutbox):
+    import re
+
+    from comptes.notifications import notify_admins_nova_sollicitud_revisio
+
+    notify_admins_nova_sollicitud_revisio(sollicitud)
+    html = (
+        mailoutbox[-1].alternatives[0][0]
+        if mailoutbox[-1].alternatives
+        else mailoutbox[-1].body
+    )
+    m = re.search(r'https?://[^/"]+(/api/v1/staff/correu/sollicitud/[^"]+)"', html)
+    assert m, "the staff mail must carry the one-click approve link"
+    return m.group(1)
+
+
+def test_mail_link_approves_all_for_staff_session(
+    db, sollicitud, staff_user, mailoutbox
+):
+    from django.test import Client
+
+    path = _mail_link(sollicitud, mailoutbox)
+    c = Client()
+    c.force_login(staff_user)
+    assert c.get(path).status_code == 200
+    sollicitud.refresh_from_db()
+    assert sollicitud.estat == SolicitudRevisio.ESTAT_RESOLTA
+    assert _pendents_verificades(sollicitud) == {True}
+
+
+def test_mail_link_changes_nothing_without_staff_session_or_for_another_pk(
+    db, sollicitud, staff_user, mailoutbox
+):
+    from django.test import Client
+
+    path = _mail_link(sollicitud, mailoutbox)
+    assert Client().get(path).status_code == 302  # anon → login
+    c = Client()
+    c.force_login(staff_user)
+    swapped = path.replace(
+        f"/sollicitud/{sollicitud.pk}/", f"/sollicitud/{sollicitud.pk + 1}/"
+    )
+    assert c.get(swapped).status_code == 400
+    sollicitud.refresh_from_db()
+    assert sollicitud.estat == SolicitudRevisio.ESTAT_PENDENT
+    assert _pendents_verificades(sollicitud) == {False}
+
+
+# ─────────────── Comentaris = conversa amb la bústia admin ───────────────
+# Promise: what staff write on a sol·licitud reaches the requester's inbox,
+# and the requester's reply from that inbox shows up on the staff page.
+
+
+def test_staff_comment_reaches_user_and_reply_comes_back(
+    client_staff, gestor, mailoutbox
+):
+    url = f"/api/v1/staff/usuaris/{gestor.pk}/conversa/"
+    assert (
+        client_staff.post(url, {"cos": "Ens falta l'enllaç de Deezer"}).status_code
+        == 201
+    )
+    assert any(gestor.email in m.to for m in mailoutbox)
+
+    user = APIClient()
+    user.force_authenticate(user=gestor)
+    inbox = user.get("/api/v1/missatges/").json()["results"]
+    admin_pk = inbox[0]["altre"]["pk"]
+    assert inbox[0]["darrer_missatge"]["cos"] == "Ens falta l'enllaç de Deezer"
+    user.post(
+        "/api/v1/missatges/nou/",
+        {"destinatari_pk": admin_pk, "cos": "Ara el trobareu"},
+    )
+
+    fil = client_staff.get(url).json()["missatges"]
+    assert [m["cos"] for m in fil] == [
+        "Ens falta l'enllaç de Deezer",
+        "Ara el trobareu",
+    ]
+    assert [m["meu"] for m in fil] == [True, False]
+
+
+def test_conversa_is_staff_only(db, gestor):
+    c = APIClient()
+    c.force_authenticate(user=gestor)
+    assert c.get(f"/api/v1/staff/usuaris/{gestor.pk}/conversa/").status_code == 403

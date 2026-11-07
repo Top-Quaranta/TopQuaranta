@@ -3,9 +3,27 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-10-30.
+> Last updated: 2026-11-07.
 
 ---
+
+## Sprint 2026-11-07 — Sol·licituds fàcils d'aprovar
+
+- **Aprovar sol·licituds de revisió en un clic**: botó «Aprovar totes» al
+  workbench i enllaç signat «Aprovar-les totes» al correu a l'staff.
+- **Comentaris a les sol·licituds**: a la fitxa de proposta i de revisió,
+  conversa amb l'usuari via la bústia `admin` (li arriba als missatges).
+- **Fusionar proposta** ara aprova també l'artista descartat per la neteja
+  no-PPCC (cas sanrruu: pk 49032, Deezer 240715781, aprovat a mà el
+  mateix dia i avisat per missatge intern).
+- Ill. (#5) aprovada; **Un de Vint (#6) pendent**: «L'amo Del Barri» té
+  Whisper `es` 0,79 — escoltar-la abans d'aprovar.
+- #548: el crèdit de «Novetats singles» repetia l'artista de l'àlbum i
+  perdia el de la cançó (Pols d'estrelles, Els Rilis).
+
+**Pendent d'aquest fil:** respondre els DM d'Instagram (creamusicbcn,
+nilcanals, esgleyes, oiyupmusic); Esgleyes (Deezer 300510221) no és al
+catàleg.
 
 ## Sprint 2026-10-30 — Dos missatges d'Instagram
 

@@ -24,6 +24,7 @@ import {
   THead,
   Tr,
 } from '../../components/rd/surface'
+import ConversaStaff from './ConversaStaff'
 
 const ESTAT_TONE = {
   pendent: 'yellow',
@@ -120,6 +121,34 @@ export default function StaffSollicitudRevisioDetailPage() {
     }
   }
 
+  async function handleAprovarTotes() {
+    if (
+      !confirm(
+        `Aprovar les ${nNoVerificades} cançons pendents i tancar la sol·licitud? ` +
+          'El gestor rebrà un correu.'
+      )
+    )
+      return
+    setBusy(true)
+    try {
+      const out = await api.post(
+        `/staff/sollicituds-revisio/${pk}/aprovar-totes/`
+      )
+      setFeedback({
+        tone: 'success',
+        msg: `${out.n_aprovades} cançons aprovades i sol·licitud resolta. El gestor rebrà un correu.`,
+      })
+      reload()
+    } catch (e) {
+      setFeedback({
+        tone: 'danger',
+        msg: e.payload?.error || e.message || 'Error',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleReconsiderar(historial_pk) {
     setBusy(true)
     try {
@@ -148,6 +177,9 @@ export default function StaffSollicitudRevisioDetailPage() {
 
   const resolta = data.estat === 'resolta'
   const pendent = data.estat === 'pendent'
+  const nNoVerificades = data.pendents.filter(
+    c => !c.missing && !c.verificada
+  ).length
 
   return (
     <section className="max-w-6xl mx-auto">
@@ -172,6 +204,15 @@ export default function StaffSollicitudRevisioDetailPage() {
         }
         right={
           <>
+            {!resolta && nNoVerificades > 0 && (
+              <Btn
+                tone="primary"
+                onClick={handleAprovarTotes}
+                disabled={busy}
+              >
+                Aprovar totes ({nNoVerificades})
+              </Btn>
+            )}
             {pendent && (
               <Btn onClick={handleMarcarEnRevisio} disabled={busy}>
                 Començar a revisar
@@ -347,6 +388,11 @@ export default function StaffSollicitudRevisioDetailPage() {
           </tbody>
         </Table>
       </TableCard>
+
+      <ConversaStaff
+        usuariPk={data.gestor.pk}
+        assumpte={`Sol·licitud de revisió: ${data.artista.nom}`}
+      />
 
       {/* ── Modals ── */}
       <ConfirmDialog

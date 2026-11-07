@@ -17,6 +17,7 @@ from . import (
     staff_views,
     top_views,
 )
+from .staff import conversa as staff_conversa
 from .staff import correu as staff_correu
 from .staff import sollicituds_revisio as staff_sr
 
@@ -171,6 +172,11 @@ urlpatterns = [
         "staff/correu/canco/<int:pk>/<str:accio>/<str:token>/",
         staff_correu.canco_accio,
         name="staff_correu_canco_accio",
+    ),
+    path(
+        "staff/correu/sollicitud/<int:pk>/aprovar/<str:token>/",
+        staff_correu.sollicitud_aprovar,
+        name="staff_correu_sollicitud_aprovar",
     ),
     path("staff/estat/", staff_views.estat, name="staff_estat"),
     # K1: ethical aggregate analytics dashboard.
@@ -356,6 +362,16 @@ urlpatterns = [
         "staff/sollicituds-revisio/<int:pk>/resoldre/",
         staff_sr.resoldre,
         name="staff_sollicituds_revisio_resoldre",
+    ),
+    path(
+        "staff/sollicituds-revisio/<int:pk>/aprovar-totes/",
+        staff_sr.aprovar_totes,
+        name="staff_sollicituds_revisio_aprovar_totes",
+    ),
+    path(
+        "staff/usuaris/<int:pk>/conversa/",
+        staff_conversa.conversa,
+        name="staff_usuari_conversa",
     ),
     # Senyal diari
     path("staff/senyal/", staff_views.senyal_list, name="staff_senyal_list"),

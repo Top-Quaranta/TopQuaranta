@@ -242,15 +242,9 @@ def reconsiderar_rebutjada(request: Request, pk: int) -> Response:
     return Response({"ok": True, "historial_pk": h.pk, "reconsiderada": True})
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated, IsStaff])
-def resoldre(request: Request, pk: int) -> Response:
-    s = get_object_or_404(SolicitudRevisio, pk=pk)
-    if s.estat == SolicitudRevisio.ESTAT_RESOLTA:
-        return Response({"error": "Aquesta sol·licitud ja està resolta."}, status=400)
-    nota = (request.data or {}).get("nota") or ""
-    nota = nota.strip()[:5000]
-
+def _resoldre(request, s: SolicitudRevisio, nota: str, **meta) -> None:
+    """Close `s`, mail the gestor, audit. Shared by «Marcar com resolta»,
+    «Aprovar totes» and the one-click mail link."""
     from comptes.notifications import notify_gestor_sollicitud_revisio_resolta
     from music.audit import log_staff_action
 
@@ -272,7 +266,54 @@ def resoldre(request: Request, pk: int) -> Response:
         target=s.artista,
         sollicitud_pk=s.pk,
         nota_len=len(nota),
+        **meta,
     )
+
+
+def aprovar_totes_i_resoldre(
+    request, s: SolicitudRevisio, nota: str = "", **meta
+) -> int:
+    """Approve every still-unverified pendent song, then resolve. A gestor
+    only asks for review of songs they know are in Catalan, so the default
+    answer is yes. Returns how many songs were approved.
+
+    ponytail: rebutjades are left alone — un-rejecting only re-queues
+    them for ingestion, it doesn't approve; use «Tornar al pipeline»."""
+    from music.audit import log_staff_action
+    from music.services import aprovar_canco
+
+    n = 0
+    with transaction.atomic():
+        for c in Canco.objects.filter(pk__in=s.pendents_ids or [], verificada=False):
+            aprovar_canco(c)
+            log_staff_action(
+                request, "canco_aprovar", target=c, sollicitud_pk=s.pk, **meta
+            )
+            n += 1
+    _resoldre(request, s, nota, n_aprovades=n, **meta)
+    return n
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsStaff])
+def aprovar_totes(request: Request, pk: int) -> Response:
+    s = get_object_or_404(SolicitudRevisio, pk=pk)
+    if s.estat == SolicitudRevisio.ESTAT_RESOLTA:
+        return Response({"error": "Aquesta sol·licitud ja està resolta."}, status=400)
+    nota = ((request.data or {}).get("nota") or "").strip()[:5000]
+    n = aprovar_totes_i_resoldre(request, s, nota)
+    return Response({"ok": True, "estat": s.estat, "n_aprovades": n})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsStaff])
+def resoldre(request: Request, pk: int) -> Response:
+    s = get_object_or_404(SolicitudRevisio, pk=pk)
+    if s.estat == SolicitudRevisio.ESTAT_RESOLTA:
+        return Response({"error": "Aquesta sol·licitud ja està resolta."}, status=400)
+    nota = (request.data or {}).get("nota") or ""
+    nota = nota.strip()[:5000]
+    _resoldre(request, s, nota)
     return Response(
         {
             "ok": True,

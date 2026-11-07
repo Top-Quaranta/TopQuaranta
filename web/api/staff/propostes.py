@@ -303,12 +303,12 @@ def proposta_fusionar(request: Request, pk: int) -> Response:
             if val:
                 setattr(target, field, val)
 
-        # If the target was a pendent auto-discovery, a merge with a
-        # human-curated proposal is a strong approval signal — flip
-        # aprovat on but only when the target now satisfies the
-        # aprovat-needs-Deezer invariant (which it does, we just
-        # attached IDs).
-        if target.pendent_review and target.deezer_ids.exists():
+        # A merge with a human-curated proposal is a strong approval
+        # signal — whether the target was a pendent auto-discovery or
+        # one the no-PPCC cleanup discarded (sanrruu, 2026-11-07: the
+        # proposal brings the location the cleanup missed). Only when
+        # the target satisfies the aprovat-needs-Deezer invariant.
+        if not target.aprovat and target.deezer_ids.exists():
             target.aprovat = True
             target.pendent_review = False
         target.save()

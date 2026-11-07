@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { Btn, PageHeader, Pill, TableCard } from '../../components/rd/surface'
+import ConversaStaff from './ConversaStaff'
 
 function ConflictPanel({ conflicts, onMerge, onReject, busy }) {
   return (
@@ -228,6 +229,11 @@ export default function PropostaDetailPage() {
           )}
         </TableCard>
       </div>
+
+      <ConversaStaff
+        usuariPk={p.usuari.pk}
+        assumpte={`Proposta d'artista: ${p.nom}`}
+      />
     </section>
   )
 }

@@ -12,9 +12,20 @@
   <li>Pendents de verificar: <strong>{{ n_pendents }}</strong></li>
   <li>Rebutjades a reconsiderar: <strong>{{ n_rebutjades }}</strong></li>
 </ul>
-<p style="margin:24px 0;text-align:center;">
-  <a href="{{ workbench_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+<p style="margin:24px 0 8px;text-align:center;">
+  {% if n_pendents %}
+  <a href="{{ aprovar_url }}" style="display:inline-block;background:#facc15;color:#0a0a0a;font-weight:700;font-size:15px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    Aprovar-les totes
+  </a>
+  {% endif %}
+  <a href="{{ workbench_url }}" style="display:inline-block;color:#facc15;font-weight:700;font-size:15px;text-decoration:underline;padding:12px 16px;">
     Obrir al workbench
   </a>
 </p>
+{% if n_pendents %}
+<p style="margin:0 0 16px;text-align:center;color:#9ca3af;font-size:12px;">
+  Un clic aprova les {{ n_pendents }} cançons pendents i tanca la sol·licitud (el gestor rep un correu).
+  Les rebutjades es reconsideren al workbench.
+</p>
+{% endif %}
 {% endblock %}

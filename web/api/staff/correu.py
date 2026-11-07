@@ -89,3 +89,63 @@ def canco_accio(request: HttpRequest, pk: int, accio: str, token: str) -> HttpRe
         log_staff_action(request, "canco_aprovar", target=canco, via="correu")
         ctx["titol"] = "Aprovada"
     return render(request, "analytics/correu_accio.html", ctx)
+
+
+# ── Sol·licitud de revisió: «Aprovar-les totes» from the staff mail ──
+# Same guards as above (signed token bound to the sol·licitud, staff
+# session required), own salt so a song token can never pass here.
+
+_signer_sollicitud = signing.TimestampSigner(salt="staff-correu-sollicitud")
+
+
+def enllac_sollicitud(pk: int) -> str:
+    """Site-relative one-click «approve all + resolve» URL for the mail."""
+    token = _signer_sollicitud.sign(str(pk))
+    return f"/api/v1/staff/correu/sollicitud/{pk}/aprovar/{token}/"
+
+
+@require_GET
+def sollicitud_aprovar(request: HttpRequest, pk: int, token: str) -> HttpResponse:
+    from comptes.models import SolicitudRevisio
+    from web.api.staff.sollicituds_revisio import aprovar_totes_i_resoldre
+
+    if not request.user.is_authenticated:
+        return redirect(f"{LOGIN_URL}?next={quote(request.get_full_path())}")
+    ctx = {
+        "etiqueta": "Sol·licitud de revisió",
+        "staff_url": f"/staff/sollicituds-revisio/{pk}/",
+    }
+    if not request.user.is_staff:
+        return render(
+            request,
+            "analytics/correu_accio.html",
+            {**ctx, "titol": "Només per a l'staff", "detall": ""},
+            status=403,
+        )
+    try:
+        valid = _signer_sollicitud.unsign(token, max_age=MAX_AGE) == str(pk)
+    except signing.BadSignature:
+        valid = False
+    if not valid:
+        return render(
+            request,
+            "analytics/correu_accio.html",
+            {
+                **ctx,
+                "titol": "Enllaç no vàlid",
+                "detall": "L'enllaç està manipulat o té més de catorze dies. "
+                "Decideix-ho des del panell.",
+            },
+            status=400,
+        )
+
+    s = get_object_or_404(SolicitudRevisio.objects.select_related("artista"), pk=pk)
+    if s.estat == SolicitudRevisio.ESTAT_RESOLTA:
+        ctx.update(titol="Ja estava resolta", detall=s.artista.nom)
+    else:
+        n = aprovar_totes_i_resoldre(request, s, via="correu")
+        ctx.update(
+            titol="Aprovada",
+            detall=f"{s.artista.nom} · {n} cançons aprovades. El gestor rebrà un correu.",
+        )
+    return render(request, "analytics/correu_accio.html", ctx)

@@ -143,6 +143,24 @@ def test_album_collabs(trio):
     assert [a.id for a in collabs[c.album_id]] == [c1.id, c2.id]
 
 
+@pytest.mark.django_db
+def test_album_collabs_credits_track_principal_not_album_principal_twice(trio):
+    """Album credited to A, track by B feat. A (the «Pols d'estrelles»
+    case): the credit must name B and must not repeat A."""
+    p, c1, _ = trio
+    al = Album.objects.create(artista=c1, nom="EXEMPLE Single")
+    c = Canco.objects.create(
+        artista=p,
+        album=al,
+        nom="EXEMPLE Track",
+        isrc="ZZ00IG0000010",
+        verificada=True,
+        activa=True,
+    )
+    c.artistes_col.add(c1)
+    assert [a.id for a in _album_collabs([al.id])[al.id]] == [p.id]
+
+
 def test_artist_credit_joins_collaborators():
     """Top rows must show principal + collaborators (was principal-only,
     while stories already showed all)."""

@@ -88,20 +88,28 @@ def _album_collabs(album_ids: list[int]) -> dict[int, list]:
     album is credited to one artist, but a release often features guests
     on individual tracks; both the visible credit (`artistes_noms`) and
     the IG tagger (`artistes_instagram_urls`) derive from this one pass —
-    same intent as `_instagram_urls_for_canco` for the top carousel."""
+    same intent as `_instagram_urls_for_canco` for the top carousel.
+
+    A track's own principal counts too when it differs from the album's
+    (Deezer credits the album to one artist, the track to another), and
+    the album's principal is never repeated as a collaborator — otherwise
+    «Pols d'estrelles» read «Mariona Escoda, Mariona Escoda» and lost
+    Diana Murr (2026-11-07)."""
     out: dict[int, list] = {aid: [] for aid in album_ids}
     if not album_ids:
         return out
     seen: dict[int, set[int]] = {aid: set() for aid in album_ids}
     cancons = (
         Canco.objects.filter(album_id__in=album_ids, verificada=True, activa=True)
+        .select_related("artista", "album")
         .prefetch_related("artistes_col")
         .order_by("album_id", "id")
     )
     for canco in cancons:
         aid = canco.album_id
-        for a in canco.artistes_col.all():
-            if a.id not in seen[aid]:
+        seen[aid].add(canco.album.artista_id)
+        for a in [canco.artista, *canco.artistes_col.all()]:
+            if a is not None and a.id not in seen[aid]:
                 out[aid].append(a)
                 seen[aid].add(a.id)
     return out

@@ -103,7 +103,10 @@
   two days old; «El Boig de la Ciutat (En Directe al Palau Sant Jordi)»
   was carrying the studio version's 25.033. ~60 rows a day, mostly live
   albums. A remaster or a `(feat. X)` is the same tape and still
-  recovers. Guarded by:
+  recovers. A trailing parenthetical with a year and no
+  remaster/reedició counts as a marker too (`_PARENTESI_DATAT`):
+  «Tinc fam de tu (Mercat de Música Viva Vic 1991)» carried the studio
+  original's 10.953 to #1 on 2026-11-14. Guarded by:
   `test_lastfm_client.py::TestVersionsNoHeretenLOriginal`.
 - **The name that answered (`asked_artist`) drives drift detection and
   alias summing; aliases are never summed onto a collaborator.** Drift

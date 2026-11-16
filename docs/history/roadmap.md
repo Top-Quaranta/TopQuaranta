@@ -3,9 +3,21 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-11-07.
+> Last updated: 2026-11-16.
 
 ---
+
+## Sprint 2026-11-16 — Un directe del 1991 al número 1
+
+El top del 14-11 va posar «Tinc fam de tu (Mercat de Música Viva Vic
+1991)» de Lax'n'Busto (pk 41287) al número 1 de CAT i del Global amb les
+10.953 escoltes de tota la vida de l'original (vegeu LESSONS). Dues
+guardes: la del comptador parat passa a «quasi parat» (creixement < 5 %
+entre lectures) i un parèntesi final amb any compta com una altra
+gravació al reintent de Last.fm.
+
+**Pendent d'aquest fil:** el top publicat del 14-11 no s'ha recalculat
+ni republicat; és decisió editorial.
 
 ## Sprint 2026-11-07 — Sol·licituds fàcils d'aprovar
 

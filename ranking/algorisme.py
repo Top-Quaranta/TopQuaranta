@@ -479,6 +479,15 @@ def _track_identity(s: str) -> str:
 # buit, no arran del soroll.
 _MARGE_EVIDENCIA_EDAT = 180
 
+# Quina part del comptador ha d'haver arribat ENTRE les nostres lectures
+# perquè ens creguem que una cançó de menys de 7 dies és una estrena.
+# Mostra de producció el 16/11/2026 (53 cançons des de l'agost amb ≥2
+# lectures la primera setmana i ≥50 escoltes): les 17 reedicions creixen
+# entre el 0 % i el 0,3 %; l'estrena de veritat que menys, un 10 % en un
+# dia i un 44 % en la setmana. No hi ha res entremig; el llindar va al
+# buit.
+_CREIXEMENT_MINIM_ESTRENA = 0.05
+
 
 def _compute_weekly_plays(
     canco: Canco,
@@ -576,10 +585,19 @@ def _compute_weekly_plays(
         llegides = [
             s.lastfm_playcount for s in signals if s.lastfm_playcount is not None
         ]
-        if len(llegides) < 2 or len(set(llegides)) > 1:
+        #
+        # «Clavat» no vol dir idèntic. Lax'n'Busto, 14/11/2026: un directe
+        # del 1991 publicat com a senzill, Last.fm contesta amb la pàgina
+        # de l'original i el comptador fa 10.952 → 10.953. Una escolta de
+        # diferència va bastar per a passar per estrena i ser número 1 de
+        # CAT i del Global amb 109.530 de senyal.
+        if (
+            len(llegides) < 2
+            or llegides[-1] - llegides[0] >= _CREIXEMENT_MINIM_ESTRENA * llegides[-1]
+        ):
             return max(0.0, float(playcount_today))
-        # Comptador parat: cau a les branques de línia base → 0 fins que
-        # el nostre propi senyal n'acumule una.
+        # Comptador (quasi) parat: cau a les branques de línia base → 0
+        # fins que el nostre propi senyal n'acumule una.
 
     # Track-switch guard (2026-05-08): a baseline is only valid if it
     # was sampled against the SAME recording the latest signal points

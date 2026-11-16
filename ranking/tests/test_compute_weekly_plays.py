@@ -60,7 +60,7 @@ def test_reissue_of_an_older_homonym_is_not_fresh():
     today = date(2026, 8, 15)
     reissue = _Canco(date(2026, 8, 11), artista_id=7, nom="Ànima D'Acer")
     # No entry → old behaviour, kept for every caller not passing the map.
-    signals = [_Senyal(date(2026, 8, 13), 966), _Senyal(date(2026, 8, 15), 970)]
+    signals = [_Senyal(date(2026, 8, 13), 400), _Senyal(date(2026, 8, 15), 970)]
     assert _compute_weekly_plays(reissue, signals, today) == 970.0
     primer = {(7, "anima d acer"): date(2025, 4, 29)}
     assert _compute_weekly_plays(reissue, signals, today, primer) == 0.0
@@ -112,9 +112,17 @@ def test_un_comptador_parat_no_es_una_estrena():
     parat = [_Senyal(date(2026, 9, 25), 420), _Senyal(date(2026, 9, 26), 420)]
     assert _compute_weekly_plays(canco, parat, today) == 0.0
 
-    # Una estrena de veritat acumula, encara que siga poc.
-    movent = [_Senyal(date(2026, 9, 25), 420), _Senyal(date(2026, 9, 26), 424)]
-    assert _compute_weekly_plays(canco, movent, today) == 424.0
+    # Una estrena de veritat acumula: el que té ha arribat mentre miràvem.
+    movent = [_Senyal(date(2026, 9, 25), 420), _Senyal(date(2026, 9, 26), 600)]
+    assert _compute_weekly_plays(canco, movent, today) == 600.0
+
+    # «Parat» no vol dir idèntic. Lax'n'Busto, 14/11/2026: un directe del
+    # 1991 publicat com a senzill, Last.fm contesta amb l'original i el
+    # comptador de tota la vida es mou una escolta. Número 1 del Global.
+    today = date(2026, 11, 14)
+    canco = _Canco(date(2026, 11, 13), nom="Tinc fam de tu (Vic 1991)")
+    quasi = [_Senyal(date(2026, 11, 13), 10952), _Senyal(date(2026, 11, 14), 10953)]
+    assert _compute_weekly_plays(canco, quasi, today) == 0.0
 
     # Amb una sola lectura no hi ha evidència de res: l'estrena es manté.
     unica = [_Senyal(date(2026, 9, 26), 420)]
@@ -469,7 +477,7 @@ def test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament():
     today = date(2026, 8, 22)
     # Comptador en moviment: ací l'única cosa que ha de desmentir la data
     # és el vídeo, no la guarda del comptador parat.
-    signals = [_Senyal(date(2026, 8, 20), 4200), _Senyal(date(2026, 8, 22), 4260)]
+    signals = [_Senyal(date(2026, 8, 20), 2000), _Senyal(date(2026, 8, 22), 4260)]
 
     fresca = _Canco(date(2026, 8, 20), nom="Eterns")
     assert _compute_weekly_plays(fresca, signals, today) == 4260.0

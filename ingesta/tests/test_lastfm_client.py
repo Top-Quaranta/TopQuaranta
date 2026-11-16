@@ -375,6 +375,36 @@ class TestVersionsNoHeretenLOriginal:
 
     @patch("ingesta.clients.lastfm.time.sleep")
     @patch("ingesta.clients.lastfm.requests.get")
+    def test_un_directe_datat_sense_la_paraula_directe_tampoc(
+        self, mock_get, mock_sleep
+    ):
+        """Lax'n'Busto, 14/11/2026: el títol només porta lloc i any. Cap
+        marcador de versió, i el directe del 1991 es va quedar amb les
+        escoltes de tota la vida de l'original: número 1 del Global."""
+        original = {
+            "track": {
+                "name": "Tinc fam de tu",
+                "playcount": "10953",
+                "listeners": "2241",
+                "artist": {"name": "Lax'n'Busto"},
+            }
+        }
+        self._respostes(mock_get, {"Tinc fam de tu": original})
+
+        assert (
+            get_track_info(
+                "Lax'n'Busto", "Tinc fam de tu (Mercat de Música Viva Vic 1991)"
+            )
+            is None
+        ), "el directe datat s'ha quedat amb les escoltes de l'original"
+        # Un remaster datat és la mateixa cinta i s'ha de continuar recuperant.
+        assert (
+            get_track_info("Lax'n'Busto", "Tinc fam de tu (Remaster 2015)")["playcount"]
+            == 10953
+        )
+
+    @patch("ingesta.clients.lastfm.time.sleep")
+    @patch("ingesta.clients.lastfm.requests.get")
     def test_un_directe_no_casa_amb_lestudi_a_les_top_tracks(
         self, mock_get, mock_sleep
     ):

@@ -134,9 +134,22 @@ def _mateixa_gravacio(demanat: str, candidat: str) -> bool:
     títol es descarta per contenir-les—, és una condició de simetria: el
     que demanem i el que ens tornen han de portar les mateixes.
     """
-    return bool(_VERSION_MARKER.search(demanat)) == bool(
-        _VERSION_MARKER.search(candidat)
-    )
+    return _es_versio(demanat) == _es_versio(candidat)
+
+
+# Un parèntesi final amb un any i sense «remaster»/«reedició» data una
+# gravació concreta —quasi sempre un directe— encara que no ho diga amb
+# cap paraula de `_VERSION_MARKER`. 2026-11-14: «Tinc fam de tu (Mercat de
+# Música Viva Vic 1991)» de Lax'n'Busto va cobrar les 10.953 escoltes de
+# l'original d'estudi i va ser número 1 del Global.
+_PARENTESI_DATAT = re.compile(
+    r"[\(\[](?![^)\]]*(remaster|reedici))[^)\]]*\b(19|20)\d{2}\b[^)\]]*[\)\]]\s*$",
+    re.I,
+)
+
+
+def _es_versio(titol: str) -> bool:
+    return bool(_VERSION_MARKER.search(titol) or _PARENTESI_DATAT.search(titol))
 
 
 def _api_call(

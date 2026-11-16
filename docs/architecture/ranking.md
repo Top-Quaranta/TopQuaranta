@@ -30,10 +30,14 @@
   Tracks fall within ±30 d of our date, none between 61 and 180 d, and
   the 2 % beyond a year were remasters and re-issues. Guarded by:
   `test_compute_weekly_plays.py::test_un_art_track_molt_anterior_desmenteix_la_data_de_llancament`.
-- **…and unless the counter has not moved across the readings we have.**
-  A premiere accrues day by day; a re-issue's lifetime counter sits
-  still, so ≥2 readings of the same number are not a week of listening
-  whatever the release date says. One reading alone is no evidence and
+- **…and unless the counter has barely moved across the readings we
+  have** (growth between first and last reading < 5 % of the counter,
+  `_CREIXEMENT_MINIM_ESTRENA`). A premiere accrues day by day; a
+  re-issue's lifetime counter sits still, so ≥2 readings of nearly the
+  same number are not a week of listening whatever the release date
+  says. Not "identical": Lax'n'Busto's 1991 live single read 10.952 →
+  10.953 and was #1 CAT/Global on 2026-11-14. Production sample: re-issues
+  grow 0–0.3 %, real premieres ≥ 10 % in a day. One reading alone is no evidence and
   the premiere stands. This reads directly the fact the two guards above
   infer, so it also catches a re-issue whose original we do not hold and
   one with no Art Track (Cucorba, 2026-09-24: 13 re-issued 1980s

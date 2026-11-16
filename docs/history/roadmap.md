@@ -16,8 +16,8 @@ guardes: la del comptador parat passa a «quasi parat» (creixement < 5 %
 entre lectures) i un parèntesi final amb any compta com una altra
 gravació al reintent de Last.fm.
 
-**Pendent d'aquest fil:** el top publicat del 14-11 no s'ha recalculat
-ni republicat; és decisió editorial.
+El top publicat del 14-11 es deixa com va eixir (decisió del 16-11): no
+es recalcula ni es republica.
 
 ## Sprint 2026-11-07 — Sol·licituds fàcils d'aprovar
 

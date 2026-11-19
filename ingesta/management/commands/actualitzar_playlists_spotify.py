@@ -163,9 +163,11 @@ class Command(BaseCommand):
 
         dry = opts.get("dry_run", False)
         sync_aborted = False
+        fallides: list[str] = []
         for pl in playlists:
             try:
-                self._sync_one(client, pl, dry)
+                if self._sync_one(client, pl, dry) is False:
+                    fallides.append(pl.codi)
             except RateLimitedError as exc:
                 # Spotify can rate-limit the playlist-write endpoint too
                 # (different bucket from /search, but still possible
@@ -182,11 +184,20 @@ class Command(BaseCommand):
                 "aborted. Watchdog will see status=FAIL on the affected "
                 "row. Retry after the Retry-After window."
             )
+        # Una sincronització que falla no és un run OK. 18/11/2026: Spotify
+        # va revocar el refresh token, les 12 playlists fallaven a cada
+        # execució i el cron eixia amb 0 — verd al panell un dia sencer.
+        if fallides:
+            raise CommandError(
+                f"{len(fallides)}/{len(playlists)} playlists no s'han pogut "
+                f"sincronitzar: {', '.join(fallides)}"
+            )
 
     # ── per-playlist sync ────────────────────────────────────────────────
     def _sync_one(
         self, client: UserSpotifyClient, pl: SpotifyPlaylist, dry: bool
-    ) -> None:
+    ) -> bool | None:
+        """False when the write to Spotify failed; None when nothing was tried."""
         extra = ""
         if pl.kind == SpotifyPlaylist.KIND_NO_VERIFICADES:
             extra = f" chunk={pl.chunk_index}"
@@ -254,6 +265,7 @@ class Command(BaseCommand):
 
         if ok:
             self.stdout.write(self.style.SUCCESS(f"  OK {matched} tracks a Spotify"))
+        return ok
 
     # ── selection ────────────────────────────────────────────────────────
     def _select_cancons(self, pl: SpotifyPlaylist) -> list[Canco]:

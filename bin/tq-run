@@ -47,6 +47,10 @@ shift
 # Last variant flag wins; in practice a command has one variant axis.
 # Keep this in sync with `_derive_tag` in topquaranta/tests/test_deploy_safety.py.
 tag="$cmd"
+# An ad-hoc `tq-run shell` is an operator at a keyboard, not a cron: the
+# leading underscore keeps its status file out of tq-health, which would
+# otherwise flag it ORPHAN on every hourly mail (2026-11-16 → 19).
+[[ "$cmd" == "shell" ]] && tag="_shell"
 args=("$@")
 nargs=$#
 for ((i = 0; i < nargs; i++)); do

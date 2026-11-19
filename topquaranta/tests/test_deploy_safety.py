@@ -248,7 +248,7 @@ def _derive_tag(cmd: str, args: list[str]) -> str:
     with the `for`-loop there: a command runs under distinguishing
     variants (--provisional, --freq weekly, --channel X), each needing
     its own status tag so one variant's run doesn't hide another's."""
-    tag = cmd
+    tag = "_shell" if cmd == "shell" else cmd
     for i, a in enumerate(args):
         nxt = args[i + 1] if i + 1 < len(args) else ""
         if a == "--provisional":

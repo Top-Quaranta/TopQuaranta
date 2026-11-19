@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 from ingesta.management.commands.actualitzar_playlists_spotify import (
     NO_VERIF_CHUNK_SIZE,
@@ -676,3 +677,26 @@ def test_other_kinds_do_not_push_playlist_details(auth_present, client_mock):
 
     call_command("actualitzar_playlists_spotify")
     client_mock.update_playlist_details.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_una_sincronitzacio_fallida_no_es_un_run_ok(auth_present, client_mock):
+    """18/11/2026: Spotify va revocar el refresh token. Cada playlist
+    fallava, el comandament ho apuntava a la fila i eixia amb 0: `tq-run`
+    escrivia OK i el panell va estar verd un dia sencer sense que cap
+    playlist es tocara. Totes s'intenten, i després el run falla."""
+    SpotifyPlaylist.objects.all().delete()
+    for i in range(2):
+        SpotifyPlaylist.objects.create(
+            codi=f"no-verif-{i + 1}",
+            kind=SpotifyPlaylist.KIND_NO_VERIFICADES,
+            chunk_index=i,
+            spotify_playlist_id=f"fake-pl-{i}",
+        )
+    client_mock.replace_playlist_tracks.side_effect = RuntimeError("400 api/token")
+
+    with pytest.raises(CommandError, match="2/2"):
+        call_command("actualitzar_playlists_spotify")
+
+    assert client_mock.replace_playlist_tracks.call_count == 2
+    assert not SpotifyPlaylist.objects.filter(last_sync_ok=True).exists()

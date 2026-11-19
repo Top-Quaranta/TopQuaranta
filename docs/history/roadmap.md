@@ -3,9 +3,18 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-11-16.
+> Last updated: 2026-11-19.
 
 ---
+
+## Sprint 2026-11-19 — Token de Spotify revocat
+
+Spotify va revocar el refresh token el 18-11 (`invalid_grant`): playlists
+sense sincronitzar des de les 09:15 i `enriquir_spotify*` en FAIL. El
+cron de playlists eixia en verd; ara falla si alguna sincronització
+falla (vegeu LESSONS). `tq-run shell` ja no deixa un estat ORPHAN.
+
+**Pendent d'aquest fil:** reautoritzar a `/staff/social/spotify/`.
 
 ## Sprint 2026-11-16 — Un directe del 1991 al número 1
 

@@ -138,7 +138,7 @@ distinct anomaly signature — `analytics/health_report.py`) states:
 | `STALE(Nh)` | `last_run` older than `max_age_hours` | run by hand: `sudo -u topquaranta tq-run <cmd> [args]` |
 | `FAIL` | non-zero exit after retries | read `last_output` / the area log; fix; re-run to clear |
 | `MISSING` | frequent cron with no status file | cron line dropped or tag mismatch |
-| `ORPHAN` | status file with no meta entry | register it or `rm` the file |
+| `ORPHAN` | status file with no meta entry | register it or `rm` the file (`tq-run shell` writes `_shell.status`, which is ignored) |
 | `DISABLED` | gated feature off (offsite backup) | legitimate |
 | `DRIFT` (Git tree row) | prod tree dirty or ahead/divergent | someone bypassed the pipeline; `bin/tq-deploy` |
 | `DB migrations` row | pending migrations | deploy bypassed `tq-deploy` |

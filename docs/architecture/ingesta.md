@@ -160,6 +160,11 @@
   weekly` ← latest `TopSetmanal`.** Guarded by:
   `test_actualitzar_playlists_spotify.py::test_cache_only_skips_unenriched_cancons`,
   `::test_freq_*`.
+- **A playlist whose write to Spotify fails makes the run exit non-zero**
+  (after trying every playlist). Why: the per-row `last_sync_ok=False`
+  was the only trace, the cron exited 0 and `tq-health` showed green for
+  a day while a revoked refresh token failed all 12 syncs (2026-11-18).
+  Guarded by: `::test_una_sincronitzacio_fallida_no_es_un_run_ok`.
 - **Process B (`enriquir_spotify`) is the only writer of the ISRC cache:
   priority tiers (current top → provisional → pending by `ml_confianca`
   → pending oldest → verified backlog); candidate visibility is a LEFT

@@ -2,7 +2,7 @@
 
 Nothing is stored here. Every column is counted from a table that
 already records the interaction (collab invitations, story probes,
-managers, proposals), so the view can never drift from them.
+managers, proposals, inbox counts), so the view can never drift from them.
 
 # Spec: docs/architecture/web.md
 """
@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 from comptes.models import PropostaArtista, UserArtista
 from music.models import Artista
-from social.models import InvitacioColaboracioIG, SondaStoryIG
+from social.models import InvitacioColaboracioIG, SenyalDM, SondaStoryIG
 from web.api.staff._common import IsStaff
 
 
@@ -47,7 +47,8 @@ def artistes_afins(request: Request) -> Response:
             estat=PropostaArtista.ESTAT_APROVAT, artista_creat__isnull=False
         ).values_list("artista_creat_id", flat=True)
     )
-    ids = set(acceptades) | set(reaccions) | gestors | proposats
+    dm = {s.artista_id: s for s in SenyalDM.objects.all()}
+    ids = set(acceptades) | set(reaccions) | gestors | proposats | set(dm)
     # Invitations sent, so "2 of 2 accepted" reads differently from "2 of 9".
     convidades = dict(
         InvitacioColaboracioIG.objects.filter(artista__in=ids)
@@ -60,6 +61,7 @@ def artistes_afins(request: Request) -> Response:
         "pk", "nom", "slug", "aprovat", "instagram_url"
     ):
         acc = acceptades.get(a.pk)
+        senyal = dm.get(a.pk)
         files.append(
             {
                 "pk": a.pk,
@@ -73,12 +75,17 @@ def artistes_afins(request: Request) -> Response:
                 "reaccions_sonda": reaccions.get(a.pk, 0),
                 "te_gestor": a.pk in gestors,
                 "proposat_per_usuari": a.pk in proposats,
+                "dm_missatges": senyal.missatges if senyal else 0,
+                "dm_mencions": senyal.mencions if senyal else 0,
+                "dm_reaccions": senyal.reaccions if senyal else 0,
             }
         )
     files.sort(
         key=lambda f: (
             -f["collabs_acceptades"],
+            -f["dm_mencions"],
             not f["te_gestor"],
+            -f["dm_missatges"],
             -f["reaccions_sonda"],
             f["nom"].lower(),
         )

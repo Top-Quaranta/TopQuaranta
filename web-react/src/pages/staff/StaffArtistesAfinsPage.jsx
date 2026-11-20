@@ -47,6 +47,17 @@ function Row({ a }) {
       </Td>
       <Td>{a.ultima_collab || res}</Td>
       <Td>{a.reaccions_sonda > 0 ? <Pill tone="yellow">{a.reaccions_sonda}</Pill> : res}</Td>
+      <Td>
+        {a.dm_missatges + a.dm_mencions + a.dm_reaccions > 0 ? (
+          <span className="whitespace-nowrap text-xs">
+            {a.dm_mencions > 0 && <Pill tone="green">{a.dm_mencions} mencions</Pill>}{' '}
+            {a.dm_missatges > 0 && <Pill tone="yellow">{a.dm_missatges} missatges</Pill>}{' '}
+            {a.dm_reaccions > 0 && <Pill tone="gray">{a.dm_reaccions} ♥</Pill>}
+          </span>
+        ) : (
+          res
+        )}
+      </Td>
       <Td>{a.te_gestor ? <Pill tone="green">gestor</Pill> : res}</Td>
       <Td>{a.proposat_per_usuari ? <Pill tone="gray">proposat</Pill> : res}</Td>
       <Td>
@@ -81,7 +92,7 @@ export default function StaffArtistesAfinsPage() {
   const subtitle =
     files === null
       ? 'Carregant…'
-      : `${files.length} artistes que han respost almenys una vegada: una col·laboració acceptada, una reacció a una story, un gestor a la web o una proposta d'un usuari.`
+      : `${files.length} artistes que han respost almenys una vegada: una col·laboració acceptada, una reacció a una story, un missatge directe, un gestor a la web o una proposta d'un usuari.`
 
   return (
     <section>
@@ -97,6 +108,9 @@ export default function StaffArtistesAfinsPage() {
               </Th>
               <Th>Última</Th>
               <Th title="Stories «cançó del dia» amb un abast fora del normal">Reaccions</Th>
+              <Th title="Missatges directes d'Instagram: stories seues on ens mencionen, missatges que ens han escrit i reaccions als nostres">
+                Missatges directes
+              </Th>
               <Th>Web</Th>
               <Th>Origen</Th>
               <Th>Instagram</Th>
@@ -105,7 +119,7 @@ export default function StaffArtistesAfinsPage() {
           <tbody>
             {files?.length === 0 && (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <EmptyState>Encara no hi ha cap artista amb senyals.</EmptyState>
                 </td>
               </tr>

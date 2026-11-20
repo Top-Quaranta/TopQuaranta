@@ -57,6 +57,11 @@ Two commands drive it from cron: `publicar_social` (Instagram) and
 - **Staff keeps "Marcar acceptada" (no manual reject) and the hourly `pollar_colaboracions_ig` stays a pure expiry pass: `pendent` > 14 d → `caducada`, treated as rejection (90 d cooldown).** Both the reconciler and the button have the single transition `→ acceptada`. Guarded by: `test_pollar_colaboracions_ig.py`, `test_C_caducada_treated_like_rejection_90_day_cooldown`.
 - **`InvitacioColaboracioIG.artista` is `PROTECT`.** Why: the acceptance rate is derived from registry history.
 
+### Senyals de la safata d'Instagram (`SenyalDM`)
+
+- **`SenyalDM` holds counts only (messages, mentions, reactions, last date) — never the text of a conversation; the export is aggregated off-server by `scripts/senyals_dm_instagram.py`.** Why: they are other people's private messages, and knowing who engages needs no content.
+- **`importar_senyals_dm` writes a row only when the account name matches exactly one approved artist; anything else is listed and skipped.** Why: an inbox display name is not an identity ("Cor", "Umbert"). Guarded by: `social/tests/test_importar_senyals_dm.py`.
+
 ### Sondes «la cançó del dia» (`social/sonda.py`)
 
 - **A recent release that no novetats post ever carried (`anunciat_at IS NULL`, < `LLANCAMENT_RECENT_DIES`) outranks both the artist ladder's recency term and, within an artist, the play-count order.** Why: the 41 releases the old novetats window swallowed were never named anywhere, and sorting by plays would hand the slot to the older, better-known song — the one that needs it least. Guarded by: `test_sonda_canco_dia.py::test_prioritat_al_llancament_que_no_vam_anunciar`, `::test_una_estrena_antiga_sense_anunci_no_es_prioritat`.

@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 
 from comptes.models import UserArtista
 from music.models import Artista
-from social.models import InvitacioColaboracioIG
+from social.models import InvitacioColaboracioIG, SenyalDM
 
 URL = "/api/v1/staff/artistes/afins/"
 
@@ -49,6 +49,25 @@ def test_nomes_ixen_els_que_han_respost_i_el_mes_afi_va_primer(django_user_model
     assert files[0]["collabs_acceptades"] == 1
     assert files[0]["collabs_convidades"] == 2
     assert files[1]["te_gestor"] is True
+
+
+@pytest.mark.django_db
+def test_qui_ens_escriu_o_ens_menciona_tambe_es_afi(django_user_model):
+    staff = django_user_model.objects.create_user(
+        username="s", email="s@example.com", password="x", is_staff=True
+    )
+    a = Artista.objects.create(nom="Escriu", slug="escriu", aprovat=True)
+    SenyalDM.objects.create(artista=a, missatges=4, mencions=2, reaccions=1)
+
+    c = APIClient()
+    c.force_authenticate(user=staff)
+    (fila,) = c.get(URL).json()["results"]
+
+    assert (fila["dm_missatges"], fila["dm_mencions"], fila["dm_reaccions"]) == (
+        4,
+        2,
+        1,
+    )
 
 
 @pytest.mark.django_db

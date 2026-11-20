@@ -426,3 +426,26 @@ class SondaStoryIG(models.Model):
 
     def __str__(self) -> str:
         return f"{self.data} {self.franja} · {self.artista} · auto={self.reaccio_auto}"
+
+
+class SenyalDM(models.Model):
+    """What an artist has done in our Instagram inbox, as counts only.
+
+    Loaded from an Instagram data export by `importar_senyals_dm`. The
+    text of the conversations never reaches the server: these are other
+    people's private messages, and knowing who engages needs no content.
+    """
+
+    artista = models.OneToOneField(
+        "music.Artista", on_delete=models.CASCADE, related_name="senyal_dm"
+    )
+    # Text messages they wrote to us.
+    missatges = models.PositiveIntegerField(default=0)
+    # Stories or posts of THEIR account that they shared with us.
+    mencions = models.PositiveIntegerField(default=0)
+    # Reactions to our messages and replies to our stories.
+    reaccions = models.PositiveIntegerField(default=0)
+    ultim = models.DateField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"{self.artista} · {self.missatges}/{self.mencions}/{self.reaccions}"

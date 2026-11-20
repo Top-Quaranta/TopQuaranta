@@ -42,6 +42,9 @@ una hora van donar 429 amb `Retry-After: 8512`.
 - 6 artistes a mitges pel límit de Spotify: J. Máñez (Sueca), Adéu
   Varsòvia (Vic), Claró (Barcelona), Orxata Sound System (València),
   Marc Gairí (Lleida), Joan Marcià (Cambrils).
+  No abans del 21-11 a les 13:30 UTC: el segon intent (20-11, 16:18 UTC)
+  va rebre un altre 429 a `/artists/{id}/albums` amb ~21 h d'espera. El
+  pont a mà no és fiable: cada crida dins del càstig l'allarga.
 - Fusions des del panell (el pendent té àlbums o cançons): Bram's 14122
   → Brams 3064, En Rick 3971 → 6463, Güil 2486 → 4266, Cecilio G. 6487 →
   5025, «Dan Peralbo» → «Dan Peralbo i El Comboi» 2950.

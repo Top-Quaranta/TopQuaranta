@@ -176,8 +176,15 @@ export default function MapaPage() {
   const features = useMemo(() => {
     let fs = gj?.features || []
     if (level === 'territori') fs = fs.filter(f => (f.properties?.codi) !== 'ALG')
+    // At municipi level draw only the selected comarca: the file holds the
+    // whole territori, and 900 outlines hid the handful being looked at.
+    // The viewBox follows `features`, so this is also the zoom.
+    if (level === 'municipi') {
+      const seus = fs.filter(f => f.properties?.comarca === selComarca)
+      if (seus.length) fs = seus
+    }
     return fs
-  }, [gj, level])
+  }, [gj, level, selComarca])
 
   const algFeature = useMemo(
     () => (level === 'territori' ? (gj?.features || []).find(f => f.properties?.codi === 'ALG') : null),

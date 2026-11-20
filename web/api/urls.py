@@ -213,6 +213,11 @@ urlpatterns = [
     # Artistes
     path("staff/artistes/", staff_views.artistes_list, name="staff_artistes_list"),
     path(
+        "staff/artistes/afins/",
+        staff_views.artistes_afins,
+        name="staff_artistes_afins",
+    ),
+    path(
         "staff/avisos-top/enviar/",
         staff_views.avisos_top_enviar,
         name="staff_avisos_top_enviar",

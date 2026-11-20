@@ -108,6 +108,12 @@ export const STAFF_GROUPS = [
         desc: "Artistes al top global d'aquesta setmana i si tenen gestor amb email (flux de tagging social).",
       },
       {
+        to: "/staff/artistes/afins",
+        label: "Artistes afins",
+        title: "Artistes afins",
+        desc: "Qui ens ha respost: col·laboracions acceptades, reaccions, gestors i propostes.",
+      },
+      {
         to: "/staff/cancons",
         label: "Cançons",
         title: "Cançons",

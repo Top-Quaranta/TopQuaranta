@@ -55,6 +55,7 @@ const StaffArtistesPage = lazy(() => import('./pages/staff/StaffArtistesPage'))
 const StaffArtistesSenseInstagramPage = lazy(() => import('./pages/staff/StaffArtistesSenseInstagramPage'))
 const StaffArtistesSenseYoutubePage = lazy(() => import('./pages/staff/StaffArtistesSenseYoutubePage'))
 const StaffArtistesAlTopPage = lazy(() => import('./pages/staff/StaffArtistesAlTopPage'))
+const StaffArtistesAfinsPage = lazy(() => import('./pages/staff/StaffArtistesAfinsPage'))
 const ArtistaCrearPage = lazy(() => import('./pages/staff/ArtistaCrearPage'))
 const ArtistaEditPage = lazy(() => import('./pages/staff/ArtistaEditPage'))
 const StaffCanconsPage = lazy(() => import('./pages/staff/StaffCanconsPage'))
@@ -232,6 +233,7 @@ function AppContent() {
                   <Route path="/artistes/sense-instagram" element={<StaffArtistesSenseInstagramPage />} />
                   <Route path="/artistes/sense-youtube" element={<StaffArtistesSenseYoutubePage />} />
                   <Route path="/artistes/al-top" element={<StaffArtistesAlTopPage />} />
+                  <Route path="/artistes/afins" element={<StaffArtistesAfinsPage />} />
                   <Route path="/artistes/crear" element={<ArtistaCrearPage />} />
                   <Route path="/artistes/:pk" element={<ArtistaEditPage />} />
                   <Route path="/cancons" element={<StaffCanconsPage />} />

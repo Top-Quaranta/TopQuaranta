@@ -426,7 +426,9 @@ body[data-theme="yellow"] {
 .rd-wk-latest { font-weight: 700; font-size: 13px; color: rgba(255,255,255,0.60); text-decoration: underline; margin-left: auto; }
 .rd-wk-latest:hover { color: #fff; }
 
-.rd-full-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(10px, 2vw, 24px); align-items: start; }
+/* minmax(0, …): a bare 1fr track never shrinks below its longest nowrap
+   title, so one long song name pushed the whole grid past the page. */
+.rd-full-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(10px, 2vw, 24px); align-items: start; }
 .rd-full-col { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rd-frow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: inherit; text-decoration: none; transition: transform .12s, background .15s; }
 .rd-frow:hover { transform: translateY(-1px); }
@@ -527,7 +529,7 @@ body[data-theme="yellow"] {
 @media (max-width: 900px) {
   .rd-hero-grid { grid-template-columns: 1fr; }
   .rd-ten-grid { grid-template-columns: 1fr; }
-  .rd-full-grid { grid-template-columns: 1fr; }
+  .rd-full-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 540px) {
   .rd-one-body { flex-direction: column; align-items: flex-start; gap: 16px; }

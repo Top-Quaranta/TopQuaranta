@@ -7,6 +7,49 @@
 
 ---
 
+## Sprint 2026-11-20 — Ronda de catàleg a mà
+
+Feta per consola a producció (consta a `HistorialRevisio`, no a
+`StaffAuditLog`): 257 artistes aprovats (catàleg: 2.462) i unes 2.040
+cançons decidides (10 aprovades, la resta rebutjades). La cua de cançons
+va baixar de 2.736 a 703 i torna a pujar amb les dels artistes nous
+(1.795 a la vesprada). Andorra passa
+d'1 a 11 artistes, l'Alguer d'1 a 6, Catalunya Nord d'1 a 14, Franja de
+0 a 2. Vegeu LESSONS per als 18.000 descartats.
+
+**Fonts que funcionen** per a trobar artistes que falten:
+- Llistes setmanals d'Enderrock (`descobrir_enderrock`, manual).
+- Viasona: fitxa per artista i llista per comarca
+  (`/grups/comarca/<slug>`) amb municipi. L'enllaç de Deezer de la fitxa
+  falla un 27 % (36 de 132) i el municipi alguna vegada (Uramexi Army,
+  Valtonyc): no s'apliquen sense verificar.
+- API d'Illa Sonora (`/api/grups`, `/api/init`): 226 grups en català.
+- ISRC de Spotify → `api.deezer.com/track/isrc:<isrc>`: troba el perfil
+  bo de Deezer encara que hi haja homònims.
+- LRCLIB descartat: 3 lletres de 36 consultes.
+
+**Spotify, mesurat:** `/artists/{id}/albums` i `/albums/{id}/tracks`
+responen 200 amb la nostra app; l'ISRC només ve a `/tracks/{id}` i el
+preview ve sempre buit (Whisper no tindria àudio). Unes 300 peticions en
+una hora van donar 429 amb `Retry-After: 8512`.
+
+**Pendent:**
+- ~85 artistes freqüents a Enderrock sense municipi enlloc (Som Mainada,
+  La Veu del Bosc, Maken Row, Ssanxxo, Ningú, Lleras…).
+- «ONLINE» de Car (pk 42323): Whisper es 0,51 / ca 0,19; cal escoltar-la.
+- 43 aprovacions amb el municipi de Viasona sense contrastar amb la
+  cançó (segona passada del 20-11).
+- 6 artistes a mitges pel límit de Spotify: J. Máñez (Sueca), Adéu
+  Varsòvia (Vic), Claró (Barcelona), Orxata Sound System (València),
+  Marc Gairí (Lleida), Joan Marcià (Cambrils).
+- Fusions des del panell (el pendent té àlbums o cançons): Bram's 14122
+  → Brams 3064, En Rick 3971 → 6463, Güil 2486 → 4266, Cecilio G. 6487 →
+  5025, «Dan Peralbo» → «Dan Peralbo i El Comboi» 2950.
+- Possibles homònims, no tocats (municipi diferent): Lluc 3779 (la
+  Ràpita) / 2409 (Cardedeu), Llum 4350 (Alcoi) / 2875 (Mataró), Crim
+  3663 (Sant Andreu de la Barca) / 2908 (Tarragona).
+- 5 algueresos del CantAlguer sense Deezer ni Spotify.
+
 ## Sprint 2026-11-19 — Token de Spotify revocat
 
 Spotify va revocar el refresh token el 18-11 (`invalid_grant`): playlists

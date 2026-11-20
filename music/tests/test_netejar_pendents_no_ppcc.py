@@ -50,3 +50,24 @@ def test_preserves_recommended_candidate():
     call_command("netejar_pendents_no_ppcc")
     a.refresh_from_db()
     assert a.pendent_review is True  # left in the queue for triage
+
+
+@pytest.mark.django_db
+def test_un_pendent_que_staff_ja_ha_tocat_no_es_descarta():
+    """Any audit row on the artist means a human already weighed in. The
+    guard compared against "Artista" while the audit trail stores the
+    lowercase model name, so it never matched (found 2026-11-20)."""
+    from music.audit import log_staff_action
+
+    a = Artista.objects.create(
+        nom="Mirat Per Staff",
+        lastfm_nom="Mirat Per Staff",
+        aprovat=False,
+        pendent_review=True,
+        font_descoberta="lastfm_similar",
+        nb_similars_lastfm=0,
+    )
+    log_staff_action(None, "artista_editar", target=a)
+    call_command("netejar_pendents_no_ppcc")
+    a.refresh_from_db()
+    assert a.pendent_review is True

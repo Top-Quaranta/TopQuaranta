@@ -135,7 +135,7 @@ class Command(BaseCommand):
             # this artista counts — past triage means a human has
             # already weighed in and we shouldn't second-guess.
             has_activity = StaffAuditLog.objects.filter(
-                target_type="Artista",
+                target_type="artista",
                 target_id=orphan.pk,
             ).exists()
             if has_activity:

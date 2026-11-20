@@ -125,8 +125,16 @@
   beats a stale pendent), deduped per source, replaced wholesale per
   source; a tombstoned name is matched, never re-created or re-queued;
   pendents are never sources.** Guarded by: `ingesta/tests/test_lastfm_similars.py`.
-- **`netejar_pendents_no_ppcc` only sweeps `nb_similars_lastfm = 0`.**
-  Guarded by: `music/tests/test_netejar_pendents_no_ppcc.py`.
+- **`netejar_pendents_no_ppcc` only sweeps `nb_similars_lastfm = 0`, and
+  never a pendent with any `StaffAuditLog` row** (`target_type` is the
+  lowercase model name, `"artista"`). Guarded by:
+  `music/tests/test_netejar_pendents_no_ppcc.py`.
+- **`descobrir_enderrock` is read-only**: it lists the artists of
+  Enderrock's weekly «noves cançons en català» that are not approved
+  (pendent / descartat / missing) and writes nothing; « i » is never a
+  collaboration separator. Why: the sweep above tombstones real artists
+  nobody triaged and nothing resurfaces them. Not on cron. Guarded by:
+  `ingesta/tests/test_descobrir_enderrock.py`.
 
 ### MusicBrainz (`obtenir_metadata_musicbrainz` :30 hourly)
 - **Each iteration validates the existing MBID's area before anything

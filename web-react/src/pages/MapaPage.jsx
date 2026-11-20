@@ -12,6 +12,7 @@
  * /mapa/artistes-top/ (contracts unchanged). `municipis-CAT.json` may be
  * absent → handled as an explicit empty state, never an error.
  */
+import { indexaStats } from '../lib/mapaStats'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Band, Glow, Glass, Kicker, Crit, TerrLogo } from '../components/rd/primitives'
@@ -164,15 +165,7 @@ export default function MapaPage() {
     return `${p.codi}::${p.comarca}::${p.municipi}`
   }
 
-  const statsByKey = useMemo(() => {
-    const m = {}
-    for (const r of stats) {
-      if (level === 'territori') m[r.territori] = r
-      else if (level === 'comarca') m[r.comarca] = r
-      else m[`${r.territori}::${r.comarca}::${r.municipi}`] = r
-    }
-    return m
-  }, [stats, level])
+  const statsByKey = useMemo(() => indexaStats(stats, level), [stats, level])
 
   const maxN = useMemo(() => {
     let m = 0

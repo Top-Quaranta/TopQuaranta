@@ -50,6 +50,39 @@ RECORD_TYPE_MAP = {
 }
 
 
+DEEZER_CACHE_FIELDS = [
+    "deezer_nb_fan",
+    "deezer_nb_album",
+    "deezer_nom",
+    "deezer_nom_similitud",
+]
+
+
+def populate_deezer_metadata(
+    artista: Artista, deezer_id: int, deezer_name: str | None = None
+) -> bool:
+    """Set the cached Deezer fields (`DEEZER_CACHE_FIELDS`) on the artista
+    from profile `deezer_id`; not saved. Returns False (artista untouched)
+    when Deezer gives no name to work with.
+
+    Also called on every `obtenir_novetats` P3 visit: the principal id can
+    change after the first resolve (staff fixes a homonym) and the ML reads
+    these fields, so they must follow the current id, not the first one.
+    """
+    info = deezer.get_artist_info(deezer_id)
+    deezer_name = deezer_name or (info or {}).get("name")
+    if not deezer_name:
+        return False
+    if info:
+        artista.deezer_nb_fan = info["nb_fan"]
+        artista.deezer_nb_album = info["nb_album"]
+    artista.deezer_nom = deezer_name
+    artista.deezer_nom_similitud = difflib.SequenceMatcher(
+        None, artista.nom.lower(), deezer_name.lower()
+    ).ratio()
+    return True
+
+
 class Command(BaseCommand):
     help = "Fetch Deezer metadata (albums + tracks) for approved artists."
 
@@ -293,7 +326,7 @@ class Command(BaseCommand):
             )
 
         # Populate Deezer metadata
-        self._populate_deezer_metadata(artista, candidate_id, candidate_name)
+        populate_deezer_metadata(artista, candidate_id, candidate_name)
 
         try:
             with transaction.atomic():
@@ -334,19 +367,6 @@ class Command(BaseCommand):
                 if track.get("isrc", "").upper() == expected_isrc.upper():
                     return True
         return False
-
-    def _populate_deezer_metadata(
-        self, artista: Artista, deezer_id: int, deezer_name: str
-    ) -> None:
-        """Fetch and set Deezer metadata fields on the artista (not saved yet)."""
-        info = deezer.get_artist_info(deezer_id)
-        if info:
-            artista.deezer_nb_fan = info["nb_fan"]
-            artista.deezer_nb_album = info["nb_album"]
-        artista.deezer_nom = deezer_name
-        artista.deezer_nom_similitud = difflib.SequenceMatcher(
-            None, artista.nom.lower(), deezer_name.lower()
-        ).ratio()
 
     def _upsert_album(
         self,

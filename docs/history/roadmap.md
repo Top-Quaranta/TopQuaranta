@@ -3,9 +3,26 @@
 > Estat actual i propers passos. El detall fi viu al `git log` i als
 > commits per sprint; la història de Phase 9 (auditoria d'excel·lència)
 > al fitxer `docs/history/roadmap.md` (sprints A–J ter).
-> Last updated: 2026-11-20.
+> Last updated: 2026-11-25.
 
 ---
+
+## Sprint 2026-11-25 — La memòria cau de Deezer seguia l'ID antic
+
+Benitozz tenia l'ID de Deezer bo des del 13-06, però `deezer_nom`
+(«BENITO») i els 126 àlbums eren del perfil antic: només s'omplien en
+resoldre l'ID per primera vegada i el classificador els llegia. Ara
+cada visita P3 d'`obtenir_novetats` els reescriu (#571); la resta
+d'artistes es posa al dia sola en 24 h.
+
+Aprovada per consola la sol·licitud de gestor de Benitozz (no consta a
+`StaffAuditLog`).
+
+**Pendent:**
+- Spotify torna a donar 429 al cron de matinada (22-11: 79.009 s; 24-11:
+  6.690 s, a `/tracks/{id}`): els 6 artistes a mitges segueixen parats.
+- Disc al 81 % (7,1 G lliures).
+- Dependabot oberts: gunicorn 27 (#556, salt major) i markdownify (#569).
 
 ## Sprint 2026-11-20 — Ronda de catàleg a mà
 

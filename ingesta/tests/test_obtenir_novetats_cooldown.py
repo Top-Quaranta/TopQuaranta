@@ -149,3 +149,42 @@ def test_p3_cooldown_exits_when_all_recent(db, deezer_quota_clean, stub_deezer_c
     # `fresh.last_checked_deezer` is the same value we set above
     # (2h ago) — not refreshed in this run.
     assert fresh.last_checked_deezer < timezone.now() - timedelta(hours=1)
+
+
+@pytest.mark.django_db
+def test_p3_refreshes_deezer_cache_from_current_principal(db, deezer_quota_clean):
+    """The cached Deezer fields must describe the artist's CURRENT
+    principal id. Benitozz (2026-11-25): the id was corrected in June but
+    the cache kept the old homonym's name and 126 albums, which the ML
+    reads as a penalty."""
+    a = Artista.objects.create(
+        nom="Benitozz",
+        lastfm_nom="Benitozz",
+        aprovat=True,
+        deezer_nom="BENITO",
+        deezer_nb_album=126,
+        deezer_nb_fan=103,
+        deezer_nom_similitud=0.86,
+    )
+    ArtistaDeezer.objects.create(artista=a, deezer_id=234081261, principal=True)
+
+    def fake_get(url, *args, **kwargs):
+        if url.endswith("/artist/234081261"):
+            return {"id": 234081261, "name": "Benitozz", "nb_fan": 0, "nb_album": 12}
+        return None
+
+    with (
+        patch(
+            "ingesta.management.commands.obtenir_novetats.deezer.get_artist_albums",
+            return_value=[],
+        ),
+        patch(
+            "ingesta.management.commands.obtenir_novetats.deezer._get",
+            side_effect=fake_get,
+        ),
+    ):
+        call_command("obtenir_novetats", stdout=StringIO())
+
+    a.refresh_from_db()
+    assert (a.deezer_nom, a.deezer_nb_album, a.deezer_nb_fan) == ("Benitozz", 12, 0)
+    assert a.deezer_nom_similitud == 1.0

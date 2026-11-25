@@ -52,6 +52,12 @@
   exits** (a never-empty queue hid a 12-day hang, 2026-05-01); capped by
   `--max-p3-per-run` (200, untested). Guarded by:
   `test_obtenir_novetats_cooldown.py`.
+- **The cached Deezer fields (`deezer_nom`, `deezer_nb_album`,
+  `deezer_nb_fan`, `deezer_nom_similitud`) follow the artist's current
+  principal id: every P3 visit rewrites them.** Why: they were written
+  only at first resolve, so a corrected homonym kept the old profile's
+  numbers and the ML read them as a penalty (Benitozz, 2026-11-25).
+  Guarded by: `test_p3_refreshes_deezer_cache_from_current_principal`.
 - **`_create_track` is idempotent on `deezer_id` then ISRC; an ISRC
   collision (`canco_isrc_unique_when_set`) is caught and skipped, never
   aborts the artist's transaction.**

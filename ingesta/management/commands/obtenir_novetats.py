@@ -9,6 +9,10 @@ from django.utils import timezone
 from ingesta.caducitat import caducitat_cutoff, is_caducat
 from ingesta.clients import deezer
 from ingesta.clients.deezer import _parse_date
+from ingesta.management.commands.obtenir_metadata import (
+    DEEZER_CACHE_FIELDS,
+    populate_deezer_metadata,
+)
 from music.constants import DIES_CADUCITAT
 from music.ml import classificar_i_guardar
 from music.models import Album, Artista, ArtistaDeezer, Canco, HistorialRevisio
@@ -342,7 +346,12 @@ class Command(BaseCommand):
                 if was_new:
                     new_albums += 1
             artista.last_checked_deezer = timezone.now()
-            artista.save(update_fields=["last_checked_deezer"])
+            update_fields = ["last_checked_deezer"]
+            # Keep the cached Deezer fields on the CURRENT principal id
+            # (they were only written at first resolve; Benitozz case).
+            if populate_deezer_metadata(artista, dz_principal):
+                update_fields += DEEZER_CACHE_FIELDS
+            artista.save(update_fields=update_fields)
             self.stdout.write(
                 f"  P3 artista {artista.nom} → {new_albums} àlbums nous "
                 f"(de {len(albums_data)} totals)"

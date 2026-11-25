@@ -9,7 +9,7 @@ psycopg2-binary==2.9.13
 python-decouple==3.8
 dj-database-url==3.1.2
 requests==2.34.2
-gunicorn==26.2.0
+gunicorn==27.0.1
 djangorestframework==3.18.3
 scikit-learn>=1.9.1
 joblib>=1.6.0
